@@ -53,4 +53,10 @@ Production calculation and face-scan creation must use one database transaction 
 4. Checks the effective entitlement and monthly successful/billable usage.
 5. Creates the pending usage event before external work, then records the terminal outcome.
 
-The unique idempotency index is the final concurrency guard. A quota check followed by an unrelated insert is unsafe and must not be used.
+PostgreSQL serializes reservations by locking the current entitlement row, while the unique idempotency index is the final duplicate guard. Pending reservations count against the quota so simultaneous requests cannot exceed it. Failed calculations may retry the same idempotency key; successful results are returned without recalculation or double billing. Calendar-month accounting uses UTC.
+
+Face-scan creation currently uses a provider adapter boundary and returns `REQUESTED`. Its pending reservation prevents quota overrun and its stored response makes retries idempotent. A real CarePlix adapter and signed webhook state transitions require approved provider documentation and credentials.
+
+## Administration boundary
+
+There is no public signup. A high-entropy bootstrap bearer token protects customer, organization, deployment, entitlement and version-assignment operations during local development only. The API deliberately disables it in production; named NIQ workforce identities, MFA, roles and audit attribution must replace it before deployment.

@@ -18,11 +18,10 @@ docs                    Architecture, compliance and operating notes
 
 ## Local development
 
-Prerequisites: Bun and Docker.
+Prerequisites: Bun and a locally available PostgreSQL instance.
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres
 bun install
 bun run db:migrate
 bun run dev
@@ -32,13 +31,9 @@ Use `bun run db:generate` only after intentionally changing the Drizzle schema.
 
 API: `http://localhost:4100`; administration UI: `http://localhost:4173`.
 
-The draft calculation endpoint is fail-closed. To exercise it locally, set `ENABLE_PROVISIONAL_SCORING=true`; `NODE_ENV=production` always disables it.
+The draft calculation endpoint is fail-closed. To exercise it locally, set `ENABLE_PROVISIONAL_SCORING=true`; `NODE_ENV=production` always disables it. Development administration requires `ADMIN_BOOTSTRAP_TOKEN`; this bootstrap mechanism is also always disabled in production.
 
-No public customer signup is provided. NIQ administrators create organizations and deployments, then issue one-time activation credentials. Raw credentials must never be stored.
-
-Entity primary and foreign keys are application-generated canonical ULIDs. API
-contracts accept uppercase Crockford ULIDs only. Credentials, session secrets,
-provider references, request IDs and idempotency keys remain separate opaque values.
+No public customer signup is provided. NIQ administrators create customers, organizations and deployments, then issue short-lived, one-time activation tokens. Activation returns the deployment credential exactly once; only hashes of high-entropy tokens are stored.
 
 Entity primary and foreign keys are application-generated canonical ULIDs. API
 contracts accept uppercase Crockford ULIDs only. Credentials, session secrets,

@@ -11,6 +11,9 @@ This scaffold supports compliance engineering; it is not a certification or lega
 - Treat audit records separately from redacted operational logs.
 - Apply idempotency to calculations and face-scan callbacks so retries do not double count usage.
 - Perform idempotency resolution, entitlement/quota checking and usage reservation atomically in one database transaction; concurrent requests must not exceed limits.
+- Return activation and deployment credentials once, prevent response caching, persist only hashes, and revoke per deployment.
+- Treat the bootstrap admin token as development-only; production requires named NIQ identities, MFA and audit attribution.
+- Count quota periods in UTC and retain the immutable scoring version with each result.
 - Encrypt databases, backups and object storage; rotate keys and credentials.
 - Maintain retention, deletion, legal-hold, incident response, access-review and vendor-governance procedures.
 - Keep production patient data out of development and testing.
