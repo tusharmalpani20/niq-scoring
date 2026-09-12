@@ -98,9 +98,9 @@ export class PostgresScoringStore implements ScoringStore {
   async completeUsage(usageId: string, response: unknown) { await this.database`update usage_events set outcome='SUCCEEDED', billable=true, response_payload=${this.database.json(response as never)}, completed_at=now() where id=${usageId} and outcome='PENDING'`; }
   async storePendingUsageResponse(usageId: string, response: unknown) { await this.database`update usage_events set response_payload=${this.database.json(response as never)} where id=${usageId} and outcome='PENDING'`; }
   async failUsage(usageId: string) { await this.database`update usage_events set outcome='FAILED', completed_at=now() where id=${usageId} and outcome='PENDING'`; }
-  async createFaceScanSession(input: { identity: DeploymentIdentity; organizationId: string; usageId: string; assessmentReference: string; idempotencyKey: string; provider: string }) {
+  async createFaceScanSession(input: { identity: DeploymentIdentity; organizationId: string; usageId: string; assessmentReference: string; idempotencyKey: string; provider: string; providerSessionReference?: string }) {
     const id = createEntityId();
-    const [row] = await this.database<Array<{ id: string; state: "REQUESTED" }>>`insert into face_scan_sessions (id, customer_id, organization_id, deployment_id, assessment_reference, provider, idempotency_key) values (${id}, ${input.identity.customerId}, ${input.organizationId}, ${input.identity.deploymentId}, ${input.assessmentReference}, ${input.provider}, ${input.idempotencyKey}) returning id, state`;
+    const [row] = await this.database<Array<{ id: string; state: "REQUESTED" }>>`insert into face_scan_sessions (id, customer_id, organization_id, deployment_id, assessment_reference, provider, provider_session_reference, idempotency_key) values (${id}, ${input.identity.customerId}, ${input.organizationId}, ${input.identity.deploymentId}, ${input.assessmentReference}, ${input.provider}, ${input.providerSessionReference ?? null}, ${input.idempotencyKey}) returning id, state`;
     return row!;
   }
 }

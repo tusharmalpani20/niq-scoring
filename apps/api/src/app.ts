@@ -9,6 +9,7 @@ import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import { createEntityId } from "./lib/id";
+import { StubFaceScanAdapter, type FaceScanAdapter } from "./face-scan";
 import type { DeploymentIdentity, ScoringStore } from "./store";
 
 export interface AppOptions {
@@ -19,7 +20,7 @@ export interface AppOptions {
   runtimeEnvironment: "development" | "test" | "production";
   provisionalScoringRequested: boolean;
   platformEnabled?: boolean;
-  faceScanProvider?: "stub" | "careplix";
+  faceScanAdapter?: FaceScanAdapter;
   readinessCheck?: () => Promise<boolean>;
   now?: () => Date;
 }
@@ -40,6 +41,7 @@ export function createApp(options: AppOptions) {
   const provisionalScoringEnabled = options.runtimeEnvironment !== "production" && options.provisionalScoringRequested;
   const adminEnabled = options.runtimeEnvironment !== "production" && Boolean(options.adminBootstrapToken);
   const now = options.now ?? (() => new Date());
+  const faceScanAdapter: FaceScanAdapter = options.faceScanAdapter ?? new StubFaceScanAdapter();
   app.use("*", secureHeaders());
   app.use("/v1/*", cors({ origin: options.allowedOrigins }));
   app.use("/admin/*", cors({ origin: options.allowedOrigins }));
@@ -106,7 +108,7 @@ export function createApp(options: AppOptions) {
 
   app.get("/v1/metadata", async (context) => {
     if (!(await authenticateDeployment(context))) return context.json({ error: "UNAUTHORIZED" }, 401);
-    return context.json({ service: "niq-scoring-api", region: options.region, provisionalVersion: { version: PROVISIONAL_SCORING_VERSION, status: PROVISIONAL_VERSION_STATUS, clinicalUsePermitted: false, calculationEnabled: provisionalScoringEnabled }, faceScanProvider: { configured: options.faceScanProvider === "careplix", mode: options.faceScanProvider ?? "stub" } });
+    return context.json({ service: "niq-scoring-api", region: options.region, provisionalVersion: { version: PROVISIONAL_SCORING_VERSION, status: PROVISIONAL_VERSION_STATUS, clinicalUsePermitted: false, calculationEnabled: provisionalScoringEnabled }, faceScanProvider: { configured: faceScanAdapter.configured, mode: faceScanAdapter.name } });
   });
 
   app.post("/v1/provisional/calculate", async (context) => {
@@ -127,10 +129,13 @@ export function createApp(options: AppOptions) {
     const reservation = await options.store.reserveUsage({ identity, organizationId: parsed.data.organizationId, capability: "FACE_SCAN", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.assessmentReference, platformEnabled: options.platformEnabled ?? true });
     if (reservation.status === "DUPLICATE") return context.json(reservation.response as never);
     if (reservation.status === "REJECTED") return context.json({ error: "FACE_SCAN_UNAVAILABLE", reason: reservation.reason }, 409);
-    const session = await options.store.createFaceScanSession({ identity, organizationId: parsed.data.organizationId, usageId: reservation.usageId, assessmentReference: parsed.data.assessmentReference, idempotencyKey: parsed.data.idempotencyKey, provider: options.faceScanProvider ?? "stub" });
-    const response = { session, providerConfigured: options.faceScanProvider === "careplix" };
-    await options.store.storePendingUsageResponse(reservation.usageId, response);
-    return context.json(response, 202);
+    try {
+      const providerSession = await faceScanAdapter.createSession({ organizationId: parsed.data.organizationId, assessmentReference: parsed.data.assessmentReference });
+      const session = await options.store.createFaceScanSession({ identity, organizationId: parsed.data.organizationId, usageId: reservation.usageId, assessmentReference: parsed.data.assessmentReference, idempotencyKey: parsed.data.idempotencyKey, provider: faceScanAdapter.name, ...(providerSession.providerSessionReference ? { providerSessionReference: providerSession.providerSessionReference } : {}) });
+      const response = { session, providerConfigured: faceScanAdapter.configured };
+      await options.store.storePendingUsageResponse(reservation.usageId, response);
+      return context.json(response, 202);
+    } catch (error) { await options.store.failUsage(reservation.usageId); throw error; }
   });
 
   app.notFound((context) => context.json({ error: "NOT_FOUND" }, 404));

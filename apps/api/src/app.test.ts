@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createApp } from "./app";
 import { MemoryScoringStore } from "./store";
+import { UnconfiguredCarePlixAdapter } from "./face-scan";
 
 const adminToken = "development-admin-token-at-least-32-characters";
 const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
@@ -80,5 +81,14 @@ describe("scoring API", () => {
   test("production cannot enable provisional scoring", async () => {
     const production = createApp({ store: new MemoryScoringStore(), allowedOrigins: [], region: "india", runtimeEnvironment: "production", provisionalScoringRequested: true });
     expect((await production.request("/v1/provisional/calculate", { method: "POST" })).status).toBe(503);
+  });
+
+  test("CarePlix placeholder fails closed without creating a scan", async () => {
+    const setupResult = await onboard();
+    const app = createApp({ store: setupResult.store, adminBootstrapToken: adminToken, allowedOrigins: [], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: true, faceScanAdapter: new UnconfiguredCarePlixAdapter() });
+    const response = await app.request("/v1/face-scans", jsonRequest({ organizationId: setupResult.organization.id, assessmentReference: "assessment-careplix", idempotencyKey: "face-scan-careplix" }, `Bearer ${setupResult.credential}`));
+    expect(response.status).toBe(500);
+    expect(setupResult.store.faceScans).toHaveLength(0);
+    expect(setupResult.store.usages.at(-1)?.outcome).toBe("FAILED");
   });
 });

@@ -37,7 +37,7 @@ export interface ScoringStore {
   completeUsage(usageId: string, response: unknown): Promise<void>;
   storePendingUsageResponse(usageId: string, response: unknown): Promise<void>;
   failUsage(usageId: string): Promise<void>;
-  createFaceScanSession(input: { identity: DeploymentIdentity; organizationId: string; usageId: string; assessmentReference: string; idempotencyKey: string; provider: string }): Promise<{ id: string; state: "REQUESTED" }>;
+  createFaceScanSession(input: { identity: DeploymentIdentity; organizationId: string; usageId: string; assessmentReference: string; idempotencyKey: string; provider: string; providerSessionReference?: string }): Promise<{ id: string; state: "REQUESTED" }>;
 }
 
 type Credential = DeploymentIdentity & { keyPrefix: string; secretHash: string };
