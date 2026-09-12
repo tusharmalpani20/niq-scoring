@@ -25,11 +25,19 @@ p { margin: 0; color: #5d6b7b; }
 .cards span, .cards small { display: block; color: #667787; font-size: 12px; }
 .cards strong { display: block; font-size: 21px; margin: 9px 0; }
 .panel { margin-bottom: 22px; }
+.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; }
+.login { display: grid; grid-template-columns: minmax(260px, 1fr) auto; gap: 12px; align-items: end; }
+.login small, .login .error { grid-column: 1 / -1; }
+.form { display: grid; gap: 13px; }
+label { display: grid; gap: 6px; color: #526473; font-size: 12px; text-transform: capitalize; }
+input { width: 100%; border: 1px solid #cbd8df; border-radius: 8px; padding: 10px 12px; color: #14233a; background: #fff; }
+input:focus { outline: 3px solid rgba(39, 130, 118, .18); border-color: #278276; }
 .panel-title { display: flex; justify-content: space-between; gap: 20px; }
-button { border: 0; border-radius: 8px; padding: 10px 14px; background: #dce5e8; color: #748187; height: fit-content; }
+button { border: 0; border-radius: 8px; padding: 10px 14px; background: #1b6d67; color: #fff; height: fit-content; cursor: pointer; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 13px 10px; border-top: 1px solid #e7edf1; }
+td small { display: block; margin-top: 4px; color: #84929e; font-size: 10px; }
 th { color: #70808e; font-size: 12px; }
 .pill { background: #edf1f3; padding: 5px 8px; border-radius: 99px; font-size: 12px; }
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
@@ -37,5 +45,8 @@ dl { display: grid; gap: 12px; }
 dl div { display: flex; justify-content: space-between; border-top: 1px solid #e7edf1; padding-top: 12px; }
 dt { color: #667787; } dd { margin: 0; font-weight: 650; }
 ul { color: #526473; padding-left: 20px; line-height: 1.8; }
+.version { display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: center; border-top: 1px solid #e7edf1; padding: 14px 0; }
+.version small { display: block; color: #84929e; margin-top: 4px; }
+.danger, .error { color: #9b3f32; }
 @media (max-width: 900px) { .shell { grid-template-columns: 1fr; } aside { display: none; } .cards { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .cards, .split { grid-template-columns: 1fr; } header, .warning { flex-direction: column; } }
+@media (max-width: 700px) { .cards, .split, .grid, .login { grid-template-columns: 1fr; } header, .warning { flex-direction: column; } .version { grid-template-columns: 1fr; } }

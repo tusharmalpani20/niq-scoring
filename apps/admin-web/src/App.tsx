@@ -1,64 +1,67 @@
-import { useEffect, useState } from "react";
+import { type FormEvent, useState } from "react";
 
-interface Metadata {
-  service: string;
-  region: string;
-  provisionalVersion: { version: string; status: string; clinicalUsePermitted: false };
-  faceScanProvider: { configured: boolean; mode: string };
-}
-
-const sampleOrganizations = [
-  { name: "No organizations configured", deployment: "Use the authenticated API onboarding flow", scoring: "Not enabled", limit: "—" },
-];
+type Overview = {
+  customers: Array<{ id: string; legalName: string; externalReference: string; enabled: boolean }>;
+  organizations: Array<{ id: string; customerId: string; name: string; enabled: boolean }>;
+  deployments: Array<{ id: string; customerId: string; name: string; environment: string; region: string; enabled: boolean; organizationIds: string[] }>;
+  entitlements: Array<{ organizationId: string; capability: "SCORING" | "FACE_SCAN"; enabled: boolean; monthlyLimit: number | null }>;
+  assignments: Array<{ organizationId: string; mode: string; scoringRuleVersionId?: string }>;
+  versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean }>;
+};
 
 export function App() {
-  const [metadata, setMetadata] = useState<Metadata | null>(null);
+  const [token, setToken] = useState("");
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [error, setError] = useState("");
+  const auth = { authorization: `Bearer ${token}`, "content-type": "application/json" };
 
-  useEffect(() => {
-    // The development key is never compiled into the UI. Authentication/session
-    // integration will provide a short-lived token in the onboarding milestone.
-    const controller = new AbortController();
-    fetch("/api/health", { signal: controller.signal })
-      .then((response) => response.json())
-      .then((health) => setMetadata({
-        service: health.service,
-        region: health.region,
-        provisionalVersion: { version: "NIQ-DRAFT-2026-09", status: "DRAFT_NON_CLINICAL", clinicalUsePermitted: false },
-        faceScanProvider: { configured: false, mode: "contract-only" },
-      }))
-      .catch(() => setMetadata(null));
-    return () => controller.abort();
-  }, []);
+  async function request(path: string, init?: RequestInit) {
+    setError("");
+    const response = await fetch(`/api${path}`, { ...init, headers: { ...auth, ...init?.headers } });
+    if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? "Request failed");
+    return response.json();
+  }
+  async function refresh() { try { setOverview(await request("/admin/overview")); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load"); } }
+  async function submit(path: string, body: unknown, method = "POST") { try { await request(path, { method, body: JSON.stringify(body) }); await refresh(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save"); } }
 
   return (
     <div className="shell">
-      <aside>
-        <div className="brand"><span>NIQ</span><small>Scoring control</small></div>
-        <nav aria-label="Administration"><a className="active" href="#overview">Overview</a><a href="#organizations">Organizations</a><a href="#versions">Versions</a><a href="#usage">Usage</a><a href="#audit">Audit</a></nav>
-        <p className="privacy">No patient identity belongs in this console.</p>
-      </aside>
+      <aside><div className="brand"><span>NIQ</span><small>Scoring control</small></div><nav><a href="#overview">Overview</a><a href="#customers">Customers</a><a href="#deployments">Deployments</a><a href="#versions">Versions</a></nav><p className="privacy">No patient identity belongs in this console.</p></aside>
       <main>
-        <header><div><p className="eyebrow">India · Phase 1</p><h1>Scoring administration</h1><p>Foundation status for deployments, entitlements, versions and usage.</p></div><span className={metadata ? "status online" : "status"}>{metadata ? "API reachable" : "API unavailable"}</span></header>
+        <header><div><p className="eyebrow">India · Phase 1</p><h1>Scoring administration</h1><p>Customers, deployments, quotas and governed rule assignments.</p></div><span className={overview ? "status online" : "status"}>{overview ? "Connected" : "Locked"}</span></header>
+        <section className="warning"><strong>Development-only scoring</strong><span>NIQ-DRAFT-2026-09 is unvalidated and prohibited for patient-care decisions.</span></section>
+        <section className="panel login"><label><span>Development admin token</span><input type="password" value={token} onChange={(event) => setToken(event.target.value)} autoComplete="off" /></label><button onClick={refresh}>Unlock console</button><small>Held in memory only. This bootstrap access is disabled in production.</small>{error && <p className="error" role="alert">{error}</p>}</section>
 
-        <section className="warning" aria-label="Clinical warning"><strong>Development-only scoring</strong><span>NIQ-DRAFT-2026-09 is unvalidated and must not be used for patient-care decisions.</span></section>
+        <section className="cards" id="overview"><article><span>Customers</span><strong>{overview?.customers.length ?? 0}</strong></article><article><span>Organizations</span><strong>{overview?.organizations.length ?? 0}</strong></article><article><span>Deployments</span><strong>{overview?.deployments.length ?? 0}</strong></article><article><span>Rule packages</span><strong>{overview?.versions.length ?? 0}</strong></article></section>
 
-        <section className="cards" id="overview">
-          <article><span>Region</span><strong>{metadata?.region ?? "India"}</strong><small>Prepared for future regional nodes</small></article>
-          <article><span>Active version</span><strong>None</strong><small>Draft package available only</small></article>
-          <article><span>Face scan</span><strong>Not configured</strong><small>Provider contract and states defined</small></article>
-          <article><span>Default limit</span><strong>Unlimited</strong><small>Nullable monthly entitlement</small></article>
+        <section className="grid" id="customers">
+          <AdminForm title="Create customer" fields={["legalName", "externalReference"]} onSubmit={(body) => submit("/admin/customers", body)} />
+          <AdminForm title="Create organization" fields={["customerId", "name", "externalReference"]} onSubmit={(body) => submit("/admin/organizations", body)} />
         </section>
 
-        <section className="panel" id="organizations">
-          <div className="panel-title"><div><p className="eyebrow">Customer controls</p><h2>Organizations and deployments</h2></div><button disabled title="Available after authenticated onboarding is implemented">Create organization</button></div>
-          <div className="table-wrap"><table><thead><tr><th>Organization</th><th>Deployment</th><th>Scoring</th><th>Monthly limit</th></tr></thead><tbody>{sampleOrganizations.map((row) => <tr key={row.name}><td>{row.name}</td><td>{row.deployment}</td><td><span className="pill">{row.scoring}</span></td><td>{row.limit}</td></tr>)}</tbody></table></div>
+        <section className="panel"><h2>Organizations</h2><div className="table-wrap"><table><thead><tr><th>Name</th><th>Customer</th><th>Scoring limit</th><th>Face-scan limit</th><th>Version mode</th></tr></thead><tbody>{overview?.organizations.map((organization) => {
+          const entitlement = (capability: "SCORING" | "FACE_SCAN") => overview.entitlements.find((item) => item.organizationId === organization.id && item.capability === capability);
+          return <tr key={organization.id}><td><strong>{organization.name}</strong><small>{organization.id}</small></td><td>{organization.customerId}</td><td>{formatLimit(entitlement("SCORING"))}</td><td>{formatLimit(entitlement("FACE_SCAN"))}</td><td>{overview.assignments.find((item) => item.organizationId === organization.id)?.mode ?? "Not assigned"}</td></tr>;
+        })}<EmptyRow show={!overview?.organizations.length} columns={5} /></tbody></table></div></section>
+
+        <section className="grid" id="deployments">
+          <AdminForm title="Create deployment" fields={["customerId", "name", "environment", "region", "organizationIds"]} defaults={{ environment: "production", region: "india" }} onSubmit={(body) => submit("/admin/deployments", { ...body, organizationIds: String(body.organizationIds).split(",").map((value) => value.trim()) })} />
+          <AdminForm title="Set monthly limit" fields={["organizationId", "capability", "monthlyLimit"]} defaults={{ capability: "SCORING" }} onSubmit={({ organizationId, ...body }) => submit(`/admin/organizations/${organizationId}/entitlement`, { ...body, enabled: true, monthlyLimit: body.monthlyLimit === "" ? null : Number(body.monthlyLimit) }, "PUT")} />
         </section>
 
-        <section className="split" id="versions">
-          <article className="panel"><p className="eyebrow">Rule package</p><h2>NIQ-DRAFT-2026-09</h2><dl><div><dt>Status</dt><dd>DRAFT_NON_CLINICAL</dd></div><div><dt>Clinical use</dt><dd>Prohibited</dd></div><div><dt>Lifecycle</dt><dd>Draft</dd></div></dl></article>
-          <article className="panel"><p className="eyebrow">Designed controls</p><h2>Release safeguards</h2><ul><li>Immutable published versions</li><li>Checksum and approval evidence</li><li>Per-organization assignments</li><li>Idempotent usage accounting</li></ul></article>
-        </section>
+        <section className="panel"><h2>Deployments</h2><div className="table-wrap"><table><thead><tr><th>Name</th><th>Environment</th><th>Region</th><th>Organizations</th><th>Status</th></tr></thead><tbody>{overview?.deployments.map((deployment) => <tr key={deployment.id}><td><strong>{deployment.name}</strong><small>{deployment.id}</small></td><td>{deployment.environment}</td><td>{deployment.region}</td><td>{deployment.organizationIds.length}</td><td><span className="pill">{deployment.enabled ? "Enabled" : "Disabled"}</span></td></tr>)}<EmptyRow show={!overview?.deployments.length} columns={5} /></tbody></table></div></section>
+
+        <section className="panel" id="versions"><h2>Version status</h2>{overview?.versions.map((version) => <div className="version" key={version.id}><div><strong>{version.version}</strong><small>{version.id}</small></div><span className="pill">{version.lifecycle}</span><span className="danger">{version.clinicalUsePermitted ? "Clinical use permitted" : "Clinical use prohibited"}</span></div>) ?? <p>Unlock the console to view versions.</p>}</section>
       </main>
     </div>
   );
+}
+
+function formatLimit(value?: { enabled: boolean; monthlyLimit: number | null }) { if (!value?.enabled) return "Disabled"; return value.monthlyLimit === null ? "Unlimited" : value.monthlyLimit; }
+function EmptyRow({ show, columns }: { show: boolean; columns: number }) { return show ? <tr><td colSpan={columns}>No records configured.</td></tr> : null; }
+
+function AdminForm({ title, fields, defaults = {}, onSubmit }: { title: string; fields: string[]; defaults?: Record<string, string>; onSubmit: (body: Record<string, string>) => Promise<void> }) {
+  const [values, setValues] = useState<Record<string, string>>(defaults);
+  const handleSubmit = async (event: FormEvent) => { event.preventDefault(); await onSubmit(values); };
+  return <form className="panel form" onSubmit={handleSubmit}><h2>{title}</h2>{fields.map((field) => <label key={field}><span>{field.replace(/([A-Z])/g, " $1")}</span><input required={field !== "monthlyLimit"} value={values[field] ?? ""} onChange={(event) => setValues({ ...values, [field]: event.target.value })} /></label>)}<button type="submit">Save</button></form>;
 }
