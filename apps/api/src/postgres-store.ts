@@ -76,7 +76,8 @@ export class PostgresScoringStore implements ScoringStore {
     return this.database.begin(async (tx) => {
       await tx`select pg_advisory_xact_lock(hashtext(${`${input.identity.deploymentId}:${input.capability}:${input.idempotencyKey}`}))`;
       const [duplicate] = await tx<Array<{ id: string; outcome: string; response: unknown }>>`select id, outcome, response_payload as response from usage_events where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and idempotency_key=${input.idempotencyKey}`;
-      if (duplicate) return duplicate.outcome === "SUCCEEDED" ? { status: "DUPLICATE", usageId: duplicate.id, response: duplicate.response } : { status: "REJECTED", reason: duplicate.outcome === "PENDING" ? "REQUEST_IN_PROGRESS" : "PREVIOUS_REQUEST_FAILED" };
+      if (duplicate?.response != null) return { status: "DUPLICATE", usageId: duplicate.id, response: duplicate.response };
+      if (duplicate?.outcome === "PENDING") return { status: "REJECTED", reason: "REQUEST_IN_PROGRESS" };
       const [scope] = await tx<Array<{ customerEnabled: boolean; organizationEnabled: boolean; deploymentEnabled: boolean }>>`select c.enabled as "customerEnabled", o.enabled as "organizationEnabled", d.enabled as "deploymentEnabled" from deployment_organizations link join customers c on c.id=link.customer_id join organizations o on o.id=link.organization_id join deployments d on d.id=link.deployment_id where link.customer_id=${input.identity.customerId} and link.deployment_id=${input.identity.deploymentId} and link.organization_id=${input.organizationId}`;
       if (!scope) return { status: "REJECTED", reason: "ORGANIZATION_NOT_ALLOWED" };
       const [entitlement] = await tx<Array<{ enabled: boolean; monthlyLimit: number | null }>>`select enabled, monthly_limit as "monthlyLimit" from entitlements where organization_id=${input.organizationId} and capability=${input.capability} and effective_until is null for update`;
@@ -85,20 +86,21 @@ export class PostgresScoringStore implements ScoringStore {
       const [resolvedVersion] = assignment?.mode === "PINNED"
         ? await tx<Array<{ id: string; version: string }>>`select id, version from scoring_rule_versions where id=${assignment.scoringRuleVersionId}`
         : await tx<Array<{ id: string; version: string }>>`select id, version from scoring_rule_versions where lifecycle in ('APPROVED','ACTIVE') order by approved_at desc nulls last, created_at desc limit 1`;
-      const [count] = await tx<Array<{ value: number }>>`select count(*)::int as value from usage_events where organization_id=${input.organizationId} and capability=${input.capability} and (billable=true or outcome='PENDING') and occurred_at>=date_trunc('month', now())`;
+      const [count] = await tx<Array<{ value: number }>>`select count(*)::int as value from usage_events where organization_id=${input.organizationId} and capability=${input.capability} and (billable=true or outcome='PENDING') and occurred_at >= (date_trunc('month', now() at time zone 'UTC') at time zone 'UTC')`;
       const decision = decideEntitlement({ platformEnabled: input.platformEnabled, organizationEnabled: scope.customerEnabled && scope.organizationEnabled, deploymentEnabled: scope.deploymentEnabled, versionActive: input.capability === "FACE_SCAN" || resolvedVersion?.version === PROVISIONAL_SCORING_VERSION, monthlyLimit: entitlement.monthlyLimit, monthlyUsage: count?.value ?? 0 });
       if (!decision.allowed) return { status: "REJECTED", reason: decision.reason };
-      const usageId = createEntityId();
-      await tx`insert into usage_events (id, customer_id, organization_id, deployment_id, credential_id, capability, request_id, idempotency_key, assessment_reference, outcome) values (${usageId}, ${input.identity.customerId}, ${input.organizationId}, ${input.identity.deploymentId}, ${input.identity.credentialId}, ${input.capability}, ${input.idempotencyKey}, ${input.idempotencyKey}, ${input.assessmentReference}, 'PENDING')`;
+      const usageId = duplicate?.id ?? createEntityId();
+      if (duplicate) await tx`update usage_events set outcome='PENDING', response_payload=null, completed_at=null, occurred_at=now() where id=${usageId}`;
+      else await tx`insert into usage_events (id, customer_id, organization_id, deployment_id, credential_id, capability, request_id, idempotency_key, assessment_reference, outcome) values (${usageId}, ${input.identity.customerId}, ${input.organizationId}, ${input.identity.deploymentId}, ${input.identity.credentialId}, ${input.capability}, ${input.idempotencyKey}, ${input.idempotencyKey}, ${input.assessmentReference}, 'PENDING')`;
       return { status: "NEW", usageId, version: resolvedVersion?.version ?? PROVISIONAL_SCORING_VERSION };
     });
   }
   async completeUsage(usageId: string, response: unknown) { await this.database`update usage_events set outcome='SUCCEEDED', billable=true, response_payload=${this.database.json(response as never)}, completed_at=now() where id=${usageId} and outcome='PENDING'`; }
+  async storePendingUsageResponse(usageId: string, response: unknown) { await this.database`update usage_events set response_payload=${this.database.json(response as never)} where id=${usageId} and outcome='PENDING'`; }
   async failUsage(usageId: string) { await this.database`update usage_events set outcome='FAILED', completed_at=now() where id=${usageId} and outcome='PENDING'`; }
   async createFaceScanSession(input: { identity: DeploymentIdentity; organizationId: string; usageId: string; assessmentReference: string; idempotencyKey: string; provider: string }) {
     const id = createEntityId();
     const [row] = await this.database<Array<{ id: string; state: "REQUESTED" }>>`insert into face_scan_sessions (id, customer_id, organization_id, deployment_id, assessment_reference, provider, idempotency_key) values (${id}, ${input.identity.customerId}, ${input.organizationId}, ${input.identity.deploymentId}, ${input.assessmentReference}, ${input.provider}, ${input.idempotencyKey}) returning id, state`;
-    await this.completeUsage(input.usageId, row);
     return row!;
   }
 }

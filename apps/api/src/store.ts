@@ -35,6 +35,7 @@ export interface ScoringStore {
   authenticateDeployment(keyPrefix: string, secretHash: string): Promise<DeploymentIdentity | null>;
   reserveUsage(input: { identity: DeploymentIdentity; organizationId: string; capability: Capability; idempotencyKey: string; assessmentReference: string; platformEnabled: boolean }): Promise<UsageReservation>;
   completeUsage(usageId: string, response: unknown): Promise<void>;
+  storePendingUsageResponse(usageId: string, response: unknown): Promise<void>;
   failUsage(usageId: string): Promise<void>;
   createFaceScanSession(input: { identity: DeploymentIdentity; organizationId: string; usageId: string; assessmentReference: string; idempotencyKey: string; provider: string }): Promise<{ id: string; state: "REQUESTED" }>;
 }
@@ -77,7 +78,8 @@ export class MemoryScoringStore implements ScoringStore {
   async authenticateDeployment(keyPrefix: string, secretHash: string) { const row = this.credentials.find((item) => item.keyPrefix === keyPrefix && item.secretHash === secretHash); return row ? { credentialId: row.credentialId, deploymentId: row.deploymentId, customerId: row.customerId } : null; }
   async reserveUsage(input: { identity: DeploymentIdentity; organizationId: string; capability: Capability; idempotencyKey: string; assessmentReference: string; platformEnabled: boolean }): Promise<UsageReservation> {
     const duplicate = this.usages.find((item) => item.deploymentId === input.identity.deploymentId && item.capability === input.capability && item.idempotencyKey === input.idempotencyKey);
-    if (duplicate) return duplicate.outcome === "SUCCEEDED" ? { status: "DUPLICATE", usageId: duplicate.id, response: duplicate.response } : { status: "REJECTED", reason: duplicate.outcome === "PENDING" ? "REQUEST_IN_PROGRESS" : "PREVIOUS_REQUEST_FAILED" };
+    if (duplicate?.response !== undefined) return { status: "DUPLICATE", usageId: duplicate.id, response: duplicate.response };
+    if (duplicate?.outcome === "PENDING") return { status: "REJECTED", reason: "REQUEST_IN_PROGRESS" };
     const deployment = this.deployments.find((item) => item.id === input.identity.deploymentId);
     const organization = this.organizations.find((item) => item.id === input.organizationId && item.customerId === input.identity.customerId);
     const customer = this.customers.find((item) => item.id === input.identity.customerId);
@@ -87,15 +89,17 @@ export class MemoryScoringStore implements ScoringStore {
     const resolvedVersion = assignment?.mode === "PINNED"
       ? this.versions.find((item) => item.id === assignment.scoringRuleVersionId)
       : this.versions.find((item) => item.lifecycle === "APPROVED" || item.lifecycle === "ACTIVE");
-    const usage = this.usages.filter((item) => item.organizationId === input.organizationId && item.capability === input.capability && item.outcome === "SUCCEEDED").length;
+    const usage = this.usages.filter((item) => item.organizationId === input.organizationId && item.capability === input.capability && item.outcome !== "FAILED").length;
     const decision = decideEntitlement({ platformEnabled: input.platformEnabled, organizationEnabled: Boolean(customer?.enabled && organization?.enabled), deploymentEnabled: Boolean(deployment.enabled), versionActive: input.capability === "FACE_SCAN" || resolvedVersion?.version === PROVISIONAL_SCORING_VERSION, monthlyLimit: entitlement?.monthlyLimit ?? null, monthlyUsage: usage });
     if (!entitlement?.enabled) return { status: "REJECTED", reason: "CAPABILITY_DISABLED" };
     if (!decision.allowed) return { status: "REJECTED", reason: decision.reason };
-    const event = { id: createEntityId(), organizationId: input.organizationId, deploymentId: input.identity.deploymentId, capability: input.capability, idempotencyKey: input.idempotencyKey, outcome: "PENDING" as const };
-    this.usages.push(event);
+    const event = duplicate ?? { id: createEntityId(), organizationId: input.organizationId, deploymentId: input.identity.deploymentId, capability: input.capability, idempotencyKey: input.idempotencyKey, outcome: "PENDING" as const };
+    event.outcome = "PENDING";
+    if (!duplicate) this.usages.push(event);
     return { status: "NEW", usageId: event.id, version: resolvedVersion?.version ?? PROVISIONAL_SCORING_VERSION };
   }
   async completeUsage(usageId: string, response: unknown) { const row = this.usages.find((item) => item.id === usageId)!; row.outcome = "SUCCEEDED"; row.response = response; }
+  async storePendingUsageResponse(usageId: string, response: unknown) { const row = this.usages.find((item) => item.id === usageId)!; row.response = response; }
   async failUsage(usageId: string) { const row = this.usages.find((item) => item.id === usageId)!; row.outcome = "FAILED"; }
-  async createFaceScanSession(input: { usageId: string }) { const value = { id: createEntityId(), state: "REQUESTED" as const }; this.faceScans.push(value); await this.completeUsage(input.usageId, value); return value; }
+  async createFaceScanSession() { const value = { id: createEntityId(), state: "REQUESTED" as const }; this.faceScans.push(value); return value; }
 }

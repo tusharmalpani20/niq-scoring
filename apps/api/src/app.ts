@@ -92,6 +92,7 @@ export function createApp(options: AppOptions) {
     if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
     const token = `niq_act_${randomSecret(36)}`; const expiresAt = new Date(now().getTime() + body.data.expiresInMinutes * 60_000);
     await options.store.storeActivationToken({ id: createEntityId(), deploymentId: id.data, tokenHash: await sha256(token), expiresAt });
+    context.header("cache-control", "no-store");
     return context.json({ activationToken: token, expiresAt: expiresAt.toISOString() }, 201);
   });
 
@@ -99,6 +100,7 @@ export function createApp(options: AppOptions) {
     const parsed = activationExchangeSchema.safeParse(await parseJson(context)); if (!parsed.success) return context.json({ error: "INVALID_REQUEST" }, 400);
     const prefix = randomSecret(9).slice(0, 12); const credential = `niq_dep_${prefix}.${randomSecret(32)}`;
     const exchanged = await options.store.exchangeActivation({ tokenHash: await sha256(parsed.data.activationToken), credentialId: createEntityId(), keyPrefix: prefix, secretHash: await sha256(credential), now: now() });
+    context.header("cache-control", "no-store");
     return exchanged ? context.json({ deploymentId: exchanged.deploymentId, credential }, 201) : context.json({ error: "ACTIVATION_INVALID_OR_EXPIRED" }, 401);
   });
 
@@ -126,7 +128,9 @@ export function createApp(options: AppOptions) {
     if (reservation.status === "DUPLICATE") return context.json(reservation.response as never);
     if (reservation.status === "REJECTED") return context.json({ error: "FACE_SCAN_UNAVAILABLE", reason: reservation.reason }, 409);
     const session = await options.store.createFaceScanSession({ identity, organizationId: parsed.data.organizationId, usageId: reservation.usageId, assessmentReference: parsed.data.assessmentReference, idempotencyKey: parsed.data.idempotencyKey, provider: options.faceScanProvider ?? "stub" });
-    return context.json({ session, providerConfigured: options.faceScanProvider === "careplix" }, 202);
+    const response = { session, providerConfigured: options.faceScanProvider === "careplix" };
+    await options.store.storePendingUsageResponse(reservation.usageId, response);
+    return context.json(response, 202);
   });
 
   app.notFound((context) => context.json({ error: "NOT_FOUND" }, 404));
