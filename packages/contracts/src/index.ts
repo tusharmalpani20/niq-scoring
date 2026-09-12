@@ -87,6 +87,50 @@ export const createFaceScanSessionSchema = z.object({
   idempotencyKey: z.string().min(8).max(128),
 });
 
+export const createCustomerSchema = z.object({
+  legalName: z.string().trim().min(2).max(200),
+  externalReference: z.string().trim().min(2).max(100),
+});
+
+export const updateEnabledSchema = z.object({ enabled: z.boolean() });
+
+export const createOrganizationSchema = z.object({
+  customerId: ulidSchema,
+  name: z.string().trim().min(2).max(200),
+  externalReference: z.string().trim().min(2).max(100),
+});
+
+export const createDeploymentSchema = z.object({
+  customerId: ulidSchema,
+  name: z.string().trim().min(2).max(120),
+  environment: z.enum(["development", "test", "staging", "production"]),
+  region: z.string().trim().min(2).max(50),
+  organizationIds: z.array(ulidSchema).min(1),
+});
+
+export const entitlementInputSchema = z.object({
+  capability: z.enum(["SCORING", "FACE_SCAN"]),
+  enabled: z.boolean(),
+  monthlyLimit: z.number().int().nonnegative().nullable(),
+});
+
+export const versionAssignmentInputSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("LATEST_APPROVED") }),
+  z.object({ mode: z.literal("PINNED"), scoringRuleVersionId: ulidSchema }),
+]);
+
+export const activationTokenInputSchema = z.object({
+  expiresInMinutes: z.number().int().min(5).max(1440).default(30),
+});
+
+export const activationExchangeSchema = z.object({ activationToken: z.string().min(48).max(256) });
+
+export type CreateCustomer = z.infer<typeof createCustomerSchema>;
+export type CreateOrganization = z.infer<typeof createOrganizationSchema>;
+export type CreateDeployment = z.infer<typeof createDeploymentSchema>;
+export type EntitlementInput = z.infer<typeof entitlementInputSchema>;
+export type VersionAssignmentInput = z.infer<typeof versionAssignmentInputSchema>;
+
 export type ProvisionalScoringInput = z.infer<typeof provisionalScoringInputSchema>;
 export type ProvisionalScoringResult = z.infer<typeof provisionalScoringResultSchema>;
 export type CalculateRequest = z.infer<typeof calculateRequestSchema>;

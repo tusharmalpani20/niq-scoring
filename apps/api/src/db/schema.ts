@@ -81,7 +81,7 @@ export const deploymentCredentials = pgTable("deployment_credentials", {
   deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),
   keyPrefix: varchar("key_prefix", { length: 20 }).notNull(),
   secretHash: varchar("secret_hash", { length: 128 }).notNull(),
-  hashAlgorithm: varchar("hash_algorithm", { length: 30 }).notNull().default("argon2id"),
+  hashAlgorithm: varchar("hash_algorithm", { length: 30 }).notNull().default("sha256"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
@@ -89,6 +89,18 @@ export const deploymentCredentials = pgTable("deployment_credentials", {
 }, (table) => [
   uniqueIndex("deployment_credentials_prefix_uq").on(table.keyPrefix),
   uniqueIndex("deployment_credentials_deployment_id_uq").on(table.deploymentId, table.id),
+]);
+
+export const activationTokens = pgTable("activation_tokens", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),
+  tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("activation_tokens_hash_uq").on(table.tokenHash),
+  index("activation_tokens_deployment_idx").on(table.deploymentId, table.createdAt),
 ]);
 
 export const entitlements = pgTable("entitlements", {
@@ -151,6 +163,8 @@ export const usageEvents = pgTable("usage_events", {
   assessmentReference: varchar("assessment_reference", { length: 128 }).notNull(),
   outcome: usageOutcomeEnum("outcome").notNull(),
   billable: boolean("billable").notNull().default(false),
+  responsePayload: jsonb("response_payload"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("usage_deployment_idempotency_uq").on(table.deploymentId, table.capability, table.idempotencyKey),
