@@ -4,7 +4,7 @@ export default defineConfig({
   dialect: "postgresql",
   schema: "./src/db/schema.ts",
   out: "./drizzle",
-  dbCredentials: { url: process.env.DATABASE_URL ?? "postgresql://niq_scoring:change-me@localhost:5433/niq_scoring" },
+  dbCredentials: { url: process.env.DATABASE_URL ?? "postgresql://niq:change-me@localhost:5432/niq_scoring" },
   strict: true,
   verbose: true,
 });
