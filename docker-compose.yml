@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: niq_scoring
+      POSTGRES_USER: niq_scoring
+      POSTGRES_PASSWORD: change-me
+    ports:
+      - "5433:5432"
+    volumes:
+      - scoring-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U niq_scoring"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file: ${NIQ_SCORING_ENV_FILE:-.env.example}
+    environment:
+      DATABASE_URL: postgresql://niq_scoring:change-me@postgres:5432/niq_scoring
+    ports:
+      - "4100:4100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: migrations
+    env_file: ${NIQ_SCORING_ENV_FILE:-.env.example}
+    environment:
+      DATABASE_URL: postgresql://niq_scoring:change-me@postgres:5432/niq_scoring
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  admin-web:
+    build:
+      context: .
+      dockerfile: apps/admin-web/Dockerfile
+    ports:
+      - "4173:80"
+    depends_on:
+      - api
+
+volumes:
+  scoring-postgres:
