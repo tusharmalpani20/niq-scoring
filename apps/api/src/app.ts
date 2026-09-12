@@ -1,68 +1,141 @@
-import { calculateRequestSchema, PROVISIONAL_SCORING_VERSION, PROVISIONAL_VERSION_STATUS } from "@niq-scoring/contracts";
+import {
+  activationExchangeSchema, activationTokenInputSchema, calculateRequestSchema,
+  createCustomerSchema, createDeploymentSchema, createFaceScanSessionSchema,
+  createOrganizationSchema, entitlementInputSchema, PROVISIONAL_SCORING_VERSION,
+  PROVISIONAL_VERSION_STATUS, ulidSchema, updateEnabledSchema, versionAssignmentInputSchema,
+} from "@niq-scoring/contracts";
 import { calculateProvisionalScore } from "@niq-scoring/scoring-engine";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
+import { createEntityId } from "./lib/id";
+import type { DeploymentIdentity, ScoringStore } from "./store";
 
 export interface AppOptions {
-  apiKey: string;
+  store: ScoringStore;
+  adminBootstrapToken?: string;
   allowedOrigins: string[];
   region: string;
   runtimeEnvironment: "development" | "test" | "production";
   provisionalScoringRequested: boolean;
+  platformEnabled?: boolean;
+  faceScanProvider?: "stub" | "careplix";
   readinessCheck?: () => Promise<boolean>;
   now?: () => Date;
 }
 
+async function sha256(value: string): Promise<string> {
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function randomSecret(bytes = 32): string {
+  return Buffer.from(crypto.getRandomValues(new Uint8Array(bytes))).toString("base64url");
+}
+
+const parseJson = (context: Context) => context.req.json().catch(() => null);
+
 export function createApp(options: AppOptions) {
   const app = new Hono();
   const provisionalScoringEnabled = options.runtimeEnvironment !== "production" && options.provisionalScoringRequested;
+  const adminEnabled = options.runtimeEnvironment !== "production" && Boolean(options.adminBootstrapToken);
+  const now = options.now ?? (() => new Date());
   app.use("*", secureHeaders());
   app.use("/v1/*", cors({ origin: options.allowedOrigins }));
+  app.use("/admin/*", cors({ origin: options.allowedOrigins }));
+  app.use("*", async (context, next) => { context.header("x-request-id", context.req.header("x-request-id") ?? crypto.randomUUID()); await next(); });
 
-  app.get("/health", (context) => context.json({ status: "ok", service: "niq-scoring-api", region: options.region }));
-  app.get("/ready", async (context) => {
-    const ready = await (options.readinessCheck ?? (async () => true))();
-    return context.json({ status: ready ? "ready" : "not_ready" }, ready ? 200 : 503);
-  });
-
-  app.use("/v1/*", async (context, next) => {
-    const requestId = context.req.header("x-request-id") ?? crypto.randomUUID();
-    context.header("x-request-id", requestId);
-    const credential = context.req.header("authorization");
-    if (credential !== `Bearer ${options.apiKey}`) {
-      return context.json({ error: "UNAUTHORIZED", requestId }, 401);
-    }
+  app.use("/admin/*", async (context, next) => {
+    if (!adminEnabled) return context.json({ error: "ADMIN_AUTH_NOT_CONFIGURED" }, 503);
+    if (context.req.header("authorization") !== `Bearer ${options.adminBootstrapToken}`) return context.json({ error: "UNAUTHORIZED" }, 401);
     await next();
   });
 
-  app.get("/v1/metadata", (context) => context.json({
-    service: "niq-scoring-api",
-    region: options.region,
-    provisionalVersion: {
-      version: PROVISIONAL_SCORING_VERSION,
-      status: PROVISIONAL_VERSION_STATUS,
-      clinicalUsePermitted: false,
-      calculationEnabled: provisionalScoringEnabled,
-    },
-    faceScanProvider: { configured: false, mode: "contract-only" },
-  }));
+  const authenticateDeployment = async (context: Context): Promise<DeploymentIdentity | null> => {
+    const credential = context.req.header("authorization")?.replace(/^Bearer /, "");
+    const match = credential?.match(/^niq_dep_([A-Za-z0-9_-]{8,20})\.([A-Za-z0-9_-]{32,})$/);
+    if (!match) return null;
+    return options.store.authenticateDeployment(match[1]!, await sha256(credential!));
+  };
+
+  app.get("/health", (context) => context.json({ status: "ok", service: "niq-scoring-api", region: options.region }));
+  app.get("/ready", async (context) => { const ready = await (options.readinessCheck ?? (async () => true))(); return context.json({ status: ready ? "ready" : "not_ready" }, ready ? 200 : 503); });
+  app.get("/admin/overview", async (context) => context.json(await options.store.overview()));
+
+  app.post("/admin/customers", async (context) => {
+    const parsed = createCustomerSchema.safeParse(await parseJson(context));
+    return parsed.success ? context.json(await options.store.createCustomer(parsed.data), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+  });
+  app.patch("/admin/customers/:id/enabled", async (context) => updateEnabled(context, options.store.setCustomerEnabled.bind(options.store)));
+  app.post("/admin/organizations", async (context) => {
+    const parsed = createOrganizationSchema.safeParse(await parseJson(context));
+    return parsed.success ? context.json(await options.store.createOrganization(parsed.data), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+  });
+  app.patch("/admin/organizations/:id/enabled", async (context) => updateEnabled(context, options.store.setOrganizationEnabled.bind(options.store)));
+  app.post("/admin/deployments", async (context) => {
+    const parsed = createDeploymentSchema.safeParse(await parseJson(context));
+    return parsed.success ? context.json(await options.store.createDeployment(parsed.data), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+  });
+  app.patch("/admin/deployments/:id/enabled", async (context) => updateEnabled(context, options.store.setDeploymentEnabled.bind(options.store)));
+  app.put("/admin/organizations/:id/entitlement", async (context) => {
+    const id = ulidSchema.safeParse(context.req.param("id")); const body = entitlementInputSchema.safeParse(await parseJson(context));
+    if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
+    await options.store.setEntitlement(id.data, body.data); return context.json({ organizationId: id.data, ...body.data });
+  });
+  app.put("/admin/organizations/:id/version-assignment", async (context) => {
+    const id = ulidSchema.safeParse(context.req.param("id")); const body = versionAssignmentInputSchema.safeParse(await parseJson(context));
+    if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
+    await options.store.assignVersion(id.data, body.data); return context.json({ organizationId: id.data, ...body.data });
+  });
+  app.post("/admin/deployments/:id/activation-token", async (context) => {
+    const id = ulidSchema.safeParse(context.req.param("id")); const body = activationTokenInputSchema.safeParse(await parseJson(context));
+    if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
+    const token = `niq_act_${randomSecret(36)}`; const expiresAt = new Date(now().getTime() + body.data.expiresInMinutes * 60_000);
+    await options.store.storeActivationToken({ id: createEntityId(), deploymentId: id.data, tokenHash: await sha256(token), expiresAt });
+    return context.json({ activationToken: token, expiresAt: expiresAt.toISOString() }, 201);
+  });
+
+  app.post("/v1/activate", async (context) => {
+    const parsed = activationExchangeSchema.safeParse(await parseJson(context)); if (!parsed.success) return context.json({ error: "INVALID_REQUEST" }, 400);
+    const prefix = randomSecret(9).slice(0, 12); const credential = `niq_dep_${prefix}.${randomSecret(32)}`;
+    const exchanged = await options.store.exchangeActivation({ tokenHash: await sha256(parsed.data.activationToken), credentialId: createEntityId(), keyPrefix: prefix, secretHash: await sha256(credential), now: now() });
+    return exchanged ? context.json({ deploymentId: exchanged.deploymentId, credential }, 201) : context.json({ error: "ACTIVATION_INVALID_OR_EXPIRED" }, 401);
+  });
+
+  app.get("/v1/metadata", async (context) => {
+    if (!(await authenticateDeployment(context))) return context.json({ error: "UNAUTHORIZED" }, 401);
+    return context.json({ service: "niq-scoring-api", region: options.region, provisionalVersion: { version: PROVISIONAL_SCORING_VERSION, status: PROVISIONAL_VERSION_STATUS, clinicalUsePermitted: false, calculationEnabled: provisionalScoringEnabled }, faceScanProvider: { configured: options.faceScanProvider === "careplix", mode: options.faceScanProvider ?? "stub" } });
+  });
 
   app.post("/v1/provisional/calculate", async (context) => {
-    if (!provisionalScoringEnabled) {
-      return context.json({ error: "PROVISIONAL_SCORING_DISABLED" }, 503);
-    }
-    const parsed = calculateRequestSchema.safeParse(await context.req.json().catch(() => null));
-    if (!parsed.success) {
-      return context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues.map(({ path, message }) => ({ path, message })) }, 400);
-    }
-    // Database-backed credential, organization entitlement, quota and idempotency checks
-    // are deliberately required before exposing this route beyond local development.
-    const result = calculateProvisionalScore(parsed.data.input, (options.now ?? (() => new Date()))().toISOString());
-    return context.json({ result, idempotencyKey: parsed.data.idempotencyKey });
+    if (!provisionalScoringEnabled) return context.json({ error: "PROVISIONAL_SCORING_DISABLED" }, 503);
+    const identity = await authenticateDeployment(context); if (!identity) return context.json({ error: "UNAUTHORIZED" }, 401);
+    const parsed = calculateRequestSchema.safeParse(await parseJson(context));
+    if (!parsed.success) return context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues.map(({ path, message }) => ({ path, message })) }, 400);
+    const reservation = await options.store.reserveUsage({ identity, organizationId: parsed.data.input.organizationId, capability: "SCORING", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.input.assessmentReference, platformEnabled: options.platformEnabled ?? true });
+    if (reservation.status === "DUPLICATE") return context.json(reservation.response as never);
+    if (reservation.status === "REJECTED") return context.json({ error: "SCORING_UNAVAILABLE", reason: reservation.reason }, 409);
+    try { const result = calculateProvisionalScore(parsed.data.input, now().toISOString()); const response = { result, idempotencyKey: parsed.data.idempotencyKey }; await options.store.completeUsage(reservation.usageId, response); return context.json(response); }
+    catch (error) { await options.store.failUsage(reservation.usageId); throw error; }
+  });
+
+  app.post("/v1/face-scans", async (context) => {
+    const identity = await authenticateDeployment(context); if (!identity) return context.json({ error: "UNAUTHORIZED" }, 401);
+    const parsed = createFaceScanSessionSchema.safeParse(await parseJson(context)); if (!parsed.success) return context.json({ error: "INVALID_REQUEST" }, 400);
+    const reservation = await options.store.reserveUsage({ identity, organizationId: parsed.data.organizationId, capability: "FACE_SCAN", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.assessmentReference, platformEnabled: options.platformEnabled ?? true });
+    if (reservation.status === "DUPLICATE") return context.json(reservation.response as never);
+    if (reservation.status === "REJECTED") return context.json({ error: "FACE_SCAN_UNAVAILABLE", reason: reservation.reason }, 409);
+    const session = await options.store.createFaceScanSession({ identity, organizationId: parsed.data.organizationId, usageId: reservation.usageId, assessmentReference: parsed.data.assessmentReference, idempotencyKey: parsed.data.idempotencyKey, provider: options.faceScanProvider ?? "stub" });
+    return context.json({ session, providerConfigured: options.faceScanProvider === "careplix" }, 202);
   });
 
   app.notFound((context) => context.json({ error: "NOT_FOUND" }, 404));
   app.onError((_error, context) => context.json({ error: "INTERNAL_ERROR" }, 500));
   return app;
+}
+
+async function updateEnabled(context: Context, update: (id: string, enabled: boolean) => Promise<boolean>) {
+  const id = ulidSchema.safeParse(context.req.param("id")); const body = updateEnabledSchema.safeParse(await parseJson(context));
+  if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
+  return (await update(id.data, body.data.enabled)) ? context.json({ id: id.data, ...body.data }) : context.json({ error: "NOT_FOUND" }, 404);
 }

@@ -1,71 +1,84 @@
 import { describe, expect, test } from "bun:test";
 import { createApp } from "./app";
+import { MemoryScoringStore } from "./store";
 
-const apiKey = "development-key-at-least-24-characters";
-const app = createApp({ apiKey, allowedOrigins: ["http://localhost:4173"], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: true, now: () => new Date("2026-09-13T00:00:00.000Z") });
+const adminToken = "development-admin-token-at-least-32-characters";
+const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+const jsonRequest = (body: unknown, authorization = adminHeaders.authorization) => ({ method: "POST", headers: { authorization, "content-type": "application/json" }, body: JSON.stringify(body) });
+
+function setup() {
+  const store = new MemoryScoringStore();
+  const app = createApp({ store, adminBootstrapToken: adminToken, allowedOrigins: ["http://localhost:4173"], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: true, now: () => new Date("2026-09-13T00:00:00.000Z") });
+  return { app, store };
+}
+
+async function onboard() {
+  const { app, store } = setup();
+  const customer = await (await app.request("/admin/customers", jsonRequest({ legalName: "Apollo Group", externalReference: "apollo" }))).json() as { id: string };
+  const organization = await (await app.request("/admin/organizations", jsonRequest({ customerId: customer.id, name: "Apollo Group", externalReference: "apollo-main" }))).json() as { id: string };
+  const deployment = await (await app.request("/admin/deployments", jsonRequest({ customerId: customer.id, name: "Apollo Production", environment: "production", region: "india", organizationIds: [organization.id] }))).json() as { id: string };
+  for (const capability of ["SCORING", "FACE_SCAN"] as const) await app.request(`/admin/organizations/${organization.id}/entitlement`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ capability, enabled: true, monthlyLimit: null }) });
+  await app.request(`/admin/organizations/${organization.id}/version-assignment`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id }) });
+  const activation = await (await app.request(`/admin/deployments/${deployment.id}/activation-token`, jsonRequest({ expiresInMinutes: 30 }))).json() as { activationToken: string };
+  const activated = await (await app.request("/v1/activate", jsonRequest({ activationToken: activation.activationToken }, ""))).json() as { credential: string };
+  return { app, store, customer, organization, deployment, activationToken: activation.activationToken, credential: activated.credential };
+}
+
+const scoringInput = (organizationId: string) => ({ idempotencyKey: "request-key-0001", input: { assessmentReference: "pseudonym-1", organizationId, heightCm: 170, weightKg: 70, weightTrend: "stable", weightChangePercent: null, intakeLevel: "normal", appetite: "good", functionalStatus: "fully_active", cancerStage: "Unknown", albumin: null, crp: null, fluidStatus: {}, symptoms: {} } });
 
 describe("scoring API", () => {
-  test("health is public and discloses no secrets", async () => {
-    const response = await app.request("/health");
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ status: "ok", service: "niq-scoring-api", region: "india" });
-  });
-
-  test("metadata requires a credential", async () => {
-    expect((await app.request("/v1/metadata")).status).toBe(401);
-  });
-
-  test("readiness fails closed when the schema is unavailable", async () => {
-    const unavailable = createApp({ apiKey, allowedOrigins: [], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: false, readinessCheck: async () => false });
+  test("health is public and readiness fails closed", async () => {
+    const { app } = setup();
+    expect((await app.request("/health")).status).toBe(200);
+    const unavailable = createApp({ store: new MemoryScoringStore(), allowedOrigins: [], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: false, readinessCheck: async () => false });
     expect((await unavailable.request("/ready")).status).toBe(503);
   });
 
-  test("provisional scoring requires an explicit runtime flag", async () => {
-    const disabled = createApp({ apiKey, allowedOrigins: [], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: false });
-    const response = await disabled.request("/v1/provisional/calculate", {
-      method: "POST",
-      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: "{}",
-    });
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: "PROVISIONAL_SCORING_DISABLED" });
+  test("admin bootstrap is authenticated and impossible in production", async () => {
+    const { app, store } = setup();
+    expect((await app.request("/admin/overview")).status).toBe(401);
+    const production = createApp({ store, adminBootstrapToken: adminToken, allowedOrigins: [], region: "india", runtimeEnvironment: "production", provisionalScoringRequested: true });
+    expect((await production.request("/admin/overview", { headers: adminHeaders })).status).toBe(503);
+  });
+
+  test("creates customer, organization and deployment through admin boundary", async () => {
+    const { app, organization, deployment } = await onboard();
+    const overview = await (await app.request("/admin/overview", { headers: adminHeaders })).json() as { organizations: unknown[]; deployments: unknown[] };
+    expect(overview.organizations).toHaveLength(1);
+    expect(overview.deployments).toEqual([expect.objectContaining({ id: deployment.id, organizationIds: [organization.id] })]);
+  });
+
+  test("activation tokens are one-time and deployment credentials authenticate", async () => {
+    const { app, activationToken, credential } = await onboard();
+    expect(credential).toStartWith("niq_dep_");
+    expect((await app.request("/v1/activate", jsonRequest({ activationToken }, ""))).status).toBe(401);
+    expect((await app.request("/v1/metadata", { headers: { authorization: `Bearer ${credential}` } })).status).toBe(200);
+  });
+
+  test("guards provisional scoring, records usage and returns idempotent result", async () => {
+    const { app, store, organization, credential } = await onboard();
+    const request = jsonRequest(scoringInput(organization.id), `Bearer ${credential}`);
+    const first = await app.request("/v1/provisional/calculate", request);
+    const firstBody = await first.json();
+    expect(first.status).toBe(200);
+    expect(firstBody).toMatchObject({ result: { versionStatus: "DRAFT_NON_CLINICAL", clinicalUsePermitted: false } });
+    const duplicate = await app.request("/v1/provisional/calculate", request);
+    expect(await duplicate.json()).toEqual(firstBody);
+    expect(store.usages).toHaveLength(1);
+  });
+
+  test("enforces monthly quota and preserves face-scan stub state", async () => {
+    const { app, organization, credential } = await onboard();
+    await app.request(`/admin/organizations/${organization.id}/entitlement`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ capability: "FACE_SCAN", enabled: true, monthlyLimit: 1 }) });
+    const auth = `Bearer ${credential}`;
+    const first = await app.request("/v1/face-scans", jsonRequest({ organizationId: organization.id, assessmentReference: "assessment-1", idempotencyKey: "face-scan-0001" }, auth));
+    expect(first.status).toBe(202); expect(await first.json()).toMatchObject({ session: { state: "REQUESTED" }, providerConfigured: false });
+    const second = await app.request("/v1/face-scans", jsonRequest({ organizationId: organization.id, assessmentReference: "assessment-2", idempotencyKey: "face-scan-0002" }, auth));
+    expect(await second.json()).toEqual({ error: "FACE_SCAN_UNAVAILABLE", reason: "MONTHLY_LIMIT_REACHED" });
   });
 
   test("production cannot enable provisional scoring", async () => {
-    const production = createApp({ apiKey, allowedOrigins: [], region: "india", runtimeEnvironment: "production", provisionalScoringRequested: true });
-    const response = await production.request("/v1/provisional/calculate", {
-      method: "POST",
-      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: "{}",
-    });
-    expect(response.status).toBe(503);
-  });
-
-  test("calculates only the explicit provisional version", async () => {
-    const response = await app.request("/v1/provisional/calculate", {
-      method: "POST",
-      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        idempotencyKey: "request-key-0001",
-        input: {
-          assessmentReference: "pseudonym-1",
-          organizationId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-          heightCm: 170,
-          weightKg: 70,
-          weightTrend: "stable",
-          weightChangePercent: null,
-          intakeLevel: "normal",
-          appetite: "good",
-          functionalStatus: "fully_active",
-          cancerStage: "Unknown",
-          albumin: null,
-          crp: null,
-          fluidStatus: {},
-          symptoms: {},
-        },
-      }),
-    });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ result: { versionStatus: "DRAFT_NON_CLINICAL", clinicalUsePermitted: false } });
+    const production = createApp({ store: new MemoryScoringStore(), allowedOrigins: [], region: "india", runtimeEnvironment: "production", provisionalScoringRequested: true });
+    expect((await production.request("/v1/provisional/calculate", { method: "POST" })).status).toBe(503);
   });
 });

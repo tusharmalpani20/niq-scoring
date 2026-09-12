@@ -1,15 +1,19 @@
 import { parseEnvironment } from "@niq-scoring/config";
 import postgres from "postgres";
 import { createApp } from "./app";
+import { PostgresScoringStore } from "./postgres-store";
 
 const environment = parseEnvironment(Bun.env);
 const database = postgres(environment.DATABASE_URL, { max: 2, idle_timeout: 10 });
 const app = createApp({
-  apiKey: environment.DEV_API_KEY,
+  store: new PostgresScoringStore(database),
+  ...(environment.ADMIN_BOOTSTRAP_TOKEN ? { adminBootstrapToken: environment.ADMIN_BOOTSTRAP_TOKEN } : {}),
   allowedOrigins: environment.CORS_ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()),
   region: environment.DEPLOYMENT_REGION,
   runtimeEnvironment: environment.NODE_ENV,
   provisionalScoringRequested: environment.ENABLE_PROVISIONAL_SCORING,
+  platformEnabled: environment.SCORING_PLATFORM_ENABLED,
+  faceScanProvider: environment.FACE_SCAN_PROVIDER,
   readinessCheck: async () => {
     try {
       const [result] = await database<{ schemaReady: boolean }[]>`
