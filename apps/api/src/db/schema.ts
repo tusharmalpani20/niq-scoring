@@ -1,0 +1,194 @@
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  check,
+  foreignKey,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  timestamp,
+  uniqueIndex,
+  varchar,
+} from "drizzle-orm/pg-core";
+
+export const lifecycleEnum = pgEnum("scoring_rule_lifecycle", ["DRAFT", "VALIDATED", "APPROVED", "ACTIVE", "RETIRED"]);
+export const capabilityEnum = pgEnum("entitlement_capability", ["SCORING", "FACE_SCAN"]);
+export const usageOutcomeEnum = pgEnum("usage_outcome", ["SUCCEEDED", "FAILED", "REJECTED", "PENDING"]);
+export const faceScanStateEnum = pgEnum("face_scan_state", ["REQUESTED", "PROVIDER_SESSION_CREATED", "CAPTURE_IN_PROGRESS", "PROCESSING", "COMPLETED", "FAILED", "EXPIRED"]);
+export const versionAssignmentModeEnum = pgEnum("version_assignment_mode", ["LATEST_APPROVED", "PINNED"]);
+
+const timestamps = {
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const customers = pgTable("customers", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  legalName: varchar("legal_name", { length: 200 }).notNull(),
+  externalReference: varchar("external_reference", { length: 100 }).notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  ...timestamps,
+}, (table) => [uniqueIndex("customers_external_reference_uq").on(table.externalReference)]);
+
+// Organization is the scoring platform's authoritative application-tenant term.
+// A hospital group normally has one organization,
+// while facilities remain in the calling clinical application.
+export const organizations = pgTable("organizations", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  customerId: varchar("customer_id", { length: 26 }).notNull().references(() => customers.id),
+  name: varchar("name", { length: 200 }).notNull(),
+  externalReference: varchar("external_reference", { length: 100 }).notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("organizations_customer_reference_uq").on(table.customerId, table.externalReference),
+  uniqueIndex("organizations_customer_id_uq").on(table.customerId, table.id),
+]);
+
+export const deployments = pgTable("deployments", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  customerId: varchar("customer_id", { length: 26 }).notNull().references(() => customers.id),
+  name: varchar("name", { length: 120 }).notNull(),
+  environment: varchar("environment", { length: 30 }).notNull(),
+  region: varchar("region", { length: 50 }).notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("deployments_customer_name_uq").on(table.customerId, table.name),
+  uniqueIndex("deployments_customer_id_uq").on(table.customerId, table.id),
+]);
+
+// Explicit allow-list: a deployment may submit work only for linked organizations.
+// Composite FKs guarantee both records belong to the same customer.
+export const deploymentOrganizations = pgTable("deployment_organizations", {
+  customerId: varchar("customer_id", { length: 26 }).notNull(),
+  deploymentId: varchar("deployment_id", { length: 26 }).notNull(),
+  organizationId: varchar("organization_id", { length: 26 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.deploymentId, table.organizationId] }),
+  uniqueIndex("deployment_org_customer_scope_uq").on(table.customerId, table.deploymentId, table.organizationId),
+  foreignKey({ columns: [table.customerId, table.deploymentId], foreignColumns: [deployments.customerId, deployments.id], name: "deployment_org_deployment_fk" }),
+  foreignKey({ columns: [table.customerId, table.organizationId], foreignColumns: [organizations.customerId, organizations.id], name: "deployment_org_organization_fk" }),
+]);
+
+export const deploymentCredentials = pgTable("deployment_credentials", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),
+  keyPrefix: varchar("key_prefix", { length: 20 }).notNull(),
+  secretHash: varchar("secret_hash", { length: 128 }).notNull(),
+  hashAlgorithm: varchar("hash_algorithm", { length: 30 }).notNull().default("argon2id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+}, (table) => [
+  uniqueIndex("deployment_credentials_prefix_uq").on(table.keyPrefix),
+  uniqueIndex("deployment_credentials_deployment_id_uq").on(table.deploymentId, table.id),
+]);
+
+export const entitlements = pgTable("entitlements", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  organizationId: varchar("organization_id", { length: 26 }).notNull().references(() => organizations.id),
+  capability: capabilityEnum("capability").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  monthlyLimit: integer("monthly_limit"), // NULL means unlimited.
+  effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull().defaultNow(),
+  effectiveUntil: timestamp("effective_until", { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("entitlements_one_current_uq").on(table.organizationId, table.capability).where(sql`${table.effectiveUntil} is null`),
+  index("entitlements_org_history_idx").on(table.organizationId, table.capability, table.effectiveFrom),
+  check("entitlements_nonnegative_limit_ck", sql`${table.monthlyLimit} is null or ${table.monthlyLimit} >= 0`),
+  check("entitlements_valid_period_ck", sql`${table.effectiveUntil} is null or ${table.effectiveUntil} > ${table.effectiveFrom}`),
+]);
+
+export const scoringRuleVersions = pgTable("scoring_rule_versions", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  version: varchar("version", { length: 80 }).notNull(),
+  lifecycle: lifecycleEnum("lifecycle").notNull().default("DRAFT"),
+  clinicalUsePermitted: boolean("clinical_use_permitted").notNull().default(false),
+  packageChecksum: varchar("package_checksum", { length: 128 }).notNull(),
+  definition: jsonb("definition").notNull(),
+  createdBy: varchar("created_by", { length: 26 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  validatedAt: timestamp("validated_at", { withTimezone: true }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  activatedAt: timestamp("activated_at", { withTimezone: true }),
+  retiredAt: timestamp("retired_at", { withTimezone: true }),
+}, (table) => [uniqueIndex("scoring_rule_versions_version_uq").on(table.version), uniqueIndex("scoring_rule_versions_checksum_uq").on(table.packageChecksum)]);
+
+export const organizationVersionAssignments = pgTable("organization_version_assignments", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  organizationId: varchar("organization_id", { length: 26 }).notNull().references(() => organizations.id),
+  mode: versionAssignmentModeEnum("mode").notNull(),
+  scoringRuleVersionId: varchar("scoring_rule_version_id", { length: 26 }).references(() => scoringRuleVersions.id),
+  effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull().defaultNow(),
+  effectiveUntil: timestamp("effective_until", { withTimezone: true }),
+  assignedBy: varchar("assigned_by", { length: 26 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("version_assignments_one_current_uq").on(table.organizationId).where(sql`${table.effectiveUntil} is null`),
+  index("version_assignments_org_history_idx").on(table.organizationId, table.effectiveFrom),
+  check("version_assignment_mode_ck", sql`(${table.mode} = 'PINNED' and ${table.scoringRuleVersionId} is not null) or (${table.mode} = 'LATEST_APPROVED' and ${table.scoringRuleVersionId} is null)`),
+  check("version_assignments_valid_period_ck", sql`${table.effectiveUntil} is null or ${table.effectiveUntil} > ${table.effectiveFrom}`),
+]);
+
+export const usageEvents = pgTable("usage_events", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  customerId: varchar("customer_id", { length: 26 }).notNull(),
+  organizationId: varchar("organization_id", { length: 26 }).notNull(),
+  deploymentId: varchar("deployment_id", { length: 26 }).notNull(),
+  credentialId: varchar("credential_id", { length: 26 }),
+  capability: capabilityEnum("capability").notNull(),
+  scoringRuleVersionId: varchar("scoring_rule_version_id", { length: 26 }).references(() => scoringRuleVersions.id),
+  requestId: varchar("request_id", { length: 128 }).notNull(),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  assessmentReference: varchar("assessment_reference", { length: 128 }).notNull(),
+  outcome: usageOutcomeEnum("outcome").notNull(),
+  billable: boolean("billable").notNull().default(false),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("usage_deployment_idempotency_uq").on(table.deploymentId, table.capability, table.idempotencyKey),
+  index("usage_org_capability_month_idx").on(table.organizationId, table.capability, table.occurredAt),
+  foreignKey({ columns: [table.customerId, table.deploymentId, table.organizationId], foreignColumns: [deploymentOrganizations.customerId, deploymentOrganizations.deploymentId, deploymentOrganizations.organizationId], name: "usage_authorized_deployment_org_fk" }),
+  foreignKey({ columns: [table.deploymentId, table.credentialId], foreignColumns: [deploymentCredentials.deploymentId, deploymentCredentials.id], name: "usage_credential_deployment_fk" }),
+]);
+
+export const faceScanSessions = pgTable("face_scan_sessions", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  customerId: varchar("customer_id", { length: 26 }).notNull(),
+  organizationId: varchar("organization_id", { length: 26 }).notNull(),
+  deploymentId: varchar("deployment_id", { length: 26 }).notNull(),
+  assessmentReference: varchar("assessment_reference", { length: 128 }).notNull(),
+  provider: varchar("provider", { length: 40 }).notNull(),
+  providerSessionReference: varchar("provider_session_reference", { length: 160 }),
+  state: faceScanStateEnum("state").notNull().default("REQUESTED"),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  failureCode: varchar("failure_code", { length: 80 }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("face_scan_deployment_idempotency_uq").on(table.deploymentId, table.idempotencyKey),
+  foreignKey({ columns: [table.customerId, table.deploymentId, table.organizationId], foreignColumns: [deploymentOrganizations.customerId, deploymentOrganizations.deploymentId, deploymentOrganizations.organizationId], name: "face_scan_authorized_deployment_org_fk" }),
+]);
+
+export const auditEvents = pgTable("audit_events", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  organizationId: varchar("organization_id", { length: 26 }).references(() => organizations.id),
+  deploymentId: varchar("deployment_id", { length: 26 }).references(() => deployments.id),
+  actorType: varchar("actor_type", { length: 40 }).notNull(),
+  actorReference: varchar("actor_reference", { length: 128 }),
+  action: varchar("action", { length: 120 }).notNull(),
+  resourceType: varchar("resource_type", { length: 80 }).notNull(),
+  resourceReference: varchar("resource_reference", { length: 128 }),
+  requestId: varchar("request_id", { length: 128 }).notNull(),
+  outcome: varchar("outcome", { length: 30 }).notNull(),
+  metadata: jsonb("metadata").notNull().default({}),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("audit_org_occurred_idx").on(table.organizationId, table.occurredAt)]);

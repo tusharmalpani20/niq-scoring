@@ -1,0 +1,30 @@
+{
+  "name": "@niq-scoring/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/index.ts --target=bun --outdir=dist",
+    "dev": "bun --watch src/index.ts",
+    "lint": "tsc --noEmit",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@niq-scoring/config": "workspace:*",
+    "@niq-scoring/contracts": "workspace:*",
+    "@niq-scoring/entitlements": "workspace:*",
+    "@niq-scoring/scoring-engine": "workspace:*",
+    "drizzle-orm": "^0.44.5",
+    "hono": "^4.9.6",
+    "postgres": "^3.4.7",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.21",
+    "drizzle-kit": "^0.31.4",
+    "typescript": "^5.9.2"
+  }
+}
