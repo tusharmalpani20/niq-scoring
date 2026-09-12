@@ -1,0 +1,15 @@
+{
+  "name": "@niq-scoring/scoring-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": { "@niq-scoring/contracts": "workspace:*" },
+  "devDependencies": { "typescript": "^5.9.2" }
+}

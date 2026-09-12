@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "baseUrl": ".",
+    "paths": {
+      "@niq-scoring/config": ["packages/config/src/index.ts"],
+      "@niq-scoring/contracts": ["packages/contracts/src/index.ts"],
+      "@niq-scoring/contracts/metadata": ["packages/contracts/src/metadata.ts"],
+      "@niq-scoring/entitlements": ["packages/entitlements/src/index.ts"],
+      "@niq-scoring/scoring-engine": ["packages/scoring-engine/src/index.ts"]
+    }
+  }
+}

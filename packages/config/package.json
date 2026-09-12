@@ -1,0 +1,15 @@
+{
+  "name": "@niq-scoring/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "bun test --pass-with-no-tests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": { "zod": "^4.1.5" },
+  "devDependencies": { "typescript": "^5.9.2" }
+}
