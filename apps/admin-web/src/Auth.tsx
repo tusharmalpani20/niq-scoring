@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { useEffect, useState } from "react";
 import { request, message, type User } from "./api";
 import { Button } from "./components/ui/button";
+import { Separator } from "./components/ui/separator";
 import { Panel, FormInput, ErrorNotice } from "./shared";
 export function Auth({
   setupRequired,
@@ -145,6 +146,7 @@ export function Auth({
                   autoComplete="off"
                   required
                 />
+                <Separator />
                 <FormInput
                   control={form.control}
                   name="displayName"
