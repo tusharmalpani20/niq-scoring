@@ -12,4 +12,6 @@ There is no public signup.
 
 One central Apollo production installation therefore uses one production deployment credential even when it contains many facilities. Test, disaster-recovery or separately operated installations receive separate credentials.
 
-Raw tokens are returned with `Cache-Control: no-store`. Put the deployment credential directly into protected application configuration and never into logs, URLs, source control or screenshots.
+Raw tokens are returned with `Cache-Control: no-store`. The customer enters only the one-time activation token in the application onboarding screen. The application backend exchanges it server-to-server and writes the returned deployment credential to an encrypted server-side credential store. Never expose the credential to browser storage or place it in environment files, logs, URLs, source control or screenshots.
+
+The scoring API implements token issuance and exchange today. Activation-token generation in the scoring administration UI, plus the main application's activation screen and encrypted credential store, remain pending. Until that complete flow exists, scoring must fail closed.
