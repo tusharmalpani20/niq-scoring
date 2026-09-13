@@ -12,6 +12,7 @@ type Overview = {
 export function App() {
   const [token, setToken] = useState("");
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [activation, setActivation] = useState<{ deploymentId: string; activationToken: string; expiresAt: string } | null>(null);
   const [error, setError] = useState("");
   const auth = { authorization: `Bearer ${token}`, "content-type": "application/json" };
 
@@ -23,6 +24,14 @@ export function App() {
   }
   async function refresh() { try { setOverview(await request("/admin/overview")); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load"); } }
   async function submit(path: string, body: unknown, method = "POST") { try { await request(path, { method, body: JSON.stringify(body) }); await refresh(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save"); } }
+  async function generateActivationToken(deploymentId: string) {
+    try {
+      const result = await request(`/admin/deployments/${deploymentId}/activation-token`, { method: "POST", body: JSON.stringify({ expiresInMinutes: 30 }) }) as { activationToken: string; expiresAt: string };
+      setActivation({ deploymentId, ...result });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to generate activation token");
+    }
+  }
 
   return (
     <div className="shell">
@@ -49,7 +58,9 @@ export function App() {
           <AdminForm title="Set monthly limit" fields={["organizationId", "capability", "monthlyLimit"]} defaults={{ capability: "SCORING" }} onSubmit={({ organizationId, ...body }) => submit(`/admin/organizations/${organizationId}/entitlement`, { ...body, enabled: true, monthlyLimit: body.monthlyLimit === "" ? null : Number(body.monthlyLimit) }, "PUT")} />
         </section>
 
-        <section className="panel"><h2>Deployments</h2><div className="table-wrap" role="region" aria-label="Deployments table" tabIndex={0}><table><thead><tr><th>Name</th><th>Environment</th><th>Region</th><th>Organizations</th><th>Status</th></tr></thead><tbody>{overview?.deployments.map((deployment) => <tr key={deployment.id}><td><strong>{deployment.name}</strong><small>{deployment.id}</small></td><td>{deployment.environment}</td><td>{deployment.region}</td><td>{deployment.organizationIds.length}</td><td><span className="pill">{deployment.enabled ? "Enabled" : "Disabled"}</span></td></tr>)}<EmptyRow show={!overview?.deployments.length} columns={5} /></tbody></table></div></section>
+        <section className="panel"><h2>Deployments</h2><div className="table-wrap" role="region" aria-label="Deployments table" tabIndex={0}><table><thead><tr><th>Name</th><th>Environment</th><th>Region</th><th>Organizations</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>{overview?.deployments.map((deployment) => <tr key={deployment.id}><td><strong>{deployment.name}</strong><small>{deployment.id}</small></td><td>{deployment.environment}</td><td>{deployment.region}</td><td>{deployment.organizationIds.length}</td><td><span className="pill">{deployment.enabled ? "Enabled" : "Disabled"}</span></td><td><button className="small-button" type="button" onClick={() => generateActivationToken(deployment.id)}>Generate activation token</button></td></tr>)}<EmptyRow show={!overview?.deployments.length} columns={6} /></tbody></table></div>
+          {activation && <div className="activation-result" role="status"><div><strong>One-time activation token</strong><span>For deployment {activation.deploymentId}. Expires {new Date(activation.expiresAt).toLocaleString()}.</span></div><textarea readOnly value={activation.activationToken} aria-label="One-time activation token" /><small>Copy this into the client’s NIQ Application organization page. It is shown only now and cannot be used again after exchange.</small></div>}
+        </section>
 
         <section className="panel" id="versions"><h2>Version status</h2>{overview?.versions.map((version) => <div className="version" key={version.id}><div><strong>{version.version}</strong><small>{version.id}</small></div><span className="pill">{version.lifecycle}</span><span className="danger">{version.clinicalUsePermitted ? "Clinical use permitted" : "Clinical use prohibited"}</span></div>) ?? <p>Unlock the console to view versions.</p>}</section>
       </main>
