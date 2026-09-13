@@ -3,7 +3,7 @@
 This scaffold supports compliance engineering; it is not a certification or legal determination.
 
 - Use TLS for every external and service-to-service connection.
-- Store deployment credential hashes only. Show a one-time activation token once and exchange it server-to-server for a revocable deployment credential. The scoring API implements this exchange; the application-side UI and encrypted credential store remain pending.
+- Store deployment credential hashes only. Show a one-time activation token once and exchange it server-to-server for a revocable deployment credential. The scoring API and application activation screen implement this exchange; the application stores the credential encrypted on its backend.
 - Never log raw credentials, patient identifiers, input payloads or face images.
 - Use pseudonymous assessment references and data minimization.
 - Partition every business record by organization; enforce that boundary in repositories and tests, not only in the UI.
@@ -12,7 +12,7 @@ This scaffold supports compliance engineering; it is not a certification or lega
 - Apply idempotency to calculations and face-scan callbacks so retries do not double count usage.
 - Perform idempotency resolution, entitlement/quota checking and usage reservation atomically in one database transaction; concurrent requests must not exceed limits.
 - Return activation and deployment credentials once, prevent response caching, persist only hashes, and revoke per deployment.
-- Treat the bootstrap admin token as development-only; production requires named NIQ identities, MFA and audit attribution.
+- Use the bootstrap admin token only for first-account setup, then remove it. Named NIQ accounts, cookie sessions and account-management audit attribution are implemented; MFA/SSO remains a production prerequisite.
 - Count quota periods in UTC and retain the immutable scoring version with each result.
 - Encrypt databases, backups and object storage; rotate keys and credentials.
 - Maintain retention, deletion, legal-hold, incident response, access-review and vendor-governance procedures.

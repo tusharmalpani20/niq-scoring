@@ -7,7 +7,7 @@ Independent, centrally governed scoring platform for NIQ. It contains an adminis
 ## Workspace
 
 ```text
-apps/admin-web          React + TypeScript + Vite status console
+apps/admin-web          React + TypeScript + Vite NIQ administration console
 apps/api                Hono API and PostgreSQL/Drizzle schema
 packages/contracts      Versioned external contracts and validation
 packages/config         Runtime configuration validation
@@ -33,7 +33,9 @@ Use `bun run db:generate` only after intentionally changing the Drizzle schema.
 
 API: `http://localhost:4100`; administration UI: `http://localhost:4173`.
 
-The draft calculation endpoint is fail-closed. To exercise it locally, set `ENABLE_PROVISIONAL_SCORING=true`; `NODE_ENV=production` always disables it. Development administration requires `ADMIN_BOOTSTRAP_TOKEN`; this bootstrap mechanism is also always disabled in production.
+The draft calculation endpoint is fail-closed. To exercise it locally, set `ENABLE_PROVISIONAL_SCORING=true`; `NODE_ENV=production` always disables it.
+
+The console is for NIQ staff only. Set an independent random `ADMIN_BOOTSTRAP_TOKEN`, open the console, and use the one-time setup form to create the first administrator. Setup closes once an administrator exists. Remove the setup token afterward; subsequent access uses individual email/password accounts and server-side sessions. The setup token no longer authorizes administration API requests. See [Administrator accounts](docs/authentication.md) for setup and invitation instructions.
 
 No public customer signup is provided. NIQ administrators create customers, organizations and deployments, then issue short-lived, one-time activation tokens. Activation returns the deployment credential exactly once; only hashes of high-entropy tokens are stored.
 

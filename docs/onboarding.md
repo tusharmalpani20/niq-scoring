@@ -1,6 +1,6 @@
 # Controlled onboarding
 
-There is no public signup.
+There is no public signup. NIQ staff first sign in to the scoring console using their own administrator accounts; see [Administrator accounts](authentication.md). Staff invitations are separate from the customer deployment activation described below.
 
 1. An NIQ administrator creates a customer, organization and its first deployment.
 2. NIQ links the deployment to its allowed organizations.
@@ -14,4 +14,4 @@ One central Apollo production installation therefore uses one production deploym
 
 Raw tokens are returned with `Cache-Control: no-store`. The customer enters only the one-time activation token in the application onboarding screen. The application backend exchanges it server-to-server and writes the returned deployment credential to an encrypted server-side credential store. Never expose the credential to browser storage or place it in environment files, logs, URLs, source control or screenshots.
 
-The scoring API implements token issuance and exchange today. Activation-token generation in the scoring administration UI, plus the main application's activation screen and encrypted credential store, remain pending. Until that complete flow exists, scoring must fail closed.
+The scoring API and administration UI implement activation-token issuance. The main application's organization screen exchanges the token server-to-server and encrypts the returned credential. Assessment submission to scoring remains separate work; activation alone does not mean that clinical scoring is available.

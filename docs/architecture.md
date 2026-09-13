@@ -59,4 +59,6 @@ Face-scan creation currently uses a provider adapter boundary and returns `REQUE
 
 ## Administration boundary
 
-There is no public signup. A high-entropy bootstrap bearer token protects customer, organization, deployment, entitlement and version-assignment operations during local development only. The API deliberately disables it in production; named NIQ workforce identities, MFA, roles and audit attribution must replace it before deployment.
+There is no public signup. A high-entropy bootstrap token authorizes creation of the first named NIQ administrator only. After setup, NIQ administrators authenticate through individual email/password accounts and opaque cookie sessions. They can invite other NIQ administrators and deactivate accounts. All console users have the same NIQ administrator permissions in this phase; customer credentials remain a separate machine-to-machine boundary.
+
+See [Administrator accounts](authentication.md) for session, invitation and setup behavior. MFA/SSO and password recovery remain follow-up work before production rollout.
