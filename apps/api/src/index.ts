@@ -1,5 +1,6 @@
 import { parseEnvironment } from "@niq-scoring/config";
 import postgres from "postgres";
+import { PostgresAdminAuthStore } from "./admin-auth-store";
 import { createApp } from "./app";
 import { PostgresScoringStore } from "./postgres-store";
 import { createFaceScanAdapter } from "./face-scan";
@@ -8,6 +9,7 @@ const environment = parseEnvironment(Bun.env);
 const database = postgres(environment.DATABASE_URL, { max: 2, idle_timeout: 10 });
 const app = createApp({
   store: new PostgresScoringStore(database),
+  authStore: new PostgresAdminAuthStore(database),
   ...(environment.ADMIN_BOOTSTRAP_TOKEN ? { adminBootstrapToken: environment.ADMIN_BOOTSTRAP_TOKEN } : {}),
   allowedOrigins: environment.CORS_ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()),
   region: environment.DEPLOYMENT_REGION,
@@ -19,7 +21,11 @@ const app = createApp({
     try {
       const [result] = await database<{ schemaReady: boolean }[]>`
         select to_regclass('public.scoring_rule_versions') is not null
-          and to_regclass('public.audit_events') is not null as "schemaReady"
+          and to_regclass('public.audit_events') is not null
+          and to_regclass('public.admin_users') is not null
+          and to_regclass('public.admin_invitations') is not null
+          and to_regclass('public.admin_sessions') is not null
+          and to_regclass('public.admin_auth_attempts') is not null as "schemaReady"
       `;
       return result?.schemaReady === true;
     } catch {

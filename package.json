@@ -9,8 +9,8 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "db:generate": "bun --cwd apps/api db:generate",
-    "db:migrate": "bun --cwd apps/api db:migrate"
+    "db:generate": "bun --env-file=../../.env --cwd apps/api db:generate",
+    "db:migrate": "bun --env-file=../../.env --cwd apps/api db:migrate"
   },
   "devDependencies": {
     "turbo": "^2.5.6",

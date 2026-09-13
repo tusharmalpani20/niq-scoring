@@ -1,15 +1,19 @@
 import { describe, expect, test } from "bun:test";
+import { MemoryAdminAuthStore } from "./admin-auth-store";
 import { createApp } from "./app";
 import { MemoryScoringStore } from "./store";
 import { UnconfiguredCarePlixAdapter } from "./face-scan";
 
 const adminToken = "development-admin-token-at-least-32-characters";
-const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
-const jsonRequest = (body: unknown, authorization = adminHeaders.authorization) => ({ method: "POST", headers: { authorization, "content-type": "application/json" }, body: JSON.stringify(body) });
+const adminHeaders = { authorization: `Bearer ${adminToken}`, cookie: "niq_scoring_session=test-session", origin: "http://localhost:4173", "content-type": "application/json" };
+const jsonRequest = (body: unknown, authorization = adminHeaders.authorization) => ({ method: "POST", headers: { ...adminHeaders, authorization }, body: JSON.stringify(body) });
 
 function setup() {
   const store = new MemoryScoringStore();
-  const app = createApp({ store, adminBootstrapToken: adminToken, allowedOrigins: ["http://localhost:4173"], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: true, now: () => new Date("2026-09-13T00:00:00.000Z") });
+  const authStore = new MemoryAdminAuthStore();
+  authStore.state.users.push({ id: "01J00000000000000000000001", email: "admin@niq.test", displayName: "Admin", enabled: true, createdAt: "2026-09-13T00:00:00.000Z", passwordHash: "unused" });
+  authStore.state.sessions.push({ userId: "01J00000000000000000000001", tokenHash: new Bun.CryptoHasher("sha256").update("test-session").digest("hex"), expiresAt: "2027-01-01T00:00:00.000Z" });
+  const app = createApp({ store, authStore, adminBootstrapToken: adminToken, allowedOrigins: ["http://localhost:4173"], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: true, now: () => new Date("2026-09-13T00:00:00.000Z") });
   return { app, store };
 }
 
@@ -31,15 +35,15 @@ describe("scoring API", () => {
   test("health is public and readiness fails closed", async () => {
     const { app } = setup();
     expect((await app.request("/health")).status).toBe(200);
-    const unavailable = createApp({ store: new MemoryScoringStore(), allowedOrigins: [], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: false, readinessCheck: async () => false });
+    const unavailable = createApp({ authStore: new MemoryAdminAuthStore(), store: new MemoryScoringStore(), allowedOrigins: [], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: false, readinessCheck: async () => false });
     expect((await unavailable.request("/ready")).status).toBe(503);
   });
 
-  test("admin bootstrap is authenticated and impossible in production", async () => {
+  test("legacy admin bearer token never authenticates in production", async () => {
     const { app, store } = setup();
     expect((await app.request("/admin/overview")).status).toBe(401);
-    const production = createApp({ store, adminBootstrapToken: adminToken, allowedOrigins: [], region: "india", runtimeEnvironment: "production", provisionalScoringRequested: true });
-    expect((await production.request("/admin/overview", { headers: adminHeaders })).status).toBe(503);
+    const production = createApp({ authStore: new MemoryAdminAuthStore(), store, adminBootstrapToken: adminToken, allowedOrigins: [], region: "india", runtimeEnvironment: "production", provisionalScoringRequested: true });
+    expect((await production.request("/admin/overview", { headers: adminHeaders })).status).toBe(401);
   });
 
   test("creates customer, organization and deployment through admin boundary", async () => {
@@ -91,13 +95,13 @@ describe("scoring API", () => {
   });
 
   test("production cannot enable provisional scoring", async () => {
-    const production = createApp({ store: new MemoryScoringStore(), allowedOrigins: [], region: "india", runtimeEnvironment: "production", provisionalScoringRequested: true });
+    const production = createApp({ authStore: new MemoryAdminAuthStore(), store: new MemoryScoringStore(), allowedOrigins: [], region: "india", runtimeEnvironment: "production", provisionalScoringRequested: true });
     expect((await production.request("/v1/provisional/calculate", { method: "POST" })).status).toBe(503);
   });
 
   test("CarePlix placeholder fails closed without creating a scan", async () => {
     const setupResult = await onboard();
-    const app = createApp({ store: setupResult.store, adminBootstrapToken: adminToken, allowedOrigins: [], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: true, faceScanAdapter: new UnconfiguredCarePlixAdapter() });
+    const app = createApp({ authStore: new MemoryAdminAuthStore(), store: setupResult.store, adminBootstrapToken: adminToken, allowedOrigins: [], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: true, faceScanAdapter: new UnconfiguredCarePlixAdapter() });
     const response = await app.request("/v1/face-scans", jsonRequest({ organizationId: setupResult.organization.id, assessmentReference: "assessment-careplix", idempotencyKey: "face-scan-careplix" }, `Bearer ${setupResult.credential}`));
     expect(response.status).toBe(500);
     expect(setupResult.store.faceScans).toHaveLength(0);

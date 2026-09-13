@@ -5,6 +5,8 @@ import {
   PROVISIONAL_VERSION_STATUS, ulidSchema, updateEnabledSchema, versionAssignmentInputSchema,
 } from "@niq-scoring/contracts";
 import { calculateProvisionalScore } from "@niq-scoring/scoring-engine";
+import { installAdminAuth } from "./admin-auth";
+import { type AdminAuthStore } from "./admin-auth-store";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
@@ -14,6 +16,7 @@ import type { DeploymentIdentity, ScoringStore } from "./store";
 
 export interface AppOptions {
   store: ScoringStore;
+  authStore: AdminAuthStore;
   adminBootstrapToken?: string;
   allowedOrigins: string[];
   region: string;
@@ -39,19 +42,15 @@ const parseJson = (context: Context) => context.req.json().catch(() => null);
 export function createApp(options: AppOptions) {
   const app = new Hono();
   const provisionalScoringEnabled = options.runtimeEnvironment !== "production" && options.provisionalScoringRequested;
-  const adminEnabled = options.runtimeEnvironment !== "production" && Boolean(options.adminBootstrapToken);
   const now = options.now ?? (() => new Date());
   const faceScanAdapter: FaceScanAdapter = options.faceScanAdapter ?? new StubFaceScanAdapter();
   app.use("*", secureHeaders());
   app.use("/v1/*", cors({ origin: options.allowedOrigins }));
-  app.use("/admin/*", cors({ origin: options.allowedOrigins }));
+  app.use("/admin/*", cors({ origin: options.allowedOrigins, credentials: true }));
+  app.use("/auth/*", cors({ origin: options.allowedOrigins, credentials: true }));
   app.use("*", async (context, next) => { context.header("x-request-id", context.req.header("x-request-id") ?? crypto.randomUUID()); await next(); });
 
-  app.use("/admin/*", async (context, next) => {
-    if (!adminEnabled) return context.json({ error: "ADMIN_AUTH_NOT_CONFIGURED" }, 503);
-    if (context.req.header("authorization") !== `Bearer ${options.adminBootstrapToken}`) return context.json({ error: "UNAUTHORIZED" }, 401);
-    await next();
-  });
+  installAdminAuth(app, { ...options, authStore: options.authStore });
 
   const authenticateDeployment = async (context: Context): Promise<DeploymentIdentity | null> => {
     const credential = context.req.header("authorization")?.replace(/^Bearer /, "");

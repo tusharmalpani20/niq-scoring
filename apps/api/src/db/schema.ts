@@ -206,3 +206,30 @@ export const auditEvents = pgTable("audit_events", {
   metadata: jsonb("metadata").notNull().default({}),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index("audit_org_occurred_idx").on(table.organizationId, table.occurredAt)]);
+
+export const adminUsers = pgTable("admin_users", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  email: varchar("email", { length: 254 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 120 }).notNull(),
+  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [check("admin_users_normalized_email_ck", sql`${table.email} = lower(trim(${table.email}))`)]);
+export const adminInvitations = pgTable("admin_invitations", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  email: varchar("email", { length: 254 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 120 }).notNull(),
+  tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const adminSessions = pgTable("admin_sessions", {
+  tokenHash: varchar("token_hash", { length: 64 }).primaryKey(),
+  userId: varchar("user_id", { length: 26 }).notNull().references(() => adminUsers.id),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+export const adminAuthAttempts = pgTable("admin_auth_attempts", {
+  key: varchar("key", { length: 100 }).primaryKey(),
+  count: integer("count").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
