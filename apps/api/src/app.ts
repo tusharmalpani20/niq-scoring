@@ -101,9 +101,9 @@ export function createApp(options: AppOptions) {
   app.post("/v1/activate", async (context) => {
     const parsed = activationExchangeSchema.safeParse(await parseJson(context)); if (!parsed.success) return context.json({ error: "INVALID_REQUEST" }, 400);
     const prefix = randomSecret(9).slice(0, 12); const credential = `niq_dep_${prefix}.${randomSecret(32)}`;
-    const exchanged = await options.store.exchangeActivation({ tokenHash: await sha256(parsed.data.activationToken), credentialId: createEntityId(), keyPrefix: prefix, secretHash: await sha256(credential), now: now() });
+    const exchanged = await options.store.exchangeActivation({ tokenHash: await sha256(parsed.data.activationToken), organizationReference: parsed.data.organizationReference, credentialId: createEntityId(), keyPrefix: prefix, secretHash: await sha256(credential), now: now() });
     context.header("cache-control", "no-store");
-    return exchanged ? context.json({ deploymentId: exchanged.deploymentId, credential }, 201) : context.json({ error: "ACTIVATION_INVALID_OR_EXPIRED" }, 401);
+    return exchanged ? context.json({ deploymentId: exchanged.deploymentId, organizationId: exchanged.organizationId, credential }, 201) : context.json({ error: "ACTIVATION_INVALID_OR_EXPIRED" }, 401);
   });
 
   app.get("/v1/metadata", async (context) => {

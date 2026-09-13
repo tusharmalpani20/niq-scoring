@@ -31,7 +31,7 @@ export interface ScoringStore {
   setEntitlement(organizationId: string, input: EntitlementInput): Promise<void>;
   assignVersion(organizationId: string, input: VersionAssignmentInput): Promise<void>;
   storeActivationToken(input: { id: string; deploymentId: string; tokenHash: string; expiresAt: Date }): Promise<void>;
-  exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }): Promise<{ deploymentId: string } | null>;
+  exchangeActivation(input: { tokenHash: string; organizationReference: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }): Promise<{ deploymentId: string; organizationId: string } | null>;
   authenticateDeployment(keyPrefix: string, secretHash: string): Promise<DeploymentIdentity | null>;
   reserveUsage(input: { identity: DeploymentIdentity; organizationId: string; capability: Capability; idempotencyKey: string; assessmentReference: string; platformEnabled: boolean }): Promise<UsageReservation>;
   completeUsage(usageId: string, response: unknown): Promise<void>;
@@ -67,13 +67,15 @@ export class MemoryScoringStore implements ScoringStore {
   async setEntitlement(organizationId: string, input: EntitlementInput) { this.entitlements = this.entitlements.filter((item) => item.organizationId !== organizationId || item.capability !== input.capability); this.entitlements.push({ organizationId, ...input }); }
   async assignVersion(organizationId: string, input: VersionAssignmentInput) { this.assignments = this.assignments.filter((item) => item.organizationId !== organizationId); this.assignments.push({ organizationId, ...input }); }
   async storeActivationToken(input: { deploymentId: string; tokenHash: string; expiresAt: Date }) { this.activations.push({ deploymentId: input.deploymentId, tokenHash: input.tokenHash, expiresAt: input.expiresAt, usedAt: null }); }
-  async exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
+  async exchangeActivation(input: { tokenHash: string; organizationReference: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
     const token = this.activations.find((item) => item.tokenHash === input.tokenHash && !item.usedAt && item.expiresAt > input.now);
     if (!token) return null;
-    token.usedAt = input.now;
     const deployment = this.deployments.find((item) => item.id === token.deploymentId)!;
+    const organization = this.organizations.find((item) => deployment.organizationIds.includes(item.id) && item.externalReference === input.organizationReference);
+    if (!organization) return null;
+    token.usedAt = input.now;
     this.credentials.push({ credentialId: input.credentialId, deploymentId: token.deploymentId, customerId: deployment.customerId, keyPrefix: input.keyPrefix, secretHash: input.secretHash });
-    return { deploymentId: token.deploymentId };
+    return { deploymentId: token.deploymentId, organizationId: organization.id };
   }
   async authenticateDeployment(keyPrefix: string, secretHash: string) { const row = this.credentials.find((item) => item.keyPrefix === keyPrefix && item.secretHash === secretHash); return row ? { credentialId: row.credentialId, deploymentId: row.deploymentId, customerId: row.customerId } : null; }
   async reserveUsage(input: { identity: DeploymentIdentity; organizationId: string; capability: Capability; idempotencyKey: string; assessmentReference: string; platformEnabled: boolean }): Promise<UsageReservation> {

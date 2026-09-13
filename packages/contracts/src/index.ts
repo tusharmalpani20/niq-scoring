@@ -123,7 +123,10 @@ export const activationTokenInputSchema = z.object({
   expiresInMinutes: z.number().int().min(5).max(1440).default(30),
 });
 
-export const activationExchangeSchema = z.object({ activationToken: z.string().min(48).max(256) });
+export const activationExchangeSchema = z.object({
+  activationToken: z.string().min(48).max(256),
+  organizationReference: z.string().trim().min(2).max(100),
+});
 
 export type CreateCustomer = z.infer<typeof createCustomerSchema>;
 export type CreateOrganization = z.infer<typeof createOrganizationSchema>;

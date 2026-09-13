@@ -21,7 +21,7 @@ async function onboard() {
   for (const capability of ["SCORING", "FACE_SCAN"] as const) await app.request(`/admin/organizations/${organization.id}/entitlement`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ capability, enabled: true, monthlyLimit: null }) });
   await app.request(`/admin/organizations/${organization.id}/version-assignment`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id }) });
   const activation = await (await app.request(`/admin/deployments/${deployment.id}/activation-token`, jsonRequest({ expiresInMinutes: 30 }))).json() as { activationToken: string };
-  const activated = await (await app.request("/v1/activate", jsonRequest({ activationToken: activation.activationToken }, ""))).json() as { credential: string };
+  const activated = await (await app.request("/v1/activate", jsonRequest({ activationToken: activation.activationToken, organizationReference: "apollo-main" }, ""))).json() as { credential: string };
   return { app, store, customer, organization, deployment, activationToken: activation.activationToken, credential: activated.credential };
 }
 
@@ -52,8 +52,20 @@ describe("scoring API", () => {
   test("activation tokens are one-time and deployment credentials authenticate", async () => {
     const { app, activationToken, credential } = await onboard();
     expect(credential).toStartWith("niq_dep_");
-    expect((await app.request("/v1/activate", jsonRequest({ activationToken }, ""))).status).toBe(401);
+    expect((await app.request("/v1/activate", jsonRequest({ activationToken, organizationReference: "apollo-main" }, ""))).status).toBe(401);
     expect((await app.request("/v1/metadata", { headers: { authorization: `Bearer ${credential}` } })).status).toBe(200);
+  });
+
+  test("binds activation to an organization reference without consuming a mismatched token", async () => {
+    const { app } = setup();
+    const customer = await (await app.request("/admin/customers", jsonRequest({ legalName: "Test Client", externalReference: "test-client" }))).json() as { id: string };
+    const organization = await (await app.request("/admin/organizations", jsonRequest({ customerId: customer.id, name: "Test Organization", externalReference: "01J00000000000000000000009" }))).json() as { id: string };
+    const deployment = await (await app.request("/admin/deployments", jsonRequest({ customerId: customer.id, name: "Test Deployment", environment: "test", region: "india", organizationIds: [organization.id] }))).json() as { id: string };
+    const activation = await (await app.request(`/admin/deployments/${deployment.id}/activation-token`, jsonRequest({ expiresInMinutes: 30 }))).json() as { activationToken: string };
+    expect((await app.request("/v1/activate", jsonRequest({ activationToken: activation.activationToken, organizationReference: "wrong-reference" }, ""))).status).toBe(401);
+    const valid = await app.request("/v1/activate", jsonRequest({ activationToken: activation.activationToken, organizationReference: "01J00000000000000000000009" }, ""));
+    expect(valid.status).toBe(201);
+    expect(await valid.json()).toMatchObject({ organizationId: organization.id, deploymentId: deployment.id });
   });
 
   test("guards provisional scoring, records usage and returns idempotent result", async () => {

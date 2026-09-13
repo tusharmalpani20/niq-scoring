@@ -59,12 +59,15 @@ export class PostgresScoringStore implements ScoringStore {
     });
   }
   async storeActivationToken(input: { id: string; deploymentId: string; tokenHash: string; expiresAt: Date }) { await this.database`insert into activation_tokens (id, deployment_id, token_hash, expires_at) values (${input.id}, ${input.deploymentId}, ${input.tokenHash}, ${input.expiresAt})`; }
-  async exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
+  async exchangeActivation(input: { tokenHash: string; organizationReference: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
     return this.database.begin(async (tx) => {
-      const [token] = await tx<Array<{ deploymentId: string }>>`update activation_tokens set used_at=${input.now} where token_hash=${input.tokenHash} and used_at is null and expires_at>${input.now} returning deployment_id as "deploymentId"`;
+      const [token] = await tx<Array<{ deploymentId: string }>>`select deployment_id as "deploymentId" from activation_tokens where token_hash=${input.tokenHash} and used_at is null and expires_at>${input.now} for update`;
       if (!token) return null;
+      const [organization] = await tx<Array<{ organizationId: string }>>`select organization.id as "organizationId" from deployment_organizations link join organizations organization on organization.customer_id=link.customer_id and organization.id=link.organization_id where link.deployment_id=${token.deploymentId} and organization.external_reference=${input.organizationReference}`;
+      if (!organization) return null;
+      await tx`update activation_tokens set used_at=${input.now} where token_hash=${input.tokenHash}`;
       await tx`insert into deployment_credentials (id, deployment_id, key_prefix, secret_hash, hash_algorithm) values (${input.credentialId}, ${token.deploymentId}, ${input.keyPrefix}, ${input.secretHash}, 'sha256')`;
-      return token;
+      return { deploymentId: token.deploymentId, organizationId: organization.organizationId };
     });
   }
   async authenticateDeployment(keyPrefix: string, secretHash: string) {
