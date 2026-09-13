@@ -55,15 +55,38 @@ textarea {
 input[aria-invalid="true"] {
   border-color: var(--color-destructive);
 }
+.password-input-group {
+  display: flex;
+  height: 36px;
+  overflow: hidden;
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+.password-input-group:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+.password-input-group[data-invalid="true"] {
+  border-color: var(--color-destructive);
+}
+.password-input-group[data-invalid="true"]:focus-within {
+  box-shadow: 0 0 0 1px var(--color-destructive);
+}
+.password-input-group > .password-input-control {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
 .password-visibility-toggle {
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  bottom: 1px;
+  flex: 0 0 44px;
   width: 44px;
   height: auto;
   border-left: 1px solid #cde3de;
-  border-radius: 0 7px 7px 0;
+  border-radius: 0;
   background: #e8f4f1;
   color: var(--primary);
 }

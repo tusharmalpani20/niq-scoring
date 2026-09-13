@@ -17,12 +17,15 @@ export const PasswordInput = React.forwardRef<
   }, [props.value]);
 
   return (
-    <div className="relative">
+    <div
+      className="password-input-group"
+      data-invalid={props["aria-invalid"] === true || props["aria-invalid"] === "true"}
+    >
       <Input
         {...props}
         ref={ref}
         type={visible ? "text" : "password"}
-        className={cn("pr-14", className)}
+        className={cn("password-input-control", className)}
       />
       <Button
         type="button"
