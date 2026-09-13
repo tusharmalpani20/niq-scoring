@@ -1,78 +1,233 @@
-import { type FormEvent, useState } from "react";
-
-type Overview = {
-  customers: Array<{ id: string; legalName: string; externalReference: string; enabled: boolean }>;
-  organizations: Array<{ id: string; customerId: string; name: string; enabled: boolean }>;
-  deployments: Array<{ id: string; customerId: string; name: string; environment: string; region: string; enabled: boolean; organizationIds: string[] }>;
-  entitlements: Array<{ organizationId: string; capability: "SCORING" | "FACE_SCAN"; enabled: boolean; monthlyLimit: number | null }>;
-  assignments: Array<{ organizationId: string; mode: string; scoringRuleVersionId?: string }>;
-  versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean }>;
-};
-
+import { useEffect, useState } from "react";
+import {
+  BrowserRouter,
+  NavLink,
+  useLocation,
+  Navigate,
+  useNavigate,
+} from "react-router-dom";
+import {
+  LayoutDashboard,
+  Users as UsersIcon,
+  Building2,
+  Network,
+  Server,
+  Layers3,
+  LogOut,
+  ShieldCheck,
+} from "lucide-react";
+import { request, message, type User } from "./api";
+import { Auth } from "./Auth";
+import { Users } from "./Users";
+import { Operations, type Overview } from "./Operations";
+import { Button } from "./components/ui/button";
+import { ErrorNotice } from "./shared";
+const pages = [
+  {
+    path: "overview",
+    label: "Overview",
+    icon: LayoutDashboard,
+    description: "Your scoring operations at a glance.",
+  },
+  {
+    path: "users",
+    label: "Users",
+    icon: UsersIcon,
+    description: "Manage access for your NIQ administration team.",
+  },
+  {
+    path: "customers",
+    label: "Customers",
+    icon: Building2,
+    description: "Manage customers using NIQ scoring services.",
+  },
+  {
+    path: "organizations",
+    label: "Organizations",
+    icon: Network,
+    description: "Manage organization access and monthly limits.",
+  },
+  {
+    path: "deployments",
+    label: "Deployments",
+    icon: Server,
+    description: "Connect and activate NIQ application installations.",
+  },
+  {
+    path: "versions",
+    label: "Rule versions",
+    icon: Layers3,
+    description: "Review scoring rule packages and their status.",
+  },
+];
 export function App() {
-  const [token, setToken] = useState("");
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [activation, setActivation] = useState<{ deploymentId: string; activationToken: string; expiresAt: string } | null>(null);
-  const [error, setError] = useState("");
-  const auth = { authorization: `Bearer ${token}`, "content-type": "application/json" };
-
-  async function request(path: string, init?: RequestInit) {
-    setError("");
-    const response = await fetch(`/api${path}`, { ...init, headers: { ...auth, ...init?.headers } });
-    if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? "Request failed");
-    return response.json();
-  }
-  async function refresh() { try { setOverview(await request("/admin/overview")); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load"); } }
-  async function submit(path: string, body: unknown, method = "POST") { try { await request(path, { method, body: JSON.stringify(body) }); await refresh(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save"); } }
-  async function generateActivationToken(deploymentId: string) {
-    try {
-      const result = await request(`/admin/deployments/${deploymentId}/activation-token`, { method: "POST", body: JSON.stringify({ expiresInMinutes: 30 }) }) as { activationToken: string; expiresAt: string };
-      setActivation({ deploymentId, ...result });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to generate activation token");
-    }
-  }
-
   return (
-    <div className="shell">
-      <aside><div className="brand"><span>NIQ</span><small>Scoring control</small></div><nav><a href="#overview">Overview</a><a href="#customers">Customers</a><a href="#deployments">Deployments</a><a href="#versions">Versions</a></nav><p className="privacy">No patient identity belongs in this console.</p></aside>
-      <main>
-        <header><div><p className="eyebrow">India · Phase 1</p><h1>Scoring administration</h1><p>Customers, deployments, quotas and governed rule assignments.</p></div><span className={overview ? "status online" : "status"}>{overview ? "Connected" : "Locked"}</span></header>
-        <section className="warning"><strong>Development-only scoring</strong><span>NIQ-DRAFT-2026-09 is unvalidated and prohibited for patient-care decisions.</span></section>
-        <section className="panel login"><label><span>Development admin token</span><input type="password" value={token} onChange={(event) => setToken(event.target.value)} autoComplete="off" /></label><button onClick={refresh}>Unlock console</button><small>Held in memory only. This bootstrap access is disabled in production.</small>{error && <p className="error" role="alert">{error}</p>}</section>
-
-        <section className="cards" id="overview"><article><span>Customers</span><strong>{overview?.customers.length ?? 0}</strong></article><article><span>Organizations</span><strong>{overview?.organizations.length ?? 0}</strong></article><article><span>Deployments</span><strong>{overview?.deployments.length ?? 0}</strong></article><article><span>Rule packages</span><strong>{overview?.versions.length ?? 0}</strong></article></section>
-
-        <section className="grid" id="customers">
-          <AdminForm title="Create customer" fields={["legalName", "externalReference"]} onSubmit={(body) => submit("/admin/customers", body)} />
-          <AdminForm title="Create organization" fields={["customerId", "name", "externalReference"]} onSubmit={(body) => submit("/admin/organizations", body)} />
-        </section>
-
-        <section className="panel"><h2>Organizations</h2><div className="table-wrap" role="region" aria-label="Organizations table" tabIndex={0}><table><thead><tr><th>Name</th><th>Customer</th><th>Scoring limit</th><th>Face-scan limit</th><th>Version mode</th></tr></thead><tbody>{overview?.organizations.map((organization) => {
-          const entitlement = (capability: "SCORING" | "FACE_SCAN") => overview.entitlements.find((item) => item.organizationId === organization.id && item.capability === capability);
-          return <tr key={organization.id}><td><strong>{organization.name}</strong><small>{organization.id}</small></td><td>{organization.customerId}</td><td>{formatLimit(entitlement("SCORING"))}</td><td>{formatLimit(entitlement("FACE_SCAN"))}</td><td>{overview.assignments.find((item) => item.organizationId === organization.id)?.mode ?? "Not assigned"}</td></tr>;
-        })}<EmptyRow show={!overview?.organizations.length} columns={5} /></tbody></table></div></section>
-
-        <section className="grid" id="deployments">
-          <AdminForm title="Create deployment" fields={["customerId", "name", "environment", "region", "organizationIds"]} defaults={{ environment: "production", region: "india" }} onSubmit={(body) => submit("/admin/deployments", { ...body, organizationIds: String(body.organizationIds).split(",").map((value) => value.trim()) })} />
-          <AdminForm title="Set monthly limit" fields={["organizationId", "capability", "monthlyLimit"]} defaults={{ capability: "SCORING" }} onSubmit={({ organizationId, ...body }) => submit(`/admin/organizations/${organizationId}/entitlement`, { ...body, enabled: true, monthlyLimit: body.monthlyLimit === "" ? null : Number(body.monthlyLimit) }, "PUT")} />
-        </section>
-
-        <section className="panel"><h2>Deployments</h2><div className="table-wrap" role="region" aria-label="Deployments table" tabIndex={0}><table><thead><tr><th>Name</th><th>Environment</th><th>Region</th><th>Organizations</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>{overview?.deployments.map((deployment) => <tr key={deployment.id}><td><strong>{deployment.name}</strong><small>{deployment.id}</small></td><td>{deployment.environment}</td><td>{deployment.region}</td><td>{deployment.organizationIds.length}</td><td><span className="pill">{deployment.enabled ? "Enabled" : "Disabled"}</span></td><td><button className="small-button" type="button" onClick={() => generateActivationToken(deployment.id)}>Generate activation token</button></td></tr>)}<EmptyRow show={!overview?.deployments.length} columns={6} /></tbody></table></div>
-          {activation && <div className="activation-result" role="status"><div><strong>One-time activation token</strong><span>For deployment {activation.deploymentId}. Expires {new Date(activation.expiresAt).toLocaleString()}.</span></div><textarea readOnly value={activation.activationToken} aria-label="One-time activation token" /><small>Copy this into the client’s NIQ Application organization page. It is shown only now and cannot be used again after exchange.</small></div>}
-        </section>
-
-        <section className="panel" id="versions"><h2>Version status</h2>{overview?.versions.map((version) => <div className="version" key={version.id}><div><strong>{version.version}</strong><small>{version.id}</small></div><span className="pill">{version.lifecycle}</span><span className="danger">{version.clinicalUsePermitted ? "Clinical use permitted" : "Clinical use prohibited"}</span></div>) ?? <p>Unlock the console to view versions.</p>}</section>
-      </main>
-    </div>
+    <BrowserRouter>
+      <Console />
+    </BrowserRouter>
   );
 }
-
-function formatLimit(value?: { enabled: boolean; monthlyLimit: number | null }) { if (!value?.enabled) return "Disabled"; return value.monthlyLimit === null ? "Unlimited" : value.monthlyLimit; }
-function EmptyRow({ show, columns }: { show: boolean; columns: number }) { return show ? <tr><td colSpan={columns}>No records configured.</td></tr> : null; }
-
-function AdminForm({ title, fields, defaults = {}, onSubmit }: { title: string; fields: string[]; defaults?: Record<string, string>; onSubmit: (body: Record<string, string>) => Promise<void> }) {
-  const [values, setValues] = useState<Record<string, string>>(defaults);
-  const handleSubmit = async (event: FormEvent) => { event.preventDefault(); await onSubmit(values); };
-  return <form className="panel form" onSubmit={handleSubmit}><h2>{title}</h2>{fields.map((field) => <label key={field}><span>{field.replace(/([A-Z])/g, " $1")}</span><input required={field !== "monthlyLimit"} value={values[field] ?? ""} onChange={(event) => setValues({ ...values, [field]: event.target.value })} /></label>)}<button type="submit">Save</button></form>;
+function Console() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [user, setUser] = useState<User | null>(null);
+  const [setup, setSetup] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [connectionError, setConnectionError] = useState("");
+  const [data, setData] = useState<Overview | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [invitationToken, setInvitationToken] = useState(() =>
+    location.pathname === "/accept-invitation"
+      ? (new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "")
+      : "",
+  );
+  async function initialize() {
+    setLoading(true);
+    setConnectionError("");
+    try {
+      const status = await request<{ setupRequired: boolean }>("/auth/status");
+      setSetup(status.setupRequired);
+      if (!status.setupRequired) {
+        const response = await fetch("/api/auth/session", {
+          credentials: "same-origin",
+        });
+        if (response.ok) setUser((await response.json()).user);
+        else if (response.status !== 401)
+          throw new Error("Unable to check your session. Please try again.");
+      }
+    } catch (c) {
+      setConnectionError(message(c));
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    void initialize();
+    const expired = () => {
+      setUser(null);
+      setData(null);
+    };
+    window.addEventListener("session-expired", expired);
+    return () => window.removeEventListener("session-expired", expired);
+  }, []);
+  async function refresh() {
+    setData(await request<Overview>("/admin/overview"));
+  }
+  useEffect(() => {
+    if (user) refresh().catch((c) => setError(message(c)));
+  }, [user]);
+  if (loading)
+    return (
+      <div className="loading" role="status">
+        Connecting to NIQ scoring…
+      </div>
+    );
+  if (!user && connectionError)
+    return (
+      <div className="loading">
+        <ErrorNotice error={connectionError} />
+        <Button onClick={initialize}>Try again</Button>
+      </div>
+    );
+  if (!user || (invitationToken && location.pathname === "/accept-invitation"))
+    return (
+      <Auth
+        setupRequired={setup}
+        invitationToken={
+          location.pathname === "/accept-invitation" ? invitationToken : ""
+        }
+        onSetup={() => setSetup(false)}
+        onInvitationAccepted={() => {
+          setInvitationToken("");
+          setUser(null);
+          setData(null);
+          navigate("/login", { replace: true });
+        }}
+        onLogin={(u) => {
+          setUser(u);
+          setError("");
+          navigate("/overview", { replace: true });
+        }}
+      />
+    );
+  const page = pages.find((p) => `/${p.path}` === location.pathname);
+  if (!page) return <Navigate to="/overview" replace />;
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brandmark">
+          NIQ<span>Scoring</span>
+        </div>
+        <div className="nav-label">ADMINISTRATION</div>
+        <nav>
+          {pages.map((p) => (
+            <NavLink key={p.path} to={`/${p.path}`}>
+              <p.icon size={18} />
+              {p.label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <ShieldCheck size={18} />
+          <p>
+            NIQ administrators only<small>Central scoring console</small>
+          </p>
+        </div>
+      </aside>
+      <div className="workspace">
+        <div className="topbar">
+          <span>
+            NIQ scoring / <strong>{page.label}</strong>
+          </span>
+          <div className="account">
+            <div>
+              <strong>{user.displayName}</strong>
+              <small>Administrator</small>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={loggingOut}
+              onClick={async () => {
+                setLoggingOut(true);
+                try {
+                  await request("/auth/logout", {});
+                  setUser(null);
+                  setData(null);
+                  setError("");
+                } catch (c) {
+                  setError(message(c));
+                } finally {
+                  setLoggingOut(false);
+                }
+              }}
+            >
+              <LogOut size={16} /> Sign out
+            </Button>
+          </div>
+        </div>
+        <main>
+          <header className="page-header">
+            <p className="eyebrow">SCORING CONTROL</p>
+            <h1>{page.label}</h1>
+            <p>{page.description}</p>
+          </header>
+          <ErrorNotice error={error} />
+          {page.path === "users" ? (
+            <Users currentUser={user} />
+          ) : data ? (
+            <Operations
+              key={page.path}
+              page={page.path}
+              data={data}
+              refresh={refresh}
+            />
+          ) : (
+            <p role="status">Loading scoring operations…</p>
+          )}
+        </main>
+      </div>
+    </div>
+  );
 }
