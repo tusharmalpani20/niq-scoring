@@ -1,9 +1,8 @@
 import { Deployments } from "./Deployments";
 import { Clients } from "./Clients";
-import { Badge } from "./components/ui/badge";
+import { RuleVersions } from "./RuleVersions";
 import { Card, CardContent } from "./components/ui/card";
 import { Link } from "react-router-dom";
-import { Panel } from "./shared";
 export type Overview = {
   clients: Array<{
     id: string;
@@ -65,29 +64,5 @@ export function Operations({
     );
   if (page === "clients") return <Clients data={data} refresh={refresh} />;
   if (page === "deployments") return <Deployments data={data} refresh={refresh} />;
-  return (
-    <Panel
-      title="Rule versions"
-      description="Review the lifecycle and clinical-use status of each scoring rule package."
-    >
-      {data.versions.length === 0 ? (
-        <p className="empty">No rule versions configured.</p>
-      ) : (
-        data.versions.map((v) => (
-          <div className="version" key={v.id}>
-            <div>
-              <strong>{v.version}</strong>
-              <small>{v.id}</small>
-            </div>
-            <Badge variant="secondary">{v.lifecycle}</Badge>
-            <span className={v.clinicalUsePermitted ? "success" : "danger"}>
-              {v.clinicalUsePermitted
-                ? "Clinical use permitted"
-                : "Clinical use prohibited"}
-            </span>
-          </div>
-        ))
-      )}
-    </Panel>
-  );
+  return <RuleVersions data={data} />;
 }
