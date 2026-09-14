@@ -1,31 +1,58 @@
 import type { RuleDefinition } from '@niq-scoring/contracts/rules';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { ConditionEditor } from './ConditionEditor';
 import { newRuleId } from './questionnaire-model';
 import { ScoringField, ScoringNumber, ScoringSelect, RangeFields } from './scoring-controls';
-import { optionPoints, scoringReferences, synchronizeOptionPoints } from './scoring-model';
-type Props = {definition:RuleDefinition;onChange:(definition:RuleDefinition)=>void;disabled?:boolean};
+import { scoringReferences } from './scoring-model';
+import { describeCondition } from './QuestionnaireEditor';
+
+type Props = { definition: RuleDefinition; onChange: (definition: RuleDefinition) => void; disabled?: boolean };
 type Score = RuleDefinition['scoring'][number];
-const aggregation = [{value:'sum',label:'Sum'},{value:'max',label:'Highest value'}];
-export function ScoringEditor({definition:d,onChange,disabled=false}:Props) {
-  const questions=d.sections.flatMap(section=>section.questions);
-  const numeric=[...questions.filter(q=>q.type==='number').map(q=>({value:`question:${q.id}`,label:q.label})),...d.calculations.map(c=>({value:`calculation:${c.id}`,label:c.label}))];
-  const optionQuestions=questions.filter(q=>q.type==='single_select'||q.type==='multi_select');
-  const patch=(index:number,value:Score)=>onChange({...d,scoring:d.scoring.map((rule,i)=>i===index?value:rule)});
-  function add(kind:Score['kind']) {
-    const base={id:newRuleId('score'),label:'New scoring rule',domainId:d.domains[0]!.id,sources:[]};
-    const rule:Score=kind==='options'?{...base,kind,questionId:optionQuestions[0]!.id,points:optionPoints(d,optionQuestions[0]!.id),aggregation:'sum',cap:null}:kind==='ranges'?{...base,kind,input:{kind:numeric[0]!.value.split(':')[0] as 'question'|'calculation',id:numeric[0]!.value.split(':')[1]!},bands:[{id:newRuleId('band'),min:null,max:null,minInclusive:true,maxInclusive:true,points:0}]}:{...base,kind,when:{match:'all',tests:[{ref:{kind:'question',id:questions[0]!.id},operator:'answered'}]},points:0,otherwise:0};
-    onChange({...d,scoring:[...d.scoring,rule]});
-  }
-  return <fieldset disabled={disabled} className="space-y-8 min-w-0">
-    <section className="space-y-4"><h3 className="text-lg font-medium">Domains</h3><p className="text-sm text-muted-foreground">Group component scores. Leave a cap blank for no upper limit.</p>{d.domains.map((domain,index)=>{const uses=scoringReferences(d,'domain',domain.id);return <div key={domain.id} id={`rule-domains-${domain.id}`} className="space-y-3 rounded-lg border p-4"><div className="grid gap-3 sm:grid-cols-2"><ScoringField label="Domain name"><Input aria-label="Domain name" value={domain.label} onChange={e=>onChange({...d,domains:d.domains.map((v,i)=>i===index?{...v,label:e.target.value}:v)})}/></ScoringField><ScoringNumber label="Domain cap" min={0} value={domain.cap} onChange={cap=>onChange({...d,domains:d.domains.map((v,i)=>i===index?{...v,cap}:v)})}/></div><Button type="button" variant="outline" disabled={uses.length>0} onClick={()=>onChange({...d,domains:d.domains.filter((_,i)=>i!==index)})}>Remove domain</Button>{uses.length>0&&<p className="text-sm text-muted-foreground">Used by {uses.join(', ')}. Remove these references first.</p>}</div>})}<Button type="button" variant="outline" onClick={()=>onChange({...d,domains:[...d.domains,{id:newRuleId('domain'),label:'New domain',cap:null,sources:[]}]})}>Add domain</Button></section>
-    <section className="space-y-4"><h3 className="text-lg font-medium">Scoring rules</h3>{!d.domains.length&&<p className="text-sm text-muted-foreground">Add a domain before adding scoring rules.</p>}{d.scoring.map((rule,index)=><div key={rule.id} id={`rule-scoring-${rule.id}`} className="space-y-4 rounded-lg border p-4"><div className="grid gap-3 sm:grid-cols-2"><ScoringField label="Rule name"><Input aria-label="Rule name" value={rule.label} onChange={e=>patch(index,{...rule,label:e.target.value})}/></ScoringField><ScoringSelect label="Domain" value={rule.domainId} options={d.domains.map(v=>({value:v.id,label:v.label}))} onChange={domainId=>patch(index,{...rule,domainId})}/></div>
-      {rule.kind==='options'&&<><ScoringSelect label="Question" value={rule.questionId} options={optionQuestions.map(q=>({value:q.id,label:q.label}))} onChange={questionId=>patch(index,{...rule,questionId,points:optionPoints(d,questionId)})}/><p className="text-sm text-muted-foreground">Changing the question resets its option points. After editing answer options, synchronize the mapping to include new options at zero points.</p><Button type="button" variant="outline" onClick={()=>patch(index,{...rule,points:synchronizeOptionPoints(d,rule)})}>Synchronize answer options</Button>{rule.points.map((point,i)=><ScoringNumber key={point.optionId} label={questions.find(q=>q.id===rule.questionId)?.options.find(o=>o.id===point.optionId)?.label??`Missing option: ${point.optionId}`} value={point.points} onChange={points=>patch(index,{...rule,points:rule.points.map((p,j)=>i===j?{...p,points:points??0}:p)})}/>)}<div className="grid gap-3 sm:grid-cols-2"><ScoringSelect label="Combine selected options" value={rule.aggregation} options={aggregation} onChange={value=>patch(index,{...rule,aggregation:value as 'sum'|'max'})}/><ScoringNumber label="Component cap" min={0} value={rule.cap} onChange={cap=>patch(index,{...rule,cap})}/></div></>}
-      {rule.kind==='ranges'&&<><ScoringSelect label="Numeric input" value={`${rule.input.kind}:${rule.input.id}`} options={numeric} onChange={value=>{const[kind,id]=value.split(':');patch(index,{...rule,input:{kind:kind as 'question'|'calculation',id:id!}})}}/>{rule.bands.map((band,i)=><div key={band.id} className="space-y-3 rounded-md bg-muted/30 p-3"><RangeFields value={band} onChange={value=>patch(index,{...rule,bands:rule.bands.map((b,j)=>i===j?{...b,...value}:b)})}/><ScoringNumber label="Range points" value={band.points} onChange={points=>patch(index,{...rule,bands:rule.bands.map((b,j)=>i===j?{...b,points:points??0}:b)})}/><Button type="button" variant="outline" disabled={rule.bands.length===1} onClick={()=>patch(index,{...rule,bands:rule.bands.filter((_,j)=>i!==j)})}>Remove range</Button></div>)}<Button type="button" variant="outline" onClick={()=>patch(index,{...rule,bands:[...rule.bands,{id:newRuleId('band'),min:null,max:null,minInclusive:true,maxInclusive:true,points:0}]})}>Add range</Button></>}
-      {rule.kind==='condition'&&<><ConditionEditor definition={d} value={rule.when} required disabled={disabled} allowedKinds={['question','calculation']} onChange={when=>{if(when)patch(index,{...rule,when})}}/><div className="grid gap-3 sm:grid-cols-2"><ScoringNumber label="Points when matched" value={rule.points} onChange={points=>patch(index,{...rule,points:points??0})}/><ScoringNumber label="Points otherwise" value={rule.otherwise} onChange={otherwise=>patch(index,{...rule,otherwise:otherwise??0})}/></div></>}
-      <Button type="button" variant="outline" onClick={()=>onChange({...d,scoring:d.scoring.filter((_,i)=>i!==index)})}>Remove scoring rule</Button></div>)}<div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={!d.domains.length||!optionQuestions.length} onClick={()=>add('options')}>Add option scoring</Button><Button type="button" variant="outline" disabled={!d.domains.length||!numeric.length} onClick={()=>add('ranges')}>Add range scoring</Button><Button type="button" variant="outline" disabled={!d.domains.length||!questions.length} onClick={()=>add('condition')}>Add conditional scoring</Button></div></section>
-    <section className="space-y-4"><h3 className="text-lg font-medium">Total score</h3><div className="grid gap-3 sm:grid-cols-3"><ScoringSelect label="Combine domains" value={d.total.aggregation} options={aggregation} onChange={value=>onChange({...d,total:{...d.total,aggregation:value as 'sum'|'max'}})}/><ScoringNumber label="Total cap" min={0} value={d.total.cap} onChange={cap=>onChange({...d,total:{...d.total,cap}})}/><ScoringNumber label="Decimal places (0–6)" min={0} max={6} value={d.total.precision} onChange={precision=>onChange({...d,total:{...d.total,precision:precision??0}})}/></div></section>
+
+export function ScoringEditor({ definition: d, onChange, disabled = false }: Props) {
+  const questions = d.sections.flatMap(section => section.questions);
+  const patch = (index: number, rule: Score) => onChange({ ...d, scoring: d.scoring.map((item, i) => i === index ? rule : item) });
+  const domains = d.domains.filter(domain => domain.id !== 'unassigned');
+  return <fieldset disabled={disabled} className="min-w-0 space-y-8">
+    <p className="text-sm text-muted-foreground">Fields and scoring components follow the NIQ assessment spreadsheet. Configure their points, thresholds and caps below. Leave a cap blank for no upper limit.</p>
+    <section className="space-y-4"><h3 className="text-lg font-medium">Domain caps</h3><div className="grid gap-3 sm:grid-cols-2">{domains.map(domain => <div key={domain.id} id={`rule-domains-${domain.id}`} className="space-y-3 rounded-lg border p-4"><h4 className="font-medium">{domain.label}</h4><ScoringNumber label="Domain cap" min={0} value={domain.cap} onChange={cap => onChange({ ...d, domains: d.domains.map(item => item.id === domain.id ? { ...item, cap } : item) })}/></div>)}</div></section>
+    <section className="space-y-4"><h3 className="text-lg font-medium">Scoring rules</h3>{d.scoring.map((rule, index) => <section key={rule.id} id={`rule-scoring-${rule.id}`} className="space-y-4 rounded-lg border p-4">
+      <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1"><h4 className="font-medium">{rule.label}</h4><p className="text-sm text-muted-foreground">{rule.kind === 'options' ? questions.find(question => question.id === rule.questionId)?.label : rule.kind === 'ranges' ? [...questions, ...d.calculations].find(input => input.id === rule.input.id)?.label : 'Conditional scoring'}</p></div><ScoringSelect label="Domain" value={rule.domainId} options={[{value:'unassigned',label:'Choose domain'}, ...domains.map(domain => ({ value: domain.id, label: domain.label }))]} onChange={domainId => patch(index, { ...rule, domainId })}/></div>
+      {rule.kind === 'options' && <OptionsScoring definition={d} rule={rule} onChange={updated => patch(index, updated)}/>}
+      {rule.kind === 'ranges' && <div className="space-y-3">{rule.bands.map((band, i) => <fieldset key={band.id} className="space-y-3 rounded-md bg-muted/30 p-3"><legend className="px-1 text-sm font-medium">Range {i + 1}</legend><RangeFields value={band} onChange={value => patch(index, { ...rule, bands: rule.bands.map((item, j) => i === j ? { ...item, ...value } : item) })}/><ScoringNumber label="Range points" value={band.points} onChange={points => patch(index, { ...rule, bands: rule.bands.map((item, j) => i === j ? { ...item, points: points ?? 0 } : item) })}/></fieldset>)}</div>}
+      {rule.kind === 'condition' && <><p className="rounded-md bg-muted/30 p-3 text-sm">When {describeCondition(d, rule.when)}.</p>{rule.when.tests.map((test, testIndex) => typeof test.value === 'number' ? <ScoringNumber key={testIndex} label={`Condition threshold ${testIndex + 1}`} value={test.value} onChange={value => patch(index, { ...rule, when: { ...rule.when, tests: rule.when.tests.map((item, i) => i === testIndex ? { ...item, value: value ?? 0 } : item) } })}/> : null)}<div className="grid gap-3 sm:grid-cols-2"><ScoringNumber label="Points when matched" value={rule.points} onChange={points => patch(index, { ...rule, points: points ?? 0 })}/><ScoringNumber label="Points otherwise" value={rule.otherwise} onChange={otherwise => patch(index, { ...rule, otherwise: otherwise ?? 0 })}/></div></>}
+      {!!rule.sources.length && <p className="text-xs text-muted-foreground">Sources: {rule.sources.map(source => `${source.document} · ${source.location}${source.note ? ` — ${source.note}` : ''}`).join('; ')}</p>}
+    </section>)}</section>
+    <section className="space-y-4"><h3 className="text-lg font-medium">Total score</h3><div className="grid items-end gap-3 sm:grid-cols-2"><p className="text-sm text-muted-foreground">{d.total.aggregation === 'sum' ? 'Add domain scores together' : 'Use the highest domain score'}; round to {d.total.precision} decimal places.</p><ScoringNumber label="Total cap" min={0} value={d.total.cap} onChange={cap => onChange({ ...d, total: { ...d.total, cap } })}/></div></section>
     <section className="space-y-4"><h3 className="text-lg font-medium">Classifications</h3><p className="text-sm text-muted-foreground">Define non-overlapping ranges covering every possible total score.</p>{d.classifications.map((item,index)=>{const uses=scoringReferences(d,'classification',item.id);return <div key={item.id} id={`rule-classifications-${item.id}`} className="space-y-3 rounded-lg border p-4"><ScoringField label="Classification name"><Input aria-label="Classification name" value={item.label} onChange={e=>onChange({...d,classifications:d.classifications.map((v,i)=>i===index?{...v,label:e.target.value}:v)})}/></ScoringField><RangeFields value={item} onChange={value=>onChange({...d,classifications:d.classifications.map((v,i)=>i===index?{...v,...value}:v)})}/><ScoringField label="Interpretation"><Input aria-label="Interpretation" value={item.interpretation} onChange={e=>onChange({...d,classifications:d.classifications.map((v,i)=>i===index?{...v,interpretation:e.target.value}:v)})}/></ScoringField><Button type="button" variant="outline" disabled={uses.length>0} onClick={()=>onChange({...d,classifications:d.classifications.filter((_,i)=>i!==index)})}>Remove classification</Button>{uses.length>0&&<p className="text-sm text-muted-foreground">Used by {uses.join(', ')}. Remove these references first.</p>}</div>})}<Button type="button" variant="outline" onClick={()=>onChange({...d,classifications:[...d.classifications,{id:newRuleId('classification'),label:'New classification',interpretation:'',min:null,max:null,minInclusive:true,maxInclusive:true,sources:[]}]})}>Add classification</Button></section>
   </fieldset>;
+}
+
+function OptionsScoring({ definition, rule, onChange }: {
+  definition: RuleDefinition;
+  rule: Extract<Score, { kind: 'options' }>;
+  onChange: (rule: Extract<Score, { kind: 'options' }>) => void;
+}) {
+  const question = definition.sections.flatMap(section => section.questions).find(item => item.id === rule.questionId);
+  const options = question?.options ?? [];
+  const setPoints = (optionId: string, points: number | null) => {
+    // An unanswered score is unresolved configuration, not an implicit zero.
+    const configured = new Map(rule.points.map(item => [item.optionId, item.points]));
+    if (points === null) configured.delete(optionId);
+    else configured.set(optionId, points);
+    onChange({ ...rule, points: options.flatMap(option => {
+      const value = configured.get(option.id);
+      return value === undefined ? [] : [{ optionId: option.id, points: value }];
+    }) });
+  };
+  return <>
+    <div className="grid gap-3 sm:grid-cols-2">{options.map(option => {
+      const points = rule.points.find(item => item.optionId === option.id)?.points;
+      return <div key={option.id} className="space-y-1"><ScoringNumber label={option.label} value={points ?? null} onChange={value => setPoints(option.id, value)}/>{points === undefined && <p className="text-sm text-muted-foreground">Not configured</p>}</div>;
+    })}</div>
+    <div className="grid items-end gap-3 sm:grid-cols-2">
+      {question?.type === 'multi_select' ? <ScoringSelect label="Combine selected options" value={rule.aggregation} options={[{ value: 'sum', label: 'Add points together' }, { value: 'max', label: 'Use highest points' }]} onChange={value => onChange({ ...rule, aggregation: value as 'sum' | 'max' })}/> : <p className="text-sm text-muted-foreground">Use the points for the selected answer.</p>}
+      <ScoringNumber label="Component cap" min={0} value={rule.cap} onChange={cap => onChange({ ...rule, cap })}/>
+    </div>
+  </>;
 }

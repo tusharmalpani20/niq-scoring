@@ -34,6 +34,7 @@ export function message(cause: unknown) {
 }
 
 const errors: Record<string, string> = {
+  FIXED_RULE_REQUIRED: "Fields and options must match the fixed Excel questionnaire. Create a new version for older custom definitions.",
   VERSION_UNAVAILABLE: "Choose an approved, available rule version.",
   RULE_REVISION_CONFLICT: "This version changed in another session. Your edits are preserved. Reload only when you are ready to discard them.",
   RULE_NAME_EXISTS: "A rule version with this name already exists.",
