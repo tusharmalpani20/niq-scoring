@@ -56,7 +56,7 @@ test("one scoring page replaces questionnaire, preview and validation authoring"
   await expect(page.getByRole("columnheader", { name: "Field name", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Type", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Score", exact: true })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Cap", exact: true })).toBeVisible();
+  await expect(page.getByRole("table").filter({ has: page.getByRole("columnheader", { name: "Field name", exact: true }) }).getByRole("columnheader", { name: "Cap", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Interventions", exact: true }).click();
   await expect(page.getByText(/N\/A.*not finalized/i)).toBeVisible();
   expect(state.getRecord()!.definition.sections).toEqual(createSpreadsheetTemplate("Reference").sections);
