@@ -22,4 +22,4 @@ Administrators create and edit deployments from a single configuration dialog. A
 
 New deployments select NIQ hosted or Client cloud. Hosting is descriptive metadata; choosing it does not provision infrastructure. Client, environment and hosting cannot change after creation. Older deployments without hosting can select it once; existing on-premises deployments retain their legacy value.
 
-The configuration API generates a display name from the client, environment, hosting and a random suffix (for example, `apollo-production-niq-7f3a91bc`). Editing preserves this name and the internal deployment ID. Name and region are not form inputs. New NIQ-hosted records use the API's configured region; client-cloud records use `unknown` until installation region reporting is implemented. Existing regions are preserved.
+The configuration API generates a display name from the client, environment, hosting and a random suffix (for example, `apollo-production-niq-7f3a91bc`). Editing preserves this name and the internal deployment ID. Name is not a form input. Deployment records do not store region; the API retains its separate runtime region configuration.

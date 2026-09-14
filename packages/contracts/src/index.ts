@@ -96,7 +96,6 @@ export const createClientSchema = z.object({
 export const createDeploymentSchema = z.object({
   name: z.string().trim().min(2).max(120),
   environment: z.enum(["development", "test", "staging", "production"]),
-  region: z.string().trim().min(2).max(50),
   clientId: ulidSchema,
 });
 
@@ -118,8 +117,8 @@ export const deploymentConfigurationSchema = createDeploymentSchema.extend({
   faceScan: entitlementInputSchema.omit({ capability: true }),
   versionAssignment: versionAssignmentInputSchema,
 });
-// Admin callers choose configuration; display name and region are server-managed.
-export const deploymentConfigurationRequestSchema = deploymentConfigurationSchema.omit({ name: true, region: true });
+// Admin callers choose configuration; display names are server-generated.
+export const deploymentConfigurationRequestSchema = deploymentConfigurationSchema.omit({ name: true });
 export type DeploymentConfiguration = z.infer<typeof deploymentConfigurationSchema>;
 
 export const activationTokenInputSchema = z.object({

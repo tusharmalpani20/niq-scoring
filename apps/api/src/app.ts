@@ -85,8 +85,6 @@ export function createApp(options: AppOptions) {
     const input = {
       ...parsed.data,
       name: existing?.name ?? `${clientSlug}-${parsed.data.environment}-${hosting}-${crypto.randomUUID().slice(0, 8)}`,
-      // A client-cloud installation's region is not the central API's region.
-      region: existing?.region ?? (parsed.data.hostingType === "NIQ_HOSTED" ? options.region : "unknown"),
     };
     const policy = input.versionAssignment;
     if (policy.mode === "PINNED" && !current.versions.some(v => v.id === policy.scoringRuleVersionId)) return context.json({ error: "VERSION_NOT_FOUND" }, 400);

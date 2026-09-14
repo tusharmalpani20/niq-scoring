@@ -13,7 +13,7 @@ export class PostgresScoringStore implements ScoringStore {
   async overview() {
     const [clients, deployments, entitlements, assignments, versions] = await Promise.all([
       this.database<Client[]>`select id, name, enabled from clients order by created_at`,
-      this.database<Deployment[]>`select id, client_id as "clientId", name, environment, region, hosting_type as "hostingType", enabled from deployments order by created_at`,
+      this.database<Deployment[]>`select id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled from deployments order by created_at`,
       this.database<Array<EntitlementInput & { deploymentId: string }>>`select deployment_id as "deploymentId", capability, enabled, monthly_limit as "monthlyLimit" from entitlements where effective_until is null`,
       this.database<Array<{ deploymentId: string; mode: "LATEST_APPROVED" | "PINNED"; scoringRuleVersionId: string | null }>>`select deployment_id as "deploymentId", mode, scoring_rule_version_id as "scoringRuleVersionId" from deployment_version_assignments where effective_until is null`,
       this.database<Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean }>>`select id, version, lifecycle, clinical_use_permitted as "clinicalUsePermitted" from scoring_rule_versions order by created_at desc`,
@@ -30,7 +30,7 @@ export class PostgresScoringStore implements ScoringStore {
   async createDeployment(input: CreateDeployment) {
     return this.database.begin(async (tx) => {
       const id = createEntityId();
-      const [row] = await tx<Deployment[]>`insert into deployments (id, client_id, name, environment, region) values (${id}, ${input.clientId}, ${input.name}, ${input.environment}, ${input.region}) returning id, client_id as "clientId", name, environment, region, hosting_type as "hostingType", enabled`;
+      const [row] = await tx<Deployment[]>`insert into deployments (id, client_id, name, environment) values (${id}, ${input.clientId}, ${input.name}, ${input.environment}) returning id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled`;
       return row!;
     });
   }
@@ -38,8 +38,8 @@ export class PostgresScoringStore implements ScoringStore {
     return this.database.begin(async tx => {
       const deploymentId = id ?? createEntityId();
       const [deployment] = id
-        ? await tx<Deployment[]>`update deployments set name=${input.name}, environment=${input.environment}, region=${input.region}, hosting_type=${input.hostingType}, enabled=${input.enabled}, updated_at=now() where id=${id} and client_id=${input.clientId} returning id, client_id as "clientId", name, environment, region, hosting_type as "hostingType", enabled`
-        : await tx<Deployment[]>`insert into deployments (id,client_id,name,environment,region,hosting_type,enabled) values (${deploymentId},${input.clientId},${input.name},${input.environment},${input.region},${input.hostingType},${input.enabled}) returning id, client_id as "clientId", name, environment, region, hosting_type as "hostingType", enabled`;
+        ? await tx<Deployment[]>`update deployments set name=${input.name}, environment=${input.environment}, hosting_type=${input.hostingType}, enabled=${input.enabled}, updated_at=now() where id=${id} and client_id=${input.clientId} returning id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled`
+        : await tx<Deployment[]>`insert into deployments (id,client_id,name,environment,hosting_type,enabled) values (${deploymentId},${input.clientId},${input.name},${input.environment},${input.hostingType},${input.enabled}) returning id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled`;
       if (!deployment) return null;
       // Persist the complete form atomically; credentials and usage remain untouched.
       for (const capability of ["SCORING", "FACE_SCAN"] as const) {

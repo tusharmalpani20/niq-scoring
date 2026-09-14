@@ -61,8 +61,8 @@ export class MemoryScoringStore implements ScoringStore {
   async saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration) {
     const existing = id ? this.deployments.find(d => d.id === id && d.clientId === input.clientId) : null;
     if (id && !existing) return null;
-    const deployment = existing ?? await this.createDeployment({ name: input.name, clientId: input.clientId, environment: input.environment, region: input.region });
-    Object.assign(deployment, { name: input.name, environment: input.environment, region: input.region, hostingType: input.hostingType, enabled: input.enabled });
+    const deployment = existing ?? await this.createDeployment({ name: input.name, clientId: input.clientId, environment: input.environment });
+    Object.assign(deployment, { name: input.name, environment: input.environment, hostingType: input.hostingType, enabled: input.enabled });
     await this.setEntitlement(deployment.id, { capability: "SCORING", ...input.scoring });
     await this.setEntitlement(deployment.id, { capability: "FACE_SCAN", ...input.faceScan });
     await this.assignVersion(deployment.id, input.versionAssignment);

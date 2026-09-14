@@ -21,7 +21,7 @@ async function onboard() {
   const { app, store } = setup();
 
   const client = await (await app.request("/admin/clients", jsonRequest({ name: "Apollo Group" }))).json() as { id: string };
-  const deployment = await (await app.request("/admin/deployments", jsonRequest({ name: "Apollo Production", environment: "production", region: "india", clientId: client.id }))).json() as { id: string };
+  const deployment = await (await app.request("/admin/deployments", jsonRequest({ name: "Apollo Production", environment: "production", clientId: client.id }))).json() as { id: string };
   for (const capability of ["SCORING", "FACE_SCAN"] as const) await app.request(`/admin/deployments/${deployment.id}/entitlement`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ capability, enabled: true, monthlyLimit: null }) });
   await app.request(`/admin/deployments/${deployment.id}/version-assignment`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id }) });
   const activation = await (await app.request(`/admin/deployments/${deployment.id}/activation-token`, jsonRequest({ expiresInMinutes: 30 }))).json() as { activationToken: string };
@@ -73,7 +73,7 @@ describe("scoring API", () => {
   test("deployment limits are independent and issuing another credential does not reset usage", async () => {
     const { app, store, client, deployment, credential } = await onboard();
     await store.setEntitlement(deployment.id, { capability: "SCORING", enabled: true, monthlyLimit: 1 });
-    const second = await store.createDeployment({ clientId: client.id, name: "Second", environment: "test", region: "india" });
+    const second = await store.createDeployment({ clientId: client.id, name: "Second", environment: "test" });
     await store.setEntitlement(second.id, { capability: "SCORING", enabled: true, monthlyLimit: 2 });
     await store.assignVersion(second.id, { mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id });
     async function activate(id: string) {
@@ -126,9 +126,9 @@ describe("scoring API", () => {
     expect(store.usages).toHaveLength(1);
     const created = await app.request("/admin/deployments/configuration", jsonRequest(input));
     expect(created.status).toBe(201);
-    const saved = await created.json() as { id: string; name: string; region: string };
+    const saved = await created.json() as { id: string; name: string };
     expect(saved.name).toMatch(/^apollo-group-production-client-cloud-[a-f0-9]{8}$/);
-    expect(saved.region).toBe("unknown");
+    expect(saved).not.toHaveProperty("region");
     expect(store.entitlements.filter(e => e.deploymentId === saved.id)).toHaveLength(2);
     expect(store.assignments.find(a => a.deploymentId === saved.id)?.mode).toBe("PINNED");
     const again = await app.request("/admin/deployments/configuration", jsonRequest(input));

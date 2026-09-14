@@ -43,6 +43,13 @@
       "when": 1789400000002,
       "tag": "0005_deployment_hosting",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789400000003,
+      "tag": "0006_remove_deployment_region",
+      "breakpoints": true
     }
   ]
 }
