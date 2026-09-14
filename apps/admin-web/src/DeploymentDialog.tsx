@@ -11,14 +11,14 @@ import { Select, SelectValue, SelectTrigger, SelectContent, SelectItem } from ".
 import { Separator } from "./components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
-type Values = { name: string; clientId: string; environment: string; region: string; hostingType: string; enabled: boolean; scoringEnabled: boolean; faceEnabled: boolean; scoringUnlimited: boolean; faceUnlimited: boolean; scoringLimit: string; faceLimit: string; ruleVersion: string };
+type Values = { clientId: string; environment: string; hostingType: string; enabled: boolean; scoringEnabled: boolean; faceEnabled: boolean; scoringUnlimited: boolean; faceUnlimited: boolean; scoringLimit: string; faceLimit: string; ruleVersion: string };
 export function DeploymentDialog({ data, deployment, refresh, onClose }: { data: Overview; deployment: Overview["deployments"][number] | null; refresh: () => Promise<void>; onClose: () => void }) {
   const scoring = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "SCORING");
   const face = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "FACE_SCAN");
   const assignment = data.assignments.find(item => item.deploymentId === deployment?.id);
   const form = useForm<Values>({ defaultValues: {
-    name: deployment?.name ?? "", clientId: deployment?.clientId ?? "", environment: deployment?.environment ?? "production", region: deployment?.region ?? "india",
-    hostingType: deployment ? (deployment.hostingType === "ON_PREMISES" ? "" : deployment.hostingType ?? "") : "NIQ_HOSTED", enabled: deployment?.enabled ?? true,
+    clientId: deployment?.clientId ?? "", environment: deployment?.environment ?? "production",
+    hostingType: deployment ? (deployment.hostingType ?? "") : "NIQ_HOSTED", enabled: deployment?.enabled ?? true,
     scoringEnabled: scoring?.enabled ?? !deployment, faceEnabled: face?.enabled ?? !deployment,
     scoringUnlimited: !deployment || scoring?.monthlyLimit === null, faceUnlimited: !deployment || face?.monthlyLimit === null,
     scoringLimit: String(scoring?.monthlyLimit ?? 0), faceLimit: String(face?.monthlyLimit ?? 0),
@@ -35,8 +35,8 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
   async function submit(values: Values) {
     form.clearErrors();
     let invalid = false;
-    for (const name of ["name", "clientId", "environment", "region", "hostingType", "ruleVersion"] as const) {
-      if (!values[name].trim() || ((name === "name" || name === "region") && values[name].trim().length < 2)) { form.setError(name, { message: name === "name" ? "Enter at least 2 characters." : "This field is required." }); invalid = true; }
+    for (const name of ["clientId", "environment", "hostingType", "ruleVersion"] as const) {
+      if (!values[name].trim()) { form.setError(name, { message: "This field is required." }); invalid = true; }
     }
     for (const [name, unlimited] of [["scoringLimit", values.scoringUnlimited], ["faceLimit", values.faceUnlimited]] as const) {
       if ((name === "scoringLimit" ? values.scoringEnabled : values.faceEnabled) && !unlimited && (!/^\d+$/.test(values[name]) || !Number.isSafeInteger(Number(values[name])) || Number(values[name]) > 2147483647)) { form.setError(name, { message: "Enter a whole number from 0 to 2,147,483,647." }); invalid = true; }
@@ -45,7 +45,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
     setBusy(true); setError("");
     try {
       const saved = await request<{ id: string }>(savedId ? `/admin/deployments/${savedId}/configuration` : "/admin/deployments/configuration", {
-        name: values.name.trim(), clientId: values.clientId, environment: values.environment.trim(), region: values.region.trim(), hostingType: values.hostingType, enabled: values.enabled,
+        clientId: values.clientId, environment: values.environment.trim(), hostingType: values.hostingType, enabled: values.enabled,
         scoring: { enabled: values.scoringEnabled, monthlyLimit: values.scoringUnlimited ? null : (/^\d+$/.test(values.scoringLimit) && Number(values.scoringLimit) <= 2147483647 ? Number(values.scoringLimit) : null) },
         faceScan: { enabled: values.faceEnabled, monthlyLimit: values.faceUnlimited ? null : (/^\d+$/.test(values.faceLimit) && Number(values.faceLimit) <= 2147483647 ? Number(values.faceLimit) : null) },
         versionAssignment: values.ruleVersion === "LATEST_APPROVED" ? { mode: "LATEST_APPROVED" } : { mode: "PINNED", scoringRuleVersionId: values.ruleVersion },
@@ -79,13 +79,11 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
     <DialogHeader><DialogTitle>{savedId ? "Edit deployment" : "Create deployment"}</DialogTitle></DialogHeader>
     <form className="space-y-6" noValidate onSubmit={form.handleSubmit(submit)}>
       <fieldset disabled={busy} className="grid min-w-0 gap-4 sm:grid-cols-2">
-        <FormInput control={form.control} name="name" label="Name" maxLength={120} />
         {select("clientId", "Client", data.clients.map(client => ({ value: client.id, label: client.name })), Boolean(savedId))}
-        {select("environment", "Environment", ["development", "test", "staging", "production"].map(value => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })))}
-        <FormInput control={form.control} name="region" label="Region" maxLength={50} />
+        {select("environment", "Environment", ["development", "test", "staging", "production"].map(value => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })), Boolean(savedId))}
       </fieldset>
       {data.clients.length === 0 && <p className="text-sm text-muted-foreground">Create a client before adding a deployment.</p>}
-      {select("hostingType", "Hosting", [{ value: "NIQ_HOSTED", label: "NIQ hosted" }, { value: "CLIENT_CLOUD", label: "Client cloud" }])}
+      {select("hostingType", "Hosting", [{ value: "NIQ_HOSTED", label: "NIQ hosted" }, { value: "CLIENT_CLOUD", label: "Client cloud" }, ...(deployment?.hostingType === "ON_PREMISES" ? [{ value: "ON_PREMISES", label: "On-premises (legacy)" }] : [])], Boolean(savedId && deployment?.hostingType))}
       <div className="space-y-2">{toggle("enabled", "Deployment active")}<p className="text-sm text-muted-foreground">Turn off to pause scoring and face scans for this deployment.</p></div>
       <Separator />
       <div className="grid gap-4 sm:grid-cols-2">

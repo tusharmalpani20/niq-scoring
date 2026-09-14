@@ -33,6 +33,7 @@ export function message(cause: unknown) {
 const errors: Record<string, string> = {
   INVALID_CREDENTIALS:
     "The email or password is incorrect, or your account is disabled.",
+  DEPLOYMENT_IDENTITY_IMMUTABLE: "Environment and hosting cannot change after creation.",
   INVALID_REQUEST: "Please check the entered details and try again.",
   INVALID_ORIGIN:
     "This console address is not authorized. Contact your deployment operator.",
