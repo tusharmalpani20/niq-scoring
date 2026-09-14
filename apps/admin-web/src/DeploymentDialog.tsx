@@ -13,7 +13,7 @@ import { Select, SelectValue, SelectTrigger, SelectContent, SelectItem } from ".
 import { Separator } from "./components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
-type Values = { clientId: string; environment: string; hostingType: string; enabled: boolean; scoringEnabled: boolean; faceEnabled: boolean; scoringUnlimited: boolean; faceUnlimited: boolean; scoringLimit: string; faceLimit: string; ruleVersion: string; expiryPreset: string; expiryDate: string };
+import { deploymentErrors, deploymentSteps, type DeploymentValues as Values } from "./deployment-validation";
 export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated }: { data: Overview; deployment: Overview["deployments"][number] | null; refresh: () => Promise<void>; onClose: () => void; onCreated: (id: string) => void }) {
   const scoring = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "SCORING");
   const face = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "FACE_SCAN");
@@ -27,6 +27,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
     expiryPreset: "7", expiryDate: "",
     ruleVersion: assignment?.mode === "PINNED" ? assignment.scoringRuleVersionId ?? "" : "LATEST_APPROVED",
   } });
+  const [step, setStep] = useState(0);
   const [savedId, setSavedId] = useState<string | null>(deployment?.id ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -35,14 +36,14 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
   function close() { if (busy) return; if (dirty) setConfirmClose(true); else onClose(); }
   async function submit(values: Values) {
     form.clearErrors();
-    let invalid = false;
-    for (const name of ["clientId", "environment", "hostingType", "ruleVersion"] as const) {
-      if (!values[name].trim()) { form.setError(name, { message: "This field is required." }); invalid = true; }
+    for (const current of [0, 1]) {
+      const errors = deploymentErrors(values, current);
+      if (Object.keys(errors).length) {
+        for (const [name, message] of Object.entries(errors)) form.setError(name as keyof Values, { message });
+        if (!savedId) setStep(current);
+        return;
+      }
     }
-    for (const [name, unlimited] of [["scoringLimit", values.scoringUnlimited], ["faceLimit", values.faceUnlimited]] as const) {
-      if ((name === "scoringLimit" ? values.scoringEnabled : values.faceEnabled) && !unlimited && (!/^\d+$/.test(values[name]) || !Number.isSafeInteger(Number(values[name])) || Number(values[name]) > 2147483647)) { form.setError(name, { message: "Enter a whole number from 0 to 2,147,483,647." }); invalid = true; }
-    }
-    if (invalid) return;
     setBusy(true); setError("");
     try {
       const saved = await request<{ id: string; activation?: ActivationToken }>(savedId ? `/admin/deployments/${savedId}/configuration` : "/admin/deployments/configuration", {
@@ -57,7 +58,23 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
       if (saved.activation) onCreated(saved.id); else onClose();
     } catch (cause) { setError(message(cause)); } finally { setBusy(false); }
   }
-  const select = (name: "clientId" | "hostingType" | "ruleVersion" | "environment", label: string, options: Array<{ value: string; label: string }>, disabled = false) => <Controller control={form.control} name={name} render={({ field, fieldState }) => <Field><FieldLabel htmlFor={`deployment-${name}`}>{label}</FieldLabel><Select value={field.value} onValueChange={field.onChange} disabled={disabled || busy}><SelectTrigger ref={field.ref} onBlur={field.onBlur} id={`deployment-${name}`} aria-invalid={fieldState.invalid}><SelectValue placeholder={`Select ${label.toLowerCase()}`} /></SelectTrigger><SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>{fieldState.error && <FieldError errors={[fieldState.error]} />}</Field>} />;
+  function continueStep() {
+    form.clearErrors();
+    const errors = deploymentErrors(form.getValues(), step);
+    for (const [name, message] of Object.entries(errors)) form.setError(name as keyof Values, { message });
+    if (!Object.keys(errors).length) { setError(""); setStep(step + 1); }
+  }
+  const values = form.watch();
+  const reviewRows = [
+    ["Client", data.clients.find(client => client.id === values.clientId)?.name ?? ""],
+    ["Environment", values.environment.charAt(0).toUpperCase() + values.environment.slice(1)],
+    ["Hosting", values.hostingType === "NIQ_HOSTED" ? "NIQ hosted" : "Client cloud"],
+    ["Status", values.enabled ? "Enabled" : "Disabled"],
+    ["Scoring", !values.enabled || !values.scoringEnabled ? "Disabled" : values.scoringUnlimited ? "Unlimited" : `${values.scoringLimit} / month`],
+    ["Face scan", !values.enabled || !values.faceEnabled ? "Disabled" : values.faceUnlimited ? "Unlimited" : `${values.faceLimit} / month`],
+    ["Rule version", values.ruleVersion === "LATEST_APPROVED" ? "Latest approved" : data.versions.find(version => version.id === values.ruleVersion)?.version ?? ""],
+  ];
+  const select = (name: "clientId" | "hostingType" | "ruleVersion" | "environment", label: string, options: Array<{ value: string; label: string }>, disabled = false) => <Controller control={form.control} name={name} render={({ field, fieldState }) => <Field><FieldLabel htmlFor={`deployment-${name}`}>{label}</FieldLabel><Select value={field.value} onValueChange={value => { field.onChange(value); form.clearErrors(name); }} disabled={disabled || busy}><SelectTrigger ref={field.ref} onBlur={field.onBlur} id={`deployment-${name}`} aria-invalid={fieldState.invalid}><SelectValue placeholder={`Select ${label.toLowerCase()}`} /></SelectTrigger><SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>{fieldState.error && <FieldError errors={[fieldState.error]} />}</Field>} />;
   const toggle = (name: "enabled" | "scoringEnabled" | "faceEnabled" | "scoringUnlimited" | "faceUnlimited", label: string, disabled = false) => <Controller control={form.control} name={name} render={({ field }) => <div className="flex items-center justify-between gap-3"><FieldLabel htmlFor={`deployment-${name}`}>{label}</FieldLabel><Switch id={`deployment-${name}`} checked={field.value} onCheckedChange={field.onChange} disabled={busy || disabled} /></div>} />;
   const active = form.watch("enabled");
   const capabilityCard = (name: "scoring" | "face", label: string, unit: string) => {
@@ -79,13 +96,19 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
   };
   return <Dialog open onOpenChange={next => { if (!next) close(); }}><DialogContent aria-describedby={undefined} className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
     <DialogHeader><DialogTitle>{savedId ? "Edit deployment" : "Create deployment"}</DialogTitle></DialogHeader>
-    <form className="space-y-6" noValidate onSubmit={form.handleSubmit(submit)}>
+    {!savedId && <ol aria-label="Creation progress" className="grid grid-cols-3 gap-2 border-b pb-4">
+      {deploymentSteps.map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined} className={`flex items-center gap-2 text-xs sm:text-sm ${step === index ? "font-medium text-primary" : "text-muted-foreground"}`}><span className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${index <= step ? "border-primary bg-primary text-primary-foreground" : ""}`}>{index + 1}</span>{label}</li>)}
+    </ol>}
+    <form className="space-y-6" noValidate onSubmit={event => { if (!savedId && step < 2) { event.preventDefault(); continueStep(); } else void form.handleSubmit(submit)(event); }}>
+      {(savedId || step === 0) && <div className="space-y-6">
       <fieldset disabled={busy} className="grid min-w-0 gap-4 sm:grid-cols-2">
         {select("clientId", "Client", data.clients.map(client => ({ value: client.id, label: client.name })), Boolean(savedId))}
         {select("environment", "Environment", ["development", "test", "staging", "production"].map(value => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })), Boolean(savedId))}
       </fieldset>
       {data.clients.length === 0 && <p className="text-sm text-muted-foreground">Create a client before adding a deployment.</p>}
       {select("hostingType", "Hosting", [{ value: "NIQ_HOSTED", label: "NIQ hosted" }, { value: "CLIENT_CLOUD", label: "Client cloud" }, ...(deployment?.hostingType === "ON_PREMISES" ? [{ value: "ON_PREMISES", label: "On-premises (legacy)" }] : [])], Boolean(savedId && deployment?.hostingType))}
+      </div>}
+      {(savedId || step === 1) && <div className="space-y-6">
       <div className="space-y-2">{toggle("enabled", "Deployment active")}<p className="text-sm text-muted-foreground">Turn off to pause scoring and face scans for this deployment.</p></div>
       <Separator />
       <div className="grid gap-4 sm:grid-cols-2">
@@ -93,9 +116,19 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
         {capabilityCard("face", "Face scan", "face scans")}
       </div>
       {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: "Latest approved" }, ...data.versions.map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
-      {!savedId && <TokenExpirySelect value={form.watch("expiryPreset")} date={form.watch("expiryDate")} onValueChange={value => form.setValue("expiryPreset", value, { shouldDirty: true })} onDateChange={value => form.setValue("expiryDate", value, { shouldDirty: true })} disabled={busy} />}
+      </div>}
+      {!savedId && step === 2 && <div className="space-y-5">
+        <dl className="divide-y rounded-xl border">{reviewRows.map(([label, value]) => <div key={label} className="grid grid-cols-2 gap-3 px-4 py-3 text-sm"><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-medium break-words">{value}</dd></div>)}</dl>
+        <p className="text-sm text-muted-foreground">Client, Environment, and Hosting cannot change after creation.</p>
+        <TokenExpirySelect value={form.watch("expiryPreset")} date={form.watch("expiryDate")} onValueChange={value => form.setValue("expiryPreset", value, { shouldDirty: true })} onDateChange={value => form.setValue("expiryDate", value, { shouldDirty: true })} disabled={busy} /></div>}
       <ErrorNotice error={error} />
-      <DialogFooter className="grid grid-cols-2 gap-2 sm:flex"><Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button><Button disabled={busy || data.clients.length === 0}>{busy ? "Saving…" : savedId ? "Save" : "Create"}</Button></DialogFooter>
+      <DialogFooter className="flex flex-row justify-between gap-2 border-t pt-4">
+        <Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button>
+        <div className="flex gap-2">
+          {!savedId && step > 0 && <Button type="button" variant="outline" disabled={busy} onClick={() => { setError(""); setStep(step - 1); }}>Back</Button>}
+          <Button type="submit" disabled={busy || data.clients.length === 0}>{busy ? "Saving…" : savedId ? "Save" : step < 2 ? "Continue" : "Create"}</Button>
+        </div>
+      </DialogFooter>
     </form>
     <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Leave this deployment?</AlertDialogTitle><AlertDialogDescription>Your unsaved changes will be lost.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep editing</AlertDialogCancel><AlertDialogAction onClick={onClose}>Leave</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </DialogContent></Dialog>;
