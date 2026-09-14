@@ -17,3 +17,7 @@ Raw tokens are returned with `Cache-Control: no-store`. The client enters only t
 The scoring API and administration UI implement activation-token issuance. The main application's organization screen exchanges the token server-to-server and encrypts the returned credential. Assessment submission to scoring remains separate work; activation alone does not mean that clinical scoring is available.
 
 Client creation needs only a name. Activation tokens identify a specific deployment; no external client reference is required. All credentials for a deployment share its monthly allowance, including after credential replacement. Allowances are independent across deployments of the same client.
+
+Administrators create and edit deployments from a single configuration dialog. A configuration save writes the deployment details, both capability limits and the rule assignment in one transaction. A deployment cannot be moved to a different client through this editor. Existing credentials and usage remain attached to its unchanged deployment ID.
+
+Hosting type records whether the installation is NIQ hosted, in the client's cloud, or on-premises. This is descriptive metadata; choosing it does not provision infrastructure. Older deployments have no hosting type until an administrator selects one.
