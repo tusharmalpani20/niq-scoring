@@ -57,6 +57,13 @@
       "when": 1789400000004,
       "tag": "0007_recoverable_activation_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789400000005,
+      "tag": "0008_token_expiry_and_revocation",
+      "breakpoints": true
     }
   ]
 }

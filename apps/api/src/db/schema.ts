@@ -69,7 +69,8 @@ export const activationTokens = pgTable("activation_tokens", {
   deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),
   tokenHash: varchar("token_hash", { length: 64 }).notNull(),
   tokenCiphertext: text("token_ciphertext"),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
   usedAt: timestamp("used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

@@ -1,4 +1,5 @@
-import type { StoredActivationToken } from "./store";
+import { postgresDeletion, type RecordKind } from "./record-deletion";
+import type { StoredActivationToken, TokenRecord } from "./store";
 import postgres from "postgres";
 import type { DeploymentConfiguration, CreateDeployment, CreateClient, EntitlementInput, VersionAssignmentInput } from "@niq-scoring/contracts";
 import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
@@ -9,6 +10,8 @@ import type { Deployment, DeploymentIdentity, Client, ScoringStore, UsageReserva
 type Database = ReturnType<typeof postgres>;
 
 export class PostgresScoringStore implements ScoringStore {
+  async deletionStatus(kind: RecordKind, id: string) { return postgresDeletion(this.database, kind, id); }
+  async deleteUnused(kind: RecordKind, id: string) { return postgresDeletion(this.database, kind, id, true); }
   constructor(private readonly database: Database) {}
 
   async overview() {
@@ -76,17 +79,24 @@ export class PostgresScoringStore implements ScoringStore {
     await this.database.begin(async tx => {
       // Serialize replacement requests so only the latest unused token survives.
       await tx`select id from deployments where id=${input.deploymentId} for update`;
-      await tx`delete from activation_tokens where deployment_id=${input.deploymentId} and used_at is null`;
+      await tx`update activation_tokens set revoked_at=now(), token_ciphertext=null where deployment_id=${input.deploymentId} and used_at is null and revoked_at is null`;
       await tx`insert into activation_tokens (id,deployment_id,token_hash,token_ciphertext,expires_at) values (${input.id},${input.deploymentId},${input.tokenHash},${input.tokenCiphertext},${input.expiresAt})`;
     });
   }
-  async getActivationToken(deploymentId: string, now: Date) {
-    const [token] = await this.database<Array<{ tokenCiphertext: string; expiresAt: Date }>>`select token_ciphertext as "tokenCiphertext", expires_at as "expiresAt" from activation_tokens where deployment_id=${deploymentId} and used_at is null and expires_at>${now} and token_ciphertext is not null order by created_at desc limit 1`;
+  async getActivationToken(deploymentId: string, now: Date, tokenId?: string) {
+    const [token] = await this.database<Array<{ tokenCiphertext: string; expiresAt: Date | null }>>`select token_ciphertext as "tokenCiphertext", expires_at as "expiresAt" from activation_tokens where deployment_id=${deploymentId} and used_at is null and revoked_at is null and (expires_at is null or expires_at>${now}) and (${tokenId ?? null}::varchar is null or id=${tokenId ?? null}) and token_ciphertext is not null order by created_at desc limit 1`;
     return token ?? null;
+  }
+  async listActivationTokens(deploymentId: string) {
+    return this.database<TokenRecord[]>`select id, expires_at as "expiresAt", created_at as "createdAt", used_at as "usedAt", revoked_at as "revokedAt", (token_ciphertext is not null) as "canCopy" from activation_tokens where deployment_id=${deploymentId} order by created_at desc, id desc`;
+  }
+  async revokeActivationToken(deploymentId: string, tokenId: string, now: Date) {
+    const rows = await this.database`update activation_tokens set revoked_at=${now}, token_ciphertext=null where deployment_id=${deploymentId} and id=${tokenId} and used_at is null and revoked_at is null returning id`;
+    return rows.length > 0;
   }
   async exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
     return this.database.begin(async (tx) => {
-      const [token] = await tx<Array<{ deploymentId: string }>>`select deployment_id as "deploymentId" from activation_tokens where token_hash=${input.tokenHash} and used_at is null and expires_at>${input.now} for update`;
+      const [token] = await tx<Array<{ deploymentId: string }>>`select deployment_id as "deploymentId" from activation_tokens where token_hash=${input.tokenHash} and used_at is null and revoked_at is null and (expires_at is null or expires_at>${input.now}) for update`;
       if (!token) return null;
       const [client] = await tx<Array<{ clientId: string }>>`select client.id as "clientId" from deployments link join clients client on client.id=link.client_id where link.id=${token.deploymentId}`;
       if (!client) return null;

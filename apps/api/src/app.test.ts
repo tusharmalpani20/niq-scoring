@@ -164,10 +164,43 @@ describe("scoring API", () => {
     await app.request(path, jsonRequest({ expiresInMinutes: 30 }));
     const prefix = connected.credential.split(".")[0]!.replace("niq_dep_", "");
     expect(await store.authenticateDeployment(prefix, new Bun.CryptoHasher("sha256").update(connected.credential).digest("hex"))).not.toBeNull();
-    const unused = store.activations.find(t => t.deploymentId === deployment.id && !t.usedAt)!;
+    const unused = store.activations.find(t => t.deploymentId === deployment.id && !t.usedAt && !t.revokedAt)!;
     unused.expiresAt = new Date("2020-01-01");
     expect(await (await read()).json()).toEqual({ activation: null });
     expect((await app.request("/v1/provisional/calculate", jsonRequest(scoringInput(client.id), `Bearer ${credential}`))).status).toBe(200);
+  });
+
+  test("supports expiry choices, token history and scoped revocation", async () => {
+    const { app, store, deployment } = await onboard();
+    const base = `/admin/deployments/${deployment.id}`;
+    const generate = (body: unknown) => app.request(`${base}/activation-token`, jsonRequest(body));
+    expect((await generate({ expiresAt: "2020-01-01T00:00:00.000Z" })).status).toBe(400);
+    expect((await generate({ expiresAt: null, expiresInMinutes: 10 })).status).toBe(400);
+    for (const days of [7, 30, 90, 180, 360]) {
+      const result = await generate({ expiresInMinutes: days * 1440 });
+      expect(result.status).toBe(201);
+      expect((await result.json() as { expiresAt: string }).expiresAt).toBe(new Date(Date.parse("2026-09-13T00:00:00Z") + days * 86400000).toISOString());
+    }
+    const custom = await generate({ expiresAt: "2027-03-01T00:00:00.000Z" });
+    expect((await custom.json() as { expiresAt: string }).expiresAt).toBe("2027-03-01T00:00:00.000Z");
+    const never = await generate({ expiresAt: null });
+    expect((await never.json() as { expiresAt: null }).expiresAt).toBeNull();
+    const historyResponse = await app.request(`${base}/activation-tokens`, { headers: adminHeaders });
+    expect(historyResponse.headers.get("cache-control")).toBe("no-store");
+    const history = await historyResponse.json() as { tokens: Array<{ id: string; status: string; expiresAt: string | null }> };
+    expect(history.tokens.filter(t => t.status === "Unused")).toHaveLength(1);
+    expect(history.tokens.some(t => t.status === "Revoked")).toBe(true);
+    expect(history.tokens.some(t => t.status === "Used")).toBe(true);
+    expect(JSON.stringify(history)).not.toContain("niq_act_");
+    const active = history.tokens.find(t => t.status === "Unused")!;
+    const path = `${base}/activation-tokens/${active.id}`;
+    expect((await app.request(path, { headers: adminHeaders })).status).toBe(200);
+    const other = await store.createDeployment({ clientId: store.clients[0]!.id, environment: "test", name: "Other" });
+    expect((await app.request(`/admin/deployments/${other.id}/activation-tokens/${active.id}`, { headers: adminHeaders })).status).toBe(404);
+    expect((await app.request(path, { method: "DELETE", headers: adminHeaders })).status).toBe(200);
+    expect((await app.request(path, { headers: adminHeaders })).status).toBe(404);
+    expect((await app.request(path, { method: "DELETE", headers: adminHeaders })).status).toBe(409);
+    expect((await app.request(`${base}/activation-tokens`)).status).toBe(401);
   });
 
   test("guards provisional scoring, records usage and returns idempotent result", async () => {

@@ -117,13 +117,17 @@ export const deploymentConfigurationSchema = createDeploymentSchema.extend({
   faceScan: entitlementInputSchema.omit({ capability: true }),
   versionAssignment: versionAssignmentInputSchema,
 });
-// Admin callers choose configuration; display names are server-generated.
-export const deploymentConfigurationRequestSchema = deploymentConfigurationSchema.omit({ name: true });
-export type DeploymentConfiguration = z.infer<typeof deploymentConfigurationSchema>;
-
 export const activationTokenInputSchema = z.object({
-  expiresInMinutes: z.number().int().min(5).max(1440).default(30),
+  expiresInMinutes: z.number().int().min(1).max(518400).optional(),
+  expiresAt: z.iso.datetime().nullable().optional(),
+}).refine(value => value.expiresAt === undefined || value.expiresInMinutes === undefined, {
+  message: "Choose one expiry option.",
 });
+// Admin callers choose configuration; display names are server-generated.
+export const deploymentConfigurationRequestSchema = deploymentConfigurationSchema.omit({ name: true }).extend({
+  tokenExpiry: activationTokenInputSchema.default({ expiresInMinutes: 10080 }),
+});
+export type DeploymentConfiguration = z.infer<typeof deploymentConfigurationSchema>;
 
 export const activationExchangeSchema = z.object({
   activationToken: z.string().min(48).max(256),
