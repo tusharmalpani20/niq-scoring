@@ -17,7 +17,7 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
   const [page, setPage] = useState(1);
   const clientName = (id: string) => data.clients.find(client => client.id === id)?.name ?? id;
   const query = search.trim().toLocaleLowerCase();
-  const deployments = paginate(data.deployments.filter(deployment => [deployment.name, clientName(deployment.clientId), deployment.environment, deployment.region].some(value => value.toLocaleLowerCase().includes(query))), page);
+  const deployments = paginate(data.deployments.filter(deployment => [deployment.name, clientName(deployment.clientId), deployment.environment].some(value => value.toLocaleLowerCase().includes(query))), page);
   return <Tabs defaultValue="deployments" className="gap-5">
     <div className="flex items-center justify-between gap-3">
       <TabsList variant="line" aria-label="Deployment management" className="p-0"><TabsTrigger value="deployments" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Deployments <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{data.deployments.length}</Badge></TabsTrigger></TabsList>
@@ -26,7 +26,7 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
     <TabsContent value="deployments" className="space-y-5"><Card><CardContent className="pt-6"><Table>
       <TableHeader><TableRow><TableHead>Deployment</TableHead><TableHead>Client</TableHead><TableHead>Hosting</TableHead><TableHead>Status</TableHead><TableHead>Scoring</TableHead><TableHead>Face scan</TableHead></TableRow></TableHeader>
       <TableBody>{deployments.rows.map(deployment => <TableRow key={deployment.id}>
-        <TableCell><Button variant="link" className="h-auto p-0 text-left font-medium" onClick={() => setSelected(deployment)}>{deployment.name}</Button><div className="text-xs text-muted-foreground">{deployment.environment} · {deployment.region}</div></TableCell>
+        <TableCell><Button variant="link" className="h-auto p-0 text-left font-medium" onClick={() => setSelected(deployment)}>{deployment.name}</Button><div className="text-xs text-muted-foreground">{deployment.environment}</div></TableCell>
         <TableCell>{clientName(deployment.clientId)}</TableCell><TableCell>{deployment.hostingType ? hostingLabels[deployment.hostingType] : "Not specified"}</TableCell><TableCell><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
         {["SCORING", "FACE_SCAN"].map(capability => { const limit = data.entitlements.find(item => item.deploymentId === deployment.id && item.capability === capability); return <TableCell key={capability}>{!limit?.enabled ? "Disabled" : limit.monthlyLimit === null ? "Unlimited" : `${limit.monthlyLimit.toLocaleString()}/month`}</TableCell>; })}
       </TableRow>)}

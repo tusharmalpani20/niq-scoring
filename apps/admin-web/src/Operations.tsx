@@ -15,7 +15,6 @@ export type Overview = {
     clientId: string;
     name: string;
     environment: string;
-    region: string;
     hostingType: "NIQ_HOSTED" | "CLIENT_CLOUD" | "ON_PREMISES" | null;
     enabled: boolean;
   }>;

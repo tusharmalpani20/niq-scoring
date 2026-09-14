@@ -58,9 +58,7 @@ export function dataFormSchema(fields: string[], title: string) {
           }),
         ];
       const max =
-        name === "region"
-            ? 50
-            : name === "name" && title === "Create deployment"
+        name === "name" && title === "Create deployment"
               ? 120
               : 200;
       return [
