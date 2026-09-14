@@ -11,9 +11,11 @@ test("Excel option points and caps persist without changing questionnaire struct
   await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
   await page.getByLabel("What it means", { exact: true }).first().fill("Updated risk interpretation");
   await expect(page.getByText("0 to 15, including both", { exact: true })).toBeVisible();
-  await page.getByLabel("To score rule", { exact: true }).first().selectOption("exclusive");
+  await page.getByLabel("To score rule", { exact: true }).first().click();
+  await page.getByRole("option", { name: "Less than", exact: true }).click();
   await expect(page.getByText("At least 0 and below 15", { exact: true })).toBeVisible();
-  await page.getByLabel("To score rule", { exact: true }).first().selectOption("inclusive");
+  await page.getByLabel("To score rule", { exact: true }).first().click();
+  await page.getByRole("option", { name: "Up to and including", exact: true }).click();
 
   await page.getByRole("tab", { name: "Scoring", exact: true }).click();
 
@@ -75,6 +77,7 @@ test("approved history retains fixed content and read-only scoring", async ({ pa
   await expect(page.getByLabel("Total cap", { exact: true })).toBeDisabled();
   await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
   await expect(page.getByLabel("Category name", { exact: true }).first()).toBeDisabled();
+  await expect(page.getByLabel("To score rule", { exact: true }).first()).toBeDisabled();
   expect(state.getRecord()!.definition.sections).toEqual(createSpreadsheetTemplate("Reference").sections);
 });
 
