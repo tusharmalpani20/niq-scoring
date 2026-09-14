@@ -113,3 +113,10 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Added a separately invoked browser integration suite with no API interception. A gated loopback fixture starts real Hono/authentication/rule routes with disposable memory stores; it never connects to the user database or changes the normal Vite/API endpoints.
 - Both desktop and mobile runs pass for login, source-template draft creation, save/reopen after page reload, blocked validation of unresolved source content, duplication with independent edits and confirmed unused-draft deletion.
 - This establishes browser-to-real-API behavior with memory persistence. It does not establish PostgreSQL behavior or persistence after a server restart. Complete synthetic scoring/lifecycle integration, database checks, semantic audit and final completion audit remain outstanding.
+
+### Complete synthetic workflow through real API
+
+- Added a UI-authored synthetic questionnaire and scoring package to the no-interception integration suite. The shared scoring workflow exercises explicit option points/caps, guidance, real preview output, independent samples, failed validation and correction, approval/cancellation, activation, retirement, read-only controls and audit actions.
+- All four real-API browser runs pass (two scenarios on desktop/mobile). Approved synthetic packages exist only in disposable memory stores. The source template remains unresolved and unapproved.
+- Re-ran both opted-in PostgreSQL integration tests: 2 passed, 23 assertions, covering atomic/conflict-safe draft persistence, deletion retry tombstones, concrete assessment binding, retired-version retention, quotas and replay fingerprints. These database checks remain separate from memory-backed browser evidence.
+- Remaining: semantic/adversarial review, responsive visual inspection beyond interaction reachability, outstanding scope details and final requirement-by-requirement audit. Goal remains active.
