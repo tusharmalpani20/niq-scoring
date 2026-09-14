@@ -266,6 +266,8 @@ test("fixed Excel authoring rejects blank creation and direct field/option tampe
   const record = store.rules.records.find(r => r.id === draft.id)!;
   (record.definition as RuleDefinition).sections[0]!.questions.pop();
   expect((await request(`/${draft.id}`)).status).toBe(200);
+  const list = await (await request("")).json();
+  expect(list.versions[0]).toMatchObject({ editable: false, duplicable: false, deletable: true });
   expect((await request("", "POST", { name: "Legacy copy", requestId: crypto.randomUUID(), duplicateId: draft.id })).status).toBe(409);
   expect((await request(`/${draft.id}/validate`, "POST", { revision: 1 })).status).toBe(409);
 });

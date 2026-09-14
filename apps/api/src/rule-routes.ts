@@ -25,7 +25,7 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
     catch (error) { if (error instanceof RuleStoreError) return c.json({ error: error.code }, error.code === "RULE_NOT_FOUND" ? 404 : 409); throw error; }
   };
   const actor = (c: Context): string => c.get("adminUserId");
-  app.get("/admin/rules", guard(async c => c.json({ versions: (await store.list()).map(({ definition, ...record }) => ({ ...record, editable: ruleDefinitionSchema.safeParse(definition).success && ["DRAFT", "VALIDATED"].includes(record.lifecycle) })) })));
+  app.get("/admin/rules", guard(async c => c.json({ versions: (await store.list()).map(({ definition, ...record }) => ({ ...record, editable: isFixedRuleDefinition(definition) && ["DRAFT", "VALIDATED"].includes(record.lifecycle), duplicable: isFixedRuleDefinition(definition), deletable: ruleDefinitionSchema.safeParse(definition).success && record.lifecycle === "DRAFT" })) })));
   app.post("/admin/rules", guard(async c => {
     const parsed = createSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
