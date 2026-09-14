@@ -7,7 +7,7 @@ This console is restricted to NIQ staff. Every account currently has the same NI
 1. Apply the database migrations with `bun run db:migrate`.
 2. Configure an independent high-entropy `ADMIN_BOOTSTRAP_TOKEN` in the protected API environment. Do not reuse a customer activation token or deployment credential.
 3. Open the console at `http://localhost:4173`. On a fresh database it presents first-administrator setup.
-4. Enter the setup token, administrator name, email address and a password of 12–128 characters.
+4. Enter the setup token, administrator name, email address and a password of 8–128 characters.
 5. Sign in with the new account. Setup does not automatically create a session.
 6. Remove `ADMIN_BOOTSTRAP_TOKEN` from the runtime configuration and restart the API. Setup remains closed once an account exists, even if the token is retained accidentally.
 

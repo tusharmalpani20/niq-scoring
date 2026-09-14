@@ -14,6 +14,15 @@ const setup = {
 };
 
 describe("administrator form validation", () => {
+  test("setup and invitations accept 8–128 characters", () => {
+    for (const mode of ["setup", "invite"] as const) {
+      for (const length of [7, 8, 128, 129]) {
+        const password = "a".repeat(length);
+        expect(authSchema(mode).safeParse({ ...setup, password, confirm: password }).success)
+          .toBe(length >= 8 && length <= 128);
+      }
+    }
+  });
   test("setup requires identity, token, and matching strong passwords", () => {
     expect(authSchema("setup").safeParse(setup).success).toBe(true);
     for (const invalid of [

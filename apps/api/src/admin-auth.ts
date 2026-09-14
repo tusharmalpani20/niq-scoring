@@ -5,7 +5,7 @@ import { createEntityId } from "./lib/id";
 import { type AdminAuthStore, type AdminUser } from "./admin-auth-store";
 
 const cookieName = "niq_scoring_session";
-const password = z.string().min(12).max(128);
+const password = z.string().min(8).max(128);
 const profile = z.object({
   email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
   displayName: z.string().trim().min(1).max(120),

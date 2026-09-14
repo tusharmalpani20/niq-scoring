@@ -16,8 +16,8 @@ export function authSchema(mode: "setup" | "invite" | "login") {
       password: z
         .string()
         .min(
-          creating ? 12 : 1,
-          creating ? "Use at least 12 characters." : "Enter your password.",
+          creating ? 8 : 1,
+          creating ? "Use at least 8 characters." : "Enter your password.",
         )
         .max(128, "Use at most 128 characters."),
       confirm: z.string(),

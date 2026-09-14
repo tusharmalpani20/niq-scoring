@@ -53,6 +53,22 @@ function fixture() {
   };
 }
 describe("NIQ named administrator authentication", () => {
+  test("setup accepts eight-character passwords and rejects shorter ones", async () => {
+    const f = fixture();
+    for (const password of ["1234567", "12345678"]) {
+      const response = await f.request("/auth/setup", {
+        setupToken,
+        email: "admin@niq.test",
+        displayName: "Admin",
+        password,
+      });
+      expect(response.status).toBe(password.length === 8 ? 201 : 400);
+    }
+    expect((await f.request("/auth/login", {
+      email: "admin@niq.test",
+      password: "12345678",
+    })).status).toBe(200);
+  });
   test("first setup is one-time, normalized, hashed, and does not log in", async () => {
     const f = fixture();
     expect(await (await f.app.request("/auth/status")).json()).toEqual({
