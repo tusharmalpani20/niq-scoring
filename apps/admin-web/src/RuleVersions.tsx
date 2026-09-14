@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import type { Overview } from "./Operations";
 import { paginate } from "./pagination";
 import { Badge } from "./components/ui/badge";
@@ -20,9 +20,12 @@ export function RuleVersions({ data }: { data: Overview }) {
       <TabsList variant="line" aria-label="Rule version management" className="shrink-0 p-0">
         <TabsTrigger value="versions" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Rule versions <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{data.versions.length}</Badge></TabsTrigger>
       </TabsList>
+      <div className="flex min-w-0 items-center justify-end gap-2">
       <div className="relative min-w-0 w-full max-w-xs">
         <Input aria-label="Search rule versions" placeholder="Search versions…" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="pr-9" />
         {search && <Button type="button" variant="ghost" size="icon" aria-label="Clear search" className="absolute right-0 top-0 size-9 text-muted-foreground hover:text-foreground" onClick={() => { setSearch(""); setPage(1); }}><X className="size-4" aria-hidden="true" /></Button>}
+      </div>
+      <span title="Rule creation will be available once the creation form is added."><Button size="icon" disabled aria-label="Create rule version (not available yet)"><Plus aria-hidden="true" /></Button></span>
       </div>
     </div>
     <TabsContent value="versions" className="space-y-5">
