@@ -1,3 +1,4 @@
+import { TokenExpirySelect, tokenExpiry } from "./TokenExpirySelect";
 import { ActivationTokenPanel, type ActivationToken } from "./ActivationTokenPanel";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -12,7 +13,7 @@ import { Select, SelectValue, SelectTrigger, SelectContent, SelectItem } from ".
 import { Separator } from "./components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
-type Values = { clientId: string; environment: string; hostingType: string; enabled: boolean; scoringEnabled: boolean; faceEnabled: boolean; scoringUnlimited: boolean; faceUnlimited: boolean; scoringLimit: string; faceLimit: string; ruleVersion: string };
+type Values = { clientId: string; environment: string; hostingType: string; enabled: boolean; scoringEnabled: boolean; faceEnabled: boolean; scoringUnlimited: boolean; faceUnlimited: boolean; scoringLimit: string; faceLimit: string; ruleVersion: string; expiryPreset: string; expiryDate: string };
 export function DeploymentDialog({ data, deployment, refresh, onClose }: { data: Overview; deployment: Overview["deployments"][number] | null; refresh: () => Promise<void>; onClose: () => void }) {
   const scoring = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "SCORING");
   const face = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "FACE_SCAN");
@@ -23,13 +24,13 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
     scoringEnabled: scoring?.enabled ?? !deployment, faceEnabled: face?.enabled ?? !deployment,
     scoringUnlimited: !deployment || scoring?.monthlyLimit === null, faceUnlimited: !deployment || face?.monthlyLimit === null,
     scoringLimit: String(scoring?.monthlyLimit ?? 0), faceLimit: String(face?.monthlyLimit ?? 0),
+    expiryPreset: "7", expiryDate: "",
     ruleVersion: assignment?.mode === "PINNED" ? assignment.scoringRuleVersionId ?? "" : "LATEST_APPROVED",
   } });
   const [savedId, setSavedId] = useState<string | null>(deployment?.id ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
-  const [initialToken, setInitialToken] = useState<ActivationToken | null>(null);
   const dirty = form.formState.isDirty;
   function close() { if (busy) return; if (dirty) setConfirmClose(true); else onClose(); }
   async function submit(values: Values) {
@@ -46,12 +47,12 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
     try {
       const saved = await request<{ id: string; activation?: ActivationToken }>(savedId ? `/admin/deployments/${savedId}/configuration` : "/admin/deployments/configuration", {
         clientId: values.clientId, environment: values.environment.trim(), hostingType: values.hostingType, enabled: values.enabled,
+        ...(!savedId ? { tokenExpiry: tokenExpiry(values.expiryPreset, values.expiryDate) } : {}),
         scoring: { enabled: values.scoringEnabled, monthlyLimit: values.scoringUnlimited ? null : (/^\d+$/.test(values.scoringLimit) && Number(values.scoringLimit) <= 2147483647 ? Number(values.scoringLimit) : null) },
         faceScan: { enabled: values.faceEnabled, monthlyLimit: values.faceUnlimited ? null : (/^\d+$/.test(values.faceLimit) && Number(values.faceLimit) <= 2147483647 ? Number(values.faceLimit) : null) },
         versionAssignment: values.ruleVersion === "LATEST_APPROVED" ? { mode: "LATEST_APPROVED" } : { mode: "PINNED", scoringRuleVersionId: values.ruleVersion },
       }, savedId ? "PUT" : "POST");
       setSavedId(saved.id);
-      if (saved.activation) setInitialToken(saved.activation);
       form.reset(values); await refresh();
       if (!saved.activation) onClose();
     } catch (cause) { setError(message(cause)); } finally { setBusy(false); }
@@ -92,7 +93,8 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
         {capabilityCard("face", "Face scan", "face scans")}
       </div>
       {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: "Latest approved" }, ...data.versions.map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
-      {savedId && <><Separator /><ActivationTokenPanel deploymentId={savedId} initialToken={initialToken} disabled={busy || dirty} /></>}
+      {!savedId && <TokenExpirySelect value={form.watch("expiryPreset")} date={form.watch("expiryDate")} onValueChange={value => form.setValue("expiryPreset", value, { shouldDirty: true })} onDateChange={value => form.setValue("expiryDate", value, { shouldDirty: true })} disabled={busy} />}
+      {savedId && <><Separator /><ActivationTokenPanel deploymentId={savedId} disabled={busy || dirty} /></>}
       <ErrorNotice error={error} />
       <DialogFooter className="grid grid-cols-2 gap-2 sm:flex"><Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button><Button disabled={busy || data.clients.length === 0}>{busy ? "Saving…" : savedId ? "Save" : "Create"}</Button></DialogFooter>
     </form>

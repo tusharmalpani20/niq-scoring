@@ -1,3 +1,4 @@
+import { DeleteRecord } from "./DeleteRecord";
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import type { Overview } from "./Operations";
@@ -45,14 +46,15 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
       {filtersActive && <Button variant="ghost" size="sm" onClick={() => { setHosting("all"); setStatus("all"); setEnvironment("all"); setPage(1); }}>Clear filters</Button>}
     </div>
     <TabsContent value="deployments" className="space-y-5"><Card><CardContent className="pt-6"><Table>
-      <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Hosting</TableHead><TableHead>Environment</TableHead><TableHead>Status</TableHead><TableHead>Scoring</TableHead><TableHead>Face scan</TableHead></TableRow></TableHeader>
+      <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Hosting</TableHead><TableHead>Environment</TableHead><TableHead>Status</TableHead><TableHead>Scoring</TableHead><TableHead>Face scan</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
       <TableBody>{deployments.rows.map(deployment => <TableRow key={deployment.id}>
         <TableCell><Button variant="link" className="h-auto p-0 text-left font-medium" onClick={() => setSelected(deployment)}>{clientName(deployment.clientId)}</Button></TableCell>
         <TableCell>{deployment.hostingType ? hostingLabels[deployment.hostingType] : "Not specified"}</TableCell><TableCell className="capitalize">{deployment.environment}</TableCell><TableCell><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
         {["SCORING", "FACE_SCAN"].map(capability => { const limit = data.entitlements.find(item => item.deploymentId === deployment.id && item.capability === capability); return <TableCell key={capability}>{!limit?.enabled ? "Disabled" : limit.monthlyLimit === null ? "Unlimited" : `${limit.monthlyLimit.toLocaleString()}/month`}</TableCell>; })}
+        <TableCell className="text-right"><DeleteRecord kind="deployments" id={deployment.id} name={`${clientName(deployment.clientId)} ${deployment.environment} deployment`} refresh={refresh} revision={data} /></TableCell>
       </TableRow>)}
-      {data.deployments.length === 0 && <TableRow><TableCell colSpan={6} className="h-32 text-center"><Button variant="ghost" onClick={() => setSelected(null)}><Plus />Create your first deployment</Button></TableCell></TableRow>}
-      {data.deployments.length > 0 && deployments.total === 0 && <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">No deployments match your search or filters.</TableCell></TableRow>}
+      {data.deployments.length === 0 && <TableRow><TableCell colSpan={7} className="h-32 text-center"><Button variant="ghost" onClick={() => setSelected(null)}><Plus />Create your first deployment</Button></TableCell></TableRow>}
+      {data.deployments.length > 0 && deployments.total === 0 && <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground">No deployments match your search or filters.</TableCell></TableRow>}
       </TableBody></Table></CardContent></Card>
       <Pagination aria-label="Deployments pagination"><PaginationContent><PaginationItem><Button variant="outline" size="sm" disabled={deployments.page === 1} onClick={() => setPage(deployments.page - 1)}>Previous</Button></PaginationItem><PaginationItem><span className="flex flex-col items-center gap-1 px-2 text-xs text-muted-foreground sm:block sm:px-3 sm:text-sm" role="status"><span className="whitespace-nowrap">Page {deployments.page} of {deployments.pageCount}</span><span className="whitespace-nowrap"><span className="hidden sm:inline"> · </span>{deployments.total} total</span></span></PaginationItem><PaginationItem><Button variant="outline" size="sm" disabled={deployments.page === deployments.pageCount} onClick={() => setPage(deployments.page + 1)}>Next</Button></PaginationItem></PaginationContent></Pagination>
     </TabsContent>
