@@ -1,0 +1,1 @@
+ALTER TABLE "activation_tokens" ADD COLUMN "token_ciphertext" text;

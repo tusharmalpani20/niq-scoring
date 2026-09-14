@@ -1,3 +1,4 @@
+import type { StoredActivationToken } from "./store";
 import postgres from "postgres";
 import type { DeploymentConfiguration, CreateDeployment, CreateClient, EntitlementInput, VersionAssignmentInput } from "@niq-scoring/contracts";
 import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
@@ -34,7 +35,7 @@ export class PostgresScoringStore implements ScoringStore {
       return row!;
     });
   }
-  async saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration) {
+  async saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken) {
     return this.database.begin(async tx => {
       const deploymentId = id ?? createEntityId();
       const [deployment] = id
@@ -52,6 +53,7 @@ export class PostgresScoringStore implements ScoringStore {
       await tx`select pg_advisory_xact_lock(hashtext(${`version:${deploymentId}`}))`;
       await tx`update deployment_version_assignments set effective_until=clock_timestamp() where deployment_id=${deploymentId} and effective_until is null`;
       await tx`insert into deployment_version_assignments (id,deployment_id,mode,scoring_rule_version_id) values (${createEntityId()},${deploymentId},${policy.mode},${policy.mode === "PINNED" ? policy.scoringRuleVersionId : null})`;
+      if (activation) await tx`insert into activation_tokens (id,deployment_id,token_hash,token_ciphertext,expires_at) values (${activation.id},${deploymentId},${activation.tokenHash},${activation.tokenCiphertext},${activation.expiresAt})`;
       return deployment;
     });
   }
@@ -70,14 +72,25 @@ export class PostgresScoringStore implements ScoringStore {
       await tx`insert into deployment_version_assignments (id, deployment_id, mode, scoring_rule_version_id) values (${createEntityId()}, ${deploymentId}, ${input.mode}, ${input.mode === "PINNED" ? input.scoringRuleVersionId : null})`;
     });
   }
-  async storeActivationToken(input: { id: string; deploymentId: string; tokenHash: string; expiresAt: Date }) { await this.database`insert into activation_tokens (id, deployment_id, token_hash, expires_at) values (${input.id}, ${input.deploymentId}, ${input.tokenHash}, ${input.expiresAt})`; }
+  async storeActivationToken(input: StoredActivationToken & { deploymentId: string }) {
+    await this.database.begin(async tx => {
+      // Serialize replacement requests so only the latest unused token survives.
+      await tx`select id from deployments where id=${input.deploymentId} for update`;
+      await tx`delete from activation_tokens where deployment_id=${input.deploymentId} and used_at is null`;
+      await tx`insert into activation_tokens (id,deployment_id,token_hash,token_ciphertext,expires_at) values (${input.id},${input.deploymentId},${input.tokenHash},${input.tokenCiphertext},${input.expiresAt})`;
+    });
+  }
+  async getActivationToken(deploymentId: string, now: Date) {
+    const [token] = await this.database<Array<{ tokenCiphertext: string; expiresAt: Date }>>`select token_ciphertext as "tokenCiphertext", expires_at as "expiresAt" from activation_tokens where deployment_id=${deploymentId} and used_at is null and expires_at>${now} and token_ciphertext is not null order by created_at desc limit 1`;
+    return token ?? null;
+  }
   async exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
     return this.database.begin(async (tx) => {
       const [token] = await tx<Array<{ deploymentId: string }>>`select deployment_id as "deploymentId" from activation_tokens where token_hash=${input.tokenHash} and used_at is null and expires_at>${input.now} for update`;
       if (!token) return null;
       const [client] = await tx<Array<{ clientId: string }>>`select client.id as "clientId" from deployments link join clients client on client.id=link.client_id where link.id=${token.deploymentId}`;
       if (!client) return null;
-      await tx`update activation_tokens set used_at=${input.now} where token_hash=${input.tokenHash}`;
+      await tx`update activation_tokens set used_at=${input.now}, token_ciphertext=null where token_hash=${input.tokenHash}`;
       await tx`insert into deployment_credentials (id, deployment_id, key_prefix, secret_hash, hash_algorithm) values (${input.credentialId}, ${token.deploymentId}, ${input.keyPrefix}, ${input.secretHash}, 'sha256')`;
       return { deploymentId: token.deploymentId, clientId: client.clientId };
     });

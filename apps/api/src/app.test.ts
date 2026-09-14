@@ -13,7 +13,7 @@ function setup() {
   const authStore = new MemoryAdminAuthStore();
   authStore.state.users.push({ id: "01J00000000000000000000001", email: "admin@niq.test", displayName: "Admin", enabled: true, createdAt: "2026-09-13T00:00:00.000Z", passwordHash: "unused" });
   authStore.state.sessions.push({ userId: "01J00000000000000000000001", tokenHash: new Bun.CryptoHasher("sha256").update("test-session").digest("hex"), expiresAt: "2027-01-01T00:00:00.000Z" });
-  const app = createApp({ store, authStore, adminBootstrapToken: adminToken, allowedOrigins: ["http://localhost:4173"], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: true, now: () => new Date("2026-09-13T00:00:00.000Z") });
+  const app = createApp({ store, authStore, activationTokenEncryptionKey: "ab".repeat(32), adminBootstrapToken: adminToken, allowedOrigins: ["http://localhost:4173"], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: true, now: () => new Date("2026-09-13T00:00:00.000Z") });
   return { app, store };
 }
 
@@ -134,6 +134,40 @@ describe("scoring API", () => {
     const again = await app.request("/admin/deployments/configuration", jsonRequest(input));
     expect(again.status).toBe(201);
     expect((await again.json() as { name: string }).name).not.toBe(saved.name);
+  });
+
+  test("recovers unused activation tokens and replaces them without disconnecting credentials", async () => {
+    const { app, store, client, credential } = await onboard();
+    const input = { clientId: client.id, environment: "staging", hostingType: "NIQ_HOSTED", enabled: true, scoring: { enabled: true, monthlyLimit: null }, faceScan: { enabled: true, monthlyLimit: null }, versionAssignment: { mode: "LATEST_APPROVED" } };
+    const created = await app.request("/admin/deployments/configuration", jsonRequest(input));
+    expect(created.status).toBe(201);
+    expect(created.headers.get("cache-control")).toBe("no-store");
+    const deployment = await created.json() as { id: string; activation: { activationToken: string; expiresAt: string } };
+    const path = `/admin/deployments/${deployment.id}/activation-token`;
+    const read = () => app.request(path, { headers: adminHeaders });
+    const first = deployment.activation.activationToken;
+    expect(first).toStartWith("niq_act_");
+    expect(store.activations.find(t => t.deploymentId === deployment.id)?.tokenCiphertext).not.toContain(first);
+    expect(await (await read()).json()).toEqual({ activation: deployment.activation });
+    expect(JSON.stringify(await store.overview())).not.toContain(first);
+    expect((await app.request(path)).status).toBe(401);
+    const replacement = await app.request(path, jsonRequest({ expiresInMinutes: 30 }));
+    const next = await replacement.json() as { activationToken: string };
+    expect(next.activationToken).not.toBe(first);
+    expect((await app.request("/v1/activate", jsonRequest({ activationToken: first }, ""))).status).toBe(401);
+    const activated = await app.request("/v1/activate", jsonRequest(next, ""));
+    expect(activated.status).toBe(201);
+    const connected = await activated.json() as { credential: string };
+    expect(await (await read()).json()).toEqual({ activation: null });
+    expect(store.activations.find(t => t.deploymentId === deployment.id)?.tokenCiphertext).toBeNull();
+    expect((await app.request("/v1/activate", jsonRequest(next, ""))).status).toBe(401);
+    await app.request(path, jsonRequest({ expiresInMinutes: 30 }));
+    const prefix = connected.credential.split(".")[0]!.replace("niq_dep_", "");
+    expect(await store.authenticateDeployment(prefix, new Bun.CryptoHasher("sha256").update(connected.credential).digest("hex"))).not.toBeNull();
+    const unused = store.activations.find(t => t.deploymentId === deployment.id && !t.usedAt)!;
+    unused.expiresAt = new Date("2020-01-01");
+    expect(await (await read()).json()).toEqual({ activation: null });
+    expect((await app.request("/v1/provisional/calculate", jsonRequest(scoringInput(client.id), `Bearer ${credential}`))).status).toBe(200);
   });
 
   test("guards provisional scoring, records usage and returns idempotent result", async () => {

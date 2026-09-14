@@ -13,6 +13,7 @@ const app = createApp({
   ...(environment.ADMIN_BOOTSTRAP_TOKEN ? { adminBootstrapToken: environment.ADMIN_BOOTSTRAP_TOKEN } : {}),
   allowedOrigins: environment.CORS_ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()),
   region: environment.DEPLOYMENT_REGION,
+  ...(environment.ACTIVATION_TOKEN_ENCRYPTION_KEY ? { activationTokenEncryptionKey: environment.ACTIVATION_TOKEN_ENCRYPTION_KEY } : {}),
   runtimeEnvironment: environment.NODE_ENV,
   provisionalScoringRequested: environment.ENABLE_PROVISIONAL_SCORING,
   platformEnabled: environment.SCORING_PLATFORM_ENABLED,

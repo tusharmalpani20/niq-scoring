@@ -10,6 +10,7 @@ import {
   pgTable,
   primaryKey,
   timestamp,
+  text,
   uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -67,6 +68,7 @@ export const activationTokens = pgTable("activation_tokens", {
   id: varchar("id", { length: 26 }).primaryKey(),
   deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),
   tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+  tokenCiphertext: text("token_ciphertext"),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

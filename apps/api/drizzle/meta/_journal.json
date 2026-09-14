@@ -50,6 +50,13 @@
       "when": 1789400000003,
       "tag": "0006_remove_deployment_region",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789400000004,
+      "tag": "0007_recoverable_activation_tokens",
+      "breakpoints": true
     }
   ]
 }

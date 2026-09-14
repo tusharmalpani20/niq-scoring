@@ -1,3 +1,4 @@
+import { encryptActivationToken, decryptActivationToken } from "./lib/activation-secret";
 import {
   activationExchangeSchema, activationTokenInputSchema, calculateRequestSchema,
    deploymentConfigurationRequestSchema, createDeploymentSchema, createFaceScanSessionSchema,
@@ -20,6 +21,7 @@ export interface AppOptions {
   adminBootstrapToken?: string;
   allowedOrigins: string[];
   region: string;
+  activationTokenEncryptionKey?: string;
   runtimeEnvironment: "development" | "test" | "production";
   provisionalScoringRequested: boolean;
   platformEnabled?: boolean;
@@ -89,8 +91,11 @@ export function createApp(options: AppOptions) {
     const policy = input.versionAssignment;
     if (policy.mode === "PINNED" && !current.versions.some(v => v.id === policy.scoringRuleVersionId)) return context.json({ error: "VERSION_NOT_FOUND" }, 400);
     try {
-      const saved = await options.store.saveDeploymentConfiguration(id, input);
-      return saved ? context.json(saved, id ? 200 : 201) : context.json({ error: "DEPLOYMENT_NOT_FOUND" }, 404);
+      if (!id && !options.activationTokenEncryptionKey) return context.json({ error: "TOKEN_STORAGE_UNAVAILABLE" }, 503);
+      const activation = id ? undefined : await newActivation(30);
+      const saved = await options.store.saveDeploymentConfiguration(id, input, activation?.stored);
+      context.header("cache-control", "no-store");
+      return saved ? context.json({ ...saved, ...(activation ? { activation: activation.public } : {}) }, id ? 200 : 201) : context.json({ error: "DEPLOYMENT_NOT_FOUND" }, 404);
     } catch (error) {
       if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") return context.json({ error: "DEPLOYMENT_NAME_EXISTS" }, 409);
       throw error;
@@ -115,13 +120,32 @@ export function createApp(options: AppOptions) {
     if (!(await options.store.overview()).deployments.some(d => d.id === id.data)) return context.json({ error: "NOT_FOUND" }, 404);
     await options.store.assignVersion(id.data, body.data); return context.json({ deploymentId: id.data, ...body.data });
   });
-  app.post("/admin/deployments/:id/activation-token", async (context) => {
+  async function newActivation(minutes: number) {
+    const token = `niq_act_${randomSecret(36)}`;
+    const expiresAt = new Date(now().getTime() + minutes * 60_000);
+    return {
+      stored: { id: createEntityId(), tokenHash: await sha256(token), tokenCiphertext: encryptActivationToken(token, options.activationTokenEncryptionKey!), expiresAt },
+      public: { activationToken: token, expiresAt: expiresAt.toISOString() },
+    };
+  }
+  app.get("/admin/deployments/:id/activation-token", async context => {
+    context.header("cache-control", "no-store");
+    const id = ulidSchema.safeParse(context.req.param("id"));
+    if (!id.success) return context.json({ error: "INVALID_REQUEST" }, 400);
+    if (!(await options.store.overview()).deployments.some(d => d.id === id.data)) return context.json({ error: "DEPLOYMENT_NOT_FOUND" }, 404);
+    if (!options.activationTokenEncryptionKey) return context.json({ error: "TOKEN_STORAGE_UNAVAILABLE" }, 503);
+    const token = await options.store.getActivationToken(id.data, now());
+    return context.json({ activation: token ? { activationToken: decryptActivationToken(token.tokenCiphertext, options.activationTokenEncryptionKey), expiresAt: token.expiresAt.toISOString() } : null });
+  });
+  app.post("/admin/deployments/:id/activation-token", async context => {
+    context.header("cache-control", "no-store");
     const id = ulidSchema.safeParse(context.req.param("id")); const body = activationTokenInputSchema.safeParse(await parseJson(context));
     if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    const token = `niq_act_${randomSecret(36)}`; const expiresAt = new Date(now().getTime() + body.data.expiresInMinutes * 60_000);
-    await options.store.storeActivationToken({ id: createEntityId(), deploymentId: id.data, tokenHash: await sha256(token), expiresAt });
-    context.header("cache-control", "no-store");
-    return context.json({ activationToken: token, expiresAt: expiresAt.toISOString() }, 201);
+    if (!(await options.store.overview()).deployments.some(d => d.id === id.data)) return context.json({ error: "DEPLOYMENT_NOT_FOUND" }, 404);
+    if (!options.activationTokenEncryptionKey) return context.json({ error: "TOKEN_STORAGE_UNAVAILABLE" }, 503);
+    const activation = await newActivation(body.data.expiresInMinutes);
+    await options.store.storeActivationToken({ ...activation.stored, deploymentId: id.data });
+    return context.json(activation.public, 201);
   });
 
   app.post("/v1/activate", async (context) => {

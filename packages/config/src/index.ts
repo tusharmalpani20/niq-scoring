@@ -7,6 +7,7 @@ const environmentSchema = z.object({
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   CORS_ALLOWED_ORIGINS: z.string().default("http://localhost:4173"),
   DEPLOYMENT_REGION: z.string().min(1).default("india"),
+  ACTIVATION_TOKEN_ENCRYPTION_KEY: z.string().regex(/^[a-fA-F0-9]{64}$/).optional(),
   ADMIN_BOOTSTRAP_TOKEN: z.string().min(32).optional(),
   SCORING_PLATFORM_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
   FACE_SCAN_PROVIDER: z.enum(["stub", "careplix"]).default("stub"),
