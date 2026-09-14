@@ -62,6 +62,5 @@ export async function mockConsole(page: Page, definition?: RuleDefinition) {
 export async function startDraft(page: Page) {
   await page.goto("/versions");
   await page.getByRole("button", { name: "Create rule version", exact: true }).click();
-  await page.getByLabel("Version name", { exact: true }).fill("Synthetic browser draft");
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Synthetic browser draft");
 }

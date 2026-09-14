@@ -12,8 +12,7 @@ test("real API login, spreadsheet draft, reopen, duplicate and protected deletio
   await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
   await page.goto("/versions");
   await page.getByRole("button", { name: "Create rule version", exact: true }).click();
-  await page.getByLabel("Version name", { exact: true }).fill(name);
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
   await expect(page.getByText("Source decisions", { exact: true })).toBeVisible();
@@ -31,7 +30,6 @@ test("real API login, spreadsheet draft, reopen, duplicate and protected deletio
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Synthetic browser persistence check");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.getByRole("button", { name: `Duplicate ${name}`, exact: true }).click();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Synthetic browser persistence check");
   await page.getByLabel("Description", { exact: true }).fill("Copy-only change");
@@ -58,9 +56,8 @@ test("real API persists scoring edits and rejects altered fixed fields", async (
   await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
   await page.goto("/versions");
   await page.getByRole("button", { name: "Create rule version", exact: true }).click();
-  await page.getByLabel("Version name", { exact: true }).fill(name);
+  await page.getByLabel("Name", { exact: true }).fill(name);
   await expect(page.getByLabel("Starting point", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
   const creation = page.waitForResponse(response => response.url().endsWith("/api/admin/rules") && response.request().method() === "POST");
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   const response = await creation;
