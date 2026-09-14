@@ -38,7 +38,7 @@ export function ActivationTokenPanel({ deploymentId, disabled }: { deploymentId:
   }
   const rows = paginate(tokens, page);
   return <section className="space-y-4" aria-label="Activation tokens">
-    <div className="flex items-center justify-between gap-3"><h3 className="font-medium">Activation tokens</h3>
+    <div className="flex items-center justify-end">
       <Button type="button" size="icon" title="Create token" aria-label="Create token" disabled={busy || disabled} onClick={() => { setCreating(value => !value); setError(""); }}><Plus className="size-4" /></Button>
     </div>
     {creating && <div className="space-y-4 rounded-lg border p-4">
