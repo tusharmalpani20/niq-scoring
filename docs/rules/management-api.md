@@ -26,7 +26,7 @@ DRAFT and VALIDATED contents are editable; saving resets lifecycle to DRAFT and 
 
 Semantic errors prevent saving; incomplete clinical mappings may remain in drafts as blocking issues. Validation and approval require no outstanding issues and successful independently specified sample expectations. Technical validation does not perform clinical approval.
 
-Audit records retain actor, time, action, revision and checksum. Definition writes and audit events commit together. Deletion checks deployment-assignment history and historical usage; foreign keys prevent concurrent references being erased. Additional assessment-binding references will be included with consumption integration.
+Audit records retain actor, time, action, revision and checksum. Definition writes and audit events commit together. Deletion checks deployment-assignment history and historical usage; foreign keys prevent concurrent references being erased. Assessment bindings also prevent deletion.
 
 ## Database verification
 

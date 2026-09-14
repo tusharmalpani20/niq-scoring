@@ -130,6 +130,16 @@ export const deploymentVersionAssignments = pgTable("deployment_version_assignme
   check("version_assignments_valid_period_ck", sql`${table.effectiveUntil} is null or ${table.effectiveUntil} > ${table.effectiveFrom}`),
 ]);
 
+export const assessmentBindings = pgTable("assessment_bindings", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),
+  clientId: varchar("client_id", { length: 26 }).notNull().references(() => clients.id),
+  assessmentReference: varchar("assessment_reference", { length: 128 }).notNull(),
+  scoringRuleVersionId: varchar("scoring_rule_version_id", { length: 26 }).notNull().references(() => scoringRuleVersions.id),
+  packageChecksum: varchar("package_checksum", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [uniqueIndex("assessment_binding_reference_uq").on(table.deploymentId, table.assessmentReference)]);
+
 export const usageEvents = pgTable("usage_events", {
   id: varchar("id", { length: 26 }).primaryKey(),
   clientId: varchar("client_id", { length: 26 }).notNull(),
@@ -142,6 +152,7 @@ export const usageEvents = pgTable("usage_events", {
   assessmentReference: varchar("assessment_reference", { length: 128 }).notNull(),
   outcome: usageOutcomeEnum("outcome").notNull(),
   billable: boolean("billable").notNull().default(false),
+  requestFingerprint: varchar("request_fingerprint", { length: 64 }),
   responsePayload: jsonb("response_payload"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),

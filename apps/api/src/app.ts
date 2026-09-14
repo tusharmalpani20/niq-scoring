@@ -1,3 +1,6 @@
+import { RuleStoreError } from "./rule-store";
+import { installAssessmentRoutes } from "./assessment-routes";
+import { ruleChecksum } from "./rule-routes";
 import { installRuleRoutes } from "./rule-routes";
 import { DuplicateClientNameError } from "./lib/client-name";
 import { installRecordDeletion } from "./record-deletion";
@@ -99,7 +102,11 @@ export function createApp(options: AppOptions) {
       name: existing?.name ?? `${clientSlug}-${parsed.data.environment}-${hosting}-${crypto.randomUUID().slice(0, 8)}`,
     };
     const policy = input.versionAssignment;
-    if (policy.mode === "PINNED" && !current.versions.some(v => v.id === policy.scoringRuleVersionId)) return context.json({ error: "VERSION_NOT_FOUND" }, 400);
+    if (policy.mode === "PINNED") {
+      const selected = current.versions.find(v => v.id === policy.scoringRuleVersionId);
+      const unchanged = current.assignments.some(a => a.deploymentId === id && a.mode === "PINNED" && a.scoringRuleVersionId === policy.scoringRuleVersionId);
+      if (!selected || !unchanged && !(selected.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(selected.lifecycle) || provisionalScoringEnabled && selected.version === PROVISIONAL_SCORING_VERSION)) return context.json({ error: "VERSION_UNAVAILABLE" }, 409);
+    }
     try {
       if (!id && !options.activationTokenEncryptionKey) return context.json({ error: "TOKEN_STORAGE_UNAVAILABLE" }, 503);
       const expiresAt = tokenExpiryDate(parsed.data.tokenExpiry);
@@ -130,6 +137,13 @@ export function createApp(options: AppOptions) {
     const id = ulidSchema.safeParse(context.req.param("id")); const body = versionAssignmentInputSchema.safeParse(await parseJson(context));
     if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
     if (!(await options.store.overview()).deployments.some(d => d.id === id.data)) return context.json({ error: "NOT_FOUND" }, 404);
+    if (body.data.mode === "PINNED") {
+      const overview = await options.store.overview();
+      const pin = body.data.scoringRuleVersionId;
+      const selected = overview.versions.find(v => v.id === pin);
+      const unchanged = overview.assignments.some(a => a.deploymentId === id.data && a.mode === "PINNED" && a.scoringRuleVersionId === pin);
+      if (!selected || !unchanged && !(selected.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(selected.lifecycle) || provisionalScoringEnabled && selected.version === PROVISIONAL_SCORING_VERSION)) return context.json({ error: "VERSION_UNAVAILABLE" }, 409);
+    }
     await options.store.assignVersion(id.data, body.data); return context.json({ deploymentId: id.data, ...body.data });
   });
   function tokenExpiryDate(input: { expiresAt?: string | null | undefined; expiresInMinutes?: number | undefined }): Date | null | false {
@@ -201,12 +215,14 @@ export function createApp(options: AppOptions) {
     return context.json({ service: "niq-scoring-api", region: options.region, provisionalVersion: { version: PROVISIONAL_SCORING_VERSION, status: PROVISIONAL_VERSION_STATUS, clinicalUsePermitted: false, calculationEnabled: provisionalScoringEnabled }, faceScanProvider: { configured: faceScanAdapter.configured, mode: faceScanAdapter.name } });
   });
 
+  installAssessmentRoutes(app, options.store, authenticateDeployment, now, options.platformEnabled ?? true);
+
   app.post("/v1/provisional/calculate", async (context) => {
     if (!provisionalScoringEnabled) return context.json({ error: "PROVISIONAL_SCORING_DISABLED" }, 503);
     const identity = await authenticateDeployment(context); if (!identity) return context.json({ error: "UNAUTHORIZED" }, 401);
     const parsed = calculateRequestSchema.safeParse(await parseJson(context));
     if (!parsed.success) return context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues.map(({ path, message }) => ({ path, message })) }, 400);
-    const reservation = await options.store.reserveUsage({ identity, clientId: parsed.data.input.clientId, capability: "SCORING", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.input.assessmentReference, platformEnabled: options.platformEnabled ?? true });
+    const reservation = await options.store.reserveUsage({ identity, clientId: parsed.data.input.clientId, capability: "SCORING", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.input.assessmentReference, fingerprint: ruleChecksum({ endpoint: "provisional", input: parsed.data.input }), platformEnabled: options.platformEnabled ?? true });
     if (reservation.status === "DUPLICATE") return context.json(reservation.response as never);
     if (reservation.status === "REJECTED") return context.json({ error: "SCORING_UNAVAILABLE", reason: reservation.reason }, 409);
     try { const result = calculateProvisionalScore(parsed.data.input, now().toISOString()); const response = { result, idempotencyKey: parsed.data.idempotencyKey }; await options.store.completeUsage(reservation.usageId, response); return context.json(response); }
@@ -216,7 +232,7 @@ export function createApp(options: AppOptions) {
   app.post("/v1/face-scans", async (context) => {
     const identity = await authenticateDeployment(context); if (!identity) return context.json({ error: "UNAUTHORIZED" }, 401);
     const parsed = createFaceScanSessionSchema.safeParse(await parseJson(context)); if (!parsed.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    const reservation = await options.store.reserveUsage({ identity, clientId: parsed.data.clientId, capability: "FACE_SCAN", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.assessmentReference, platformEnabled: options.platformEnabled ?? true });
+    const reservation = await options.store.reserveUsage({ identity, clientId: parsed.data.clientId, capability: "FACE_SCAN", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.assessmentReference, fingerprint: ruleChecksum({ endpoint: "face-scan", input: parsed.data }), platformEnabled: options.platformEnabled ?? true });
     if (reservation.status === "DUPLICATE") return context.json(reservation.response as never);
     if (reservation.status === "REJECTED") return context.json({ error: "FACE_SCAN_UNAVAILABLE", reason: reservation.reason }, 409);
     try {
@@ -229,7 +245,7 @@ export function createApp(options: AppOptions) {
   });
 
   app.notFound((context) => context.json({ error: "NOT_FOUND" }, 404));
-  app.onError((_error, context) => context.json({ error: "INTERNAL_ERROR" }, 500));
+  app.onError((error, context) => error instanceof RuleStoreError ? context.json({ error: error.code }, 409) : context.json({ error: "INTERNAL_ERROR" }, 500));
   return app;
 }
 

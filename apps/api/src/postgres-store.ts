@@ -1,3 +1,7 @@
+import { assertAssignmentEligible } from "./version-eligibility";
+import { postgresBindAssessment } from "./postgres-assessment-binding";
+import type { BindingInput } from "./assessment-binding";
+import type { ReserveInput } from "./store";
 import { PostgresRuleStore } from "./postgres-rule-store";
 import { DuplicateClientNameError } from "./lib/client-name";
 import { postgresDeletion, type RecordKind } from "./record-deletion";
@@ -12,6 +16,7 @@ import type { Deployment, DeploymentIdentity, Client, ScoringStore, UsageReserva
 type Database = ReturnType<typeof postgres>;
 
 export class PostgresScoringStore implements ScoringStore {
+  async bindAssessment(input: BindingInput) { return postgresBindAssessment(this.database, input); }
   async deletionStatus(kind: RecordKind, id: string) { return postgresDeletion(this.database, kind, id); }
   async deleteUnused(kind: RecordKind, id: string) { return postgresDeletion(this.database, kind, id, true); }
   readonly rules: PostgresRuleStore;
@@ -58,6 +63,7 @@ export class PostgresScoringStore implements ScoringStore {
       }
       const policy = input.versionAssignment;
       await tx`select pg_advisory_xact_lock(hashtext(${`version:${deploymentId}`}))`;
+      await assertAssignmentEligible(tx, deploymentId, policy);
       await tx`update deployment_version_assignments set effective_until=clock_timestamp() where deployment_id=${deploymentId} and effective_until is null`;
       await tx`insert into deployment_version_assignments (id,deployment_id,mode,scoring_rule_version_id) values (${createEntityId()},${deploymentId},${policy.mode},${policy.mode === "PINNED" ? policy.scoringRuleVersionId : null})`;
       if (activation) await tx`insert into activation_tokens (id,deployment_id,token_hash,token_ciphertext,expires_at) values (${activation.id},${deploymentId},${activation.tokenHash},${activation.tokenCiphertext},${activation.expiresAt})`;
@@ -75,6 +81,7 @@ export class PostgresScoringStore implements ScoringStore {
   async assignVersion(deploymentId: string, input: VersionAssignmentInput) {
     await this.database.begin(async (tx) => {
       await tx`select pg_advisory_xact_lock(hashtext(${`version:${deploymentId}`}))`;
+      await assertAssignmentEligible(tx, deploymentId, input);
       await tx`update deployment_version_assignments set effective_until=now() where deployment_id=${deploymentId} and effective_until is null`;
       await tx`insert into deployment_version_assignments (id, deployment_id, mode, scoring_rule_version_id) values (${createEntityId()}, ${deploymentId}, ${input.mode}, ${input.mode === "PINNED" ? input.scoringRuleVersionId : null})`;
     });
@@ -114,26 +121,29 @@ export class PostgresScoringStore implements ScoringStore {
     if (row) await this.database`update deployment_credentials set last_used_at=now() where id=${row.credentialId}`;
     return row ?? null;
   }
-  async reserveUsage(input: { identity: DeploymentIdentity; clientId: string; capability: Capability; idempotencyKey: string; assessmentReference: string; platformEnabled: boolean }): Promise<UsageReservation> {
+  async reserveUsage(input: ReserveInput): Promise<UsageReservation> {
     return this.database.begin(async (tx) => {
       await tx`select pg_advisory_xact_lock(hashtext(${`${input.identity.deploymentId}:${input.capability}:${input.idempotencyKey}`}))`;
       const [scope] = await tx<Array<{ clientEnabled: boolean; deploymentEnabled: boolean }>>`select o.enabled as "clientEnabled", d.enabled as "deploymentEnabled" from deployments d join clients o on o.id=d.client_id where d.client_id=${input.identity.clientId} and d.id=${input.identity.deploymentId} and o.id=${input.clientId}`;
       if (!scope) return { status: "REJECTED", reason: "CLIENT_NOT_ALLOWED" };
-      const [duplicate] = await tx<Array<{ id: string; outcome: string; response: unknown }>>`select id, outcome, response_payload as response from usage_events where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and idempotency_key=${input.idempotencyKey}`;
-      if (duplicate?.response != null) return { status: "DUPLICATE", usageId: duplicate.id, response: duplicate.response };
-      if (duplicate?.outcome === "PENDING") return { status: "REJECTED", reason: "REQUEST_IN_PROGRESS" };
       const [entitlement] = await tx<Array<{ enabled: boolean; monthlyLimit: number | null }>>`select enabled, monthly_limit as "monthlyLimit" from entitlements where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and effective_until is null for update`;
       if (!entitlement?.enabled) return { status: "REJECTED", reason: "CAPABILITY_DISABLED" };
+      const [duplicate] = await tx<Array<{ id: string; outcome: string; response: unknown; fingerprint: string | null }>>`select id, outcome, response_payload as response, request_fingerprint as fingerprint from usage_events where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and idempotency_key=${input.idempotencyKey}`;
+      if (!input.platformEnabled || !scope.clientEnabled || !scope.deploymentEnabled) return { status: "REJECTED", reason: !input.platformEnabled ? "PLATFORM_DISABLED" : !scope.clientEnabled ? "CLIENT_DISABLED" : "DEPLOYMENT_DISABLED" };
+      if (duplicate && duplicate.fingerprint !== (input.fingerprint ?? null)) return { status: "REJECTED", reason: "IDEMPOTENCY_CONFLICT" };
+      if (duplicate?.response != null) return { status: "DUPLICATE", usageId: duplicate.id, response: duplicate.response };
+      if (duplicate?.outcome === "PENDING") return { status: "REJECTED", reason: "REQUEST_IN_PROGRESS" };
       const [assignment] = await tx<Array<{ mode: "LATEST_APPROVED" | "PINNED"; scoringRuleVersionId: string | null }>>`select mode, scoring_rule_version_id as "scoringRuleVersionId" from deployment_version_assignments where deployment_id=${input.identity.deploymentId} and effective_until is null`;
       const [resolvedVersion] = assignment?.mode === "PINNED"
         ? await tx<Array<{ id: string; version: string }>>`select id, version from scoring_rule_versions where id=${assignment.scoringRuleVersionId}`
         : await tx<Array<{ id: string; version: string }>>`select id, version from scoring_rule_versions where lifecycle in ('APPROVED','ACTIVE') order by approved_at desc nulls last, created_at desc limit 1`;
+      const [bound] = input.binding ? await tx`select id from assessment_bindings where id=${input.binding.id} and deployment_id=${input.identity.deploymentId} and assessment_reference=${input.assessmentReference} and scoring_rule_version_id=${input.binding.ruleVersionId} and package_checksum=${input.binding.checksum}` : [];
       const [count] = await tx<Array<{ value: number }>>`select count(*)::int as value from usage_events where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and (billable=true or outcome='PENDING') and occurred_at >= (date_trunc('month', now() at time zone 'UTC') at time zone 'UTC')`;
-      const decision = decideEntitlement({ platformEnabled: input.platformEnabled, clientEnabled: scope.clientEnabled, deploymentEnabled: scope.deploymentEnabled, versionActive: input.capability === "FACE_SCAN" || resolvedVersion?.version === PROVISIONAL_SCORING_VERSION, monthlyLimit: entitlement.monthlyLimit, monthlyUsage: count?.value ?? 0 });
+      const decision = decideEntitlement({ platformEnabled: input.platformEnabled, clientEnabled: scope.clientEnabled, deploymentEnabled: scope.deploymentEnabled, versionActive: input.capability === "FACE_SCAN" || Boolean(bound) || resolvedVersion?.version === PROVISIONAL_SCORING_VERSION, monthlyLimit: entitlement.monthlyLimit, monthlyUsage: count?.value ?? 0 });
       if (!decision.allowed) return { status: "REJECTED", reason: decision.reason };
       const usageId = duplicate?.id ?? createEntityId();
-      if (duplicate) await tx`update usage_events set outcome='PENDING', response_payload=null, completed_at=null, occurred_at=now() where id=${usageId}`;
-      else await tx`insert into usage_events (id, client_id, deployment_id, credential_id, capability, request_id, idempotency_key, assessment_reference, outcome) values (${usageId}, ${input.clientId}, ${input.identity.deploymentId}, ${input.identity.credentialId}, ${input.capability}, ${input.idempotencyKey}, ${input.idempotencyKey}, ${input.assessmentReference}, 'PENDING')`;
+      if (duplicate) await tx`update usage_events set outcome='PENDING', response_payload=null, completed_at=null, occurred_at=now(), request_fingerprint=${input.fingerprint ?? null}, scoring_rule_version_id=${input.binding?.ruleVersionId ?? null} where id=${usageId}`;
+      else await tx`insert into usage_events (id, client_id, deployment_id, credential_id, capability, request_id, idempotency_key, assessment_reference, request_fingerprint, scoring_rule_version_id, outcome) values (${usageId}, ${input.clientId}, ${input.identity.deploymentId}, ${input.identity.credentialId}, ${input.capability}, ${input.idempotencyKey}, ${input.idempotencyKey}, ${input.assessmentReference}, ${input.fingerprint ?? null}, ${input.binding?.ruleVersionId ?? null}, 'PENDING')`;
       return { status: "NEW", usageId, version: resolvedVersion?.version ?? PROVISIONAL_SCORING_VERSION };
     });
   }

@@ -13,6 +13,7 @@ export function memoryDeletion(store: MemoryScoringStore, kind: RecordKind, id: 
   const history = store as MemoryScoringStore & { auditEvents?: Array<{ clientId?: string; deploymentId?: string }> };
   const scans = store.faceScans as Array<{ clientId?: string; deploymentId?: string }>;
   const historyKey = kind === "clients" ? "clientId" : "deploymentId";
+  if (store.bindings.some(row => row[historyKey] === id)) return used;
   if (scans.some(row => row[historyKey] === id) || history.auditEvents?.some(row => row[historyKey] === id)) return used;
   if (kind === "clients") {
     if (store.deployments.some(row => row.clientId === id)) return { allowed: false, reason: "Remove this client’s unused deployments first." };
@@ -43,11 +44,11 @@ export async function postgresDeletion(database: ReturnType<typeof postgres>, ki
       if (kind === "clients") {
         const [children] = await tx`select exists(select 1 from deployments where client_id=${id}) as present`;
         if (children?.present) return { allowed: false, reason: "Remove this client’s unused deployments first." };
-        const [history] = await tx`select exists(select 1 from usage_events where client_id=${id}) or exists(select 1 from face_scan_sessions where client_id=${id}) or exists(select 1 from audit_events where client_id=${id}) as present`;
+        const [history] = await tx`select exists(select 1 from assessment_bindings where client_id=${id}) or exists(select 1 from usage_events where client_id=${id}) or exists(select 1 from face_scan_sessions where client_id=${id}) or exists(select 1 from audit_events where client_id=${id}) as present`;
         if (history?.present) return used;
         if (remove) await tx`delete from clients where id=${id}`;
       } else {
-        const [history] = await tx`select exists(select 1 from deployment_credentials where deployment_id=${id}) or exists(select 1 from activation_tokens where deployment_id=${id} and used_at is not null) or exists(select 1 from usage_events where deployment_id=${id}) or exists(select 1 from face_scan_sessions where deployment_id=${id}) or exists(select 1 from audit_events where deployment_id=${id}) as present`;
+        const [history] = await tx`select exists(select 1 from assessment_bindings where deployment_id=${id}) or exists(select 1 from deployment_credentials where deployment_id=${id}) or exists(select 1 from activation_tokens where deployment_id=${id} and used_at is not null) or exists(select 1 from usage_events where deployment_id=${id}) or exists(select 1 from face_scan_sessions where deployment_id=${id}) or exists(select 1 from audit_events where deployment_id=${id}) as present`;
         if (history?.present) return used;
         if (remove) {
           await tx`delete from activation_tokens where deployment_id=${id}`;

@@ -1,0 +1,39 @@
+import type { Context, Hono } from "hono";
+import { z } from "zod";
+import { answersSchema, ruleDefinitionSchema } from "@niq-scoring/contracts/rules";
+import { publicQuestionnaire } from "@niq-scoring/contracts/rule-public";
+import { evaluateRule } from "@niq-scoring/scoring-engine/rules";
+import { BindingError } from "./assessment-binding";
+import { ruleChecksum } from "./rule-routes";
+import type { DeploymentIdentity, ScoringStore } from "./store";
+const reference = z.string().trim().min(1).max(128);
+export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenticate: (c: Context) => Promise<DeploymentIdentity | null>, now: () => Date, platformEnabled: boolean) {
+  for (const action of ["start", "calculate"] as const) app.post(`/v1/assessments/${action}`, async c => {
+    c.header("Cache-Control", "no-store");
+    const identity = await authenticate(c);
+    if (!identity) return c.json({ error: "UNAUTHORIZED" }, 401);
+    const schema = action === "start" ? z.object({ assessmentReference: reference }).strict() : z.object({ assessmentReference: reference, idempotencyKey: z.string().min(8).max(128), answers: answersSchema }).strict();
+    const parsed = schema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+    try {
+      const { binding, rule } = await store.bindAssessment({ identity, assessmentReference: parsed.data.assessmentReference, platformEnabled, create: action === "start" });
+      const definition = ruleDefinitionSchema.parse(rule.definition);
+      const evidence = { assessmentReference: binding.assessmentReference, bindingId: binding.id, ruleVersionId: rule.id, checksum: binding.checksum, version: rule.version };
+      if (action === "start") return c.json({ ...evidence, questionnaire: publicQuestionnaire(definition) });
+      const input = parsed.data as { assessmentReference: string; idempotencyKey: string; answers: z.infer<typeof answersSchema> };
+      const result = { ...evaluateRule(definition, input.answers), ...evidence, calculatedAt: now().toISOString() };
+      if (!result.complete) return c.json({ error: "ASSESSMENT_INCOMPLETE", result }, 422);
+      const reservation = await store.reserveUsage({ identity, clientId: identity.clientId, capability: "SCORING", assessmentReference: binding.assessmentReference, idempotencyKey: input.idempotencyKey, platformEnabled, binding, fingerprint: ruleChecksum({ endpoint: "assessment", bindingId: binding.id, checksum: binding.checksum, answers: input.answers }) });
+      if (reservation.status === "REJECTED") return c.json({ error: "SCORING_UNAVAILABLE", reason: reservation.reason }, 409);
+      if (reservation.status === "DUPLICATE") return c.json(reservation.response as never);
+      try {
+        const response = { result: { ...result, resultReference: reservation.usageId }, idempotencyKey: input.idempotencyKey };
+        await store.completeUsage(reservation.usageId, response);
+        return c.json(response);
+      } catch (cause) { await store.failUsage(reservation.usageId); throw cause; }
+    } catch (cause) {
+      if (cause instanceof BindingError) return c.json({ error: cause.code }, cause.code === "ASSESSMENT_NOT_FOUND" ? 404 : 409);
+      throw cause;
+    }
+  });
+}

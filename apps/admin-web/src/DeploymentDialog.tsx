@@ -115,7 +115,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
         {capabilityCard("scoring", "Scoring", "scores")}
         {capabilityCard("face", "Face scan", "face scans")}
       </div>
-      {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: "Latest approved" }, ...data.versions.map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
+      {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: "Latest approved" }, ...data.versions.filter(version => version.id === values.ruleVersion || version.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(version.lifecycle)).map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
       </div>}
       {!savedId && step === 2 && <div className="space-y-5">
         <dl className="divide-y rounded-xl border">{reviewRows.map(([label, value]) => <div key={label} className="grid grid-cols-2 gap-3 px-4 py-3 text-sm"><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-medium break-words">{value}</dd></div>)}</dl>

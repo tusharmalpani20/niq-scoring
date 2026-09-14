@@ -8,7 +8,8 @@
     "./metadata": "./src/metadata.ts",
     "./rules": "./src/rule-definition.ts",
     "./rule-validation": "./src/rule-validation.ts",
-    "./rule-template": "./src/rule-template.ts"
+    "./rule-template": "./src/rule-template.ts",
+    "./rule-public": "./src/rule-public.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

@@ -66,3 +66,11 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Late preview responses are ignored if the definition/answers/revision changed while evaluation was running.
 - Verification: 24 targeted API/evaluator/frontend helper tests passed (161 assertions before the additional expected/actual message assertion); evaluator test rerun passed with that assertion. All workspace typechecks and admin production build passed. No new browser interaction coverage in this checkpoint.
 - Remaining: complete browser and frontend interaction coverage, deployment binding/consumption integration, database lifecycle/authorization checks, source review controls and final end-to-end audit. Goal remains active.
+
+### Deployment consumption checkpoint
+
+- Added authenticated start/calculate assessment APIs and persisted concrete version bindings, with deterministic latest-approved resolution, eligible pins, retained retired bindings and public questionnaire allowlisting.
+- Added request fingerprints across assessment/provisional/face-scan requests; scope/capability disabling precedes replay and quota reservations retain concrete rule IDs. Bindings protect related records from deletion. No answers stored in bindings.
+- Moved template internal scoring help to source notes and displayed those notes in questionnaire provenance. No clinical content invented.
+- Migration 0012 applied locally. Both PostgreSQL integration tests passed (23 assertions), including rollback-only binding/retirement/quota/replay checks. Full workspace tests and typechecks passed; API suite now 53 passed, 2 opt-in database skips in ordinary run.
+- Remaining: comprehensive frontend interaction tests and desktop/mobile browser workflows, performance/readability review, adversarial validation/permission audit, documentation reconciliation and final requirement-by-requirement completion proof. No completion claim yet.

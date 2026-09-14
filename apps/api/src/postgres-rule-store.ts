@@ -107,7 +107,7 @@ export class PostgresRuleStore implements RuleStore {
     await this.write(async sql => {
       const current = await this.locked(sql, id, revision);
       if (current.lifecycle !== "DRAFT") throw new RuleStoreError("RULE_IMMUTABLE");
-      const [usage] = await sql<Array<{ used: boolean }>>`select exists(select 1 from deployment_version_assignments where scoring_rule_version_id=${id})
+      const [usage] = await sql<Array<{ used: boolean }>>`select exists(select 1 from assessment_bindings where scoring_rule_version_id=${id}) or exists(select 1 from deployment_version_assignments where scoring_rule_version_id=${id})
         or exists(select 1 from usage_events where scoring_rule_version_id=${id}) as used`;
       if (usage?.used) throw new RuleStoreError("RULE_IN_USE");
       await this.log(sql, { ...current, revision: revision + 1 }, actor, "RULE_DELETED", now);

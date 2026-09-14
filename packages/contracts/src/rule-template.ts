@@ -21,7 +21,6 @@ export function createSpreadsheetTemplate(name: string): RuleDefinition {
   };
   const choose = (target: RuleQuestion[], id: string, label: string, rows: string, choices: [string, string][], points = "", multiple = false, purpose: RuleQuestion["purpose"] = "scoring") => question(target, id, label, multiple ? "multi_select" : "single_select", rows, {
     purpose, options: choices.map(([key, text]) => ({ id: `${id}_${key}`, label: text, help: "" })),
-    help: points ? `Source scoring instruction (not yet executable): ${points}` : "",
     sources: [master(rows, points)],
   });
   const text = (target: RuleQuestion[], id: string, label: string, rows: string, long = false) => question(target, id, label, long ? "long_text" : "text", rows);
@@ -64,7 +63,7 @@ export function createSpreadsheetTemplate(name: string): RuleDefinition {
   date(history, "previous_surgery_date", "Previous surgery date", "A73");
   text(history, "long_term_illness", "Any long-term illness", "A74:B74", true);
   date(history, "illness_since", "Illness since", "A75");
-  question(history, "family_cancer", "Family history of cancer?", "boolean", "A76:B78", { purpose: "scoring", help: "Source scoring instruction (not yet executable): Yes: 1; no: 0." });
+  question(history, "family_cancer", "Family history of cancer?", "boolean", "A76:B78", { purpose: "scoring", sources: [master("A76:B78", "Yes: 1; no: 0.")] });
   const relation = text(history, "family_relation", "Relation", "A77");
   relation.visibleWhen = { match: "all", tests: [{ ref: { kind: "question", id: "family_cancer" }, operator: "eq", value: true }] };
 
@@ -114,7 +113,7 @@ export function createSpreadsheetTemplate(name: string): RuleDefinition {
 
   const clinician = section("clinician_assessment", "Dietitian assessment and guidance", "Clinician-entered fields are distinct from automatically generated recommendations.");
   choose(clinician, "nutrition_assessment", "Clinical assessment by dietitian", "A204:A207", [["well", "Well nourished"], ["moderate", "Moderately malnourished"], ["severe", "Severely malnourished"]], "", false, "clinician");
-  const sga = number(clinician, "sga_score", "SGA total score", "A208:A209"); sga.purpose = "clinician"; sga.help = "Source states ≥6 indicates risk of malnutrition; calculation and relationship to NIQ total require confirmation.";
+  const sga = number(clinician, "sga_score", "SGA total score", "A208:A209"); sga.purpose = "clinician"; sga.sources = [master("A208:A209", "Source states ≥6 indicates risk of malnutrition; calculation and relationship to NIQ total require confirmation.")];
   choose(clinician, "nutrition_goals", "Nutrition therapy goals / recommendations", "A210:A215", [["gain_weight", "Gain Weight"], ["maintain_status", "Maintain Present Nutritional Status"], ["improve_status", "Improve Nutritional Status"], ["prevent_infection", "Prevent Infection / Sepsis"], ["rehydration", "Maintain Rehydration"], ["blood_values", "Maintain Normal Blood Values"], ["recovery", "Ensure Speedy Recovery"], ["supplementation", "Provide Appropriate Nutritional Supplementation"]], "", true, "clinician");
   text(clinician, "dietary_regime", "Advised dietary regime (treatment-specific interventions)", "A216", true).purpose = "clinician";
   text(clinician, "remarks", "Remarks / Notes", "A217", true).purpose = "clinician";
@@ -134,7 +133,7 @@ export function createSpreadsheetTemplate(name: string): RuleDefinition {
     { id: "high_risk", label: "High Risk", min: 25, max: null, minInclusive: false, maxInclusive: false, interpretation: "Severe nutritional risk / active catabolism", sources: [master("D21:F21")] },
   ];
   const issue = (id: string, path: string, message: string, sources: RuleDefinition["issues"][number]["sources"]) => definition.issues.push({ id, path, message, blocking: true, resolved: false, resolution: "", sources });
-  issue("domain_mapping", "scoring", "The source gives domain caps but no complete question-to-domain mapping or aggregation rules. Source points are retained in field help; no executable scoring assignments are invented.", [master("D4:F14")]);
+  issue("domain_mapping", "scoring", "The source gives domain caps but no complete question-to-domain mapping or aggregation rules. Source points are retained in source notes; no executable scoring assignments are invented.", [master("D4:F14")]);
   issue("model_difference", "total", "The workbook uses 35 points and three risk categories; the reference prototype uses a different 100-point model. Confirm the authoritative model and cap semantics.", [master("D4:F21"), { document: "nutra-iq-app", location: "src/app/services/assessment.service.ts", note: "Different prototype model; not imported." }]);
   issue("functional_difference", "sections.dietary_assessment.functional_capacity", "Functional capacity is 0/1/2 in the master sheet and 1/2/3 in Assessment. Resolve before scoring.", [master("A183:B186"), source("Assessment!D21")]);
   issue("biomedical_thresholds", "sections.biomedical", "Confirm units and all lab thresholds, including equality boundaries. Haemoglobin bands overlap; SGPT/SGOT/albumin thresholds are incomplete; bilirubin and total proteins have no scoring. Assessment explicitly says Need to confirm.", [master("A112:B118"), source("Assessment!B25:D25")]);
