@@ -4,6 +4,7 @@ import type { Overview } from "./Operations";
 import { request, message } from "./api";
 import { FormInput, ErrorNotice } from "./shared";
 import { Button } from "./components/ui/button";
+import { Card, CardHeader, CardContent } from "./components/ui/card";
 import { Switch } from "./components/ui/switch";
 import { Field, FieldLabel, FieldError } from "./components/ui/field";
 import { Select, SelectValue, SelectTrigger, SelectContent, SelectItem } from "./components/ui/select";
@@ -55,7 +56,25 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
     } catch (cause) { setError(message(cause)); } finally { setBusy(false); }
   }
   const select = (name: "clientId" | "hostingType" | "ruleVersion" | "environment", label: string, options: Array<{ value: string; label: string }>, disabled = false) => <Controller control={form.control} name={name} render={({ field, fieldState }) => <Field><FieldLabel htmlFor={`deployment-${name}`}>{label}</FieldLabel><Select value={field.value} onValueChange={field.onChange} disabled={disabled || busy}><SelectTrigger ref={field.ref} onBlur={field.onBlur} id={`deployment-${name}`} aria-invalid={fieldState.invalid}><SelectValue placeholder={`Select ${label.toLowerCase()}`} /></SelectTrigger><SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>{fieldState.error && <FieldError errors={[fieldState.error]} />}</Field>} />;
-  const toggle = (name: "enabled" | "scoringEnabled" | "faceEnabled" | "scoringUnlimited" | "faceUnlimited", label: string) => <Controller control={form.control} name={name} render={({ field }) => <div className="flex items-center justify-between gap-3"><FieldLabel htmlFor={`deployment-${name}`}>{label}</FieldLabel><Switch id={`deployment-${name}`} checked={field.value} onCheckedChange={field.onChange} disabled={busy} /></div>} />;
+  const toggle = (name: "enabled" | "scoringEnabled" | "faceEnabled" | "scoringUnlimited" | "faceUnlimited", label: string, disabled = false) => <Controller control={form.control} name={name} render={({ field }) => <div className="flex items-center justify-between gap-3"><FieldLabel htmlFor={`deployment-${name}`}>{label}</FieldLabel><Switch id={`deployment-${name}`} checked={field.value} onCheckedChange={field.onChange} disabled={busy || disabled} /></div>} />;
+  const active = form.watch("enabled");
+  const capabilityCard = (name: "scoring" | "face", label: string, unit: string) => {
+    const enabledName = name === "scoring" ? "scoringEnabled" : "faceEnabled";
+    const unlimitedName = name === "scoring" ? "scoringUnlimited" : "faceUnlimited";
+    const limitName = name === "scoring" ? "scoringLimit" : "faceLimit";
+    const enabled = form.watch(enabledName);
+    const unlimited = form.watch(unlimitedName);
+    const disabled = !active || !enabled;
+    return <Card className={active ? "shadow-none" : "opacity-50 shadow-none"}>
+      <CardHeader className="p-4">{toggle(enabledName, label, !active)}</CardHeader>
+      <Separator />
+      <CardContent className={active && !enabled ? "space-y-4 p-4 opacity-50" : "space-y-4 p-4"}>
+        {toggle(unlimitedName, `Unlimited ${unit}`, disabled)}
+        <p className="text-sm text-muted-foreground">{unlimited ? `No monthly limit on ${unit}.` : `Set the maximum number of ${unit} per month.`}</p>
+        {!unlimited && <FormInput control={form.control} name={limitName} label={`Monthly ${unit}`} type="number" min={0} max={2147483647} step={1} disabled={busy || disabled} />}
+      </CardContent>
+    </Card>;
+  };
   return <Dialog open onOpenChange={next => { if (!next) close(); }}><DialogContent aria-describedby={undefined} className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
     <DialogHeader><DialogTitle>{savedId ? "Edit deployment" : "Create deployment"}</DialogTitle></DialogHeader>
     <form className="space-y-6" noValidate onSubmit={form.handleSubmit(submit)}>
@@ -70,10 +89,10 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
       <div className="space-y-2">{toggle("enabled", "Deployment active")}<p className="text-sm text-muted-foreground">Turn off to pause scoring and face scans for this deployment.</p></div>
       <Separator />
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-4 rounded-lg border p-4">{toggle("scoringEnabled", "Scoring")}{form.watch("scoringEnabled") && <>{toggle("scoringUnlimited", "Unlimited scores")}<p className="text-sm text-muted-foreground">{form.watch("scoringUnlimited") ? "No monthly limit on scores." : "Set the maximum number of scores per month."}</p>{!form.watch("scoringUnlimited") && <FormInput control={form.control} name="scoringLimit" label="Monthly scores" type="number" min={0} max={2147483647} step={1} disabled={busy} />}</>}</div>
-        <div className="space-y-4 rounded-lg border p-4">{toggle("faceEnabled", "Face scan")}{form.watch("faceEnabled") && <>{toggle("faceUnlimited", "Unlimited face scans")}<p className="text-sm text-muted-foreground">{form.watch("faceUnlimited") ? "No monthly limit on face scans." : "Set the maximum number of face scans per month."}</p>{!form.watch("faceUnlimited") && <FormInput control={form.control} name="faceLimit" label="Monthly face scans" type="number" min={0} max={2147483647} step={1} disabled={busy} />}</>}</div>
+        {capabilityCard("scoring", "Scoring", "scores")}
+        {capabilityCard("face", "Face scan", "face scans")}
       </div>
-      {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: "Latest approved" }, ...data.versions.map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))])}
+      {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: "Latest approved" }, ...data.versions.map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
       {savedId && <><Separator /><div className="space-y-2"><FieldLabel>Activation token</FieldLabel>{!token ? <Button type="button" variant="outline" disabled={busy || dirty} onClick={async () => { setBusy(true); setError(""); try { const result = await request<{ activationToken: string; expiresAt: string }>(`/admin/deployments/${savedId}/activation-token`, { expiresInMinutes: 30 }); setToken({ value: result.activationToken, expiresAt: result.expiresAt }); setCopied(false); } catch (cause) { setError(message(cause)); } finally { setBusy(false); } }}>Generate token</Button> : <><Button type="button" variant="link" className="h-auto p-0" onClick={async () => { try { await navigator.clipboard.writeText(token.value); setCopied(true); setError(""); } catch { setError("Could not copy the token. Please allow clipboard access and try again."); } }}>{copied ? "Copied · Copy again" : "Copy activation token"}</Button><p className="text-sm text-muted-foreground">Expires {new Date(token.expiresAt).toLocaleString()}.</p></>}{dirty && <p className="text-sm text-muted-foreground">Save your changes before generating a token.</p>}</div></>}
       <ErrorNotice error={error} />
       <DialogFooter className="grid grid-cols-2 gap-2 sm:flex"><Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button><Button disabled={busy || data.clients.length === 0}>{busy ? "Saving…" : savedId ? "Save" : "Create"}</Button></DialogFooter>
