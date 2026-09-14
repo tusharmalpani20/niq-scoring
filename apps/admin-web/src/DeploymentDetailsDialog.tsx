@@ -24,7 +24,6 @@ export function DeploymentDetailsDialog({ data, deployment, clientName, hostingL
         <TabsContent value="details" className="space-y-4">
           <Card className="shadow-none"><CardContent className="p-0">
             <dl className="divide-y">
-              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-center gap-4 px-4 py-3"><dt className="text-sm text-muted-foreground">Client</dt><dd className="break-words text-right font-medium">{clientName}</dd></div>
               <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-center gap-4 px-4 py-3"><dt className="text-sm text-muted-foreground">Status</dt><dd className="text-right"><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></dd></div>
               {[["Hosting", hostingLabel], ["Environment", deployment.environment], ["Rule version", version]].map(([label, value]) => <div key={label} className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-center gap-4 px-4 py-3"><dt className="text-sm text-muted-foreground">{label}</dt><dd className={label === "Environment" ? "break-words text-right capitalize" : "break-words text-right"}>{value}</dd></div>)}
             </dl>
