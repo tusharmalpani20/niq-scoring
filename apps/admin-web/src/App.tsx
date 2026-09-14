@@ -1,3 +1,4 @@
+import { RulePage } from "./rules/RulePage";
 import { useEffect, useState } from "react";
 import {
   createBrowserRouter,
@@ -142,7 +143,8 @@ function Console() {
     );
   if (["/customers", "/organizations"].includes(location.pathname))
     return <Navigate to="/clients" replace />;
-  const page = pages.find((p) => `/${p.path}` === location.pathname);
+  const ruleId = location.pathname.match(/^\/versions\/([^/]+)$/)?.[1];
+  const page = pages.find((p) => `/${p.path}` === location.pathname || (p.path === "versions" && ruleId));
   if (!page) return <Navigate to="/overview" replace />;
   return (
     <SidebarProvider>
@@ -205,10 +207,10 @@ function Console() {
         <main className="page-content">
           <SidebarTrigger title="Toggle sidebar" />
           <header className="page-header">
-            <h1>{page.label}</h1>
+            <h1>{ruleId ? "Rule version" : page.label}</h1>
           </header>
           <ErrorNotice error={error} />
-          {page.path === "users" ? (
+          {ruleId ? <RulePage key={ruleId} id={ruleId}/> : page.path === "users" ? (
             <Users currentUser={user} />
           ) : data ? (
             <Operations

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useBlocker } from "react-router-dom";
 import { request, message } from "../api";
 import { ErrorNotice } from "../shared";
@@ -14,8 +14,9 @@ export function RuleCreate({ source, onClose, onCreated }: { source?: { id: stri
   const [error, setError] = useState("");
   const [discard, setDiscard] = useState(false);
   const [requestId] = useState(() => crypto.randomUUID());
+  const completed = useRef(false);
   const dirty = Boolean(name);
-  const blocker = useBlocker(dirty || busy);
+  const blocker = useBlocker(() => !completed.current && (dirty || busy));
   useEffect(() => {
     if (!dirty && !busy) return;
     const unload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -28,7 +29,12 @@ export function RuleCreate({ source, onClose, onCreated }: { source?: { id: stri
       event.preventDefault(); setError("");
       if (!name.trim() || name.trim().length > 80) { setError("Enter a version name between 1 and 80 characters."); return; }
       setBusy(true);
-      try { onCreated(await request<RuleDetail>("/admin/rules", { name: name.trim(), requestId, ...(source ? { duplicateId: source.id } : { template: "spreadsheet" }) })); }
+      try {
+        const record = await request<RuleDetail>("/admin/rules", { name: name.trim(), requestId, ...(source ? { duplicateId: source.id } : { template: "spreadsheet" }) });
+        // Successful creation is an intentional navigation, not an unsaved exit.
+        completed.current = true;
+        onCreated(record);
+      }
       catch (cause) { setError(message(cause)); } finally { setBusy(false); }
     }}>
     <fieldset disabled={busy} className="space-y-4"><div className="space-y-2"><Label htmlFor="rule-create-name">Name</Label><Input id="rule-create-name" value={name} maxLength={80} required onChange={e => setName(e.target.value)} autoFocus /></div>
