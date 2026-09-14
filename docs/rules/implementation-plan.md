@@ -140,3 +140,9 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Documented that these bounds are conservative: validation does not solve correlations between separate rules, and requires continuous classification coverage across the configured interval. No clinical thresholds or missing-answer defaults are generated.
 - Regression checks cover negative points, endpoint exclusivity, rounding, selection sum/max, singleton selections, conditional outcomes and caps. Workspace tests and all six typechecks pass; two database tests remain opt-in and were not rerun for this contracts-only change. All four real-API browser runs pass on desktop/mobile, including synthetic authoring through approval/activation/retirement.
 - Responsive visual inspection and final requirement-by-requirement completion proof remain open.
+
+### Preview visual review
+
+- Inspected desktop and mobile screenshots of the synthetic questionnaire preview. The mobile view clipped the sample-creation action horizontally. Preview actions now wrap, and reviewed screenshots show all three actions within the content area.
+- Added a browser layout regression checking button bounds before any automatic scrolling and checking nested layout containers for horizontal overflow. Two desktop/mobile runs pass. Intentionally clipped screen-reader text is excluded from layout-container checks.
+- Admin typecheck passes. This visual review covers the preview fixture only; broader editor visual review and final completion audit remain open.
