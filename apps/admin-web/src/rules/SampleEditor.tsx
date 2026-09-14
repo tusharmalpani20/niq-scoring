@@ -1,0 +1,23 @@
+import type { RuleDefinition } from "@niq-scoring/contracts/rules";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { NativeSelect } from "../components/ui/native-select";
+import { QuestionnaireFields } from "./QuestionnaireFields";
+import { newSample, setExpectedNumber, type RuleSample } from "./sample-model";
+export function SampleEditor({ definition, onChange, disabled = false }: { definition: RuleDefinition; onChange: (definition: RuleDefinition) => void; disabled?: boolean }) {
+  const update = (index: number, change: Partial<RuleSample>) => onChange({ ...definition, samples: definition.samples.map((sample, i) => i === index ? { ...sample, ...change } : sample) });
+  return <fieldset disabled={disabled} className="space-y-4 border-t pt-5"><legend className="font-medium">Sample cases</legend>
+    <p className="text-sm text-muted-foreground">Use synthetic answers and independently determined expectations. Save the draft, then run the definition and sample checks above. At least one complete sample is required for validation.</p>
+    {definition.samples.map((sample, index) => <details key={sample.id} id={`rule-samples-${sample.id}`} className="rounded-lg border p-4" open={definition.samples.length === 1 ? true : undefined}><summary className="cursor-pointer font-medium">{sample.name}</summary><div className="mt-4 space-y-4">
+      <label className="block space-y-2 text-sm">Sample name<Input value={sample.name} maxLength={200} onChange={e => update(index, { name: e.target.value })} /></label>
+      <details><summary className="cursor-pointer text-sm font-medium">Sample answers</summary><div className="mt-3"><QuestionnaireFields definition={definition} answers={sample.answers} onChange={answers => update(index, { answers })} disabled={disabled} /></div></details>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={sample.expected.complete} onChange={e => update(index, { expected: { ...sample.expected, complete: e.target.checked } })} />Expect a complete assessment</label>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="block space-y-2 text-sm">Expected total score<Input type="number" step="any" placeholder="No final score" value={sample.expected.score ?? ""} onChange={e => update(index, { expected: { ...sample.expected, score: e.target.value === "" ? null : Number(e.target.value) } })} /></label>
+      <label className="block space-y-2 text-sm">Expected classification<NativeSelect value={sample.expected.classificationId ?? ""} onChange={e => update(index, { expected: { ...sample.expected, classificationId: e.target.value || null } })}><option value="">No classification</option>{definition.classifications.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</NativeSelect></label></div>
+      <fieldset className="space-y-2"><legend className="text-sm font-medium">Expected guidance</legend>{definition.interventions.length === 0 && <p className="text-sm text-muted-foreground">No interventions configured.</p>}{definition.interventions.map(item => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={sample.expected.interventionIds.includes(item.id)} onChange={e => update(index, { expected: { ...sample.expected, interventionIds: e.target.checked ? [...sample.expected.interventionIds, item.id] : sample.expected.interventionIds.filter(id => id !== item.id) } })} />{item.label}</label>)}</fieldset>
+      {(["domains", "calculations"] as const).map(kind => <fieldset key={kind} className="space-y-2"><legend className="text-sm font-medium">Expected {kind} (optional)</legend><p className="text-xs text-muted-foreground">Leave blank to skip an individual value; zero is an explicit expectation.</p><div className="grid gap-3 sm:grid-cols-2">{definition[kind].map(item => <label key={item.id} className="block text-sm">{item.label}<Input type="number" step="any" value={sample.expected[kind][item.id] ?? ""} onChange={e => update(index, { expected: { ...sample.expected, [kind]: setExpectedNumber(sample.expected[kind], item.id, e.target.value) } })} /></label>)}</div></fieldset>)}
+      <Button type="button" variant="outline" onClick={() => onChange({ ...definition, samples: definition.samples.filter((_, i) => i !== index) })}>Remove sample</Button>
+    </div></details>)}
+    <Button type="button" variant="outline" disabled={disabled || definition.samples.length >= 100} onClick={() => onChange({ ...definition, samples: [...definition.samples, newSample()] })}>Add sample case</Button>
+  </fieldset>;
+}

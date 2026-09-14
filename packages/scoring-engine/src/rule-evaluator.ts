@@ -117,12 +117,14 @@ export function validateSamples(definition: RuleDefinition): EvaluationIssue[] {
   if (definition.samples.length && !definition.samples.some(s => s.expected.complete)) issues.push({ path: "samples", code: "NO_COMPLETE_SAMPLE", message: "Include a complete sample case." });
   for (const sample of definition.samples) {
     const actual = evaluateRule(definition, sample.answers); const expected = sample.expected;
-    const compare = (field: string, equal: boolean) => { if (!equal) issues.push({ path: `samples.${sample.id}.${field}`, code: "SAMPLE_MISMATCH", message: `Sample ${sample.name}: ${field} differs from the expected result.` }); };
-    compare("complete", actual.complete === expected.complete); compare("score", actual.score === expected.score);
-    compare("classificationId", actual.classification?.id === expected.classificationId || (!actual.classification && expected.classificationId === null));
-    compare("interventionIds", JSON.stringify(actual.interventions.map(i => i.id).sort()) === JSON.stringify([...expected.interventionIds].sort()));
-    for (const [id, value] of Object.entries(expected.domains)) compare(`domains.${id}`, actual.domains[id] === value);
-    for (const [id, value] of Object.entries(expected.calculations)) compare(`calculations.${id}`, actual.calculations[id] === value);
+    const compare = (field: string, actualValue: unknown, expectedValue: unknown) => {
+      if (JSON.stringify(actualValue) !== JSON.stringify(expectedValue)) issues.push({ path: `samples.${sample.id}.${field}`, code: "SAMPLE_MISMATCH", message: `Sample ${sample.name}: ${field} expected ${JSON.stringify(expectedValue)}, received ${JSON.stringify(actualValue) ?? "unavailable"}.` });
+    };
+    compare("complete", actual.complete, expected.complete); compare("score", actual.score, expected.score);
+    compare("classificationId", actual.classification?.id ?? null, expected.classificationId);
+    compare("interventionIds", actual.interventions.map(i => i.id).sort(), [...expected.interventionIds].sort());
+    for (const [id, value] of Object.entries(expected.domains)) compare(`domains.${id}`, actual.domains[id], value);
+    for (const [id, value] of Object.entries(expected.calculations)) compare(`calculations.${id}`, actual.calculations[id], value);
   }
   return issues;
 }

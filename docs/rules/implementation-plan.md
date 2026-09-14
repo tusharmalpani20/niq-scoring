@@ -57,3 +57,12 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Workspace links added for existing contracts and answer-validation modules; no new external packages. Source clinical decisions remain unresolved and editable only as draft review evidence.
 - Verification: 18 frontend tests (74 assertions; validation/helpers, not complete interaction coverage), workspace typechecks and production build passed. Browser inspected the live list and creation dialog in an isolated tab, then closed that tab. No synthetic record created by this browser check.
 - Remaining: sample-case authoring, useful validation issue navigation, broader editor interaction and responsive tests, end-to-end browser workflow, deployment consumption/binding, and final audit. Build reports a large main bundle; consider loading the editor separately during final optimization.
+
+### Sample authoring checkpoint
+
+- Added structured sample cases in Validation with questionnaire answers, expected completion/total/classification/guidance, and optional domain/calculation expectations. Blank numeric expectations mean no assertion; zero remains explicit.
+- Preview answers can be deliberately copied into a sample. Expectations are not copied from actual evaluator output. Shared questionnaire controls keep sample entry and preview consistent.
+- Validation mismatch messages now include independently expected and actual values. Issue links select the relevant editor tab, open the question/sample when needed, and focus its controls.
+- Late preview responses are ignored if the definition/answers/revision changed while evaluation was running.
+- Verification: 24 targeted API/evaluator/frontend helper tests passed (161 assertions before the additional expected/actual message assertion); evaluator test rerun passed with that assertion. All workspace typechecks and admin production build passed. No new browser interaction coverage in this checkpoint.
+- Remaining: complete browser and frontend interaction coverage, deployment binding/consumption integration, database lifecycle/authorization checks, source review controls and final end-to-end audit. Goal remains active.

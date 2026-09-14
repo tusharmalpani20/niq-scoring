@@ -63,4 +63,5 @@ test("sample expected outputs are independently checked", () => {
   expect(validateSamples(d)).toEqual([]);
   d.samples[0]!.expected.score = 7;
   expect(validateSamples(d)[0]?.path).toBe("samples.test_case.score");
+  expect(validateSamples(d)[0]?.message).toContain("expected 7, received 8");
 });
