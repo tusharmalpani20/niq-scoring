@@ -81,3 +81,10 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Added a synthetic regression covering definition order, selected alternatives, unanswered fallback, independent guidance and unresolved higher-priority winners. Documented the semantics in `definition-format.md`.
 - Verification: all 10 targeted evaluator tests passed (52 assertions); workspace tests and all six typechecks passed. The two opt-in PostgreSQL tests were skipped in this ordinary test run; no new browser coverage claimed.
 - Full interaction/browser verification and the final completion audit remain outstanding. Goal stays active.
+
+### Repeatable frontend browser coverage
+
+- Added development-only `@playwright/test` and a dedicated port-4183 test server. All API requests are intercepted with synthetic data; no real sessions, database records or clinical approvals are used. Setup and scope are documented in `browser-testing.md`.
+- Six Chromium runs now pass: desktop and mobile-sized coverage for creation retries/request identity, revision-conflict edit preservation, discard/keep-editing, save/reopen, adding sections/questions/options, option reordering with stable IDs, and definition-driven preview answer retention across tabs.
+- The mobile test exposed an unreachable Details tab after navigating to Preview. Rule editor tabs now wrap and align to the start, keeping all sections reachable on narrow screens. The failing interaction passes after that fix.
+- Workspace unit tests and typechecks passed; browser test/config files are now included in frontend typechecking. This is controlled-API frontend coverage, not full-stack browser proof. Remaining scenarios include conditional-field interactions, reference-removal warnings, scoring/intervention/sample authoring, lifecycle actions, and full-stack review.
