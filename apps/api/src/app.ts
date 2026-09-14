@@ -130,7 +130,7 @@ export function createApp(options: AppOptions) {
     return date.getTime() > now().getTime() ? date : false;
   }
   async function newActivation(expiresAt: Date | null) {
-    const token = `niq_act_${randomSecret(36)}`;
+    const token = `NIQ_act_${randomSecret(36)}`;
     return {
       stored: { id: createEntityId(), tokenHash: await sha256(token), tokenCiphertext: encryptActivationToken(token, options.activationTokenEncryptionKey!), expiresAt },
       public: { activationToken: token, expiresAt: expiresAt?.toISOString() ?? null },

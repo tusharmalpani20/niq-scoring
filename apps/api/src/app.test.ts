@@ -146,7 +146,7 @@ describe("scoring API", () => {
     const path = `/admin/deployments/${deployment.id}/activation-token`;
     const read = () => app.request(path, { headers: adminHeaders });
     const first = deployment.activation.activationToken;
-    expect(first).toStartWith("niq_act_");
+    expect(first).toStartWith("NIQ_act_");
     expect(store.activations.find(t => t.deploymentId === deployment.id)?.tokenCiphertext).not.toContain(first);
     expect(await (await read()).json()).toEqual({ activation: deployment.activation });
     expect(JSON.stringify(await store.overview())).not.toContain(first);
@@ -191,7 +191,7 @@ describe("scoring API", () => {
     expect(history.tokens.filter(t => t.status === "Unused")).toHaveLength(1);
     expect(history.tokens.some(t => t.status === "Revoked")).toBe(true);
     expect(history.tokens.some(t => t.status === "Used")).toBe(true);
-    expect(JSON.stringify(history)).not.toContain("niq_act_");
+    expect(JSON.stringify(history)).not.toContain("NIQ_act_");
     const active = history.tokens.find(t => t.status === "Unused")!;
     const path = `${base}/activation-tokens/${active.id}`;
     expect((await app.request(path, { headers: adminHeaders })).status).toBe(200);
