@@ -58,9 +58,7 @@ export function dataFormSchema(fields: string[], title: string) {
           }),
         ];
       const max =
-        name === "externalReference"
-          ? 100
-          : name === "region"
+        name === "region"
             ? 50
             : name === "name" && title === "Create deployment"
               ? 120

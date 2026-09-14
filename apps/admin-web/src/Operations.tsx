@@ -1,3 +1,4 @@
+import { Clients } from "./Clients";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
@@ -10,7 +11,6 @@ export type Overview = {
   clients: Array<{
     id: string;
     name: string;
-    externalReference: string;
     enabled: boolean;
   }>;
   deployments: Array<{
@@ -22,12 +22,12 @@ export type Overview = {
     enabled: boolean;
   }>;
   entitlements: Array<{
-    clientId: string;
+    deploymentId: string;
     capability: string;
     enabled: boolean;
     monthlyLimit: number | null;
   }>;
-  assignments: Array<{ clientId: string; mode: string }>;
+  assignments: Array<{ deploymentId: string; mode: string; scoringRuleVersionId?: string }>;
   versions: Array<{
     id: string;
     version: string;
@@ -79,82 +79,7 @@ export function Operations({
         </div>
       </>
     );
-  if (page === "clients")
-    return (
-      <>
-        <Panel title="Clients">
-          <div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Reference</TableHead>
-                  <TableHead>Scoring limit</TableHead>
-                  <TableHead>Face-scan limit</TableHead>
-                  <TableHead>Version mode</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.clients.map((o) => (
-                  <TableRow key={o.id}>
-                    <TableCell>
-                      <strong>{o.name}</strong>
-                      <small>{o.id}</small>
-                    </TableCell>
-                    <TableCell>{o.externalReference}</TableCell>
-                    {["SCORING", "FACE_SCAN"].map((cap) => {
-                      const e = data.entitlements.find(
-                        (e) =>
-                          e.clientId === o.id && e.capability === cap,
-                      );
-                      return (
-                        <TableCell key={cap}>
-                          {!e?.enabled
-                            ? "Disabled"
-                            : (e.monthlyLimit ?? "Unlimited")}
-                        </TableCell>
-                      );
-                    })}
-                    <TableCell>
-                      {data.assignments.find((a) => a.clientId === o.id)
-                        ?.mode ?? "Not assigned"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                <Empty count={data.clients.length} columns={5} />
-              </TableBody>
-            </Table>
-          </div>
-        </Panel>
-        <div className="page-grid">
-          <DataForm
-            title="Create client"
-            fields={["name", "externalReference"]}
-            onSubmit={(body) => save("/admin/clients", body)}
-          />
-          <DataForm
-            title="Set monthly limit"
-            fields={["clientId", "capability", "monthlyLimit"]}
-            options={{ clientId: clientOptions }}
-            defaults={{ capability: "SCORING" }}
-            onSubmit={({ clientId, ...body }) =>
-              save(
-                `/admin/clients/${clientId}/entitlement`,
-                {
-                  ...body,
-                  enabled: true,
-                  monthlyLimit:
-                    body.monthlyLimit == null || body.monthlyLimit === ""
-                      ? null
-                      : Number(body.monthlyLimit),
-                },
-                "PUT",
-              )
-            }
-          />
-        </div>
-      </>
-    );
+  if (page === "clients") return <Clients data={data} refresh={refresh} />;
   if (page === "deployments")
     return (
       <>
@@ -169,6 +94,9 @@ export function Operations({
                   <TableHead>Environment</TableHead>
                   <TableHead>Region</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Scoring limit</TableHead>
+                  <TableHead>Face-scan limit</TableHead>
+                  <TableHead>Rule version</TableHead>
                   <TableHead>Activation</TableHead>
                 </TableRow>
               </TableHeader>
@@ -183,6 +111,14 @@ export function Operations({
                     <TableCell>{d.environment}</TableCell>
                     <TableCell>{d.region}</TableCell>
                     <TableCell>{d.enabled ? "Enabled" : "Disabled"}</TableCell>
+                    {["SCORING", "FACE_SCAN"].map(capability => {
+                      const entitlement = data.entitlements.find(item => item.deploymentId === d.id && item.capability === capability);
+                      return <TableCell key={capability}>{!entitlement?.enabled ? "Disabled" : entitlement.monthlyLimit ?? "Unlimited"}</TableCell>;
+                    })}
+                    <TableCell>{(() => {
+                      const assignment = data.assignments.find(item => item.deploymentId === d.id);
+                      return assignment?.mode === "LATEST_APPROVED" ? "Latest approved" : assignment?.mode === "PINNED" ? data.versions.find(version => version.id === assignment.scoringRuleVersionId)?.version ?? "Pinned" : "Not assigned";
+                    })()}</TableCell>
                     <TableCell>
                       <Button
                         variant="outline"
@@ -214,7 +150,7 @@ export function Operations({
                     </TableCell>
                   </TableRow>
                 ))}
-                <Empty count={data.deployments.length} columns={6} />
+                <Empty count={data.deployments.length} columns={9} />
               </TableBody>
             </Table>
           </div>
@@ -226,13 +162,27 @@ export function Operations({
             onDismiss={() => setActivation(null)}
           />
         )}
-        <div className="narrow">
+        <div className="page-grid">
           <DataForm
             title="Create deployment"
             fields={["clientId", "name", "environment", "region"]}
             options={{ clientId: clientOptions }}
             defaults={{ environment: "production", region: "india" }}
             onSubmit={(body) => save("/admin/deployments", body)}
+          />
+          <DataForm
+            title="Set deployment limit"
+            fields={["deploymentId", "capability", "enabled", "monthlyLimit"]}
+            options={{ deploymentId: data.deployments.map(d => ({ value: d.id, label: `${client(d.clientId)} · ${d.name}` })), capability: [{ value: "SCORING", label: "Scoring" }, { value: "FACE_SCAN", label: "Face scan" }], enabled: [{ value: "true", label: "Enabled" }, { value: "false", label: "Disabled" }] }}
+            defaults={{ capability: "SCORING", enabled: "true" }}
+            onSubmit={({ deploymentId, capability, enabled, monthlyLimit }) => save(`/admin/deployments/${deploymentId}/entitlement`, { capability, enabled: enabled === "true", monthlyLimit: monthlyLimit === "" ? null : Number(monthlyLimit) }, "PUT")}
+          />
+          <DataForm
+            title="Set deployment rule version"
+            fields={["deploymentId", "ruleVersion"]}
+            options={{ deploymentId: data.deployments.map(d => ({ value: d.id, label: `${client(d.clientId)} · ${d.name}` })), ruleVersion: [{ value: "LATEST_APPROVED", label: "Latest approved" }, ...data.versions.map(v => ({ value: v.id, label: `${v.version} (${v.lifecycle.toLowerCase()})` }))] }}
+            defaults={{ ruleVersion: "LATEST_APPROVED" }}
+            onSubmit={({ deploymentId, ruleVersion }) => save(`/admin/deployments/${deploymentId}/version-assignment`, ruleVersion === "LATEST_APPROVED" ? { mode: ruleVersion } : { mode: "PINNED", scoringRuleVersionId: ruleVersion }, "PUT")}
           />
         </div>
       </>

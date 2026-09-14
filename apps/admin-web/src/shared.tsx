@@ -161,6 +161,8 @@ export function DataForm({
   options?: Record<string, Array<{ value: string; label: string }>>;
   onSubmit: (body: Record<string, string>) => Promise<void>;
 }) {
+  const formId = useId();
+  const fieldLabel = (name: string) => ({ clientId: "Client", deploymentId: "Deployment", ruleVersion: "Rule version", enabled: "Status" }[name] ?? name.replace(/([A-Z])/g, " $1").replace(/^./, value => value.toUpperCase()));
   const form = useForm<Record<string, string>>({
     resolver: zodResolver(dataFormSchema(fields, title)),
     defaultValues: Object.fromEntries(
@@ -197,19 +199,19 @@ export function DataForm({
             name={f}
             render={({ field, fieldState }) => (
               <ShadcnField data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor={`${f}-select`}>{f === "clientId" ? "Client" : f}</FieldLabel>
+                <FieldLabel htmlFor={`${formId}-${f}-select`}>{fieldLabel(f)}</FieldLabel>
                 <NativeSelect
                   {...field}
-                  id={`${f}-select`}
+                  id={`${formId}-${f}-select`}
                   aria-invalid={fieldState.invalid}
-                  aria-describedby={fieldState.error ? `${f}-error` : undefined}
+                  aria-describedby={fieldState.error ? `${formId}-${f}-error` : undefined}
                 >
-                  <NativeSelectOption value="">Select a client</NativeSelectOption>
+                  <NativeSelectOption value="">Select {fieldLabel(f).toLowerCase()}</NativeSelectOption>
                   {options[f]?.map((option) => (
                     <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
                   ))}
                 </NativeSelect>
-                {fieldState.error && <FieldError id={`${f}-error`} errors={[fieldState.error]} />}
+                {fieldState.error && <FieldError id={`${formId}-${f}-error`} errors={[fieldState.error]} />}
               </ShadcnField>
             )}
           />
