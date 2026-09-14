@@ -12,6 +12,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '../components/ui/alert-dialog';
+import { RiskCategoriesEditor } from './RiskCategoriesEditor';
 import { ScoringEditor } from './ScoringEditor';
 import { descriptionText } from './editor-copy';
 import type { RuleDetail } from './rule-api';
@@ -65,8 +66,8 @@ export function RuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail;
     {definition ? <>
       {!editable && <p className="text-sm text-muted-foreground">This version is read-only. Create a new version to change its scoring configuration.</p>}
       <Tabs defaultValue="scoring" className="gap-5">
-        <TabsList variant="line" aria-label="Rule version sections" className="h-11 w-full justify-start gap-6 rounded-none border-b p-0">
-          {['details', 'scoring', 'interventions'].map(tab => <TabsTrigger key={tab} value={tab} className="h-full flex-none rounded-none border-0 bg-transparent px-1 shadow-none data-[state=active]:bg-transparent data-[state=active]:text-primary after:bottom-0 after:bg-primary">{tab.charAt(0).toUpperCase() + tab.slice(1)}</TabsTrigger>)}
+        <TabsList variant="line" aria-label="Rule version sections" className="h-auto min-h-11 w-full flex-wrap justify-start gap-x-6 gap-y-1 rounded-none border-b p-0">
+          {['details', 'scoring', 'risk categories', 'interventions'].map(tab => <TabsTrigger key={tab} value={tab} className="h-11 flex-none rounded-none border-0 bg-transparent px-1 shadow-none data-[state=active]:bg-transparent data-[state=active]:text-primary after:bottom-0 after:bg-primary">{tab.charAt(0).toUpperCase() + tab.slice(1)}</TabsTrigger>)}
         </TabsList>
       <TabsContent value="details"><div className="grid gap-5 lg:grid-cols-2">
         <section className="rounded-2xl bg-card p-5 shadow-sm sm:p-6"><h2 className="mb-5 border-b pb-4 text-lg font-medium">Version details</h2><fieldset disabled={!editable || busy} className="space-y-3"><div className="space-y-2 rounded-xl bg-muted/40 p-4"><Label htmlFor="rule-name">Name</Label><Input id="rule-name" value={definition.name} maxLength={80} onChange={e => update({ ...definition, name: e.target.value })}/></div><div className="space-y-2 rounded-xl bg-muted/40 p-4"><Label htmlFor="rule-description">Description</Label><Textarea id="rule-description" value={descriptionText(definition.description)} onChange={e => update({ ...definition, description: e.target.value })}/></div></fieldset></section>
@@ -74,6 +75,7 @@ export function RuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail;
       </div></TabsContent>
       <TabsContent value="scoring" forceMount className="data-[state=inactive]:hidden">
       <ScoringEditor definition={definition} onChange={update} disabled={!editable || busy}/></TabsContent>
+      <TabsContent value="risk categories"><RiskCategoriesEditor definition={definition} onChange={update} disabled={!editable || busy}/></TabsContent>
       <TabsContent value="interventions"><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-6 shadow-sm"><h3 className="font-medium">Interventions</h3><span className="text-sm text-muted-foreground">N/A — not finalized</span></div></TabsContent>
       </Tabs>
     </> : <p>This earlier definition can’t be edited here.</p>}

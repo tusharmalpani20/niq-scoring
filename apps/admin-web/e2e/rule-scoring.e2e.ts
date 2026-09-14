@@ -7,6 +7,11 @@ test("Excel option points and caps persist without changing questionnaire struct
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   const original = structuredClone(state.getRecord()!.definition);
+  await expect(page.getByLabel("Classification name", { exact: true })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
+  await page.getByLabel("Interpretation", { exact: true }).first().fill("Updated risk interpretation");
+  await page.getByRole("tab", { name: "Scoring", exact: true }).click();
+
   for (const name of ["Add domain", "Add option scoring", "Add conditional scoring", "Remove scoring rule", "Synchronize answer options"]) {
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
   }
@@ -28,6 +33,7 @@ test("Excel option points and caps persist without changing questionnaire struct
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText(/^Draft saved\./)).toBeVisible();
   const saved = state.getRecord()!.definition;
+  expect(saved.classifications[0]!.interpretation).toBe("Updated risk interpretation");
   expect(saved.sections).toEqual(original.sections);
   expect(saved.calculations).toEqual(original.calculations);
   const tumourRule = saved.scoring.find(rule => rule.kind === "options" && rule.questionId === "tumour_type");
@@ -54,6 +60,8 @@ test("approved history retains fixed content and read-only scoring", async ({ pa
   await expect(page.getByLabel("Solid tumour", { exact: true })).toBeDisabled();
   await page.getByText("Domain and total caps", { exact: true }).click();
   await expect(page.getByLabel("Total cap", { exact: true })).toBeDisabled();
+  await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
+  await expect(page.getByLabel("Classification name", { exact: true }).first()).toBeDisabled();
   expect(state.getRecord()!.definition.sections).toEqual(createSpreadsheetTemplate("Reference").sections);
 });
 

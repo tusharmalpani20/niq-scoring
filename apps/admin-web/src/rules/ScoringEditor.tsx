@@ -3,8 +3,7 @@ import type { RuleDefinition, RuleQuestion } from '@niq-scoring/contracts/rules'
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { newRuleId } from './questionnaire-model';
-import { ScoringField, ScoringNumber, ScoringSelect, RangeFields } from './scoring-controls';
-import { scoringReferences } from './scoring-model';
+import { ScoringNumber, ScoringSelect, RangeFields } from './scoring-controls';
 import { describeCondition } from './QuestionnaireEditor';
 
 type Props = { definition: RuleDefinition; onChange: (definition: RuleDefinition) => void; disabled?: boolean };
@@ -50,8 +49,7 @@ export function ScoringEditor({ definition: d, onChange, disabled = false }: Pro
       </Fragment>)}
     </tbody></table></div>
     <details className="rounded-2xl border border-border/50 bg-card shadow-sm"><summary className="cursor-pointer p-4 font-medium">Domain and total caps</summary><fieldset disabled={disabled} className="grid gap-4 border-t p-4 sm:grid-cols-3">{domains.map(domain => <div key={domain.id} id={`rule-domains-${domain.id}`}><ScoringNumber label={`${domain.label} cap`} min={0} value={domain.cap} onChange={cap => onChange({ ...d, domains: d.domains.map(item => item.id === domain.id ? { ...item, cap } : item) })}/></div>)}<ScoringNumber label="Total cap" min={0} value={d.total.cap} onChange={cap => onChange({ ...d, total: { ...d.total, cap } })}/><p className="text-sm text-muted-foreground sm:col-span-3">Leave a cap blank for no upper limit.</p></fieldset></details>
-    <details className="rounded-2xl border border-border/50 bg-card shadow-sm"><summary className="cursor-pointer p-4 font-medium">Risk categories</summary><fieldset disabled={disabled} className="border-t p-4">
-    <section className="space-y-4"><h3 className="text-lg font-medium">Classifications</h3><p className="text-sm text-muted-foreground">Define non-overlapping ranges covering every possible total score.</p>{d.classifications.map((item,index)=>{const uses=scoringReferences(d,'classification',item.id);return <div key={item.id} id={`rule-classifications-${item.id}`} className="space-y-3 rounded-lg border p-4"><ScoringField label="Classification name"><Input aria-label="Classification name" value={item.label} onChange={e=>onChange({...d,classifications:d.classifications.map((v,i)=>i===index?{...v,label:e.target.value}:v)})}/></ScoringField><RangeFields value={item} onChange={value=>onChange({...d,classifications:d.classifications.map((v,i)=>i===index?{...v,...value}:v)})}/><ScoringField label="Interpretation"><Input aria-label="Interpretation" value={item.interpretation} onChange={e=>onChange({...d,classifications:d.classifications.map((v,i)=>i===index?{...v,interpretation:e.target.value}:v)})}/></ScoringField><Button type="button" variant="outline" disabled={uses.length>0} onClick={()=>onChange({...d,classifications:d.classifications.filter((_,i)=>i!==index)})}>Remove classification</Button>{uses.length>0&&<p className="text-sm text-muted-foreground">Used by {uses.join(', ')}. Remove these references first.</p>}</div>})}<Button type="button" variant="outline" onClick={()=>onChange({...d,classifications:[...d.classifications,{id:newRuleId('classification'),label:'New classification',interpretation:'',min:null,max:null,minInclusive:true,maxInclusive:true,sources:[]}]})}>Add classification</Button></section>    </fieldset></details>
+
   </div>;
 }
 function OptionsScoring({ question, rule, onChange }: { question: RuleQuestion | undefined; rule: Extract<Score, { kind: 'options' }>; onChange: (rule: Score) => void }) {
