@@ -17,6 +17,7 @@ import {
 import { dataFormSchema } from "./form-validation";
 import { useId, useState, type ReactNode } from "react";
 import { Button } from "./components/ui/button";
+import { NativeSelect, NativeSelectOption } from "./components/ui/native-select";
 import { Input } from "./components/ui/input";
 import { PasswordInput } from "./components/ui/password-input";
 import {
@@ -119,13 +120,12 @@ export function Secret({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   return (
-    <Card className="border-primary"><CardContent className="space-y-4 pt-6">
-      <strong>{label}</strong>
-      <p>
-        Copy this now and share it securely. Expires{" "}
-        {new Date(expiresAt).toLocaleString()}.
-      </p>
-      <Textarea aria-label={label} readOnly value={value} />
+    <ShadcnField className="min-w-0">
+      <FieldLabel>{label}</FieldLabel>
+      <FieldDescription>
+        Expires {new Date(expiresAt).toLocaleString()}.
+      </FieldDescription>
+      <Textarea className="min-w-0 max-w-full resize-none field-sizing-fixed break-all" rows={4} aria-label={label} readOnly value={value} />
       <div className="actions">
         <Button
           type="button"
@@ -145,18 +145,20 @@ export function Secret({
         </Button>
       </div>
       <ErrorNotice error={error} />
-    </CardContent></Card>
+    </ShadcnField>
   );
 }
 export function DataForm({
   title,
   fields,
   defaults = {},
+  options = {},
   onSubmit,
 }: {
   title: string;
   fields: string[];
   defaults?: Record<string, string>;
+  options?: Record<string, Array<{ value: string; label: string }>>;
   onSubmit: (body: Record<string, string>) => Promise<void>;
 }) {
   const form = useForm<Record<string, string>>({
@@ -188,7 +190,30 @@ export function DataForm({
         onSubmit={form.handleSubmit(submit)}
         className="form-stack"
       >
-        {fields.map((f) => (
+        {fields.map((f) => options[f] ? (
+          <Controller
+            key={f}
+            control={form.control}
+            name={f}
+            render={({ field, fieldState }) => (
+              <ShadcnField data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={`${f}-select`}>{f === "clientId" ? "Client" : f}</FieldLabel>
+                <NativeSelect
+                  {...field}
+                  id={`${f}-select`}
+                  aria-invalid={fieldState.invalid}
+                  aria-describedby={fieldState.error ? `${f}-error` : undefined}
+                >
+                  <NativeSelectOption value="">Select a client</NativeSelectOption>
+                  {options[f]?.map((option) => (
+                    <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
+                  ))}
+                </NativeSelect>
+                {fieldState.error && <FieldError id={`${f}-error`} errors={[fieldState.error]} />}
+              </ShadcnField>
+            )}
+          />
+        ) : (
           <FormInput
             control={form.control}
             name={f}
@@ -202,9 +227,7 @@ export function DataForm({
             description={
               f === "monthlyLimit"
                 ? "Leave empty for unlimited usage."
-                : f === "organizationIds"
-                  ? "Separate organization IDs with commas."
-                  : undefined
+                : undefined
             }
           />
         ))}

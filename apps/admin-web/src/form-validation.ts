@@ -43,14 +43,6 @@ export function dataFormSchema(fields: string[], title: string) {
         ];
       if (name.endsWith("Id"))
         return [name, schema.regex(ulid, "Enter a valid ID.")];
-      if (name === "organizationIds")
-        return [
-          name,
-          schema.refine(
-            (v) => v.split(",").every((id) => ulid.test(id.trim())),
-            "Enter valid organization IDs separated by commas.",
-          ),
-        ];
       if (name === "environment")
         return [
           name,

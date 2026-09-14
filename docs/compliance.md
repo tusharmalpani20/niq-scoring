@@ -6,7 +6,7 @@ This scaffold supports compliance engineering; it is not a certification or lega
 - Store deployment credential hashes only. Show a one-time activation token once and exchange it server-to-server for a revocable deployment credential. The scoring API and application activation screen implement this exchange; the application stores the credential encrypted on its backend.
 - Never log raw credentials, patient identifiers, input payloads or face images.
 - Use pseudonymous assessment references and data minimization.
-- Partition every business record by organization; enforce that boundary in repositories and tests, not only in the UI.
+- Partition every business record by client; enforce that boundary in repositories and tests, not only in the UI.
 - Record authentication, entitlement, rule publication, assignment, scoring, export and administrative events in an append-only audit stream.
 - Treat audit records separately from redacted operational logs.
 - Apply idempotency to calculations and face-scan callbacks so retries do not double count usage.

@@ -10,7 +10,6 @@ import {
   LayoutDashboard,
   Users as UsersIcon,
   Building2,
-  Network,
   Server,
   Layers3,
   LogOut,
@@ -37,16 +36,9 @@ const pages = [
     description: "Manage access for your NIQ administration team.",
   },
   {
-    path: "customers",
-    label: "Customers",
+    path: "clients",
+    label: "Clients",
     icon: Building2,
-    description: "Manage customers using NIQ scoring services.",
-  },
-  {
-    path: "organizations",
-    label: "Organizations",
-    icon: Network,
-    description: "Manage organization access and monthly limits.",
   },
   {
     path: "deployments",
@@ -152,6 +144,8 @@ function Console() {
         }}
       />
     );
+  if (["/customers", "/organizations"].includes(location.pathname))
+    return <Navigate to="/clients" replace />;
   const page = pages.find((p) => `/${p.path}` === location.pathname);
   if (!page) return <Navigate to="/overview" replace />;
   return (
@@ -215,9 +209,7 @@ function Console() {
         <main className="page-content">
           <SidebarTrigger title="Toggle sidebar" />
           <header className="page-header">
-            <p className="eyebrow">SCORING CONTROL</p>
             <h1>{page.label}</h1>
-            <p>{page.description}</p>
           </header>
           <ErrorNotice error={error} />
           {page.path === "users" ? (

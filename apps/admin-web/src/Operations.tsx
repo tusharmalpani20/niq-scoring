@@ -7,34 +7,27 @@ import { request, message } from "./api";
 import { Button } from "./components/ui/button";
 import { DataForm, Panel, Secret, ErrorNotice } from "./shared";
 export type Overview = {
-  customers: Array<{
+  clients: Array<{
     id: string;
-    legalName: string;
-    externalReference: string;
-    enabled: boolean;
-  }>;
-  organizations: Array<{
-    id: string;
-    customerId: string;
     name: string;
+    externalReference: string;
     enabled: boolean;
   }>;
   deployments: Array<{
     id: string;
-    customerId: string;
+    clientId: string;
     name: string;
     environment: string;
     region: string;
     enabled: boolean;
-    organizationIds: string[];
   }>;
   entitlements: Array<{
-    organizationId: string;
+    clientId: string;
     capability: string;
     enabled: boolean;
     monthlyLimit: number | null;
   }>;
-  assignments: Array<{ organizationId: string; mode: string }>;
+  assignments: Array<{ clientId: string; mode: string }>;
   versions: Array<{
     id: string;
     version: string;
@@ -61,15 +54,15 @@ export function Operations({
     await request(path, body, method);
     await refresh();
   }
-  const customer = (id: string) =>
-    data.customers.find((c) => c.id === id)?.legalName ?? id;
+  const client = (id: string) =>
+    data.clients.find((c) => c.id === id)?.name ?? id;
+  const clientOptions = data.clients.map((c) => ({ value: c.id, label: c.name }));
   if (page === "overview")
     return (
       <>
         <div className="metrics">
           {[
-            ["Customers", data.customers.length, "customers"],
-            ["Organizations", data.organizations.length, "organizations"],
+            ["Clients", data.clients.length, "clients"],
             ["Deployments", data.deployments.length, "deployments"],
             ["Rule versions", data.versions.length, "versions"],
           ].map(([label, count, path]) => (
@@ -86,71 +79,33 @@ export function Operations({
         </div>
       </>
     );
-  if (page === "customers")
+  if (page === "clients")
     return (
       <>
-        <Panel title="Customers">
+        <Panel title="Clients">
           <div>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Customer</TableHead>
+                  <TableHead>Client</TableHead>
                   <TableHead>Reference</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.customers.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell>
-                      <strong>{c.legalName}</strong>
-                      <small>{c.id}</small>
-                    </TableCell>
-                    <TableCell>{c.externalReference}</TableCell>
-                    <TableCell>{c.enabled ? "Enabled" : "Disabled"}</TableCell>
-                  </TableRow>
-                ))}
-                <Empty count={data.customers.length} columns={3} />
-              </TableBody>
-            </Table>
-          </div>
-        </Panel>
-        <div className="narrow">
-          <DataForm
-            title="Create customer"
-            fields={["legalName", "externalReference"]}
-            onSubmit={(body) => save("/admin/customers", body)}
-          />
-        </div>
-      </>
-    );
-  if (page === "organizations")
-    return (
-      <>
-        <Panel title="Organizations">
-          <div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Organization</TableHead>
-                  <TableHead>Customer</TableHead>
                   <TableHead>Scoring limit</TableHead>
                   <TableHead>Face-scan limit</TableHead>
                   <TableHead>Version mode</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.organizations.map((o) => (
+                {data.clients.map((o) => (
                   <TableRow key={o.id}>
                     <TableCell>
                       <strong>{o.name}</strong>
                       <small>{o.id}</small>
                     </TableCell>
-                    <TableCell>{customer(o.customerId)}</TableCell>
+                    <TableCell>{o.externalReference}</TableCell>
                     {["SCORING", "FACE_SCAN"].map((cap) => {
                       const e = data.entitlements.find(
                         (e) =>
-                          e.organizationId === o.id && e.capability === cap,
+                          e.clientId === o.id && e.capability === cap,
                       );
                       return (
                         <TableCell key={cap}>
@@ -161,29 +116,30 @@ export function Operations({
                       );
                     })}
                     <TableCell>
-                      {data.assignments.find((a) => a.organizationId === o.id)
+                      {data.assignments.find((a) => a.clientId === o.id)
                         ?.mode ?? "Not assigned"}
                     </TableCell>
                   </TableRow>
                 ))}
-                <Empty count={data.organizations.length} columns={5} />
+                <Empty count={data.clients.length} columns={5} />
               </TableBody>
             </Table>
           </div>
         </Panel>
         <div className="page-grid">
           <DataForm
-            title="Create organization"
-            fields={["customerId", "name", "externalReference"]}
-            onSubmit={(body) => save("/admin/organizations", body)}
+            title="Create client"
+            fields={["name", "externalReference"]}
+            onSubmit={(body) => save("/admin/clients", body)}
           />
           <DataForm
             title="Set monthly limit"
-            fields={["organizationId", "capability", "monthlyLimit"]}
+            fields={["clientId", "capability", "monthlyLimit"]}
+            options={{ clientId: clientOptions }}
             defaults={{ capability: "SCORING" }}
-            onSubmit={({ organizationId, ...body }) =>
+            onSubmit={({ clientId, ...body }) =>
               save(
-                `/admin/organizations/${organizationId}/entitlement`,
+                `/admin/clients/${clientId}/entitlement`,
                 {
                   ...body,
                   enabled: true,
@@ -209,6 +165,7 @@ export function Operations({
               <TableHeader>
                 <TableRow>
                   <TableHead>Deployment</TableHead>
+                  <TableHead>Client</TableHead>
                   <TableHead>Environment</TableHead>
                   <TableHead>Region</TableHead>
                   <TableHead>Status</TableHead>
@@ -222,6 +179,7 @@ export function Operations({
                       <strong>{d.name}</strong>
                       <small>{d.id}</small>
                     </TableCell>
+                    <TableCell>{client(d.clientId)}</TableCell>
                     <TableCell>{d.environment}</TableCell>
                     <TableCell>{d.region}</TableCell>
                     <TableCell>{d.enabled ? "Enabled" : "Disabled"}</TableCell>
@@ -256,7 +214,7 @@ export function Operations({
                     </TableCell>
                   </TableRow>
                 ))}
-                <Empty count={data.deployments.length} columns={5} />
+                <Empty count={data.deployments.length} columns={6} />
               </TableBody>
             </Table>
           </div>
@@ -271,23 +229,10 @@ export function Operations({
         <div className="narrow">
           <DataForm
             title="Create deployment"
-            fields={[
-              "customerId",
-              "name",
-              "environment",
-              "region",
-              "organizationIds",
-            ]}
+            fields={["clientId", "name", "environment", "region"]}
+            options={{ clientId: clientOptions }}
             defaults={{ environment: "production", region: "india" }}
-            onSubmit={(body) =>
-              save("/admin/deployments", {
-                ...body,
-                organizationIds: String(body.organizationIds)
-                  .split(",")
-                  .map((v) => v.trim())
-                  .filter(Boolean),
-              })
-            }
+            onSubmit={(body) => save("/admin/deployments", body)}
           />
         </div>
       </>

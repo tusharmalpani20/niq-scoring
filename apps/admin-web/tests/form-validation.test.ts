@@ -90,18 +90,18 @@ describe("operation form validation", () => {
     for (const monthlyLimit of ["-1", "1.5", "Infinity", "9007199254740992"])
       expect(schema.safeParse({ monthlyLimit }).success).toBe(false);
   });
-  test("deployment organization lists require canonical IDs and valid environments", () => {
+  test("deployments require a canonical client ID and valid environments", () => {
     const schema = dataFormSchema(
-      ["organizationIds", "environment"],
+      ["clientId", "environment"],
       "Create deployment",
     );
     const valid = {
-      organizationIds: "01ARZ3NDEKTSV4RRFFQ69G5FAV, 01ARZ3NDEKTSV4RRFFQ69G5FAW",
+      clientId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
       environment: "production",
     };
     expect(schema.safeParse(valid).success).toBe(true);
     expect(
-      schema.safeParse({ ...valid, organizationIds: "invalid" }).success,
+      schema.safeParse({ ...valid, clientId: "invalid" }).success,
     ).toBe(false);
     expect(schema.safeParse({ ...valid, environment: "prod" }).success).toBe(
       false,

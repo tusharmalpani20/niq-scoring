@@ -107,7 +107,7 @@ export function Auth({
             Every scoring decision.
           </h1>
           <p>
-            Manage access, customer deployments and scoring rules from one
+            Manage access, client deployments and scoring rules from one
             secure console.
           </p>
         </div>
