@@ -2,6 +2,7 @@ import type { Overview } from "./Operations";
 import { ActivationTokenPanel } from "./ActivationTokenPanel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
+import { Card, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
 
 export function DeploymentDetailsDialog({ data, deployment, clientName, hostingLabel, initialTab = "details", onClose }: {
@@ -20,16 +21,20 @@ export function DeploymentDetailsDialog({ data, deployment, clientName, hostingL
         <TabsList variant="line" aria-label="Deployment information" className="h-11 w-full justify-start gap-6 rounded-none border-b p-0">
           <TabsTrigger className="h-full flex-none rounded-none border-0 bg-transparent px-1 shadow-none data-[state=active]:bg-transparent data-[state=active]:text-primary after:bottom-0 after:bg-primary" value="details">Details</TabsTrigger><TabsTrigger className="h-full flex-none rounded-none border-0 bg-transparent px-1 shadow-none data-[state=active]:bg-transparent data-[state=active]:text-primary after:bottom-0 after:bg-primary" value="tokens">Tokens</TabsTrigger>
         </TabsList>
-        <TabsContent value="details">
-          <dl className="grid gap-5 sm:grid-cols-2">
-            <div><dt className="text-sm text-muted-foreground">Client</dt><dd className="mt-1">{clientName}</dd></div>
-            <div><dt className="text-sm text-muted-foreground">Hosting</dt><dd className="mt-1">{hostingLabel}</dd></div>
-            <div><dt className="text-sm text-muted-foreground">Environment</dt><dd className="mt-1 capitalize">{deployment.environment}</dd></div>
-            <div><dt className="text-sm text-muted-foreground">Status</dt><dd className="mt-1"><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></dd></div>
-            <div><dt className="text-sm text-muted-foreground">Scoring</dt><dd className="mt-1">{allowance("SCORING")}</dd></div>
-            <div><dt className="text-sm text-muted-foreground">Face scan</dt><dd className="mt-1">{allowance("FACE_SCAN")}</dd></div>
-            <div><dt className="text-sm text-muted-foreground">Rule version</dt><dd className="mt-1">{version}</dd></div>
-          </dl>
+        <TabsContent value="details" className="space-y-4">
+          <Card className="shadow-none"><CardContent className="p-0">
+            <dl className="divide-y">
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-center gap-4 px-4 py-3"><dt className="text-sm text-muted-foreground">Client</dt><dd className="break-words text-right font-medium">{clientName}</dd></div>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-center gap-4 px-4 py-3"><dt className="text-sm text-muted-foreground">Status</dt><dd className="text-right"><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></dd></div>
+              {[["Hosting", hostingLabel], ["Environment", deployment.environment], ["Rule version", version]].map(([label, value]) => <div key={label} className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-center gap-4 px-4 py-3"><dt className="text-sm text-muted-foreground">{label}</dt><dd className={label === "Environment" ? "break-words text-right capitalize" : "break-words text-right"}>{value}</dd></div>)}
+            </dl>
+          </CardContent></Card>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[["Scoring", "SCORING"], ["Face scan", "FACE_SCAN"]].map(([label, capability]) => <Card key={capability} className="shadow-none"><CardContent className="space-y-2 p-4">
+              <h3 className="text-sm text-muted-foreground">{label}</h3>
+              <p className="font-medium">{allowance(capability!)}</p>
+            </CardContent></Card>)}
+          </div>
         </TabsContent>
         <TabsContent value="tokens"><ActivationTokenPanel deploymentId={deployment.id} disabled={false} /></TabsContent>
       </Tabs>
