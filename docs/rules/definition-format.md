@@ -24,7 +24,7 @@ Classifications select by final score. Their bounds must be explicit. Conditions
 
 ## Interventions
 
-Interventions carry a kind, condition, text, numeric priority and optional exclusion-group ID. Higher priority wins within an exclusion group; tied group priorities block validation. Matching nonexclusive recommendations are retained in priority order. Repeated kind/text is emitted once. Guidance does not record what a clinician prescribed or did.
+Interventions carry a kind, condition, text, numeric priority and optional exclusion-group ID. Higher priority wins within an exclusion group; tied group priorities block validation. After a higher-priority item matches, lower-priority alternatives in that group are skipped, including their answer requirements. An unknown higher-priority condition still makes guidance incomplete: a lower-priority match cannot establish the winner. Unanswered conditions for independent guidance also remain incomplete. Matching nonexclusive recommendations are retained in priority order. Repeated kind/text is emitted once. Guidance does not record what a clinician prescribed or did.
 
 ## Scope and data
 

@@ -97,9 +97,12 @@ export function evaluateRule(definition: RuleDefinition, answers: RuleAnswers): 
     const groups = new Set<string>(); const texts = new Set<string>();
     const ordered = definition.interventions.map((item, index) => ({ item, index })).sort((a, b) => b.item.priority - a.item.priority || a.index - b.index);
     for (const { item } of ordered) {
+      // A selected higher-priority outcome makes its exclusive alternatives irrelevant,
+      // including any answers those alternatives would otherwise require.
+      if (item.exclusiveGroup && groups.has(item.exclusiveGroup)) continue;
       const matched = evaluateCondition(item.when, resolve);
       if (matched === null) { add(`interventions.${item.id}`, "INCOMPLETE_INTERVENTION", "Guidance requires additional answers."); continue; }
-      if (!matched || (item.exclusiveGroup && groups.has(item.exclusiveGroup))) continue;
+      if (!matched) continue;
       if (item.exclusiveGroup) groups.add(item.exclusiveGroup);
       const key = `${item.kind}:${item.text.trim()}`;
       if (texts.has(key)) continue;

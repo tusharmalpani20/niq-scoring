@@ -74,3 +74,10 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Moved template internal scoring help to source notes and displayed those notes in questionnaire provenance. No clinical content invented.
 - Migration 0012 applied locally. Both PostgreSQL integration tests passed (23 assertions), including rollback-only binding/retirement/quota/replay checks. Full workspace tests and typechecks passed; API suite now 53 passed, 2 opt-in database skips in ordinary run.
 - Remaining: comprehensive frontend interaction tests and desktop/mobile browser workflows, performance/readability review, adversarial validation/permission audit, documentation reconciliation and final requirement-by-requirement completion proof. No completion claim yet.
+
+### Intervention exclusion audit
+
+- Corrected evaluation of exclusive guidance: a selected higher-priority recommendation now skips lower-priority alternatives before evaluating their answer requirements. Unknown higher-priority or independent guidance still prevents a complete result.
+- Added a synthetic regression covering definition order, selected alternatives, unanswered fallback, independent guidance and unresolved higher-priority winners. Documented the semantics in `definition-format.md`.
+- Verification: all 10 targeted evaluator tests passed (52 assertions); workspace tests and all six typechecks passed. The two opt-in PostgreSQL tests were skipped in this ordinary test run; no new browser coverage claimed.
+- Full interaction/browser verification and the final completion audit remain outstanding. Goal stays active.

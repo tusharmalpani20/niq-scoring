@@ -54,6 +54,48 @@ test("guidance priority, exclusions and duplicate text are deterministic", () =>
   d.interventions = [{ ...base, id: "lower", priority: 1, exclusiveGroup: "test_group" }, { ...base, id: "higher", priority: 2, exclusiveGroup: "test_group" }, { ...base, id: "duplicate", priority: 0, exclusiveGroup: null }];
   expect(evaluateRule(d, { weight: 70 }).interventions.map(i => i.id)).toEqual(["higher"]);
 });
+test("selected exclusive guidance does not require answers for lower-priority alternatives", () => {
+  const d = fixture();
+  d.sections[0]!.questions.push(questionSchema.parse({
+    id: "follow_up", label: "Synthetic follow-up", type: "boolean", purpose: "assessment", required: false,
+  }));
+  d.interventions = [
+    {
+      id: "fallback", label: "Fallback", kind: "note", text: "Synthetic alternative", priority: 1,
+      exclusiveGroup: "guidance", sources: [],
+      when: { match: "all", tests: [{ ref: { kind: "question", id: "follow_up" }, operator: "eq", value: true }] },
+    },
+    {
+      id: "preferred", label: "Preferred", kind: "note", text: "Synthetic preferred output", priority: 2,
+      exclusiveGroup: "guidance", sources: [],
+      when: { match: "all", tests: [{ ref: { kind: "classification", id: "classification" }, operator: "eq", value: "high" }] },
+    },
+  ];
+
+  // Definition order does not override priority. Missing optional answers for a
+  // ruled-out alternative must not invalidate the selected recommendation.
+  const selected = evaluateRule(d, { weight: 70 });
+  expect(selected.complete).toBe(true);
+  expect(selected.interventions.map(item => item.id)).toEqual(["preferred"]);
+  expect(selected.issues).toEqual([]);
+
+  // When the preferred outcome does not match, the fallback still needs its answer.
+  const unansweredFallback = evaluateRule(d, { weight: 20 });
+  expect(unansweredFallback.complete).toBe(false);
+  expect(unansweredFallback.issues.map(issue => issue.code)).toContain("INCOMPLETE_INTERVENTION");
+  expect(evaluateRule(d, { weight: 20, follow_up: true }).interventions.map(item => item.id)).toEqual(["fallback"]);
+
+  // Independent guidance cannot be skipped simply because another item matched.
+  d.interventions[0]!.exclusiveGroup = null;
+  expect(evaluateRule(d, { weight: 70 }).complete).toBe(false);
+
+  // Nor may an unknown higher-priority outcome be bypassed by a matching lower one.
+  d.interventions[0]!.exclusiveGroup = "guidance";
+  d.interventions[0]!.priority = 3;
+  const unresolvedWinner = evaluateRule(d, { weight: 70 });
+  expect(unresolvedWinner.complete).toBe(false);
+  expect(unresolvedWinner.interventions).toEqual([]);
+});
 test("unresolved source instructions suppress final scores while retaining partial evidence", () => {
   const d = fixture(); d.issues = [{ id: "unresolved", path: "scoring", message: "Clinical decision missing", blocking: true, resolved: false, resolution: "", sources: [] }];
   const result = evaluateRule(d, { weight: 30 }); expect(result.score).toBeNull(); expect(result.components[0]?.points).toBe(2); expect(result.complete).toBe(false);
