@@ -206,9 +206,9 @@ function Console() {
       <div className="workspace">
         <main className="page-content">
           <SidebarTrigger title="Toggle sidebar" />
-          <header className="page-header">
-            <h1>{ruleId ? "Rule version" : page.label}</h1>
-          </header>
+          {!ruleId && <header className="page-header">
+            <h1>{page.label}</h1>
+          </header>}
           <ErrorNotice error={error} />
           {ruleId ? <RulePage key={ruleId} id={ruleId}/> : page.path === "users" ? (
             <Users currentUser={user} />

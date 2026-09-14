@@ -57,19 +57,24 @@ export function RuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail;
     } catch (cause) { setError(message(cause)); if (cause instanceof ApiError) setIssues(cause.issues.filter((item): item is { message: string } => item !== null && typeof item === 'object' && 'message' in item && typeof item.message === 'string')); }
     finally { setBusy(false); }
   }
-  return <section className="min-w-0 space-y-6" aria-label="Rule version editor">
-    <div className="flex flex-wrap items-center justify-between gap-3"><Button variant="outline" disabled={busy} onClick={onClose}>Back to versions</Button><div className="flex items-center gap-3 text-sm"><Badge variant="secondary">{record.lifecycle}</Badge><span className="text-muted-foreground">{dirty ? 'Unsaved changes' : `Revision ${record.revision}`}{!editable && ' · Read-only'}</span></div></div>
-    <h2 className="text-xl font-semibold break-words">{record.version}</h2>
+  return <section className="min-w-0 space-y-6 pt-6" aria-label="Rule version editor">
+    <header className="space-y-4">
+      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm"><Button variant="link" className="h-auto shrink-0 p-0 font-normal" aria-label="Back to versions" disabled={busy} onClick={onClose}>Rule versions</Button><span aria-hidden="true" className="text-muted-foreground">/</span><span aria-current="page" className="truncate text-muted-foreground">{record.version}</span></nav>
+      <div className="flex flex-wrap items-center gap-3"><h1 className="min-w-0 break-words text-3xl font-semibold tracking-tight sm:text-4xl">{record.version}</h1><Badge variant="secondary" className="gap-1.5 rounded-full px-2.5 py-1"><span className="size-1.5 rounded-full bg-current" aria-hidden="true"/>{record.lifecycle.charAt(0) + record.lifecycle.slice(1).toLowerCase()}</Badge>{dirty && <span className="text-sm text-muted-foreground">Unsaved changes</span>}{!editable && <span className="text-sm text-muted-foreground">Read-only</span>}</div>
+    </header>
     {definition ? <>
       {!editable && <p className="text-sm text-muted-foreground">This version is read-only. Create a new version to change its scoring configuration.</p>}
       <Tabs defaultValue="scoring" className="gap-5">
         <TabsList variant="line" aria-label="Rule version sections" className="h-11 w-full justify-start gap-6 rounded-none border-b p-0">
           {['details', 'scoring', 'interventions'].map(tab => <TabsTrigger key={tab} value={tab} className="h-full flex-none rounded-none border-0 bg-transparent px-1 shadow-none data-[state=active]:bg-transparent data-[state=active]:text-primary after:bottom-0 after:bg-primary">{tab.charAt(0).toUpperCase() + tab.slice(1)}</TabsTrigger>)}
         </TabsList>
-      <TabsContent value="details"><fieldset disabled={!editable || busy} className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="rule-name">Name</Label><Input id="rule-name" value={definition.name} maxLength={80} onChange={e => update({ ...definition, name: e.target.value })}/></div><div className="space-y-2"><Label htmlFor="rule-description">Description</Label><Textarea id="rule-description" value={descriptionText(definition.description)} onChange={e => update({ ...definition, description: e.target.value })}/></div></fieldset></TabsContent>
+      <TabsContent value="details"><div className="grid gap-5 lg:grid-cols-2">
+        <section className="rounded-2xl bg-card p-5 shadow-sm sm:p-6"><h2 className="mb-5 border-b pb-4 text-lg font-medium">Version details</h2><fieldset disabled={!editable || busy} className="space-y-3"><div className="space-y-2 rounded-xl bg-muted/40 p-4"><Label htmlFor="rule-name">Name</Label><Input id="rule-name" value={definition.name} maxLength={80} onChange={e => update({ ...definition, name: e.target.value })}/></div><div className="space-y-2 rounded-xl bg-muted/40 p-4"><Label htmlFor="rule-description">Description</Label><Textarea id="rule-description" value={descriptionText(definition.description)} onChange={e => update({ ...definition, description: e.target.value })}/></div></fieldset></section>
+        <section className="rounded-2xl bg-card p-5 shadow-sm sm:p-6"><h2 className="mb-5 border-b pb-4 text-lg font-medium">Version status</h2><dl className="space-y-3"><div className="rounded-xl bg-muted/40 p-4"><dt className="text-sm text-muted-foreground">Status</dt><dd className="mt-1 font-medium">{record.lifecycle.charAt(0) + record.lifecycle.slice(1).toLowerCase()}</dd></div><div className="rounded-xl bg-muted/40 p-4"><dt className="text-sm text-muted-foreground">Revision</dt><dd className="mt-1 font-medium">{record.revision}</dd></div></dl></section>
+      </div></TabsContent>
       <TabsContent value="scoring" forceMount className="data-[state=inactive]:hidden">
       <ScoringEditor definition={definition} onChange={update} disabled={!editable || busy}/></TabsContent>
-      <TabsContent value="interventions"><div className="flex items-center justify-between rounded-lg border p-4"><h3 className="font-medium">Interventions</h3><span className="text-sm text-muted-foreground">N/A — not finalized</span></div></TabsContent>
+      <TabsContent value="interventions"><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-6 shadow-sm"><h3 className="font-medium">Interventions</h3><span className="text-sm text-muted-foreground">N/A — not finalized</span></div></TabsContent>
       </Tabs>
     </> : <p>This earlier definition can’t be edited here.</p>}
     <ErrorNotice error={error}/>{notice && <p role="status" className="text-sm">{notice}</p>}
