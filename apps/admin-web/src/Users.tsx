@@ -3,7 +3,7 @@ import { Pagination, PaginationContent, PaginationItem } from "./components/ui/p
 import { paginate } from "./pagination";
 import { Plus } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./components/ui/dialog";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "./components/ui/dialog";
 import { Card, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
@@ -105,12 +105,10 @@ export function Users({ currentUser }: { currentUser: User }) {
                 <Plus aria-hidden="true" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="min-w-0 max-h-[90dvh] overflow-y-auto [&>*]:min-w-0">
+            <DialogContent aria-describedby={secret ? "invitation-description" : undefined} className="min-w-0 max-h-[90dvh] overflow-y-auto [&>*]:min-w-0">
               <DialogHeader>
                 <DialogTitle>{secret ? "Invitation created" : "Invite user"}</DialogTitle>
-                <DialogDescription>
-                  {secret ? "Share the invite link with your teammate to help them get started." : "Invite a colleague to administer NIQ Scoring."}
-                </DialogDescription>
+                {secret && <DialogDescription id="invitation-description">Share the invite link with your teammate to help them get started.</DialogDescription>}
               </DialogHeader>
               <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
                 <AlertDialogContent>
@@ -172,9 +170,10 @@ export function Users({ currentUser }: { currentUser: User }) {
               type="email"
               required
             />
-            <Button disabled={busy}>
-              {busy ? "Please wait…" : "Create invitation"}
-            </Button>
+            <DialogFooter className="grid grid-cols-2 gap-2 sm:flex [&_button]:px-2 [&_button]:text-sm">
+              <DialogClose asChild><Button type="button" variant="outline" disabled={busy}>Cancel</Button></DialogClose>
+              <Button disabled={busy}>{busy ? "Creating…" : "Create"}</Button>
+            </DialogFooter>
             <p className="muted">
               Invitations are not sent by email automatically.
             </p>

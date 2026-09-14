@@ -13,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./components/ui/dialog";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
 
@@ -58,12 +58,12 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
         </div>
       <Dialog open={open} onOpenChange={changeOpen}>
         <DialogTrigger asChild><Button size="icon" aria-label="Create client" title="Create client"><Plus aria-hidden="true" /></Button></DialogTrigger>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Create client</DialogTitle><DialogDescription>Add your client’s name. You can set up their deployments next.</DialogDescription></DialogHeader>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader><DialogTitle>Create client</DialogTitle></DialogHeader>
           <form noValidate onSubmit={form.handleSubmit(create)} className="form-stack">
-            <FormInput control={form.control} name="name" label="Client name" required maxLength={200} autoComplete="organization" />
+            <FormInput control={form.control} name="name" label="Name" required maxLength={200} autoComplete="organization" />
             <ErrorNotice error={error} />
-            <DialogFooter className="grid grid-cols-2 gap-2 sm:flex [&_button]:px-2 [&_button]:text-sm"><Button type="button" variant="outline" disabled={busy} onClick={() => changeOpen(false)}>Cancel</Button><Button disabled={busy}>{busy ? "Creating…" : "Create client"}</Button></DialogFooter>
+            <DialogFooter className="grid grid-cols-2 gap-2 sm:flex [&_button]:px-2 [&_button]:text-sm"><Button type="button" variant="outline" disabled={busy} onClick={() => changeOpen(false)}>Cancel</Button><Button disabled={busy}>{busy ? "Creating…" : "Create"}</Button></DialogFooter>
           </form>
           <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
             <AlertDialogContent>
