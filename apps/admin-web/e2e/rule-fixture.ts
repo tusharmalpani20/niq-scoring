@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
-import { blankRuleDefinition, type RuleDefinition } from "@niq-scoring/contracts/rules";
+import { type RuleDefinition } from "@niq-scoring/contracts/rules";
+import { createSpreadsheetTemplate } from "@niq-scoring/contracts/rule-template";
 import { validateRuleDefinition } from "@niq-scoring/contracts/rule-validation";
 import { evaluateRule, validateSamples } from "@niq-scoring/scoring-engine/rules";
 import type { EditableRule } from "../src/rules/rule-api";
@@ -8,7 +9,7 @@ import type { EditableRule } from "../src/rules/rule-api";
 // session, database, clinical rule or deployment, including when they fail.
 export async function mockConsole(page: Page, definition?: RuleDefinition) {
   let record: EditableRule | null = null;
-  const state = { createError: "", saveError: "", createRequests: [] as Array<{ requestId: string; name: string }>, getRecord: () => record };
+  const state = { createError: "", saveError: "", createRequests: [] as Array<{ requestId: string; name: string }>, getRecord: () => record, freezeRecord: () => { if (record) record = { ...record, lifecycle: "APPROVED", editable: false, clinicalUsePermitted: true }; } };
   await page.route("**/api/**", async route => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -22,7 +23,7 @@ export async function mockConsole(page: Page, definition?: RuleDefinition) {
       state.createRequests.push(body);
       if (state.createError) return json({ error: state.createError }, 409);
       record = { id: "synthetic-rule", version: body.name, lifecycle: "DRAFT", clinicalUsePermitted: false,
-        revision: 1, packageChecksum: "synthetic", editable: true, definition: definition ? { ...structuredClone(definition), name: body.name } : blankRuleDefinition(body.name) };
+        revision: 1, packageChecksum: "synthetic", editable: true, definition: definition ? { ...structuredClone(definition), name: body.name } : createSpreadsheetTemplate(body.name) };
       return json(record);
     }
     if (path === "/api/admin/rules/synthetic-rule" && record) {
@@ -62,6 +63,5 @@ export async function startDraft(page: Page) {
   await page.goto("/versions");
   await page.getByRole("button", { name: "Create rule version", exact: true }).click();
   await page.getByLabel("Version name", { exact: true }).fill("Synthetic browser draft");
-  await page.getByLabel("Starting point", { exact: true }).selectOption("blank");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
 }

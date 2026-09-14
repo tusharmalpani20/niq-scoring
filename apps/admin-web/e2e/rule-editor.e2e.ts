@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { blankRuleDefinition, questionSchema } from "@niq-scoring/contracts/rules";
+import { createSpreadsheetTemplate } from "@niq-scoring/contracts/rule-template";
 import { mockConsole, startDraft } from "./rule-fixture";
 
 test("creation retry preserves setup and request identity", async ({ page }) => {
@@ -38,95 +38,45 @@ test("save conflict retains edits and discard requires a deliberate choice", asy
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Unsaved synthetic description");
 });
 
-test("question and option editing preserves identifiers through reorder, save and preview", async ({ page }) => {
+test("Excel questionnaire exposes fixed fields and options without authoring controls", async ({ page }) => {
   const state = await mockConsole(page);
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await page.getByRole("tab", { name: "Questionnaire", exact: true }).click();
-  await page.getByRole("button", { name: "Add section", exact: true }).click();
-  await page.getByLabel("Section title", { exact: true }).fill("Synthetic section");
-  await page.getByRole("button", { name: "Add question", exact: true }).click();
-  await page.locator("summary").filter({ hasText: "New question" }).click();
-  await page.getByLabel("Question label", { exact: true }).fill("Synthetic choice");
-  await page.getByRole("combobox", { name: "Field type", exact: true }).selectOption("single_select");
-  await page.getByLabel("Option label", { exact: true }).fill("First option");
-  await page.getByRole("button", { name: "Add option", exact: true }).click();
-  await page.getByLabel("Option label", { exact: true }).nth(1).fill("Second option");
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
-  const original = structuredClone(state.getRecord()!.definition.sections[0]!.questions[0]!);
-  await page.getByRole("button", { name: "Move Second option up", exact: true }).click();
-  await page.getByLabel("Question label", { exact: true }).fill("Renamed choice");
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
-  const saved = state.getRecord()!.definition.sections[0]!.questions[0]!;
-  expect(saved.id).toBe(original.id);
-  expect(saved.options.map(option => option.id)).toEqual([...original.options].reverse().map(option => option.id));
-  await page.getByRole("tab", { name: "Preview", exact: true }).click();
-  const answer = page.getByLabel("Renamed choice", { exact: true });
-  await expect(answer.locator("option")).toHaveText(["Select an answer", "Second option", "First option"]);
-  await answer.selectOption(saved.options[0]!.id);
-  await page.getByRole("tab", { name: "Details", exact: true }).click();
-  await page.getByRole("tab", { name: "Preview", exact: true }).click();
-  await expect(answer).toHaveValue(saved.options[0]!.id);
+  for (const name of ["Add section", "Add question", "Add option", "Add calculation", "Remove question"]) {
+    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+  }
+  await page.locator("#rule-question-tumour_type > summary").click();
+  await expect(page.locator("#rule-question-tumour_type")).toContainText("Solid tumour");
+  await expect(page.locator("#rule-question-tumour_type")).toContainText("Haematological");
+  await expect(page.getByLabel("Question label", { exact: true })).toHaveCount(0);
+  expect(state.getRecord()!.definition.sections).toEqual(createSpreadsheetTemplate("Reference").sections);
+  await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeDisabled();
 });
 
-test("conditional questions preview yes and no, and clearing a comparison does not select no", async ({ page }) => {
-  const definition = blankRuleDefinition("Synthetic conditional fixture");
-  definition.sections = [{ id: "questions", title: "Synthetic questions", description: "", questions: [
-    questionSchema.parse({ id: "show", label: "Show follow-up", type: "boolean", purpose: "assessment", required: false }),
-    questionSchema.parse({ id: "follow_up", label: "Follow-up note", type: "text", purpose: "assessment", required: false }),
-  ] }];
-  const state = await mockConsole(page, definition);
+test("fixed questionnaire preview respects conditional fields", async ({ page }) => {
+  await mockConsole(page);
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
-  await page.getByRole("tab", { name: "Questionnaire", exact: true }).click();
-  const followUp = page.locator("details").filter({ has: page.locator("summary").filter({ hasText: "Follow-up note" }) });
-  await followUp.locator("summary").click();
-  await followUp.getByRole("button", { name: "Add condition", exact: true }).click();
-  await followUp.getByRole("combobox", { name: "Field", exact: true }).selectOption("question:show");
-  await followUp.getByRole("combobox", { name: "Comparison", exact: true }).selectOption("eq");
-  const comparison = followUp.getByRole("combobox", { name: "Value", exact: true });
-  await comparison.selectOption("true");
-  await comparison.selectOption("");
-  await expect(comparison).toHaveValue("");
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByRole("list", { name: "Validation issues" })).toContainText("Choose a comparison value.");
-  expect(state.getRecord()!.revision).toBe(1);
-  await comparison.selectOption("true");
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Preview", exact: true }).click();
-  await expect(page.getByLabel("Follow-up note", { exact: true })).toBeHidden();
-  await page.getByRole("combobox", { name: "Show follow-up", exact: true }).selectOption("true");
-  await expect(page.getByLabel("Follow-up note", { exact: true })).toBeVisible();
-  await page.getByRole("combobox", { name: "Show follow-up", exact: true }).selectOption("false");
-  await expect(page.getByLabel("Follow-up note", { exact: true })).toBeHidden();
-
-  await page.getByRole("tab", { name: "Questionnaire", exact: true }).click();
-  const controller = page.locator("details").filter({ has: page.locator("summary").filter({ hasText: "Show follow-up" }) });
-  await controller.locator("summary").click();
-  await controller.getByRole("button", { name: "Remove question", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("Dependent rules must be updated");
-  await page.getByRole("button", { name: "Keep field", exact: true }).click();
-  await expect(controller).toBeVisible();
-  await controller.getByRole("button", { name: "Remove question", exact: true }).click();
-  await page.getByRole("button", { name: "Continue with change", exact: true }).click();
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByRole("list", { name: "Validation issues" })).toContainText("Unknown question: show.");
-  expect(state.getRecord()!.definition.sections[0]!.questions).toHaveLength(2);
+  const relation = page.getByLabel("Relation", { exact: true });
+  await expect(relation).toBeHidden();
+  await page.getByRole("combobox", { name: "Family history of cancer?", exact: true }).selectOption("true");
+  await expect(relation).toBeVisible();
+  await page.getByRole("combobox", { name: "Family history of cancer?", exact: true }).selectOption("false");
+  await expect(relation).toBeHidden();
 });
 
-
-test("creation protects template-only changes and back navigation", async ({ page }) => {
+test("creation protects name changes and back navigation", async ({ page }) => {
   await mockConsole(page);
   await navigateToVersions(page);
   await page.getByRole("button", { name: "Create rule version", exact: true }).click();
-  await page.getByLabel("Starting point", { exact: true }).selectOption("blank");
+  await expect(page.getByLabel("Starting point", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Version name", { exact: true }).fill("Unsaved setup");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("alertdialog")).toContainText("Discard this draft setup?");
   await page.getByRole("button", { name: "Keep editing", exact: true }).click();
-  await expect(page.getByLabel("Starting point", { exact: true })).toHaveValue("blank");
+  await expect(page.getByLabel("Version name", { exact: true })).toHaveValue("Unsaved setup");
   await page.getByLabel("Version name", { exact: true }).fill("Unsaved setup");
   await page.evaluate(() => window.history.back());
   await expect(page.getByRole("alertdialog")).toBeVisible();
@@ -155,7 +105,6 @@ test("editing keeps unsaved changes on back navigation until discard", async ({ 
   await navigateToVersions(page);
   await page.getByRole("button", { name: "Create rule version", exact: true }).click();
   await page.getByLabel("Version name", { exact: true }).fill("Navigation fixture");
-  await page.getByLabel("Starting point", { exact: true }).selectOption("blank");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await page.getByLabel("Description", { exact: true }).fill("Unsaved edit");

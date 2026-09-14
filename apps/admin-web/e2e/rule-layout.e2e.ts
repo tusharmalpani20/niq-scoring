@@ -1,13 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { blankRuleDefinition, questionSchema } from "@niq-scoring/contracts/rules";
 import { mockConsole, startDraft } from "./rule-fixture";
 
 test("editor tabs and preview actions fit the viewport", async ({ page }, info) => {
-  const definition = blankRuleDefinition("Synthetic layout fixture");
-  definition.sections = [{ id: "section", title: "Measurements", description: "", questions: [
-    questionSchema.parse({ id: "weight", label: "Weight", type: "number", unit: "kg", purpose: "assessment", required: true }),
-  ] }];
-  await mockConsole(page, definition);
+  await mockConsole(page);
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await page.getByRole("tab", { name: "Preview", exact: true }).click();

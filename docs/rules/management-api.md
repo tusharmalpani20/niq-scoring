@@ -5,7 +5,7 @@ All `/admin/rules` operations require an enabled administrator session. Mutation
 | Method and path | Request | Result |
 | --- | --- | --- |
 | GET `/admin/rules` | — | Metadata list, including revision and editability |
-| POST `/admin/rules` | `name`, UUID `requestId`, optional `template` (`blank` or `spreadsheet`), optional `duplicateId` | Created draft |
+| POST `/admin/rules` | `name`, UUID `requestId`, optional `template` (`spreadsheet` only), optional `duplicateId` | Created draft |
 | GET `/admin/rules/:id` | — | Definition, metadata and audit events |
 | PUT `/admin/rules/:id` | Current `revision`, complete `definition` | Saved draft with incremented revision |
 | POST `/admin/rules/:id/preview` | Current `revision`, `answers` | Non-billable evaluation with version/checksum evidence |
@@ -22,7 +22,7 @@ Creation requests carry a UUID generated once per logical creation attempt. Repe
 
 Saves atomically replace the definition and increment the revision. A stale revision returns `RULE_REVISION_CONFLICT` (409); the editor must preserve its unsaved contents. Repeating a save after a lost response returns a conflict, allowing the caller to reload and compare rather than silently overwrite changes.
 
-DRAFT and VALIDATED contents are editable; saving resets lifecycle to DRAFT and removes validation evidence. Every lifecycle transition increments the operational revision while retaining checksum-bound evidence for unchanged content. APPROVED, ACTIVE and RETIRED contents are immutable. Transitioning back to draft is forbidden. Duplicate to make corrections.
+DRAFT and VALIDATED contents matching the fixed Excel profile are configurable; saving resets lifecycle to DRAFT and removes validation evidence. Every lifecycle transition increments the operational revision while retaining checksum-bound evidence for unchanged content. APPROVED, ACTIVE and RETIRED contents are immutable. Transitioning back to draft is forbidden. Duplicate to make corrections.
 
 Semantic errors prevent saving; incomplete clinical mappings may remain in drafts as blocking issues. Validation and approval require no outstanding issues and successful independently specified sample expectations. Technical validation does not perform clinical approval.
 
@@ -45,3 +45,15 @@ In the editor's Validation tab, add a sample case, enter synthetic questionnaire
 The Preview tab can copy entered answers into a new sample, but deliberately leaves expectations empty. Saving these changes invalidates earlier validation like any other definition change. Run definition/sample checks after saving. Mismatch messages show expected and actual values; issue links navigate to the affected question, rule, source decision or sample.
 
 Preview answers are transient. Tab navigation retains them; changing the definition clears them. Responses from evaluations started before a definition or answer change are discarded to avoid showing stale results.
+
+## Fixed Excel authoring (current workflow)
+
+New versions always start from the latest NIQ Excel profile. `template` may be omitted or set to `spreadsheet`; `blank` is rejected. Administrators cannot add, remove, reorder or change questions, field types, answer options, visibility, calculation formulas, domain identities or scoring-component references. The API verifies those constraints independently of the UI and returns `409 FIXED_RULE_REQUIRED` for structural changes or attempts to edit/duplicate an earlier custom profile.
+
+Points, option aggregation, domain assignments, applicable range thresholds, component/domain/total caps, classification configuration, interventions, evidence and samples remain versioned. The complete stored definition is retained for historical reproducibility. Existing approved definitions and bound assessments are not rewritten. Older custom definitions are read-only in the editor; create a new Excel version instead.
+
+The Excel master sheet supplies five domain caps (Disease 5, Clinical 10, History 5, Treatment 5, Nutrition 10), total cap 35 and GI symptom cap 6. It is authoritative over the earlier 100-point demo. Explicit source points are prefilled; no value is substituted for a missing point. An unmapped option appears blank and can be scored explicitly.
+
+The workbook does not provide question-to-domain assignments. `unassigned` is a technical draft placeholder, excluded from clinical totals when empty and hidden from domain-cap controls. Every remaining unassigned component independently blocks validation, even if a source-decision note is marked resolved. Choose one of the five Excel domains for each component.
+
+Incomplete source content remains documented in the version's Source decisions: palliative time-window rules; lab units and boundaries; symptom overlap; required/none-answer policies; therapy aggregation; weight-loss baseline; intervention triggers. Where executable rules are not justified (such as overlapping haemoglobin bands), they are not invented. Such content needs a reviewed update to the fixed profile. Merely resolving a note is not implementation of a missing algorithm.

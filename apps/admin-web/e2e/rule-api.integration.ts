@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import type { EditableRule } from "../src/rules/rule-api";
-import { exerciseScoringWorkflow } from "./scoring-workflow";
 
 test("real API login, spreadsheet draft, reopen, duplicate and protected deletion", async ({ page }, info) => {
   const name = `Synthetic browser ${info.project.name} ${Date.now()}`;
@@ -50,8 +49,8 @@ test("real API login, spreadsheet draft, reopen, duplicate and protected deletio
   }
 });
 
-test("author a complete synthetic version through real API validation and lifecycle", async ({ page }, info) => {
-  const name = `Synthetic lifecycle ${info.project.name} ${Date.now()}`;
+test("real API persists scoring edits and rejects altered fixed fields", async ({ page }, info) => {
+  const name = `Synthetic fixed rules ${info.project.name} ${Date.now()}`;
   await page.goto("/versions");
   await page.getByLabel("Email address", { exact: true }).fill("browser@example.test");
   await page.getByLabel("Password", { exact: true }).fill("Synthetic-browser-test-only-123!");
@@ -60,33 +59,28 @@ test("author a complete synthetic version through real API validation and lifecy
   await page.goto("/versions");
   await page.getByRole("button", { name: "Create rule version", exact: true }).click();
   await page.getByLabel("Version name", { exact: true }).fill(name);
-  await page.getByLabel("Starting point", { exact: true }).selectOption("blank");
+  await expect(page.getByLabel("Starting point", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   const creation = page.waitForResponse(response => response.url().endsWith("/api/admin/rules") && response.request().method() === "POST");
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   const response = await creation;
   expect(response.status()).toBe(201);
   const created = await response.json() as EditableRule;
-  const getRecord = async () => {
-    const response = await page.request.get(`/api/admin/rules/${created.id}`);
-    expect(response.status()).toBe(200);
-    return await response.json() as EditableRule;
-  };
-  await page.getByRole("tab", { name: "Questionnaire", exact: true }).click();
-  await page.getByRole("button", { name: "Add section", exact: true }).click();
-  await page.getByLabel("Section title", { exact: true }).fill("Synthetic questions");
-  await page.getByRole("button", { name: "Add question", exact: true }).click();
-  await page.locator("summary").filter({ hasText: "New question" }).click();
-  await page.getByLabel("Question label", { exact: true }).fill("Synthetic choice");
-  await page.getByRole("combobox", { name: "Field type", exact: true }).selectOption("single_select");
-  await page.getByRole("checkbox", { name: "Required answer", exact: true }).check();
-  await page.getByLabel("Option label", { exact: true }).fill("Choice A");
-  await page.getByRole("button", { name: "Add option", exact: true }).click();
-  await page.getByLabel("Option label", { exact: true }).nth(1).fill("Choice B");
-  await exerciseScoringWorkflow(page, getRecord);
-  const retired = await getRecord();
-  expect(retired.lifecycle).toBe("RETIRED");
-  expect(retired.audit?.map(event => event.action)).toEqual(expect.arrayContaining([
-    "RULE_CREATED", "RULE_SAVED", "RULE_VALIDATED", "RULE_APPROVED", "RULE_ACTIVE", "RULE_RETIRED",
-  ]));
+  await page.getByRole("tab", { name: "Scoring", exact: true }).click();
+  await page.getByLabel("Solid tumour", { exact: true }).fill("4");
+  await page.getByLabel("Total cap", { exact: true }).fill("40");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
+  const savedResponse = await page.request.get(`/api/admin/rules/${created.id}`);
+  const saved = await savedResponse.json() as EditableRule;
+  expect(saved.definition.total.cap).toBe(40);
+  expect(saved.definition.sections).toEqual(created.definition.sections);
+  const tampered = structuredClone(saved.definition);
+  tampered.sections[0]!.questions[0]!.label = "Caller-defined field";
+  const rejected = await page.request.put(`/api/admin/rules/${created.id}`, { headers: { origin: new URL(page.url()).origin }, data: { revision: saved.revision, definition: tampered } });
+  expect(rejected.status()).toBe(409);
+  expect(await rejected.json()).toMatchObject({ error: "FIXED_RULE_REQUIRED" });
+  const reloaded = await (await page.request.get(`/api/admin/rules/${created.id}`)).json() as EditableRule;
+  expect(reloaded.revision).toBe(saved.revision);
+  expect(reloaded.definition.sections).toEqual(created.definition.sections);
 });
