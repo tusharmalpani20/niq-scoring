@@ -1,41 +1,20 @@
 import { expect, test } from "@playwright/test";
 import { mockConsole, startDraft } from "./rule-fixture";
 
-test("editor tabs and preview actions fit the viewport", async ({ page }, info) => {
+test("scoring page and expanded options fit narrow and desktop layouts", async ({ page }, info) => {
   await mockConsole(page);
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
-  await page.getByRole("tab", { name: "Preview", exact: true }).click();
-  await page.screenshot({ path: info.outputPath("preview.png"), fullPage: true });
-  const dialog = page.getByRole("dialog", { name: "Synthetic browser draft", exact: true });
-  const bounds = await dialog.boundingBox();
-  expect(bounds).not.toBeNull();
-  for (const label of ["Run preview", "Clear answers", "Use answers as a sample"]) {
-    const action = page.getByRole("button", { name: label, exact: true });
-    const box = await action.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.x).toBeGreaterThanOrEqual(bounds!.x);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
-  }
-  expect(await dialog.evaluate(el => [el, ...el.querySelectorAll("div, section, fieldset")].filter(node => node.clientWidth > 0 && node.scrollWidth > node.clientWidth + 1).map(node => node.tagName))).toEqual([]);
-});
-
-test("spreadsheet editor sections fit narrow and desktop layouts", async ({ page }, info) => {
-  const { createSpreadsheetTemplate } = await import("@niq-scoring/contracts/rule-template");
-  await mockConsole(page, createSpreadsheetTemplate("Layout template"));
-  await startDraft(page);
-  await page.getByRole("button", { name: "Create draft", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Synthetic browser draft", exact: true });
-  for (const tab of ["Details", "Questionnaire", "Scoring", "Interventions", "Validation", "Preview"]) {
-    await page.getByRole("tab", { name: tab, exact: true }).click();
-    await expect(page.getByRole("tab", { name: tab, exact: true })).toHaveAttribute("aria-selected", "true");
-    if (tab === "Questionnaire") {
-      await page.locator("#rule-question-tumour_type > summary").click();
-    }
-    await page.screenshot({ path: info.outputPath(`${tab.toLowerCase()}.png`), animations: "disabled" });
-    const overflowing = await dialog.evaluate(el => [el, ...el.querySelectorAll("div, section, fieldset")]
-      .filter(node => node.clientWidth > 0 && node.scrollWidth > node.clientWidth + 1)
-      .map(node => ({ tag: node.tagName, text: node.textContent?.slice(0, 80) })));
-    expect.soft(overflowing, `${tab} horizontal overflow`).toEqual([]);
-  }
+  await expect(page).toHaveURL(/\/versions\/synthetic-rule$/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.locator("#rule-field-tumour_type").getByRole("button", { name: /configured/ }).click();
+  await expect(page.getByLabel("Solid tumour", { exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("scoring-page.png"), animations: "disabled", fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  const save = page.getByRole("button", { name: "Save draft", exact: true });
+  await save.scrollIntoViewIfNeeded();
+  const box = await save.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
 });

@@ -57,3 +57,11 @@ The Excel master sheet supplies five domain caps (Disease 5, Clinical 10, Histor
 The workbook does not provide question-to-domain assignments. `unassigned` is a technical draft placeholder, excluded from clinical totals when empty and hidden from domain-cap controls. Every remaining unassigned component independently blocks validation, even if a source-decision note is marked resolved. Choose one of the five Excel domains for each component.
 
 Incomplete source content remains documented in the version's Source decisions: palliative time-window rules; lab units and boundaries; symptom overlap; required/none-answer policies; therapy aggregation; weight-loss baseline; intervention triggers. Where executable rules are not justified (such as overlapping haemoglobin bands), they are not invented. Such content needs a reviewed update to the fixed profile. Merely resolving a note is not implementation of a missing algorithm.
+
+## Scoring page
+
+The administration UI opens each version at `/versions/:id`, including after creation. The list has an edit icon for editable versions. URLs support direct opening and refresh; leaving unsaved changes requires discard confirmation.
+
+One Scoring table replaces the questionnaire and scoring tabs: Field name, Type, Score and Cap. Fixed fields and calculated values are listed together; score summaries open inline controls. Selection fields show configured option counts, numeric scoring shows range counts, and unscored fields distinguish Not applicable from Not configured. Scoring bands can be added or removed without changing the underlying input field. Domain/total caps and risk categories are compact expandable sections.
+
+Interventions displays N/A because its design is not finalized. The UI no longer offers Preview, Validation, source-decision editing, sample authoring or lifecycle approval controls. Saving still enforces schema and reference checks on the client and server; incomplete rules remain drafts and do not gain clinical eligibility. Existing API validation/approval enforcement and historical assessment evaluation are retained. UI simplification does not automatically approve versions or erase historical interventions.
