@@ -103,7 +103,7 @@ export const createDeploymentSchema = z.object({
 export const entitlementInputSchema = z.object({
   capability: z.enum(["SCORING", "FACE_SCAN"]),
   enabled: z.boolean(),
-  monthlyLimit: z.number().int().nonnegative().nullable(),
+  monthlyLimit: z.number().int().nonnegative().max(2147483647).nullable(),
 });
 
 export const versionAssignmentInputSchema = z.discriminatedUnion("mode", [
