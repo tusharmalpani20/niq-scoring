@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { blankRuleDefinition, type RuleDefinition } from "@niq-scoring/contracts/rules";
 import { validateRuleDefinition } from "@niq-scoring/contracts/rule-validation";
-import { validateSamples } from "@niq-scoring/scoring-engine/rules";
+import { evaluateRule, validateSamples } from "@niq-scoring/scoring-engine/rules";
 import type { EditableRule } from "../src/rules/rule-api";
 
 // Every API request is intercepted. These interaction tests never use a real
@@ -38,6 +38,8 @@ export async function mockConsole(page: Page, definition?: RuleDefinition) {
     if (record && path.startsWith("/api/admin/rules/synthetic-rule/") && request.method() === "POST") {
       expect(request.postDataJSON().revision).toBe(record.revision);
       const action = path.split("/").at(-1);
+      if (action === "preview") return json({ ...evaluateRule(record.definition, request.postDataJSON().answers),
+        calculatedAt: "2026-09-14T00:00:00.000Z", ruleVersionId: record.id, checksum: record.packageChecksum });
       const issues = [...validateRuleDefinition(record.definition), ...validateSamples(record.definition)];
       if (action === "check") return json({ issues });
       if ((action === "validate" || action === "approve") && issues.length) return json({ error: "RULE_VALIDATION_FAILED", issues }, 409);

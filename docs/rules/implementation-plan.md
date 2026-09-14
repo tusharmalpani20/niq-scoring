@@ -101,3 +101,9 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Browser checks exercise failing sample validation, expected-versus-actual messages, issue-link focus, correction and validation, approval cancellation/confirmation, and read-only controls after approval.
 - Shared test fixtures use the real pure validators for check results and controlled lifecycle responses for frontend state. They do not prove database lifecycle enforcement; backend and PostgreSQL tests cover that separately.
 - All ten browser runs and frontend typechecking passed. No production data changed. Remaining verification includes range/calculation editing, activation/retirement and duplication/deletion flows, full-stack browser review, further semantic validation audit and the final requirement-by-requirement audit.
+
+### Calculation and saved-state checkpoint
+
+- Added desktop/mobile calculation operand editing, range boundaries, zero/missing-input preview behavior, and activation/retirement confirmation coverage. Preview responses in these tests use the pure evaluator with independent expected totals.
+- The new range test reproduced a false unsaved-state bug after successful saving: schema parsing changed JSON property order, which was compared directly with the raw response. Saved definitions are now normalized through the same schema before comparison. Preview and lifecycle actions no longer remain disabled solely because property order differs.
+- All twelve browser runs pass. Duplication/deletion flows, full-stack browser review, semantic validation audit and final completion proof remain outstanding.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useBlocker } from "react-router-dom";
 import { ruleDefinitionSchema, type RuleDefinition } from "@niq-scoring/contracts/rules";
 import { validateRuleDefinition } from "@niq-scoring/contracts/rule-validation";
@@ -42,7 +42,13 @@ export function RuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail;
   const [notice, setNotice] = useState("");
   const [issues, setIssues] = useState<Issue[]>([]);
   const [confirm, setConfirm] = useState<"discard" | "reload" | "approve" | "activate" | "retire" | null>(null);
-  const dirty = definition !== null && JSON.stringify(definition) !== JSON.stringify(record.definition);
+  // Database JSON and API responses may reorder properties. Compare the same
+  // schema-normalized representation used to initialize and accept editor values.
+  const savedDefinition = useMemo(() => {
+    const parsed = ruleDefinitionSchema.safeParse(record.definition);
+    return parsed.success ? parsed.data : null;
+  }, [record.definition]);
+  const dirty = definition !== null && JSON.stringify(definition) !== JSON.stringify(savedDefinition);
   const blocker = useBlocker(dirty);
   const editable = definition !== null && ["DRAFT", "VALIDATED"].includes(record.lifecycle);
   useEffect(() => {
