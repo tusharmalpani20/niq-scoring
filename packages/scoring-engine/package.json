@@ -3,13 +3,21 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./rules": "./src/rule-evaluator.ts",
+    "./answers": "./src/rule-answers.ts"
+  },
   "scripts": {
     "build": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": { "@niq-scoring/contracts": "workspace:*" },
-  "devDependencies": { "typescript": "^5.9.2" }
+  "dependencies": {
+    "@niq-scoring/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
 }
