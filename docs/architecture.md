@@ -64,3 +64,5 @@ There is no public signup. A high-entropy bootstrap token authorizes creation of
 See [Administrator accounts](authentication.md) for session, invitation and setup behavior. MFA/SSO and password recovery remain follow-up work before production rollout.
 
 Client creation needs only a name. Activation tokens identify a specific deployment; no external client reference is required. All credentials for a deployment share its monthly allowance, including after credential replacement. Allowances are independent across deployments of the same client.
+
+The credential-scoped [organization information endpoint](organization-info.md) supplies NIQ Application with persisted service configuration, deployment limits and UTC monthly usage after activation.

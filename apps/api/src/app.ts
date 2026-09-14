@@ -1,3 +1,4 @@
+import { installOrganizationInfoRoute } from "./organization-info";
 import { RuleStoreError } from "./rule-store";
 import { installAssessmentRoutes } from "./assessment-routes";
 import { ruleChecksum } from "./rule-routes";
@@ -215,6 +216,7 @@ export function createApp(options: AppOptions) {
     return context.json({ service: "niq-scoring-api", region: options.region, provisionalVersion: { version: PROVISIONAL_SCORING_VERSION, status: PROVISIONAL_VERSION_STATUS, clinicalUsePermitted: false, calculationEnabled: provisionalScoringEnabled }, faceScanProvider: { configured: faceScanAdapter.configured, mode: faceScanAdapter.name } });
   });
 
+  installOrganizationInfoRoute(app, options.store, authenticateDeployment, now);
   installAssessmentRoutes(app, options.store, authenticateDeployment, now, options.platformEnabled ?? true);
 
   app.post("/v1/provisional/calculate", async (context) => {

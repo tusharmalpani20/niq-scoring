@@ -38,7 +38,7 @@ describe("unused record deletion", () => {
   });
   test("even failed usage prevents deletion", async () => {
     const { store, deployment, client } = await fixture();
-    store.usages.push({ id: "usage", deploymentId: deployment.id, clientId: client.id, capability: "SCORING", idempotencyKey: "key", outcome: "FAILED" });
+    store.usages.push({ occurredAt: new Date(), id: "usage", deploymentId: deployment.id, clientId: client.id, capability: "SCORING", idempotencyKey: "key", outcome: "FAILED" });
     expect(memoryDeletion(store, "deployments", deployment.id, true).allowed).toBe(false);
   });
   test("routes recheck eligibility after a previous successful read", async () => {

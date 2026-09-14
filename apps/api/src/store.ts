@@ -1,3 +1,5 @@
+import { OrganizationInfoError } from "./organization-info";
+import type { OrganizationInfo } from "@niq-scoring/contracts";
 import { BindingError, eligibleRule, type AssessmentBinding, type BindingInput, type BoundAssessment } from "./assessment-binding";
 import { ruleDefinitionSchema } from "@niq-scoring/contracts/rules";
 import { MemoryRuleStore } from "./memory-rule-store";
@@ -30,6 +32,7 @@ export type UsageReservation =
 export type ReserveInput = { identity: DeploymentIdentity; clientId: string; capability: Capability; idempotencyKey: string; assessmentReference: string; platformEnabled: boolean; fingerprint?: string; binding?: AssessmentBinding };
 
 export interface ScoringStore {
+  organizationInfo(identity: DeploymentIdentity, now: Date): Promise<OrganizationInfo>;
   bindAssessment(input: BindingInput): Promise<BoundAssessment>;
   rules: RuleStore;
   deletionStatus(kind: RecordKind, id: string): Promise<DeletionStatus>;
@@ -55,9 +58,9 @@ export interface ScoringStore {
   createFaceScanSession(input: { identity: DeploymentIdentity; clientId: string; usageId: string; assessmentReference: string; idempotencyKey: string; provider: string; providerSessionReference?: string }): Promise<{ id: string; state: "REQUESTED" }>;
 }
 
-type Credential = DeploymentIdentity & { keyPrefix: string; secretHash: string };
+type Credential = DeploymentIdentity & { keyPrefix: string; secretHash: string; revokedAt?: Date | null; expiresAt?: Date | null };
 type Activation = Omit<StoredActivationToken, "tokenCiphertext"> & { tokenCiphertext: string | null; deploymentId: string; usedAt: Date | null; revokedAt: Date | null; createdAt: Date };
-type Usage = { fingerprint?: string; ruleVersionId?: string; id: string; clientId: string; deploymentId: string; capability: Capability; idempotencyKey: string; response?: unknown; outcome: "PENDING" | "SUCCEEDED" | "FAILED" };
+type Usage = { occurredAt: Date; fingerprint?: string; ruleVersionId?: string; id: string; clientId: string; deploymentId: string; capability: Capability; idempotencyKey: string; response?: unknown; outcome: "PENDING" | "SUCCEEDED" | "FAILED" };
 
 /** Deterministic in-process implementation used by unit tests; production uses PostgreSQL. */
 export class MemoryScoringStore implements ScoringStore {
@@ -128,6 +131,31 @@ export class MemoryScoringStore implements ScoringStore {
     return { deploymentId: token.deploymentId, clientId: client.id };
   }
   async authenticateDeployment(keyPrefix: string, secretHash: string) { const row = this.credentials.find((item) => item.keyPrefix === keyPrefix && item.secretHash === secretHash); return row ? { credentialId: row.credentialId, deploymentId: row.deploymentId, clientId: row.clientId } : null; }
+  integrationAuditEvents: Array<{ action: string; actorReference: string; resourceReference: string; occurredAt: Date }> = [];
+  async organizationInfo(identity: DeploymentIdentity, now: Date): Promise<OrganizationInfo> {
+    const credential = this.credentials.find(c => c.credentialId === identity.credentialId && c.deploymentId === identity.deploymentId && c.clientId === identity.clientId);
+    if (!credential || credential.revokedAt || credential.expiresAt && credential.expiresAt <= now) throw new OrganizationInfoError("UNAUTHORIZED");
+    const client = this.clients.find(c => c.id === identity.clientId);
+    const deployment = this.deployments.find(d => d.id === identity.deploymentId && d.clientId === identity.clientId);
+    if (!client || !deployment) throw new OrganizationInfoError("UNAUTHORIZED");
+    if (!client.enabled) throw new OrganizationInfoError("CLIENT_DISABLED");
+    if (!deployment.enabled) throw new OrganizationInfoError("DEPLOYMENT_DISABLED");
+    const scoring = this.entitlements.find(e => e.deploymentId === deployment.id && e.capability === "SCORING");
+    const faceScan = this.entitlements.find(e => e.deploymentId === deployment.id && e.capability === "FACE_SCAN");
+    if (!deployment.hostingType || !scoring || !faceScan) throw new OrganizationInfoError("CONFIGURATION_INCOMPLETE");
+    const period = now.toISOString().slice(0, 7);
+    const usage = this.usages.filter(u => u.deploymentId === deployment.id && u.clientId === client.id && u.outcome !== "FAILED" && u.occurredAt.toISOString().slice(0, 7) === period);
+    this.integrationAuditEvents.push({ action: "ORGANIZATION_INFO_READ", actorReference: credential.credentialId, resourceReference: deployment.id, occurredAt: now });
+    return {
+      organization: { id: client.id, name: client.name, status: client.enabled ? "ACTIVE" : "DISABLED" },
+      deployment: { id: deployment.id, mode: deployment.hostingType, environment: deployment.environment, status: deployment.enabled ? "ACTIVE" : "DISABLED" },
+      services: { scoring: { enabled: scoring.enabled }, faceScan: { enabled: faceScan.enabled } },
+      limits: { scoresPerMonth: scoring.monthlyLimit, faceScansPerMonth: faceScan.monthlyLimit },
+      usage: { period, scores: usage.filter(u => u.capability === "SCORING").length, faceScans: usage.filter(u => u.capability === "FACE_SCAN").length },
+      // This test store has no persisted configuration timestamps. PostgreSQL supplies them.
+      updatedAt: null, unavailableFields: ["limits.users"],
+    };
+  }
   async bindAssessment(input: BindingInput): Promise<BoundAssessment> {
     if (!input.platformEnabled) throw new BindingError("PLATFORM_DISABLED");
     const deployment = this.deployments.find(d => d.id === input.identity.deploymentId && d.clientId === input.identity.clientId);
@@ -164,8 +192,9 @@ export class MemoryScoringStore implements ScoringStore {
     const decision = decideEntitlement({ platformEnabled: input.platformEnabled, clientEnabled: Boolean(client?.enabled), deploymentEnabled: Boolean(deployment.enabled), versionActive: input.capability === "FACE_SCAN" || Boolean(input.binding && this.bindings.some(b => b.id === input.binding!.id && b.deploymentId === deployment.id && b.assessmentReference === input.assessmentReference && b.checksum === input.binding!.checksum)) || resolvedVersion?.version === PROVISIONAL_SCORING_VERSION, monthlyLimit: entitlement?.monthlyLimit ?? null, monthlyUsage: usage });
     if (!entitlement?.enabled) return { status: "REJECTED", reason: "CAPABILITY_DISABLED" };
     if (!decision.allowed) return { status: "REJECTED", reason: decision.reason };
-    const event: Usage = duplicate ?? { id: createEntityId(), clientId: input.clientId, deploymentId: input.identity.deploymentId, capability: input.capability, idempotencyKey: input.idempotencyKey, outcome: "PENDING" as const };
+    const event: Usage = duplicate ?? { occurredAt: new Date(), id: createEntityId(), clientId: input.clientId, deploymentId: input.identity.deploymentId, capability: input.capability, idempotencyKey: input.idempotencyKey, outcome: "PENDING" as const };
     event.outcome = "PENDING";
+    event.occurredAt = new Date();
     if (input.fingerprint) event.fingerprint = input.fingerprint;
     if (input.binding) event.ruleVersionId = input.binding.ruleVersionId;
     if (!duplicate) this.usages.push(event);

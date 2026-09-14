@@ -1,5 +1,6 @@
 import { assertAssignmentEligible } from "./version-eligibility";
 import { postgresBindAssessment } from "./postgres-assessment-binding";
+import { postgresOrganizationInfo } from "./postgres-organization-info";
 import type { BindingInput } from "./assessment-binding";
 import type { ReserveInput } from "./store";
 import { PostgresRuleStore } from "./postgres-rule-store";
@@ -16,6 +17,7 @@ import type { Deployment, DeploymentIdentity, Client, ScoringStore, UsageReserva
 type Database = ReturnType<typeof postgres>;
 
 export class PostgresScoringStore implements ScoringStore {
+  async organizationInfo(identity: DeploymentIdentity, now: Date) { return postgresOrganizationInfo(this.database, identity, now); }
   async bindAssessment(input: BindingInput) { return postgresBindAssessment(this.database, input); }
   async deletionStatus(kind: RecordKind, id: string) { return postgresDeletion(this.database, kind, id); }
   async deleteUnused(kind: RecordKind, id: string) { return postgresDeletion(this.database, kind, id, true); }

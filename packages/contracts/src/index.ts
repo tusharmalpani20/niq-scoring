@@ -142,3 +142,17 @@ export type ProvisionalScoringInput = z.infer<typeof provisionalScoringInputSche
 export type ProvisionalScoringResult = z.infer<typeof provisionalScoringResultSchema>;
 export type CalculateRequest = z.infer<typeof calculateRequestSchema>;
 export type FaceScanSessionState = z.infer<typeof faceScanSessionStateSchema>;
+
+
+/** Credential-scoped configuration; null monthly limits mean explicitly unlimited. */
+export const organizationInfoSchema = z.object({
+  organization: z.object({ id: ulidSchema, name: z.string(), status: z.enum(["ACTIVE", "DISABLED"]) }).strict(),
+  deployment: z.object({ id: ulidSchema, mode: z.enum(["NIQ_HOSTED", "CLIENT_CLOUD", "ON_PREMISES"]), environment: z.string(), status: z.enum(["ACTIVE", "DISABLED"]) }).strict(),
+  services: z.object({ scoring: z.object({ enabled: z.boolean() }).strict(), faceScan: z.object({ enabled: z.boolean() }).strict() }).strict(),
+  limits: z.object({ scoresPerMonth: z.number().int().nonnegative().nullable(), faceScansPerMonth: z.number().int().nonnegative().nullable() }).strict(),
+  usage: z.object({ period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), scores: z.number().int().nonnegative(), faceScans: z.number().int().nonnegative() }).strict(),
+  updatedAt: z.iso.datetime().nullable(),
+  unavailableFields: z.tuple([z.literal("limits.users")]),
+}).strict();
+export type OrganizationInfo = z.infer<typeof organizationInfoSchema>;
+export const organizationInfoErrorSchema = z.object({ error: z.enum(["UNAUTHORIZED", "INVALID_REQUEST", "CLIENT_DISABLED", "DEPLOYMENT_DISABLED", "CONFIGURATION_INCOMPLETE", "INTERNAL_ERROR"]) }).strict();
