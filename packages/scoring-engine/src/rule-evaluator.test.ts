@@ -107,3 +107,27 @@ test("sample expected outputs are independently checked", () => {
   expect(validateSamples(d)[0]?.path).toBe("samples.test_case.score");
   expect(validateSamples(d)[0]?.message).toContain("expected 7, received 8");
 });
+
+test("valid identifiers cannot collide with inherited object properties", () => {
+  const d = fixture();
+  d.sections[0]!.questions[0]!.id = "constructor";
+  const rule = d.scoring[0]!;
+  if (rule.kind !== "ranges") throw new Error("fixture");
+  rule.input.id = "constructor";
+  const supplied = evaluateRule(d, { constructor: 0 });
+  expect(supplied.complete).toBe(true);
+  expect(supplied.visible.constructor).toBe(true);
+  expect(supplied.score).toBe(2);
+  const missing = evaluateRule(d, {});
+  expect(missing.complete).toBe(false);
+  expect(missing.issues).toContainEqual({ path: "answers.constructor", code: "INVALID_ANSWER", message: "This answer is required." });
+
+  const calculated = fixture();
+  calculated.calculations = [{ id: "constructor", label: "Synthetic sum", operation: "sum", operands: [
+    { kind: "constant", value: 2 }, { kind: "constant", value: 3 },
+  ], precision: 0, unit: "", sources: [] }];
+  const output = evaluateRule(calculated, { weight: 0 });
+  expect(output.complete).toBe(true);
+  expect(output.calculations.constructor).toBe(5);
+  expect(JSON.parse(JSON.stringify(output)).calculations.constructor).toBe(5);
+});

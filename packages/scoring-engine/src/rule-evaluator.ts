@@ -25,7 +25,7 @@ export function evaluateRule(definition: RuleDefinition, answers: RuleAnswers): 
   const resolve = (ref: RuleReference): RuntimeValue | undefined => ref.kind === "question" ? prepared.values[ref.id] : ref.kind === "calculation" ? calculate(ref.id) : ref.kind === "domain" ? result.domains[ref.id] : ref.kind === "total" ? result.score : result.classification?.id;
   const calculations = new Map(definition.calculations.map(c => [c.id, c]));
   const calculate = (id: string): number | null => {
-    if (id in result.calculations) return result.calculations[id]!;
+    if (Object.hasOwn(result.calculations, id)) return result.calculations[id]!;
     const calculation = calculations.get(id);
     if (!calculation) return null;
     const operands = calculation.operands.map(o => o.kind === "constant" ? o.value : resolve(o));

@@ -59,8 +59,9 @@ export function validateAnswer(question: RuleQuestion, value: RuntimeValue | und
 
 export function prepareAnswers(definition: RuleDefinition, answers: RuleAnswers) {
   const questions = new Map(definition.sections.flatMap(s => s.questions).map(q => [q.id, q]));
-  const visible: Record<string, boolean> = {};
-  const values: Record<string, RuntimeValue> = {};
+  // Stable IDs are data keys, including valid names such as "constructor".
+  const visible: Record<string, boolean> = Object.create(null);
+  const values: Record<string, RuntimeValue> = Object.create(null);
   const issues: EvaluationIssue[] = [];
   const visiting = new Set<string>();
   for (const id of Object.keys(answers)) if (!questions.has(id)) issues.push({ path: `answers.${id}`, code: "UNKNOWN_QUESTION", message: "This question is not part of the selected version." });
@@ -72,7 +73,7 @@ export function prepareAnswers(definition: RuleDefinition, answers: RuleAnswers)
     const shown = !question.visibleWhen || evaluateCondition(question.visibleWhen, ref => visit(ref.id)) === true;
     visible[id] = shown;
     if (shown) {
-      const value = answers[id];
+      const value = Object.hasOwn(answers, id) ? answers[id] : undefined;
       const error = validateAnswer(question, value);
       if (error) issues.push({ path: `answers.${id}`, code: "INVALID_ANSWER", message: error });
       else if (present(value)) values[id] = value!;

@@ -120,3 +120,9 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - All four real-API browser runs pass (two scenarios on desktop/mobile). Approved synthetic packages exist only in disposable memory stores. The source template remains unresolved and unapproved.
 - Re-ran both opted-in PostgreSQL integration tests: 2 passed, 23 assertions, covering atomic/conflict-safe draft persistence, deletion retry tombstones, concrete assessment binding, retired-version retention, quotas and replay fingerprints. These database checks remain separate from memory-backed browser evidence.
 - Remaining: semantic/adversarial review, responsive visual inspection beyond interaction reachability, outstanding scope details and final requirement-by-requirement audit. Goal remains active.
+
+### Identifier lookup audit
+
+- Reproduced an evaluator bug with the valid stable ID `constructor`: inherited object properties were mistaken for previously evaluated questions/calculations. Answer/visibility dictionaries now have no prototype, input reads require own properties, and calculation cache checks use `Object.hasOwn`. Preview controls likewise ignore inherited answer properties.
+- Added a regression for supplied zero, required missing input, calculation output and serialized results with that identifier. All eleven evaluator tests pass (60 assertions); workspace tests and all six typechecks pass. Two PostgreSQL tests remain opt-in and were not repeated for this pure-evaluator change.
+- Semantic review and the final completion audit remain open.
