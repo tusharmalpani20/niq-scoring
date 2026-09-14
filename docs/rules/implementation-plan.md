@@ -4,18 +4,18 @@ Branch: `feat/rule-creation-editor`. Scope: NIQ Scoring only.
 
 ## Completion checklist
 
-- [ ] Typed format-versioned definition with reference/type/cycle validation and explicit missing-data semantics.
-- [ ] Spreadsheet questionnaire template, source references, unresolved clinical questions.
-- [ ] Atomic draft CRUD, normalized unique names, retry handling, revision conflicts, duplication, protected deletion.
-- [ ] Accessible editor: metadata, sections/questions/options, reorder, types, validation, conditions, calculations, removal dependency warnings.
-- [ ] Definition-driven preview, sample answers separate from definitions and clinical usage.
-- [ ] Backend declarative scoring with boundaries, domain aggregation/caps, classification and explainable incomplete results.
-- [ ] Intervention editor/evaluation with ordering, deduplication and exclusion groups.
-- [ ] Saved sample cases with independent expected outputs; structural, semantic and sample validation issues linked to editor locations.
-- [ ] Revision-bound validation, explicit approval, immutable published definitions, activation/retirement, actor/time audit.
-- [ ] Deployment eligibility and concrete assessment-version binding; authenticated public questionnaire projection and evaluation; retained quota/idempotency safeguards.
-- [ ] Automated API/domain/frontend interaction coverage, PostgreSQL checks and desktop/mobile browser flows.
-- [ ] Documentation, clean committed worktree, requirement-by-requirement completion audit.
+- [x] Typed format-versioned definition with reference/type/cycle validation and explicit missing-data semantics.
+- [x] Spreadsheet questionnaire template, source references, unresolved clinical questions.
+- [x] Atomic draft CRUD, normalized unique names, retry handling, revision conflicts, duplication, protected deletion.
+- [x] Accessible editor: metadata, sections/questions/options, reorder, types, validation, conditions, calculations, removal dependency warnings.
+- [x] Definition-driven preview, sample answers separate from definitions and clinical usage.
+- [x] Backend declarative scoring with boundaries, domain aggregation/caps, classification and explainable incomplete results.
+- [x] Intervention editor/evaluation with ordering, deduplication and exclusion groups.
+- [x] Saved sample cases with independent expected outputs; structural, semantic and sample validation issues linked to editor locations.
+- [x] Revision-bound validation, explicit approval, immutable published definitions, activation/retirement, actor/time audit.
+- [x] Deployment eligibility and concrete assessment-version binding; authenticated public questionnaire projection and evaluation; retained quota/idempotency safeguards.
+- [x] Automated API/domain/frontend interaction coverage, PostgreSQL checks and desktop/mobile browser flows.
+- [x] Documentation, clean committed worktree, requirement-by-requirement completion audit.
 
 ## Sequence and commit boundaries
 
@@ -166,3 +166,9 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - All three opted-in PostgreSQL tests pass (39 assertions). Complete browser suites pass: 20 controlled-API desktop/mobile runs and 4 real-API runs. Workspace tests and six typechecks pass; production build passes.
 - Build retains a 757.17 kB main bundle warning (230.81 kB gzip) and two upstream Zod annotation warnings. No new dependencies introduced.
 - Updated completion audit evidence. Final migration/data-preservation and changed-scope reconciliation remain before marking the goal complete.
+
+### Completion reconciliation
+
+- All goal sections have implementation and verification evidence in `completion-audit.md`. Checked off the completion list after reviewing that evidence, the final combined checks and database state.
+- Read-only audit matched all 13 migration hashes and verified the original provisional ID/checksum/definition and nonclinical status. No orphaned usage or assignment references. Feature diff is confined to NIQ Scoring and leaves the provisional evaluator/manifest unchanged.
+- Technical implementation is complete. Source clinical decisions remain unresolved and continue to block template approval, as required. Review workflow, browser verification limits and bundle warning are documented in the completion audit.
