@@ -89,3 +89,13 @@ test("score groups reject duplicate names and references to deleted groups", () 
   d.domains = [];
   expect(validateRuleDefinition(d).some(issue => issue.code === "MISSING_DOMAIN" && issue.severity === "error")).toBe(true);
 });
+
+
+test("risk category names ignore case and extra spaces when checking duplicates", () => {
+  const d = fixture();
+  d.classifications[0]!.label = "Low Risk";
+  d.classifications.push({ ...d.classifications[0]!, id: "second_category", label: "  LOW   risk  " });
+  expect(validateRuleDefinition(d)).toContainEqual(expect.objectContaining({ code: "DUPLICATE_CATEGORY_NAME", severity: "error", path: "classifications.1.label" }));
+  d.classifications[1]!.label = "High Risk";
+  expect(validateRuleDefinition(d).some(issue => issue.code === "DUPLICATE_CATEGORY_NAME")).toBe(false);
+});

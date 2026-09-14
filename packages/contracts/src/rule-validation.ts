@@ -130,7 +130,13 @@ export function validateRuleDefinition(definition: RuleDefinition): DefinitionIs
       if (!rule.bands.some(b => inRange(lower, b)) || !rule.bands.some(b => inRange(upper, b))) add(p, "RANGE_COVERAGE", "Ranges must cover the input bounds (or be unbounded).", "blocking");
     } else condition(rule.when, `${p}.when`, ["question", "calculation"]);
   });
-  definition.classifications.forEach((band, index) => unique(band.id, `classifications.${index}`));
+  const categoryNames = new Set<string>();
+  definition.classifications.forEach((band, index) => {
+    unique(band.id, `classifications.${index}`);
+    const name = band.label.trim().replace(/\s+/g, " ").toLowerCase();
+    if (categoryNames.has(name)) add(`classifications.${index}.label`, "DUPLICATE_CATEGORY_NAME", "Each risk category must have a unique name.");
+    categoryNames.add(name);
+  });
   ranges(definition.classifications, "classifications");
   const scoreBounds = ruleScoreBounds(definition);
   if (scoreBounds && definition.classifications.length &&
