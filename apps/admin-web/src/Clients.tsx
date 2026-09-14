@@ -90,11 +90,11 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
         </TableBody>
       </Table>
     </CardContent></Card>
-    {clients.total > 0 && <Pagination aria-label="Clients pagination"><PaginationContent>
+    <Pagination aria-label="Clients pagination"><PaginationContent>
       <PaginationItem><Button variant="outline" size="sm" disabled={clients.page === 1} onClick={() => setPage(clients.page - 1)}>Previous</Button></PaginationItem>
-      <PaginationItem><span className="px-3 text-sm text-muted-foreground" role="status">Page {clients.page} of {clients.pageCount}</span></PaginationItem>
+      <PaginationItem><span className="px-3 text-sm text-muted-foreground" role="status">Page {clients.page} of {clients.pageCount} · {clients.total} total</span></PaginationItem>
       <PaginationItem><Button variant="outline" size="sm" disabled={clients.page === clients.pageCount} onClick={() => setPage(clients.page + 1)}>Next</Button></PaginationItem>
-    </PaginationContent></Pagination>}
+    </PaginationContent></Pagination>
     </TabsContent>
   </Tabs>;
 }
