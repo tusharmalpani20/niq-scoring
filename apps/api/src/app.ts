@@ -1,7 +1,7 @@
 import {
   activationExchangeSchema, activationTokenInputSchema, calculateRequestSchema,
-  createCustomerSchema, createDeploymentSchema, createFaceScanSessionSchema,
-  createOrganizationSchema, entitlementInputSchema, PROVISIONAL_SCORING_VERSION,
+   createDeploymentSchema, createFaceScanSessionSchema,
+  createClientSchema, entitlementInputSchema, PROVISIONAL_SCORING_VERSION,
   PROVISIONAL_VERSION_STATUS, ulidSchema, updateEnabledSchema, versionAssignmentInputSchema,
 } from "@niq-scoring/contracts";
 import { calculateProvisionalScore } from "@niq-scoring/scoring-engine";
@@ -63,30 +63,25 @@ export function createApp(options: AppOptions) {
   app.get("/ready", async (context) => { const ready = await (options.readinessCheck ?? (async () => true))(); return context.json({ status: ready ? "ready" : "not_ready" }, ready ? 200 : 503); });
   app.get("/admin/overview", async (context) => context.json(await options.store.overview()));
 
-  app.post("/admin/customers", async (context) => {
-    const parsed = createCustomerSchema.safeParse(await parseJson(context));
-    return parsed.success ? context.json(await options.store.createCustomer(parsed.data), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+  app.post("/admin/clients", async (context) => {
+    const parsed = createClientSchema.safeParse(await parseJson(context));
+    return parsed.success ? context.json(await options.store.createClient(parsed.data), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
   });
-  app.patch("/admin/customers/:id/enabled", async (context) => updateEnabled(context, options.store.setCustomerEnabled.bind(options.store)));
-  app.post("/admin/organizations", async (context) => {
-    const parsed = createOrganizationSchema.safeParse(await parseJson(context));
-    return parsed.success ? context.json(await options.store.createOrganization(parsed.data), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
-  });
-  app.patch("/admin/organizations/:id/enabled", async (context) => updateEnabled(context, options.store.setOrganizationEnabled.bind(options.store)));
+  app.patch("/admin/clients/:id/enabled", async (context) => updateEnabled(context, options.store.setClientEnabled.bind(options.store)));
   app.post("/admin/deployments", async (context) => {
     const parsed = createDeploymentSchema.safeParse(await parseJson(context));
     return parsed.success ? context.json(await options.store.createDeployment(parsed.data), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
   });
   app.patch("/admin/deployments/:id/enabled", async (context) => updateEnabled(context, options.store.setDeploymentEnabled.bind(options.store)));
-  app.put("/admin/organizations/:id/entitlement", async (context) => {
+  app.put("/admin/clients/:id/entitlement", async (context) => {
     const id = ulidSchema.safeParse(context.req.param("id")); const body = entitlementInputSchema.safeParse(await parseJson(context));
     if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    await options.store.setEntitlement(id.data, body.data); return context.json({ organizationId: id.data, ...body.data });
+    await options.store.setEntitlement(id.data, body.data); return context.json({ clientId: id.data, ...body.data });
   });
-  app.put("/admin/organizations/:id/version-assignment", async (context) => {
+  app.put("/admin/clients/:id/version-assignment", async (context) => {
     const id = ulidSchema.safeParse(context.req.param("id")); const body = versionAssignmentInputSchema.safeParse(await parseJson(context));
     if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    await options.store.assignVersion(id.data, body.data); return context.json({ organizationId: id.data, ...body.data });
+    await options.store.assignVersion(id.data, body.data); return context.json({ clientId: id.data, ...body.data });
   });
   app.post("/admin/deployments/:id/activation-token", async (context) => {
     const id = ulidSchema.safeParse(context.req.param("id")); const body = activationTokenInputSchema.safeParse(await parseJson(context));
@@ -100,9 +95,9 @@ export function createApp(options: AppOptions) {
   app.post("/v1/activate", async (context) => {
     const parsed = activationExchangeSchema.safeParse(await parseJson(context)); if (!parsed.success) return context.json({ error: "INVALID_REQUEST" }, 400);
     const prefix = randomSecret(9).slice(0, 12); const credential = `niq_dep_${prefix}.${randomSecret(32)}`;
-    const exchanged = await options.store.exchangeActivation({ tokenHash: await sha256(parsed.data.activationToken), organizationReference: parsed.data.organizationReference, credentialId: createEntityId(), keyPrefix: prefix, secretHash: await sha256(credential), now: now() });
+    const exchanged = await options.store.exchangeActivation({ tokenHash: await sha256(parsed.data.activationToken), clientReference: parsed.data.clientReference, credentialId: createEntityId(), keyPrefix: prefix, secretHash: await sha256(credential), now: now() });
     context.header("cache-control", "no-store");
-    return exchanged ? context.json({ deploymentId: exchanged.deploymentId, organizationId: exchanged.organizationId, credential }, 201) : context.json({ error: "ACTIVATION_INVALID_OR_EXPIRED" }, 401);
+    return exchanged ? context.json({ deploymentId: exchanged.deploymentId, clientId: exchanged.clientId, credential }, 201) : context.json({ error: "ACTIVATION_INVALID_OR_EXPIRED" }, 401);
   });
 
   app.get("/v1/metadata", async (context) => {
@@ -115,7 +110,7 @@ export function createApp(options: AppOptions) {
     const identity = await authenticateDeployment(context); if (!identity) return context.json({ error: "UNAUTHORIZED" }, 401);
     const parsed = calculateRequestSchema.safeParse(await parseJson(context));
     if (!parsed.success) return context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues.map(({ path, message }) => ({ path, message })) }, 400);
-    const reservation = await options.store.reserveUsage({ identity, organizationId: parsed.data.input.organizationId, capability: "SCORING", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.input.assessmentReference, platformEnabled: options.platformEnabled ?? true });
+    const reservation = await options.store.reserveUsage({ identity, clientId: parsed.data.input.clientId, capability: "SCORING", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.input.assessmentReference, platformEnabled: options.platformEnabled ?? true });
     if (reservation.status === "DUPLICATE") return context.json(reservation.response as never);
     if (reservation.status === "REJECTED") return context.json({ error: "SCORING_UNAVAILABLE", reason: reservation.reason }, 409);
     try { const result = calculateProvisionalScore(parsed.data.input, now().toISOString()); const response = { result, idempotencyKey: parsed.data.idempotencyKey }; await options.store.completeUsage(reservation.usageId, response); return context.json(response); }
@@ -125,12 +120,12 @@ export function createApp(options: AppOptions) {
   app.post("/v1/face-scans", async (context) => {
     const identity = await authenticateDeployment(context); if (!identity) return context.json({ error: "UNAUTHORIZED" }, 401);
     const parsed = createFaceScanSessionSchema.safeParse(await parseJson(context)); if (!parsed.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    const reservation = await options.store.reserveUsage({ identity, organizationId: parsed.data.organizationId, capability: "FACE_SCAN", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.assessmentReference, platformEnabled: options.platformEnabled ?? true });
+    const reservation = await options.store.reserveUsage({ identity, clientId: parsed.data.clientId, capability: "FACE_SCAN", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.assessmentReference, platformEnabled: options.platformEnabled ?? true });
     if (reservation.status === "DUPLICATE") return context.json(reservation.response as never);
     if (reservation.status === "REJECTED") return context.json({ error: "FACE_SCAN_UNAVAILABLE", reason: reservation.reason }, 409);
     try {
-      const providerSession = await faceScanAdapter.createSession({ organizationId: parsed.data.organizationId, assessmentReference: parsed.data.assessmentReference });
-      const session = await options.store.createFaceScanSession({ identity, organizationId: parsed.data.organizationId, usageId: reservation.usageId, assessmentReference: parsed.data.assessmentReference, idempotencyKey: parsed.data.idempotencyKey, provider: faceScanAdapter.name, ...(providerSession.providerSessionReference ? { providerSessionReference: providerSession.providerSessionReference } : {}) });
+      const providerSession = await faceScanAdapter.createSession({ clientId: parsed.data.clientId, assessmentReference: parsed.data.assessmentReference });
+      const session = await options.store.createFaceScanSession({ identity, clientId: parsed.data.clientId, usageId: reservation.usageId, assessmentReference: parsed.data.assessmentReference, idempotencyKey: parsed.data.idempotencyKey, provider: faceScanAdapter.name, ...(providerSession.providerSessionReference ? { providerSessionReference: providerSession.providerSessionReference } : {}) });
       const response = { session, providerConfigured: faceScanAdapter.configured };
       await options.store.storePendingUsageResponse(reservation.usageId, response);
       return context.json(response, 202);

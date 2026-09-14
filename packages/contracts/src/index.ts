@@ -30,7 +30,7 @@ export const symptomFlagsSchema = z.object({
 
 export const provisionalScoringInputSchema = z.object({
   assessmentReference: z.string().min(1).max(128),
-  organizationId: ulidSchema,
+  clientId: ulidSchema,
   requestedVersion: z.literal(PROVISIONAL_SCORING_VERSION).optional(),
   heightCm: z.number().positive().max(300).nullable(),
   weightKg: z.number().positive().max(500).nullable(),
@@ -82,30 +82,23 @@ export const faceScanSessionStateSchema = z.enum([
 ]);
 
 export const createFaceScanSessionSchema = z.object({
-  organizationId: ulidSchema,
+  clientId: ulidSchema,
   assessmentReference: z.string().min(1).max(128),
   idempotencyKey: z.string().min(8).max(128),
 });
 
-export const createCustomerSchema = z.object({
-  legalName: z.string().trim().min(2).max(200),
-  externalReference: z.string().trim().min(2).max(100),
-});
-
 export const updateEnabledSchema = z.object({ enabled: z.boolean() });
 
-export const createOrganizationSchema = z.object({
-  customerId: ulidSchema,
+export const createClientSchema = z.object({
   name: z.string().trim().min(2).max(200),
   externalReference: z.string().trim().min(2).max(100),
 });
 
 export const createDeploymentSchema = z.object({
-  customerId: ulidSchema,
   name: z.string().trim().min(2).max(120),
   environment: z.enum(["development", "test", "staging", "production"]),
   region: z.string().trim().min(2).max(50),
-  organizationIds: z.array(ulidSchema).min(1),
+  clientId: ulidSchema,
 });
 
 export const entitlementInputSchema = z.object({
@@ -125,11 +118,10 @@ export const activationTokenInputSchema = z.object({
 
 export const activationExchangeSchema = z.object({
   activationToken: z.string().min(48).max(256),
-  organizationReference: z.string().trim().min(2).max(100),
+  clientReference: z.string().trim().min(2).max(100),
 });
 
-export type CreateCustomer = z.infer<typeof createCustomerSchema>;
-export type CreateOrganization = z.infer<typeof createOrganizationSchema>;
+export type CreateClient = z.infer<typeof createClientSchema>;
 export type CreateDeployment = z.infer<typeof createDeploymentSchema>;
 export type EntitlementInput = z.infer<typeof entitlementInputSchema>;
 export type VersionAssignmentInput = z.infer<typeof versionAssignmentInputSchema>;

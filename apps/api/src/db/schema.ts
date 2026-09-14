@@ -25,32 +25,20 @@ const timestamps = {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
 
-export const customers = pgTable("customers", {
+// A client is the single tenant boundary; facilities remain in the clinical application.
+export const clients = pgTable("clients", {
   id: varchar("id", { length: 26 }).primaryKey(),
-  legalName: varchar("legal_name", { length: 200 }).notNull(),
-  externalReference: varchar("external_reference", { length: 100 }).notNull(),
-  enabled: boolean("enabled").notNull().default(true),
-  ...timestamps,
-}, (table) => [uniqueIndex("customers_external_reference_uq").on(table.externalReference)]);
-
-// Organization is the scoring platform's authoritative application-tenant term.
-// A hospital group normally has one organization,
-// while facilities remain in the calling clinical application.
-export const organizations = pgTable("organizations", {
-  id: varchar("id", { length: 26 }).primaryKey(),
-  customerId: varchar("customer_id", { length: 26 }).notNull().references(() => customers.id),
   name: varchar("name", { length: 200 }).notNull(),
   externalReference: varchar("external_reference", { length: 100 }).notNull(),
   enabled: boolean("enabled").notNull().default(true),
   ...timestamps,
 }, (table) => [
-  uniqueIndex("organizations_customer_reference_uq").on(table.customerId, table.externalReference),
-  uniqueIndex("organizations_customer_id_uq").on(table.customerId, table.id),
+  uniqueIndex("clients_external_reference_uq").on(table.externalReference),
 ]);
 
 export const deployments = pgTable("deployments", {
   id: varchar("id", { length: 26 }).primaryKey(),
-  customerId: varchar("customer_id", { length: 26 }).notNull().references(() => customers.id),
+  clientId: varchar("client_id", { length: 26 }).notNull().references(() => clients.id),
   name: varchar("name", { length: 120 }).notNull(),
   environment: varchar("environment", { length: 30 }).notNull(),
   region: varchar("region", { length: 50 }).notNull(),
@@ -58,22 +46,8 @@ export const deployments = pgTable("deployments", {
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   ...timestamps,
 }, (table) => [
-  uniqueIndex("deployments_customer_name_uq").on(table.customerId, table.name),
-  uniqueIndex("deployments_customer_id_uq").on(table.customerId, table.id),
-]);
-
-// Explicit allow-list: a deployment may submit work only for linked organizations.
-// Composite FKs guarantee both records belong to the same customer.
-export const deploymentOrganizations = pgTable("deployment_organizations", {
-  customerId: varchar("customer_id", { length: 26 }).notNull(),
-  deploymentId: varchar("deployment_id", { length: 26 }).notNull(),
-  organizationId: varchar("organization_id", { length: 26 }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [
-  primaryKey({ columns: [table.deploymentId, table.organizationId] }),
-  uniqueIndex("deployment_org_customer_scope_uq").on(table.customerId, table.deploymentId, table.organizationId),
-  foreignKey({ columns: [table.customerId, table.deploymentId], foreignColumns: [deployments.customerId, deployments.id], name: "deployment_org_deployment_fk" }),
-  foreignKey({ columns: [table.customerId, table.organizationId], foreignColumns: [organizations.customerId, organizations.id], name: "deployment_org_organization_fk" }),
+  uniqueIndex("deployments_client_name_uq").on(table.clientId, table.name),
+  uniqueIndex("deployments_client_id_uq").on(table.clientId, table.id),
 ]);
 
 export const deploymentCredentials = pgTable("deployment_credentials", {
@@ -105,7 +79,7 @@ export const activationTokens = pgTable("activation_tokens", {
 
 export const entitlements = pgTable("entitlements", {
   id: varchar("id", { length: 26 }).primaryKey(),
-  organizationId: varchar("organization_id", { length: 26 }).notNull().references(() => organizations.id),
+  clientId: varchar("client_id", { length: 26 }).notNull().references(() => clients.id),
   capability: capabilityEnum("capability").notNull(),
   enabled: boolean("enabled").notNull().default(true),
   monthlyLimit: integer("monthly_limit"), // NULL means unlimited.
@@ -113,8 +87,8 @@ export const entitlements = pgTable("entitlements", {
   effectiveUntil: timestamp("effective_until", { withTimezone: true }),
   ...timestamps,
 }, (table) => [
-  uniqueIndex("entitlements_one_current_uq").on(table.organizationId, table.capability).where(sql`${table.effectiveUntil} is null`),
-  index("entitlements_org_history_idx").on(table.organizationId, table.capability, table.effectiveFrom),
+  uniqueIndex("entitlements_one_current_uq").on(table.clientId, table.capability).where(sql`${table.effectiveUntil} is null`),
+  index("entitlements_client_history_idx").on(table.clientId, table.capability, table.effectiveFrom),
   check("entitlements_nonnegative_limit_ck", sql`${table.monthlyLimit} is null or ${table.monthlyLimit} >= 0`),
   check("entitlements_valid_period_ck", sql`${table.effectiveUntil} is null or ${table.effectiveUntil} > ${table.effectiveFrom}`),
 ]);
@@ -134,9 +108,9 @@ export const scoringRuleVersions = pgTable("scoring_rule_versions", {
   retiredAt: timestamp("retired_at", { withTimezone: true }),
 }, (table) => [uniqueIndex("scoring_rule_versions_version_uq").on(table.version), uniqueIndex("scoring_rule_versions_checksum_uq").on(table.packageChecksum)]);
 
-export const organizationVersionAssignments = pgTable("organization_version_assignments", {
+export const clientVersionAssignments = pgTable("client_version_assignments", {
   id: varchar("id", { length: 26 }).primaryKey(),
-  organizationId: varchar("organization_id", { length: 26 }).notNull().references(() => organizations.id),
+  clientId: varchar("client_id", { length: 26 }).notNull().references(() => clients.id),
   mode: versionAssignmentModeEnum("mode").notNull(),
   scoringRuleVersionId: varchar("scoring_rule_version_id", { length: 26 }).references(() => scoringRuleVersions.id),
   effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull().defaultNow(),
@@ -144,16 +118,15 @@ export const organizationVersionAssignments = pgTable("organization_version_assi
   assignedBy: varchar("assigned_by", { length: 26 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  uniqueIndex("version_assignments_one_current_uq").on(table.organizationId).where(sql`${table.effectiveUntil} is null`),
-  index("version_assignments_org_history_idx").on(table.organizationId, table.effectiveFrom),
+  uniqueIndex("version_assignments_one_current_uq").on(table.clientId).where(sql`${table.effectiveUntil} is null`),
+  index("version_assignments_client_history_idx").on(table.clientId, table.effectiveFrom),
   check("version_assignment_mode_ck", sql`(${table.mode} = 'PINNED' and ${table.scoringRuleVersionId} is not null) or (${table.mode} = 'LATEST_APPROVED' and ${table.scoringRuleVersionId} is null)`),
   check("version_assignments_valid_period_ck", sql`${table.effectiveUntil} is null or ${table.effectiveUntil} > ${table.effectiveFrom}`),
 ]);
 
 export const usageEvents = pgTable("usage_events", {
   id: varchar("id", { length: 26 }).primaryKey(),
-  customerId: varchar("customer_id", { length: 26 }).notNull(),
-  organizationId: varchar("organization_id", { length: 26 }).notNull(),
+  clientId: varchar("client_id", { length: 26 }).notNull(),
   deploymentId: varchar("deployment_id", { length: 26 }).notNull(),
   credentialId: varchar("credential_id", { length: 26 }),
   capability: capabilityEnum("capability").notNull(),
@@ -168,15 +141,14 @@ export const usageEvents = pgTable("usage_events", {
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("usage_deployment_idempotency_uq").on(table.deploymentId, table.capability, table.idempotencyKey),
-  index("usage_org_capability_month_idx").on(table.organizationId, table.capability, table.occurredAt),
-  foreignKey({ columns: [table.customerId, table.deploymentId, table.organizationId], foreignColumns: [deploymentOrganizations.customerId, deploymentOrganizations.deploymentId, deploymentOrganizations.organizationId], name: "usage_authorized_deployment_org_fk" }),
+  index("usage_client_capability_month_idx").on(table.clientId, table.capability, table.occurredAt),
+  foreignKey({ columns: [table.clientId, table.deploymentId], foreignColumns: [deployments.clientId, deployments.id], name: "usage_authorized_deployment_client_fk" }),
   foreignKey({ columns: [table.deploymentId, table.credentialId], foreignColumns: [deploymentCredentials.deploymentId, deploymentCredentials.id], name: "usage_credential_deployment_fk" }),
 ]);
 
 export const faceScanSessions = pgTable("face_scan_sessions", {
   id: varchar("id", { length: 26 }).primaryKey(),
-  customerId: varchar("customer_id", { length: 26 }).notNull(),
-  organizationId: varchar("organization_id", { length: 26 }).notNull(),
+  clientId: varchar("client_id", { length: 26 }).notNull(),
   deploymentId: varchar("deployment_id", { length: 26 }).notNull(),
   assessmentReference: varchar("assessment_reference", { length: 128 }).notNull(),
   provider: varchar("provider", { length: 40 }).notNull(),
@@ -189,12 +161,12 @@ export const faceScanSessions = pgTable("face_scan_sessions", {
   ...timestamps,
 }, (table) => [
   uniqueIndex("face_scan_deployment_idempotency_uq").on(table.deploymentId, table.idempotencyKey),
-  foreignKey({ columns: [table.customerId, table.deploymentId, table.organizationId], foreignColumns: [deploymentOrganizations.customerId, deploymentOrganizations.deploymentId, deploymentOrganizations.organizationId], name: "face_scan_authorized_deployment_org_fk" }),
+  foreignKey({ columns: [table.clientId, table.deploymentId], foreignColumns: [deployments.clientId, deployments.id], name: "face_scan_authorized_deployment_client_fk" }),
 ]);
 
 export const auditEvents = pgTable("audit_events", {
   id: varchar("id", { length: 26 }).primaryKey(),
-  organizationId: varchar("organization_id", { length: 26 }).references(() => organizations.id),
+  clientId: varchar("client_id", { length: 26 }).references(() => clients.id),
   deploymentId: varchar("deployment_id", { length: 26 }).references(() => deployments.id),
   actorType: varchar("actor_type", { length: 40 }).notNull(),
   actorReference: varchar("actor_reference", { length: 128 }),
@@ -205,7 +177,7 @@ export const auditEvents = pgTable("audit_events", {
   outcome: varchar("outcome", { length: 30 }).notNull(),
   metadata: jsonb("metadata").notNull().default({}),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [index("audit_org_occurred_idx").on(table.organizationId, table.occurredAt)]);
+}, (table) => [index("audit_client_occurred_idx").on(table.clientId, table.occurredAt)]);
 
 export const adminUsers = pgTable("admin_users", {
   id: varchar("id", { length: 26 }).primaryKey(),

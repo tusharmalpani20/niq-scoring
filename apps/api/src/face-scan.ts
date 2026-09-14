@@ -1,5 +1,5 @@
 export type FaceScanStart = {
-  organizationId: string;
+  clientId: string;
   assessmentReference: string;
 };
 

@@ -5,7 +5,7 @@ import { calculateProvisionalScore } from "./index";
 
 const base: ProvisionalScoringInput = {
   assessmentReference: "assessment-pseudonym-001",
-  organizationId: "550e8400-e29b-41d4-a716-446655440000",
+  clientId: "550e8400-e29b-41d4-a716-446655440000",
   heightCm: 170,
   weightKg: 70,
   weightTrend: "stable",
