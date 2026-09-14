@@ -126,3 +126,10 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Reproduced an evaluator bug with the valid stable ID `constructor`: inherited object properties were mistaken for previously evaluated questions/calculations. Answer/visibility dictionaries now have no prototype, input reads require own properties, and calculation cache checks use `Object.hasOwn`. Preview controls likewise ignore inherited answer properties.
 - Added a regression for supplied zero, required missing input, calculation output and serialized results with that identifier. All eleven evaluator tests pass (60 assertions); workspace tests and all six typechecks pass. Two PostgreSQL tests remain opt-in and were not repeated for this pure-evaluator change.
 - Semantic review and the final completion audit remain open.
+
+### Unsaved navigation audit
+
+- Creation now protects template-only changes as well as entered names/review progress when closing or navigating away, and installs a before-unload guard while setup is unsaved or creation is pending.
+- Browser back-navigation exposed a confirmation bug: the dialog automatic close reset a navigation blocker after Discard proceeded. Both creation and editing now prevent that automatic close when proceeding with blocked navigation.
+- Twelve editor browser runs pass across desktop and mobile, including Keep editing/Discard for creation and editing, template-only cancellation, existing conflicts, reference removal and preview behavior. Admin typecheck and diff whitespace checks pass. The before-unload listener was added but native reload confirmation was not separately exercised in this checkpoint.
+- No new dependencies. Semantic validation review, visual inspection and final requirement audit remain open.

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { blankRuleDefinition, questionSchema } from "@niq-scoring/contracts/rules";
 import { mockConsole, startDraft } from "./rule-fixture";
 
@@ -115,4 +115,56 @@ test("conditional questions preview yes and no, and clearing a comparison does n
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByRole("list", { name: "Validation issues" })).toContainText("Unknown question: show.");
   expect(state.getRecord()!.definition.sections[0]!.questions).toHaveLength(2);
+});
+
+
+test("creation protects template-only changes and back navigation", async ({ page }) => {
+  await mockConsole(page);
+  await navigateToVersions(page);
+  await page.getByRole("button", { name: "Create rule version", exact: true }).click();
+  await page.getByLabel("Starting point", { exact: true }).selectOption("blank");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("alertdialog")).toContainText("Discard this draft setup?");
+  await page.getByRole("button", { name: "Keep editing", exact: true }).click();
+  await expect(page.getByLabel("Starting point", { exact: true })).toHaveValue("blank");
+  await page.getByLabel("Version name", { exact: true }).fill("Unsaved setup");
+  await page.evaluate(() => window.history.back());
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await page.getByRole("button", { name: "Keep editing", exact: true }).click();
+  await expect(page).toHaveURL(/\/versions$/);
+  await expect(page.getByLabel("Version name", { exact: true })).toHaveValue("Unsaved setup");
+  await page.evaluate(() => window.history.back());
+  await page.getByRole("button", { name: "Discard", exact: true }).click();
+  await expect(page).toHaveURL(/\/overview$/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+
+async function navigateToVersions(page: Page) {
+  await page.goto("/overview");
+  if (!await page.getByRole("link", { name: "Rule versions", exact: true }).isVisible()) {
+    await page.getByRole("button", { name: "Toggle Sidebar", exact: true }).click();
+  }
+  await page.getByRole("link", { name: "Rule versions", exact: true }).click();
+  const sidebar = page.getByRole("dialog", { name: "Sidebar", exact: true });
+  if (await sidebar.isVisible()) await page.keyboard.press("Escape");
+}
+
+test("editing keeps unsaved changes on back navigation until discard", async ({ page }) => {
+  await mockConsole(page);
+  await navigateToVersions(page);
+  await page.getByRole("button", { name: "Create rule version", exact: true }).click();
+  await page.getByLabel("Version name", { exact: true }).fill("Navigation fixture");
+  await page.getByLabel("Starting point", { exact: true }).selectOption("blank");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Create draft", exact: true }).click();
+  await page.getByLabel("Description", { exact: true }).fill("Unsaved edit");
+  await page.evaluate(() => window.history.back());
+  await expect(page.getByRole("alertdialog")).toContainText("Discard unsaved changes?");
+  await page.getByRole("button", { name: "Keep editing", exact: true }).click();
+  await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Unsaved edit");
+  await page.evaluate(() => window.history.back());
+  await page.getByRole("button", { name: "Discard", exact: true }).click();
+  await expect(page).toHaveURL(/\/overview$/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });

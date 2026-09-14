@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useBlocker } from "react-router-dom";
 import { request, message } from "../api";
 import { ErrorNotice } from "../shared";
 import { Input } from "../components/ui/input";
@@ -16,7 +17,15 @@ export function RuleCreate({ source, onClose, onCreated }: { source?: { id: stri
   const [error, setError] = useState("");
   const [discard, setDiscard] = useState(false);
   const [requestId] = useState(() => crypto.randomUUID());
-  const close = () => { if (!busy) { if (name || step > 1) setDiscard(true); else onClose(); } };
+  const dirty = Boolean(name) || template !== "spreadsheet" || step > 1;
+  const blocker = useBlocker(dirty || busy);
+  useEffect(() => {
+    if (!dirty && !busy) return;
+    const unload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", unload);
+    return () => window.removeEventListener("beforeunload", unload);
+  }, [dirty, busy]);
+  const close = () => { if (!busy) { if (dirty) setDiscard(true); else onClose(); } };
   return <><Dialog open onOpenChange={open => { if (!open) close(); }}><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle>{source ? "Duplicate rule version" : "Create rule version"}</DialogTitle><DialogDescription>Start an editable draft. Approval is a separate action.</DialogDescription></DialogHeader>
     <ol className="flex gap-6 border-b pb-4 text-sm" aria-label="Creation steps"><li aria-current={step === 1 ? "step" : undefined} className={step === 1 ? "font-medium text-primary" : "text-muted-foreground"}>1 · Details</li><li aria-current={step === 2 ? "step" : undefined} className={step === 2 ? "font-medium text-primary" : "text-muted-foreground"}>2 · Review</li></ol>
     <form className="space-y-5" onSubmit={async event => {
@@ -30,5 +39,5 @@ export function RuleCreate({ source, onClose, onCreated }: { source?: { id: stri
     {step === 1 ? <fieldset disabled={busy} className="space-y-4"><div className="space-y-2"><Label htmlFor="rule-create-name">Version name</Label><Input id="rule-create-name" value={name} maxLength={80} required onChange={e => setName(e.target.value)} autoFocus /></div>
       {source ? <p className="text-sm text-muted-foreground">Copying {source.version}. The original version remains unchanged.</p> : <div className="space-y-2"><Label htmlFor="rule-create-template">Starting point</Label><NativeSelect id="rule-create-template" value={template} onChange={e => setTemplate(e.target.value)}><option value="spreadsheet">NIQ assessment spreadsheet</option><option value="blank">Blank questionnaire</option></NativeSelect><p className="text-sm text-muted-foreground">The spreadsheet template includes source questions and unresolved clinical decisions that must be reviewed before approval.</p></div>}</fieldset> : <dl className="space-y-4"><div><dt className="text-sm text-muted-foreground">Version name</dt><dd className="font-medium break-words">{name.trim()}</dd></div><div><dt className="text-sm text-muted-foreground">Starting point</dt><dd>{source ? source.version : template === "spreadsheet" ? "NIQ assessment spreadsheet" : "Blank questionnaire"}</dd></div><div><dt className="text-sm text-muted-foreground">Initial status</dt><dd>Draft · clinical use prohibited</dd></div></dl>}
     <ErrorNotice error={error} /><div className="flex justify-end gap-2 border-t pt-4"><Button type="button" variant="outline" disabled={busy} onClick={step === 2 ? () => setStep(1) : close}>{step === 2 ? "Back" : "Cancel"}</Button><Button disabled={busy}>{busy ? "Creating…" : step === 1 ? "Continue" : "Create draft"}</Button></div></form>
-  </DialogContent></Dialog><AlertDialog open={discard} onOpenChange={setDiscard}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Discard this draft setup?</AlertDialogTitle><AlertDialogDescription>Your entered details will be lost.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep editing</AlertDialogCancel><AlertDialogAction onClick={onClose}>Discard</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></>;
+  </DialogContent></Dialog><AlertDialog open={discard || blocker.state === "blocked"} onOpenChange={open => { setDiscard(open); if (!open && blocker.state === "blocked") blocker.reset(); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Discard this draft setup?</AlertDialogTitle><AlertDialogDescription>Your entered details will be lost.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep editing</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={event => { if (blocker.state === "blocked") { event.preventDefault(); setDiscard(false); blocker.proceed(); } else onClose(); }}>Discard</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></>;
 }
