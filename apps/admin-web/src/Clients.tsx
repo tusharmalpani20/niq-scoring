@@ -2,7 +2,7 @@ import { DeleteRecord } from "./DeleteRecord";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, X } from "lucide-react";
+import { Ban, CircleCheck, Plus, X } from "lucide-react";
 import { z } from "zod";
 import type { Overview } from "./Operations";
 import { request, message } from "./api";
@@ -88,7 +88,12 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
             <TableCell className="font-medium">{client.name}</TableCell>
             <TableCell><Badge variant={client.enabled ? "default" : "secondary"}>{client.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
             <TableCell className="text-right tabular-nums">{data.deployments.filter(deployment => deployment.clientId === client.id).length}</TableCell>
-            <TableCell className="text-right"><Button variant="outline" size="sm" aria-label={`${client.enabled ? "Disable" : "Enable"} ${client.name}`} onClick={() => { setAccessError(""); setAccessClient(client); }}>{client.enabled ? "Disable" : "Enable"}</Button><DeleteRecord kind="clients" id={client.id} name={client.name} refresh={refresh} revision={data} /></TableCell>
+            <TableCell className="text-right"><div className="flex items-center justify-end gap-1">
+              <Button variant="ghost" size="icon" title={`${client.enabled ? "Disable" : "Enable"} ${client.name}`} aria-label={`${client.enabled ? "Disable" : "Enable"} ${client.name}`} onClick={() => { setAccessError(""); setAccessClient(client); }}>
+                {client.enabled ? <Ban className="size-4" aria-hidden="true" /> : <CircleCheck className="size-4 text-primary" aria-hidden="true" />}
+              </Button>
+              <DeleteRecord kind="clients" id={client.id} name={client.name} refresh={refresh} revision={data} iconOnly />
+            </div></TableCell>
           </TableRow>)}
           {data.clients.length === 0 && <TableRow><TableCell colSpan={4} className="h-32 text-center"><Button variant="ghost" onClick={() => setOpen(true)}><Plus aria-hidden="true" /> Create your first client</Button></TableCell></TableRow>}
           {data.clients.length > 0 && clients.total === 0 && <TableRow><TableCell colSpan={4} className="h-32 text-center text-muted-foreground">No clients match your search.</TableCell></TableRow>}
