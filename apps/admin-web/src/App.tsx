@@ -14,13 +14,14 @@ import {
   Server,
   Layers3,
   LogOut,
-  ShieldCheck,
+  CircleUserRound,
 } from "lucide-react";
 import { request, message, type User } from "./api";
 import { Auth } from "./Auth";
 import { Users } from "./Users";
 import { Operations, type Overview } from "./Operations";
 import { Button } from "./components/ui/button";
+import { Sidebar, SidebarProvider, SidebarHeader, SidebarContent, SidebarFooter, SidebarGroup, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarTrigger } from "./components/ui/sidebar";
 import { ErrorNotice } from "./shared";
 const pages = [
   {
@@ -154,60 +155,65 @@ function Console() {
   const page = pages.find((p) => `/${p.path}` === location.pathname);
   if (!page) return <Navigate to="/overview" replace />;
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brandmark">
-          NIQ<span>Scoring</span>
+    <SidebarProvider>
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="p-6 group-data-[collapsible=icon]:p-2">
+        <div className="flex items-center gap-3 whitespace-nowrap text-3xl font-extrabold tracking-tight text-foreground group-data-[collapsible=icon]:hidden">
+          NIQ<span className="border-l pl-3 text-sm font-medium tracking-normal text-muted-foreground">Scoring</span>
         </div>
-        <div className="nav-label">ADMINISTRATION</div>
-        <nav>
+          <span className="hidden text-center text-xs font-extrabold text-foreground group-data-[collapsible=icon]:block">NIQ</span>
+        </SidebarHeader>
+        <SidebarContent>
+        <SidebarGroup>
+        <SidebarMenu>
           {pages.map((p) => (
-            <NavLink key={p.path} to={`/${p.path}`}>
+            <SidebarMenuItem key={p.path}>
+            <SidebarMenuButton asChild isActive={page.path === p.path} tooltip={p.label}>
+            <NavLink to={`/${p.path}`}>
               <p.icon size={18} />
-              {p.label}
+              <span>{p.label}</span>
             </NavLink>
+            </SidebarMenuButton>
+            </SidebarMenuItem>
           ))}
-        </nav>
-        <div className="sidebar-footer">
-          <ShieldCheck size={18} />
-          <p>
-            NIQ administrators only<small>Central scoring console</small>
-          </p>
-        </div>
-      </aside>
-      <div className="workspace">
-        <div className="topbar">
-          <span>
-            NIQ scoring / <strong>{page.label}</strong>
-          </span>
-          <div className="account">
-            <div>
-              <strong>{user.displayName}</strong>
+        </SidebarMenu>
+        </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter className="flex-row items-center justify-between gap-2 border-t p-4 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:p-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2 text-xs group-data-[collapsible=icon]:flex-none">
+            <CircleUserRound size={24} className="shrink-0 text-primary" aria-hidden="true" />
+            <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+              <strong className="block truncate" title={user.displayName}>{user.displayName}</strong>
               <small>Administrator</small>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={loggingOut}
-              onClick={async () => {
-                setLoggingOut(true);
-                try {
-                  await request("/auth/logout", {});
-                  setUser(null);
-                  setData(null);
-                  setError("");
-                } catch (c) {
-                  setError(message(c));
-                } finally {
-                  setLoggingOut(false);
-                }
-              }}
-            >
-              <LogOut size={16} /> Sign out
-            </Button>
           </div>
-        </div>
-        <main>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Sign out"
+            title="Sign out"
+            disabled={loggingOut}
+            onClick={async () => {
+              setLoggingOut(true);
+              try {
+                await request("/auth/logout", {});
+                setUser(null);
+                setData(null);
+                setError("");
+              } catch (c) {
+                setError(message(c));
+              } finally {
+                setLoggingOut(false);
+              }
+            }}
+          >
+            <LogOut size={18} aria-hidden="true" />
+          </Button>
+        </SidebarFooter>
+      </Sidebar>
+      <div className="workspace">
+        <main className="page-content">
+          <SidebarTrigger title="Toggle sidebar" />
           <header className="page-header">
             <p className="eyebrow">SCORING CONTROL</p>
             <h1>{page.label}</h1>
@@ -228,6 +234,6 @@ function Console() {
           )}
         </main>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }
