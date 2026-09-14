@@ -1,5 +1,6 @@
+import { createSpreadsheetTemplate } from "@niq-scoring/contracts/rule-template";
 import { describe, expect, test } from "bun:test";
-import { blankRuleDefinition, questionSchema, type RuleDefinition } from "@niq-scoring/contracts/rules";
+import { type RuleDefinition } from "@niq-scoring/contracts/rules";
 import { MemoryAdminAuthStore } from "./admin-auth-store";
 import { createApp } from "./app";
 import { MemoryScoringStore } from "./store";
@@ -25,12 +26,26 @@ function setup() {
 
 // Deliberately synthetic points and independently specified expected results; not clinical content.
 function synthetic(name: string): RuleDefinition {
-  const definition = blankRuleDefinition(name);
-  definition.sections = [{ id: "measurements", title: "Measurements", description: "", questions: [questionSchema.parse({ id: "measurement", label: "Test measurement", type: "number", purpose: "scoring", required: true, validation: { min: 0, max: 10 } })] }];
-  definition.domains = [{ id: "example_domain", label: "Example", cap: null, sources: [] }];
-  definition.scoring = [{ id: "measurement_score", label: "Test points", domainId: "example_domain", kind: "ranges", input: { kind: "question", id: "measurement" }, sources: [], bands: [{ id: "first_range", min: 0, max: 5, minInclusive: true, maxInclusive: false, points: 2 }, { id: "second_range", min: 5, max: 10, minInclusive: true, maxInclusive: true, points: 7 }] }];
-  definition.classifications = [{ id: "example_lower", label: "Lower (synthetic)", interpretation: "Test only", min: null, max: 5, minInclusive: true, maxInclusive: false, sources: [] }, { id: "example_upper", label: "Upper (synthetic)", interpretation: "Test only", min: 5, max: null, minInclusive: true, maxInclusive: true, sources: [] }];
-  definition.samples = [{ id: "boundary_example", name: "Exactly at boundary", answers: { measurement: 5 }, expected: { complete: true, score: 7, classificationId: "example_upper", interventionIds: [], domains: { example_domain: 7 }, calculations: {} } }];
+  const definition = createSpreadsheetTemplate(name);
+  const domains = definition.domains.filter(d => d.id !== "unassigned");
+  definition.scoring = definition.scoring.map((rule, i) => {
+    const domainId = domains[i % domains.length]!.id;
+    if (rule.kind === "options") return { ...rule, domainId, points: definition.sections.flatMap(s => s.questions).find(q => q.id === rule.questionId)!.options.map(o => ({ optionId: o.id, points: 0 })) };
+    if (rule.kind === "condition") return { ...rule, domainId, points: 0, otherwise: 0 };
+    return { ...rule, domainId, bands: rule.bands.map((b, i) => ({ ...b, points: 0, minInclusive: i > 0, maxInclusive: false })) };
+  });
+  definition.classifications[1]!.min = 15;
+  definition.classifications[1]!.minInclusive = false;
+  definition.issues = definition.issues.map(i => ({ ...i, resolved: true, resolution: "Synthetic test decision only; not clinical approval." }));
+  const answers: Record<string, string | number | boolean | string[]> = {};
+  for (const question of definition.sections.flatMap(s => s.questions)) {
+    if (question.visibleWhen) continue;
+    if (question.type === "number") answers[question.id] = 1;
+    else if (question.type === "boolean") answers[question.id] = false;
+    else if (question.type === "single_select") answers[question.id] = question.options[0]!.id;
+    else if (question.type === "multi_select") answers[question.id] = [question.options[0]!.id];
+  }
+  definition.samples = [{ id: "boundary_example", name: "Synthetic zero point configuration", answers, expected: { complete: true, score: 0, classificationId: "low_risk", interventionIds: [], domains: {}, calculations: {} } }];
   return definition;
 }
 
@@ -88,7 +103,7 @@ describe("rule management API", () => {
     const responses = await Promise.all(["Example", " example "].map(name => request("", "POST", { name, requestId: crypto.randomUUID() })));
     expect(responses.map(r => r.status).sort()).toEqual([201, 409]);
     const second = await create("Other");
-    const renamed = await request(`/${second.id}`, "PUT", { revision: second.revision, definition: blankRuleDefinition("EXAMPLE") });
+    const renamed = await request(`/${second.id}`, "PUT", { revision: second.revision, definition: { ...(second.definition as RuleDefinition), name: "EXAMPLE" } });
     expect(renamed.status).toBe(409);
     expect(await renamed.json()).toEqual({ error: "RULE_NAME_EXISTS" });
     expect((await (await request(`/${second.id}`)).json() as RuleRecord).version).toBe("Other");
@@ -115,8 +130,8 @@ describe("rule management API", () => {
   test("concurrent saves reject stale revisions without overwriting the winner", async () => {
     const { request, create } = setup();
     const draft = await create();
-    const a = blankRuleDefinition(draft.version); a.description = "First writer";
-    const b = blankRuleDefinition(draft.version); b.description = "Second writer";
+    const a = structuredClone(draft.definition as RuleDefinition); a.description = "First writer";
+    const b = structuredClone(draft.definition as RuleDefinition); b.description = "Second writer";
     const responses = await Promise.all([a, b].map(definition => request(`/${draft.id}`, "PUT", { revision: 1, definition })));
     expect(responses.map(r => r.status).sort()).toEqual([200, 409]);
     const winner = await responses.find(r => r.status === 200)!.json() as RuleRecord;
@@ -176,10 +191,10 @@ describe("rule management API", () => {
     const context = setup();
     let rule = await savedSynthetic(context);
     const checksum = rule.packageChecksum;
-    const preview = await context.request(`/${rule.id}/preview`, "POST", { revision: rule.revision, answers: { measurement: 5 } });
+    const preview = await context.request(`/${rule.id}/preview`, "POST", { revision: rule.revision, answers: (rule.definition as RuleDefinition).samples[0]!.answers });
     expect(preview.status).toBe(200);
     expect(preview.headers.get("cache-control")).toBe("no-store");
-    expect(await preview.json()).toMatchObject({ complete: true, score: 7, classification: { id: "example_upper" }, ruleVersionId: rule.id, checksum, calculatedAt: now, preview: true });
+    expect(await preview.json()).toMatchObject({ complete: true, score: 0, classification: { id: "low_risk" }, ruleVersionId: rule.id, checksum, calculatedAt: now, preview: true });
     const missing = await context.request(`/${rule.id}/preview`, "POST", { revision: rule.revision, answers: {} });
     expect(await missing.json()).toMatchObject({ complete: false, score: null });
     expect(context.store.usages).toHaveLength(0);
@@ -227,4 +242,30 @@ describe("rule management API", () => {
     expect(await retry.json()).toEqual({ error: "RULE_REQUEST_DELETED" });
     expect(await store.rules.list()).toHaveLength(0);
   });
+});
+
+
+test("fixed Excel authoring rejects blank creation and direct field/option tampering", async () => {
+  const { request, create, store } = setup();
+  expect((await request("", "POST", { name: "Blank", requestId: crypto.randomUUID(), template: "blank" })).status).toBe(400);
+  const draft = await create("Fixed profile");
+  for (const mutate of [
+    (d: RuleDefinition) => { d.sections[0]!.questions.pop(); },
+    (d: RuleDefinition) => { d.sections.flatMap(s => s.questions).find(q => q.options.length)!.options[0]!.label = "Custom option"; },
+    (d: RuleDefinition) => { d.calculations = []; },
+    (d: RuleDefinition) => { d.scoring = []; },
+    (d: RuleDefinition) => { d.issues = []; },
+  ]) {
+    const definition = structuredClone(draft.definition as RuleDefinition); mutate(definition);
+    const result = await request(`/${draft.id}`, "PUT", { revision: 1, definition });
+    expect(result.status).toBe(409);
+    expect(await result.json()).toEqual({ error: "FIXED_RULE_REQUIRED" });
+  }
+  expect((await store.rules.get(draft.id))!.revision).toBe(1);
+  // Historical definitions remain readable; new authoring cannot use them as a bypass.
+  const record = store.rules.records.find(r => r.id === draft.id)!;
+  (record.definition as RuleDefinition).sections[0]!.questions.pop();
+  expect((await request(`/${draft.id}`)).status).toBe(200);
+  expect((await request("", "POST", { name: "Legacy copy", requestId: crypto.randomUUID(), duplicateId: draft.id })).status).toBe(409);
+  expect((await request(`/${draft.id}/validate`, "POST", { revision: 1 })).status).toBe(409);
 });

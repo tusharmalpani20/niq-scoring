@@ -1,6 +1,7 @@
+import { isFixedRuleDefinition } from "@niq-scoring/contracts/fixed-profile";
 import type { Hono, Context } from "hono";
 import { z } from "zod";
-import { blankRuleDefinition, ruleDefinitionSchema, answersSchema } from "@niq-scoring/contracts/rules";
+import { ruleDefinitionSchema, answersSchema } from "@niq-scoring/contracts/rules";
 import { createSpreadsheetTemplate } from "@niq-scoring/contracts/rule-template";
 import { validateRuleDefinition } from "@niq-scoring/contracts/rule-validation";
 import { evaluateRule, validateSamples } from "@niq-scoring/scoring-engine/rules";
@@ -16,7 +17,7 @@ export function canonicalRuleJson(value: unknown): string {
 }
 export function ruleChecksum(value: unknown) { return new Bun.CryptoHasher("sha256").update(canonicalRuleJson(value)).digest("hex"); }
 const revisionSchema = z.object({ revision: z.number().int().positive() }).strict();
-const createSchema = z.object({ name: z.string().trim().min(1).max(80), requestId: z.uuid(), template: z.enum(["blank", "spreadsheet"]).default("blank"), duplicateId: ulidSchema.optional() }).strict();
+const createSchema = z.object({ name: z.string().trim().min(1).max(80), requestId: z.uuid(), template: z.literal("spreadsheet").default("spreadsheet"), duplicateId: ulidSchema.optional() }).strict();
 
 export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) {
   const guard = (handler: (c: Context) => Promise<Response>) => async (c: Context) => {
@@ -33,12 +34,13 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
     // Replay before loading the source: the source may have changed or been deleted since creation.
     const prior = await store.replayCreate(input.requestId, fingerprint, actor(c));
     if (prior) return c.json(prior, 201);
-    let definition = input.template === "spreadsheet" ? createSpreadsheetTemplate(input.name) : blankRuleDefinition(input.name);
+    let definition = createSpreadsheetTemplate(input.name);
     if (input.duplicateId) {
       const source = await store.get(input.duplicateId);
       if (!source) throw new RuleStoreError("RULE_NOT_FOUND");
       const sourceDefinition = ruleDefinitionSchema.safeParse(source.definition);
       if (!sourceDefinition.success) return c.json({ error: "LEGACY_RULE_FORMAT" }, 409);
+      if (!isFixedRuleDefinition(sourceDefinition.data)) return c.json({ error: "FIXED_RULE_REQUIRED" }, 409);
       definition = { ...sourceDefinition.data, name: input.name };
     }
     const record = await store.create({ id: createEntityId(), definition, checksum: ruleChecksum(definition), actor: actor(c), requestId: input.requestId, fingerprint, now: now().toISOString() });
@@ -52,11 +54,13 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
   app.put("/admin/rules/:id", guard(async c => {
     const parsed = z.object({ revision: z.number().int().positive(), definition: ruleDefinitionSchema }).strict().safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "INVALID_RULE_DEFINITION", issues: parsed.error.issues }, 400);
+    if (!isFixedRuleDefinition(parsed.data.definition)) return c.json({ error: "FIXED_RULE_REQUIRED" }, 409);
     const issues = validateRuleDefinition(parsed.data.definition).filter(i => i.severity === "error");
     if (issues.length) return c.json({ error: "INVALID_RULE_DEFINITION", issues }, 400);
     if (parsed.data.definition.name.length > 80) return c.json({ error: "INVALID_RULE_NAME" }, 400);
     const current = await store.get(c.req.param("id")!);
     if (current && !ruleDefinitionSchema.safeParse(current.definition).success) return c.json({ error: "LEGACY_RULE_FORMAT" }, 409);
+    if (current && !isFixedRuleDefinition(current.definition)) return c.json({ error: "FIXED_RULE_REQUIRED" }, 409);
     return c.json(await store.save({ id: c.req.param("id")!, ...parsed.data, checksum: ruleChecksum(parsed.data.definition), actor: actor(c), now: now().toISOString() }));
   }));
   app.post("/admin/rules/:id/preview", guard(async c => {
@@ -79,6 +83,7 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
     if (record.revision !== parsed.data.revision) throw new RuleStoreError("RULE_REVISION_CONFLICT");
     const definition = ruleDefinitionSchema.safeParse(record.definition);
     if (!definition.success) return c.json({ error: "LEGACY_RULE_FORMAT" }, 409);
+    if (["validate", "approve"].includes(action.data) && !isFixedRuleDefinition(definition.data)) return c.json({ error: "FIXED_RULE_REQUIRED" }, 409);
     if (["check", "validate", "approve"].includes(action.data)) {
       const issues = [...validateRuleDefinition(definition.data), ...validateSamples(definition.data)];
       if (action.data === "check") return c.json({ issues, revision: record.revision, checksum: record.packageChecksum });

@@ -9,7 +9,8 @@
     "./rules": "./src/rule-definition.ts",
     "./rule-validation": "./src/rule-validation.ts",
     "./rule-template": "./src/rule-template.ts",
-    "./rule-public": "./src/rule-public.ts"
+    "./rule-public": "./src/rule-public.ts",
+    "./fixed-profile": "./src/fixed-profile.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
