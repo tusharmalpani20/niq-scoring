@@ -19,6 +19,12 @@ test("Excel option points and caps persist without changing questionnaire struct
   await page.getByText("Domain and total caps", { exact: true }).click();
   await page.getByLabel("Disease cap", { exact: true }).fill("8");
   await page.getByLabel("Total cap", { exact: true }).fill("40");
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  await page.getByLabel("Description", { exact: true }).fill("Scoring edits survive tab switches");
+  await page.getByRole("tab", { name: "Interventions", exact: true }).click();
+  await expect(page.getByText(/N\/A.*not finalized/i)).toBeVisible();
+  await page.getByRole("tab", { name: "Scoring", exact: true }).click();
+  await expect(page.getByLabel("Solid tumour", { exact: true })).toHaveValue("4");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText(/^Draft saved\./)).toBeVisible();
   const saved = state.getRecord()!.definition;

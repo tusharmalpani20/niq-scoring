@@ -22,6 +22,7 @@ test("save conflict retains edits and discard requires a deliberate choice", asy
   const state = await mockConsole(page);
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
   await page.getByLabel("Description", { exact: true }).fill("Unsaved synthetic description");
   state.saveError = "RULE_REVISION_CONFLICT";
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
@@ -36,6 +37,7 @@ test("save conflict retains edits and discard requires a deliberate choice", asy
   await expect(page.getByText(/^Draft saved\./)).toBeVisible();
   await page.getByRole("button", { name: "Back to versions", exact: true }).click();
   await page.getByRole("button", { name: "Synthetic browser draft", exact: true }).click();
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Unsaved synthetic description");
 });
 
@@ -45,7 +47,7 @@ test("one scoring page replaces questionnaire, preview and validation authoring"
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await expect(page).toHaveURL(/\/versions\/synthetic-rule$/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  for (const name of ["Details", "Questionnaire", "Preview", "Validation"]) {
+  for (const name of ["Questionnaire", "Preview", "Validation"]) {
     await expect(page.getByRole("tab", { name, exact: true })).toHaveCount(0);
   }
   for (const name of ["Add section", "Add question", "Add option", "Add calculation", "Remove question", "Approve version"]) {
@@ -55,6 +57,7 @@ test("one scoring page replaces questionnaire, preview and validation authoring"
   await expect(page.getByRole("columnheader", { name: "Type", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Score", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Cap", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Interventions", exact: true }).click();
   await expect(page.getByText(/N\/A.*not finalized/i)).toBeVisible();
   expect(state.getRecord()!.definition.sections).toEqual(createSpreadsheetTemplate("Reference").sections);
   await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeDisabled();
@@ -68,11 +71,13 @@ test("version link and edit action open a refreshable page", async ({ page }) =>
   await page.getByRole("button", { name: "Synthetic browser draft", exact: true }).click();
   await expect(page).toHaveURL(/\/versions\/synthetic-rule$/);
   await page.reload();
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Synthetic browser draft");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.goto("/versions");
   await page.getByRole("button", { name: "Edit Synthetic browser draft", exact: true }).click();
   await expect(page).toHaveURL(/\/versions\/synthetic-rule$/);
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Synthetic browser draft");
 });
 
@@ -115,6 +120,7 @@ test("editing keeps unsaved changes on back navigation until discard", async ({ 
   await page.getByRole("button", { name: "Create rule version", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Navigation fixture");
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
   await page.getByLabel("Description", { exact: true }).fill("Unsaved edit");
   await page.evaluate(() => window.history.back());
   await expect(page.getByRole("alertdialog")).toContainText("Discard unsaved changes?");

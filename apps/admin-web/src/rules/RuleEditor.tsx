@@ -1,3 +1,4 @@
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { useEffect, useMemo, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
 import { isFixedRuleDefinition } from '@niq-scoring/contracts/fixed-profile';
@@ -61,10 +62,15 @@ export function RuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail;
     <h2 className="text-xl font-semibold break-words">{record.version}</h2>
     {definition ? <>
       {!editable && <p className="text-sm text-muted-foreground">This version is read-only. Create a new version to change its scoring configuration.</p>}
-      <fieldset disabled={!editable || busy} className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="rule-name">Name</Label><Input id="rule-name" value={definition.name} maxLength={80} onChange={e => update({ ...definition, name: e.target.value })}/></div><div className="space-y-2"><Label htmlFor="rule-description">Description</Label><Textarea id="rule-description" value={descriptionText(definition.description)} onChange={e => update({ ...definition, description: e.target.value })}/></div></fieldset>
-      <h3 className="text-lg font-semibold">Scoring</h3>
-      <ScoringEditor definition={definition} onChange={update} disabled={!editable || busy}/>
-      <div className="flex items-center justify-between rounded-lg border p-4"><h3 className="font-medium">Interventions</h3><span className="text-sm text-muted-foreground">N/A — not finalized</span></div>
+      <Tabs defaultValue="scoring" className="gap-5">
+        <TabsList variant="line" aria-label="Rule version sections" className="h-11 w-full justify-start gap-6 rounded-none border-b p-0">
+          {['details', 'scoring', 'interventions'].map(tab => <TabsTrigger key={tab} value={tab} className="h-full flex-none rounded-none border-0 bg-transparent px-1 shadow-none data-[state=active]:bg-transparent data-[state=active]:text-primary after:bottom-0 after:bg-primary">{tab.charAt(0).toUpperCase() + tab.slice(1)}</TabsTrigger>)}
+        </TabsList>
+      <TabsContent value="details"><fieldset disabled={!editable || busy} className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="rule-name">Name</Label><Input id="rule-name" value={definition.name} maxLength={80} onChange={e => update({ ...definition, name: e.target.value })}/></div><div className="space-y-2"><Label htmlFor="rule-description">Description</Label><Textarea id="rule-description" value={descriptionText(definition.description)} onChange={e => update({ ...definition, description: e.target.value })}/></div></fieldset></TabsContent>
+      <TabsContent value="scoring" forceMount className="data-[state=inactive]:hidden">
+      <ScoringEditor definition={definition} onChange={update} disabled={!editable || busy}/></TabsContent>
+      <TabsContent value="interventions"><div className="flex items-center justify-between rounded-lg border p-4"><h3 className="font-medium">Interventions</h3><span className="text-sm text-muted-foreground">N/A — not finalized</span></div></TabsContent>
+      </Tabs>
     </> : <p>This earlier definition can’t be edited here.</p>}
     <ErrorNotice error={error}/>{notice && <p role="status" className="text-sm">{notice}</p>}
     {issues.length > 0 && <ul aria-label="Configuration issues" className="space-y-2 rounded-lg border border-destructive/30 p-4">{issues.map((issue, index) => <li key={index} className="text-sm">{issue.message}</li>)}</ul>}

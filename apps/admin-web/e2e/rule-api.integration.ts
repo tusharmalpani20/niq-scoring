@@ -18,6 +18,7 @@ test("real API login, spreadsheet draft, reopen, duplicate and protected deletio
   await expect(page).toHaveURL(/\/versions\/[^/]+$/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeDisabled();
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
   await page.getByLabel("Description", { exact: true }).fill("Synthetic browser persistence check");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText(/^Draft saved\./)).toBeVisible();
@@ -26,16 +27,20 @@ test("real API login, spreadsheet draft, reopen, duplicate and protected deletio
   await page.getByRole("button", { name: "Back to versions", exact: true }).click();
   await page.reload();
   await page.getByRole("button", { name, exact: true }).click();
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Synthetic browser persistence check");
   await page.getByRole("button", { name: "Back to versions", exact: true }).click();
   await page.getByRole("button", { name: `Duplicate ${name}`, exact: true }).click();
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Synthetic browser persistence check");
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
   await page.getByLabel("Description", { exact: true }).fill("Copy-only change");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText(/^Draft saved\./)).toBeVisible();
   await page.getByRole("button", { name: "Back to versions", exact: true }).click();
   await page.getByRole("button", { name, exact: true }).click();
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Synthetic browser persistence check");
   await page.getByRole("button", { name: "Back to versions", exact: true }).click();
   for (const title of [`${name} copy`, name]) {
