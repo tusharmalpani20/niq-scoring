@@ -302,7 +302,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                 <Button variant="outline" size="sm" disabled={current.page === 1} onClick={() => setPage(current.page - 1)}>Previous</Button>
               </PaginationItem>
               <PaginationItem>
-                <span className="px-3 text-sm text-muted-foreground" role="status">Page {current.page} of {current.pageCount} · {current.total} total</span>
+                <span className="flex flex-col items-center gap-1 px-2 text-xs text-muted-foreground sm:block sm:px-3 sm:text-sm" role="status"><span className="whitespace-nowrap">Page {current.page} of {current.pageCount}</span><span className="whitespace-nowrap"><span className="hidden sm:inline"> · </span>{current.total} total</span></span>
               </PaginationItem>
               <PaginationItem>
                 <Button variant="outline" size="sm" disabled={current.page === current.pageCount} onClick={() => setPage(current.page + 1)}>Next</Button>
