@@ -89,7 +89,9 @@ export function installAdminAuth(
   app.use("/auth/*", originGuard);
   app.use("/admin/*", originGuard);
   app.use("/admin/*", async (c, next) => {
-    if (!(await currentUser(c))) return c.json({ error: "UNAUTHORIZED" }, 401);
+    const user = await currentUser(c);
+    if (!user) return c.json({ error: "UNAUTHORIZED" }, 401);
+    c.set("adminUserId", user.id);
     await next();
   });
   app.get("/auth/status", async (c) =>
@@ -259,3 +261,5 @@ export function installAdminAuth(
       : c.json({ error: result }, result === "NOT_FOUND" ? 404 : 409);
   });
 }
+
+declare module "hono" { interface ContextVariableMap { adminUserId: string; } }

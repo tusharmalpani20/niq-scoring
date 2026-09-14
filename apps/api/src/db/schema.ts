@@ -100,6 +100,11 @@ export const scoringRuleVersions = pgTable("scoring_rule_versions", {
   lifecycle: lifecycleEnum("lifecycle").notNull().default("DRAFT"),
   clinicalUsePermitted: boolean("clinical_use_permitted").notNull().default(false),
   packageChecksum: varchar("package_checksum", { length: 128 }).notNull(),
+  revision: integer("revision").notNull().default(1),
+  validatedRevision: integer("validated_revision"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createRequestId: varchar("create_request_id", { length: 128 }),
+  createFingerprint: varchar("create_fingerprint", { length: 64 }),
   definition: jsonb("definition").notNull(),
   createdBy: varchar("created_by", { length: 26 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -107,7 +112,7 @@ export const scoringRuleVersions = pgTable("scoring_rule_versions", {
   approvedAt: timestamp("approved_at", { withTimezone: true }),
   activatedAt: timestamp("activated_at", { withTimezone: true }),
   retiredAt: timestamp("retired_at", { withTimezone: true }),
-}, (table) => [uniqueIndex("scoring_rule_versions_version_uq").on(table.version), uniqueIndex("scoring_rule_versions_checksum_uq").on(table.packageChecksum)]);
+}, (table) => [uniqueIndex("scoring_rule_versions_name_uq").on(sql`lower(btrim(${table.version}))`), uniqueIndex("scoring_rule_versions_create_request_uq").on(table.createRequestId), index("scoring_rule_versions_checksum_idx").on(table.packageChecksum)]);
 
 export const deploymentVersionAssignments = pgTable("deployment_version_assignments", {
   id: varchar("id", { length: 26 }).primaryKey(),

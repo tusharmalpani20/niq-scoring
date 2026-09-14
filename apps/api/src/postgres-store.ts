@@ -1,3 +1,4 @@
+import { PostgresRuleStore } from "./postgres-rule-store";
 import { DuplicateClientNameError } from "./lib/client-name";
 import { postgresDeletion, type RecordKind } from "./record-deletion";
 import type { StoredActivationToken, TokenRecord } from "./store";
@@ -13,7 +14,8 @@ type Database = ReturnType<typeof postgres>;
 export class PostgresScoringStore implements ScoringStore {
   async deletionStatus(kind: RecordKind, id: string) { return postgresDeletion(this.database, kind, id); }
   async deleteUnused(kind: RecordKind, id: string) { return postgresDeletion(this.database, kind, id, true); }
-  constructor(private readonly database: Database) {}
+  readonly rules: PostgresRuleStore;
+  constructor(private readonly database: Database) { this.rules = new PostgresRuleStore(database); }
 
   async overview() {
     const [clients, deployments, entitlements, assignments, versions] = await Promise.all([

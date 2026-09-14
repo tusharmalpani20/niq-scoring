@@ -40,3 +40,11 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Goal objective read in full; branch and clean worktree verified.
 - Existing stack includes Zod, React Hook Form, shadcn/Radix, PostgreSQL/Drizzle and Bun tests. No new runtime dependency needed for the initial definition/evaluator work.
 - Earlier source review covered both source spreadsheet tabs, business requirements, all four PDF pages and reference code/handover workbooks. Preserve known discrepancies in the template.
+
+### Draft persistence checkpoint
+
+- Definition schema, semantic validation, source template and pure evaluator are committed (`fa2e7da`, `6d8fb5b`, `7ac34bd`).
+- Draft CRUD and lifecycle APIs now use authenticated administrator identity, revision checks, canonical checksums, normalized unique names and durable creation-retry tombstones. Duplication retries remain valid after source deletion.
+- Local migrations 0010 and 0011 applied after checking existing name uniqueness. Migration 0011 corrects the original unconditional immutability trigger so drafts can change while published contents remain protected. Existing provisional record retained.
+- Verification: 48 API tests passed; all six workspace typechecks passed. Separately opted-in PostgreSQL test passed (11 assertions), covering concurrent creation/save, uniqueness, audit and deletion retries. Disposable rule rows removed; append-only audit evidence retained.
+- Remaining: editor, public consumption/binding, broader database lifecycle/assignment checks, frontend/browser flows and final requirement audit. These backend checks do not establish end-to-end completion.

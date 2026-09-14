@@ -1,3 +1,5 @@
+import { MemoryRuleStore } from "./memory-rule-store";
+import type { RuleStore } from "./rule-store";
 import { DuplicateClientNameError } from "./lib/client-name";
 import { memoryDeletion, type RecordKind, type DeletionStatus } from "./record-deletion";
 import type {
@@ -24,6 +26,7 @@ export type UsageReservation =
   | { status: "REJECTED"; reason: string };
 
 export interface ScoringStore {
+  rules: RuleStore;
   deletionStatus(kind: RecordKind, id: string): Promise<DeletionStatus>;
   deleteUnused(kind: RecordKind, id: string): Promise<DeletionStatus>;
   overview(): Promise<{ clients: Client[]; deployments: Deployment[]; entitlements: Array<EntitlementInput & { deploymentId: string }>; assignments: VersionAssignment[]; versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean }> }>;
@@ -53,6 +56,7 @@ type Usage = { id: string; clientId: string; deploymentId: string; capability: C
 
 /** Deterministic in-process implementation used by unit tests; production uses PostgreSQL. */
 export class MemoryScoringStore implements ScoringStore {
+  rules = new MemoryRuleStore(id => this.assignments.some(a => a.mode === "PINNED" && a.scoringRuleVersionId === id));
   async deletionStatus(kind: RecordKind, id: string) { return memoryDeletion(this, kind, id); }
   async deleteUnused(kind: RecordKind, id: string) { return memoryDeletion(this, kind, id, true); }
   clients: Client[] = [];
@@ -65,7 +69,7 @@ export class MemoryScoringStore implements ScoringStore {
   faceScans: Array<{ id: string; state: "REQUESTED"; clientId: string; deploymentId: string }> = [];
 
   versions = [{ id: "01K4ZJ9QJ7F3TWHDW1B1T6A4YV", version: PROVISIONAL_SCORING_VERSION, lifecycle: "DRAFT", clinicalUsePermitted: false }];
-  async overview() { return { clients: this.clients, deployments: this.deployments, entitlements: this.entitlements, assignments: this.assignments, versions: this.versions }; }
+  async overview() { return { clients: this.clients, deployments: this.deployments, entitlements: this.entitlements, assignments: this.assignments, versions: [...this.versions, ...await this.rules.list()] }; }
   async createClient(input: CreateClient) { if (this.clients.some(client => client.name.trim().toLowerCase() === input.name.trim().toLowerCase())) throw new DuplicateClientNameError(); const value = { id: createEntityId(), ...input, enabled: true }; this.clients.push(value); return value; }
   async setClientEnabled(id: string, enabled: boolean) { const row = this.clients.find((item) => item.id === id); if (!row) return false; row.enabled = enabled; return true; }
   async createDeployment(input: CreateDeployment) { const value = { id: createEntityId(), ...input, enabled: true, hostingType: null }; this.deployments.push(value); return value; }
