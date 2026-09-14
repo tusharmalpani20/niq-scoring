@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
-  BrowserRouter,
+  createBrowserRouter,
+  RouterProvider,
   NavLink,
   useLocation,
   Navigate,
@@ -53,13 +54,8 @@ const pages = [
     description: "Review scoring rule packages and their status.",
   },
 ];
-export function App() {
-  return (
-    <BrowserRouter>
-      <Console />
-    </BrowserRouter>
-  );
-}
+const router = createBrowserRouter([{ path: "*", element: <Console /> }]);
+export function App() { return <RouterProvider router={router} />; }
 function Console() {
   const location = useLocation();
   const navigate = useNavigate();

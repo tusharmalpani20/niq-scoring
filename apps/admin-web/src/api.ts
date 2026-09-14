@@ -5,6 +5,9 @@ export type User = {
   enabled: boolean;
   createdAt: string;
 };
+export class ApiError extends Error {
+  constructor(message: string, public code: string, public issues: unknown[] = []) { super(message); }
+}
 export async function request<T = unknown>(
   path: string,
   body?: unknown,
@@ -20,7 +23,7 @@ export async function request<T = unknown>(
   if (!response.ok) {
     if (response.status === 401 && path.startsWith("/admin/"))
       window.dispatchEvent(new Event("session-expired"));
-    throw new Error(friendlyError(result.error, response.status));
+    throw new ApiError(friendlyError(result.error, response.status), result.error, result.issues ?? []);
   }
   return result as T;
 }
@@ -31,6 +34,17 @@ export function message(cause: unknown) {
 }
 
 const errors: Record<string, string> = {
+  RULE_REVISION_CONFLICT: "This version changed in another session. Your edits are preserved. Reload only when you are ready to discard them.",
+  RULE_NAME_EXISTS: "A rule version with this name already exists.",
+  RULE_IMMUTABLE: "This version is read-only. Duplicate it to make changes.",
+  RULE_IN_USE: "This version is referenced and cannot be deleted.",
+  RULE_NOT_FOUND: "This version is no longer available.",
+  RULE_REQUEST_CONFLICT: "This creation request changed. Close the form and start a new creation attempt.",
+  RULE_REQUEST_DELETED: "The draft from this creation attempt was deleted. Start a new creation attempt.",
+  RULE_VALIDATION_FAILED: "Resolve the validation issues before continuing.",
+  INVALID_RULE_DEFINITION: "The definition contains invalid fields or references. Review the listed issues.",
+  INVALID_RULE_TRANSITION: "This lifecycle action is not available for the current version.",
+  LEGACY_RULE_FORMAT: "This version uses the earlier definition format and is read-only.",
   INVALID_CREDENTIALS:
     "The email or password is incorrect, or your account is disabled.",
   DEPLOYMENT_IDENTITY_IMMUTABLE: "Environment and hosting cannot change after creation.",

@@ -48,3 +48,12 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Local migrations 0010 and 0011 applied after checking existing name uniqueness. Migration 0011 corrects the original unconditional immutability trigger so drafts can change while published contents remain protected. Existing provisional record retained.
 - Verification: 48 API tests passed; all six workspace typechecks passed. Separately opted-in PostgreSQL test passed (11 assertions), covering concurrent creation/save, uniqueness, audit and deletion retries. Disposable rule rows removed; append-only audit evidence retained.
 - Remaining: editor, public consumption/binding, broader database lifecycle/assignment checks, frontend/browser flows and final requirement audit. These backend checks do not establish end-to-end completion.
+
+### Editor foundation checkpoint
+
+- Rule versions now loads dedicated metadata, supports lifecycle search/filter/pagination, creation, duplication, opening and draft deletion. Creation has Details/Review steps.
+- Structured editors added for sections/questions/options, validation/visibility/calculations, scoring domains/rules/classifications, and interventions. Stable IDs and reference-removal warnings are retained. Save errors preserve the local definition; reload/discard are explicit. Router supports unsaved-edit navigation blocking.
+- Definition-driven preview renders all supported answer types and invokes the backend preview evaluator without usage accounting. Editing the definition clears preview answers; navigation between tabs preserves them. Results show partial values, domain/component results, classification, guidance and incompleteness reasons.
+- Workspace links added for existing contracts and answer-validation modules; no new external packages. Source clinical decisions remain unresolved and editable only as draft review evidence.
+- Verification: 18 frontend tests (74 assertions; validation/helpers, not complete interaction coverage), workspace typechecks and production build passed. Browser inspected the live list and creation dialog in an isolated tab, then closed that tab. No synthetic record created by this browser check.
+- Remaining: sample-case authoring, useful validation issue navigation, broader editor interaction and responsive tests, end-to-end browser workflow, deployment consumption/binding, and final audit. Build reports a large main bundle; consider loading the editor separately during final optimization.

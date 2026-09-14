@@ -1,6 +1,12 @@
-import { useState } from "react";
-import { Plus, X } from "lucide-react";
-import type { Overview } from "./Operations";
+import { useEffect, useState } from "react";
+import { Plus, X, Copy, Trash2 } from "lucide-react";
+import { request, message } from "./api";
+import { ErrorNotice } from "./shared";
+import { RuleCreate } from "./rules/RuleCreate";
+import { RuleEditor } from "./rules/RuleEditor";
+import type { RuleDetail, RuleMetadata } from "./rules/rule-api";
+import { NativeSelect } from "./components/ui/native-select";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
 import { paginate } from "./pagination";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
@@ -10,34 +16,50 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
 
-export function RuleVersions({ data }: { data: Overview }) {
+export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
+  const [records, setRecords] = useState<RuleMetadata[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [source, setSource] = useState<RuleMetadata | undefined>();
+  const [selected, setSelected] = useState<RuleDetail | null>(null);
+  const [deleting, setDeleting] = useState<RuleMetadata | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function load() { setLoading(true); setError(""); try { setRecords((await request<{ versions: RuleMetadata[] }>("/admin/rules")).versions); } catch(cause) { setError(message(cause)); } finally { setLoading(false); } }
+  useEffect(() => { void load(); }, []);
+  async function open(id: string) { setBusy(true); setError(""); try { setSelected(await request<RuleDetail>(`/admin/rules/${id}`)); } catch(cause) { setError(message(cause)); } finally { setBusy(false); } }
+  function updated() { void load(); void refresh().catch(cause => setError(message(cause))); }
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const query = search.trim().toLowerCase();
-  const versions = paginate(data.versions.filter(version => version.version.toLowerCase().includes(query)), page);
-  return <Tabs defaultValue="versions" className="gap-5">
+  const versions = paginate(records.filter(version => version.version.toLowerCase().includes(query) && (!status || version.lifecycle === status)), page);
+  return <><ErrorNotice error={error} />{error && <Button variant="outline" onClick={() => void load()}>Retry</Button>}<Tabs defaultValue="versions" className="gap-5">
     <div className="flex items-center justify-between gap-3">
       <TabsList variant="line" aria-label="Rule version management" className="shrink-0 p-0">
-        <TabsTrigger value="versions" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Rule versions <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{data.versions.length}</Badge></TabsTrigger>
+        <TabsTrigger value="versions" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Rule versions <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{records.length}</Badge></TabsTrigger>
       </TabsList>
       <div className="flex min-w-0 items-center justify-end gap-2">
       <div className="relative min-w-0 w-full max-w-xs">
         <Input aria-label="Search rule versions" placeholder="Search versions…" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="pr-9" />
         {search && <Button type="button" variant="ghost" size="icon" aria-label="Clear search" className="absolute right-0 top-0 size-9 text-muted-foreground hover:text-foreground" onClick={() => { setSearch(""); setPage(1); }}><X className="size-4" aria-hidden="true" /></Button>}
       </div>
-      <span title="Rule creation will be available once the creation form is added."><Button size="icon" disabled aria-label="Create rule version (not available yet)"><Plus aria-hidden="true" /></Button></span>
+      <Button size="icon" aria-label="Create rule version" title="Create rule version" onClick={() => { setSource(undefined); setCreating(true); }}><Plus aria-hidden="true" /></Button>
       </div>
     </div>
     <TabsContent value="versions" className="space-y-5">
+      <div className="max-w-xs"><NativeSelect aria-label="Filter by lifecycle" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">All statuses</option>{["DRAFT", "VALIDATED", "APPROVED", "ACTIVE", "RETIRED"].map(value => <option key={value} value={value}>{value.charAt(0) + value.slice(1).toLowerCase()}</option>)}</NativeSelect></div>
+      {loading && <p role="status" className="text-sm text-muted-foreground">Loading versions…</p>}
       <Card><CardContent className="pt-6"><Table>
-        <TableHeader><TableRow><TableHead>Version</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Clinical use</TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead>Version</TableHead><TableHead>Status</TableHead><TableHead>Clinical use</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
           {versions.rows.map(version => <TableRow key={version.id}>
-            <TableCell className="font-medium">{version.version}</TableCell>
+            <TableCell className="font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-left" disabled={busy} onClick={() => void open(version.id)}>{version.version}</Button></TableCell>
             <TableCell><Badge variant={version.lifecycle === "APPROVED" || version.lifecycle === "ACTIVE" ? "default" : "secondary"}>{version.lifecycle.charAt(0) + version.lifecycle.slice(1).toLowerCase()}</Badge></TableCell>
-            <TableCell className="text-right"><span className={version.clinicalUsePermitted ? "text-primary" : "text-destructive"}>{version.clinicalUsePermitted ? "Permitted" : "Prohibited"}</span></TableCell>
+            <TableCell><span className={version.clinicalUsePermitted ? "text-primary" : "text-destructive"}>{version.clinicalUsePermitted ? "Permitted" : "Prohibited"}</span></TableCell>
+            <TableCell><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" title={`Duplicate ${version.version}`} aria-label={`Duplicate ${version.version}`} disabled={busy} onClick={() => { setSource(version); setCreating(true); }}><Copy className="size-4" /></Button>{version.editable && version.lifecycle === "DRAFT" && <Button variant="ghost" size="icon" className="text-destructive" title={`Delete ${version.version}`} aria-label={`Delete ${version.version}`} onClick={() => { setError(""); setDeleting(version); }}><Trash2 className="size-4" /></Button>}</div></TableCell>
           </TableRow>)}
-          {versions.total === 0 && <TableRow><TableCell colSpan={3} className="h-32 text-center text-muted-foreground">{data.versions.length ? "No rule versions match your search." : "No rule versions configured."}</TableCell></TableRow>}
+          {versions.total === 0 && <TableRow><TableCell colSpan={4} className="h-32 text-center text-muted-foreground">{records.length ? "No rule versions match your search." : "No rule versions configured."}</TableCell></TableRow>}
         </TableBody>
       </Table></CardContent></Card>
       <Pagination aria-label="Rule versions pagination"><PaginationContent>
@@ -46,5 +68,8 @@ export function RuleVersions({ data }: { data: Overview }) {
         <PaginationItem><Button variant="outline" size="sm" disabled={versions.page === versions.pageCount} onClick={() => setPage(versions.page + 1)}>Next</Button></PaginationItem>
       </PaginationContent></Pagination>
     </TabsContent>
-  </Tabs>;
+  </Tabs>
+  {creating && <RuleCreate {...(source ? { source } : {})} onClose={() => setCreating(false)} onCreated={record => { setCreating(false); setSelected(record); updated(); }} />}
+  {selected && <RuleEditor key={selected.id} initial={selected} onClose={() => { setSelected(null); updated(); }} onSaved={updated} />}
+  <AlertDialog open={deleting !== null} onOpenChange={open => { if (!open && !busy) setDeleting(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {deleting?.version}?</AlertDialogTitle><AlertDialogDescription>Only unused drafts can be deleted. Audit history is retained. This cannot be undone.</AlertDialogDescription></AlertDialogHeader><ErrorNotice error={error} /><AlertDialogFooter><AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel><AlertDialogAction disabled={busy} className="bg-destructive" onClick={async event => { event.preventDefault(); if (!deleting) return; setBusy(true); setError(""); try { await request(`/admin/rules/${deleting.id}`, { revision: deleting.revision }, "DELETE"); setDeleting(null); updated(); } catch(cause) { setError(message(cause)); } finally { setBusy(false); } }}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></>;
 }

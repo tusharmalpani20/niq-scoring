@@ -14,6 +14,8 @@
       "version": "0.0.0",
       "dependencies": {
         "@hookform/resolvers": "^5.9.1",
+        "@niq-scoring/contracts": "workspace:*",
+        "@niq-scoring/scoring-engine": "workspace:*",
         "@radix-ui/react-slot": "^1.3.3",
         "@tailwindcss/vite": "^4.3.3",
         "@vitejs/plugin-react": "^5.0.2",

@@ -64,5 +64,5 @@ export function Operations({
     );
   if (page === "clients") return <Clients data={data} refresh={refresh} />;
   if (page === "deployments") return <Deployments data={data} refresh={refresh} />;
-  return <RuleVersions data={data} />;
+  return <RuleVersions refresh={refresh} />;
 }
