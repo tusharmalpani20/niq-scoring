@@ -1,5 +1,5 @@
 import { TokenExpirySelect, tokenExpiry } from "./TokenExpirySelect";
-import { ActivationTokenPanel, type ActivationToken } from "./ActivationTokenPanel";
+import { type ActivationToken } from "./ActivationTokenPanel";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import type { Overview } from "./Operations";
@@ -14,7 +14,7 @@ import { Separator } from "./components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
 type Values = { clientId: string; environment: string; hostingType: string; enabled: boolean; scoringEnabled: boolean; faceEnabled: boolean; scoringUnlimited: boolean; faceUnlimited: boolean; scoringLimit: string; faceLimit: string; ruleVersion: string; expiryPreset: string; expiryDate: string };
-export function DeploymentDialog({ data, deployment, refresh, onClose }: { data: Overview; deployment: Overview["deployments"][number] | null; refresh: () => Promise<void>; onClose: () => void }) {
+export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated }: { data: Overview; deployment: Overview["deployments"][number] | null; refresh: () => Promise<void>; onClose: () => void; onCreated: (id: string) => void }) {
   const scoring = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "SCORING");
   const face = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "FACE_SCAN");
   const assignment = data.assignments.find(item => item.deploymentId === deployment?.id);
@@ -54,7 +54,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
       }, savedId ? "PUT" : "POST");
       setSavedId(saved.id);
       form.reset(values); await refresh();
-      if (!saved.activation) onClose();
+      if (saved.activation) onCreated(saved.id); else onClose();
     } catch (cause) { setError(message(cause)); } finally { setBusy(false); }
   }
   const select = (name: "clientId" | "hostingType" | "ruleVersion" | "environment", label: string, options: Array<{ value: string; label: string }>, disabled = false) => <Controller control={form.control} name={name} render={({ field, fieldState }) => <Field><FieldLabel htmlFor={`deployment-${name}`}>{label}</FieldLabel><Select value={field.value} onValueChange={field.onChange} disabled={disabled || busy}><SelectTrigger ref={field.ref} onBlur={field.onBlur} id={`deployment-${name}`} aria-invalid={fieldState.invalid}><SelectValue placeholder={`Select ${label.toLowerCase()}`} /></SelectTrigger><SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>{fieldState.error && <FieldError errors={[fieldState.error]} />}</Field>} />;
@@ -94,7 +94,6 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
       </div>
       {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: "Latest approved" }, ...data.versions.map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
       {!savedId && <TokenExpirySelect value={form.watch("expiryPreset")} date={form.watch("expiryDate")} onValueChange={value => form.setValue("expiryPreset", value, { shouldDirty: true })} onDateChange={value => form.setValue("expiryDate", value, { shouldDirty: true })} disabled={busy} />}
-      {savedId && <><Separator /><ActivationTokenPanel deploymentId={savedId} disabled={busy || dirty} /></>}
       <ErrorNotice error={error} />
       <DialogFooter className="grid grid-cols-2 gap-2 sm:flex"><Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button><Button disabled={busy || data.clients.length === 0}>{busy ? "Saving…" : savedId ? "Save" : "Create"}</Button></DialogFooter>
     </form>
