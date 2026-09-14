@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { blankRuleDefinition } from "@niq-scoring/contracts/rules";
+import { blankRuleDefinition, questionSchema, type RuleDefinition } from "@niq-scoring/contracts/rules";
 import type { EditableRule } from "../src/rules/rule-api";
 
 // Every API request is intercepted. These interaction tests never use a real
 // session, database, clinical rule or deployment, including when they fail.
-async function mockConsole(page: Page) {
+async function mockConsole(page: Page, definition?: RuleDefinition) {
   let record: EditableRule | null = null;
   const state = { createError: "", saveError: "", createRequests: [] as Array<{ requestId: string; name: string }>, getRecord: () => record };
   await page.route("**/api/**", async route => {
@@ -20,7 +20,7 @@ async function mockConsole(page: Page) {
       state.createRequests.push(body);
       if (state.createError) return json({ error: state.createError }, 409);
       record = { id: "synthetic-rule", version: body.name, lifecycle: "DRAFT", clinicalUsePermitted: false,
-        revision: 1, packageChecksum: "synthetic", editable: true, definition: blankRuleDefinition(body.name) };
+        revision: 1, packageChecksum: "synthetic", editable: true, definition: definition ? { ...structuredClone(definition), name: body.name } : blankRuleDefinition(body.name) };
       return json(record);
     }
     if (path === "/api/admin/rules/synthetic-rule" && record) {
@@ -113,4 +113,50 @@ test("question and option editing preserves identifiers through reorder, save an
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   await page.getByRole("tab", { name: "Preview", exact: true }).click();
   await expect(answer).toHaveValue(saved.options[0]!.id);
+});
+
+test("conditional questions preview yes and no, and clearing a comparison does not select no", async ({ page }) => {
+  const definition = blankRuleDefinition("Synthetic conditional fixture");
+  definition.sections = [{ id: "questions", title: "Synthetic questions", description: "", questions: [
+    questionSchema.parse({ id: "show", label: "Show follow-up", type: "boolean", purpose: "assessment", required: false }),
+    questionSchema.parse({ id: "follow_up", label: "Follow-up note", type: "text", purpose: "assessment", required: false }),
+  ] }];
+  const state = await mockConsole(page, definition);
+  await startDraft(page);
+  await page.getByRole("button", { name: "Create draft", exact: true }).click();
+  await page.getByRole("tab", { name: "Questionnaire", exact: true }).click();
+  const followUp = page.locator("details").filter({ has: page.locator("summary").filter({ hasText: "Follow-up note" }) });
+  await followUp.locator("summary").click();
+  await followUp.getByRole("button", { name: "Add condition", exact: true }).click();
+  await followUp.getByRole("combobox", { name: "Field", exact: true }).selectOption("question:show");
+  await followUp.getByRole("combobox", { name: "Comparison", exact: true }).selectOption("eq");
+  const comparison = followUp.getByRole("combobox", { name: "Value", exact: true });
+  await comparison.selectOption("true");
+  await comparison.selectOption("");
+  await expect(comparison).toHaveValue("");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Validation issues" })).toContainText("Choose a comparison value.");
+  expect(state.getRecord()!.revision).toBe(1);
+  await comparison.selectOption("true");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Preview", exact: true }).click();
+  await expect(page.getByLabel("Follow-up note", { exact: true })).toBeHidden();
+  await page.getByRole("combobox", { name: "Show follow-up", exact: true }).selectOption("true");
+  await expect(page.getByLabel("Follow-up note", { exact: true })).toBeVisible();
+  await page.getByRole("combobox", { name: "Show follow-up", exact: true }).selectOption("false");
+  await expect(page.getByLabel("Follow-up note", { exact: true })).toBeHidden();
+
+  await page.getByRole("tab", { name: "Questionnaire", exact: true }).click();
+  const controller = page.locator("details").filter({ has: page.locator("summary").filter({ hasText: "Show follow-up" }) });
+  await controller.locator("summary").click();
+  await controller.getByRole("button", { name: "Remove question", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Dependent rules must be updated");
+  await page.getByRole("button", { name: "Keep field", exact: true }).click();
+  await expect(controller).toBeVisible();
+  await controller.getByRole("button", { name: "Remove question", exact: true }).click();
+  await page.getByRole("button", { name: "Continue with change", exact: true }).click();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Validation issues" })).toContainText("Unknown question: show.");
+  expect(state.getRecord()!.definition.sections[0]!.questions).toHaveLength(2);
 });

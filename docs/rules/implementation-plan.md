@@ -88,3 +88,9 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Six Chromium runs now pass: desktop and mobile-sized coverage for creation retries/request identity, revision-conflict edit preservation, discard/keep-editing, save/reopen, adding sections/questions/options, option reordering with stable IDs, and definition-driven preview answer retention across tabs.
 - The mobile test exposed an unreachable Details tab after navigating to Preview. Rule editor tabs now wrap and align to the start, keeping all sections reachable on narrow screens. The failing interaction passes after that fix.
 - Workspace unit tests and typechecks passed; browser test/config files are now included in frontend typechecking. This is controlled-API frontend coverage, not full-stack browser proof. Remaining scenarios include conditional-field interactions, reference-removal warnings, scoring/intervention/sample authoring, lifecycle actions, and full-stack review.
+
+### Conditional authoring browser checkpoint
+
+- Added desktop and mobile interaction coverage for configuring a boolean visibility condition, explicit yes/no preview behavior, missing comparison validation, and reference-removal warnings. The test checks both keeping a referenced field and deliberately removing it, then proves the invalid definition cannot overwrite the saved draft.
+- Reproduced and fixed a bug where clearing a boolean comparison selected `false`. The unset choice now remains unset, and saving requires an explicit comparison value.
+- All eight browser runs pass. Scoring/intervention/sample authoring, lifecycle interactions, full-stack browser review and final completion audit remain outstanding.
