@@ -1,6 +1,6 @@
 import {
   activationExchangeSchema, activationTokenInputSchema, calculateRequestSchema,
-   createDeploymentSchema, createFaceScanSessionSchema,
+   deploymentConfigurationSchema, createDeploymentSchema, createFaceScanSessionSchema,
   createClientSchema, entitlementInputSchema, PROVISIONAL_SCORING_VERSION,
   PROVISIONAL_VERSION_STATUS, ulidSchema, updateEnabledSchema, versionAssignmentInputSchema,
 } from "@niq-scoring/contracts";
@@ -68,6 +68,27 @@ export function createApp(options: AppOptions) {
     return parsed.success ? context.json(await options.store.createClient(parsed.data), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
   });
   app.patch("/admin/clients/:id/enabled", async (context) => updateEnabled(context, options.store.setClientEnabled.bind(options.store)));
+  async function saveDeploymentConfiguration(context: Context, id: string | null) {
+    if (id !== null && !ulidSchema.safeParse(id).success) return context.json({ error: "INVALID_REQUEST" }, 400);
+    const parsed = deploymentConfigurationSchema.safeParse(await parseJson(context));
+    if (!parsed.success) return context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+    const input = parsed.data;
+    const current = await options.store.overview();
+    if (!current.clients.some(c => c.id === input.clientId)) return context.json({ error: "CLIENT_NOT_FOUND" }, 404);
+    if (id && !current.deployments.some(d => d.id === id && d.clientId === input.clientId)) return context.json({ error: "DEPLOYMENT_NOT_FOUND" }, 404);
+    if (current.deployments.some(d => d.id !== id && d.clientId === input.clientId && d.name === input.name)) return context.json({ error: "DEPLOYMENT_NAME_EXISTS" }, 409);
+    const policy = input.versionAssignment;
+    if (policy.mode === "PINNED" && !current.versions.some(v => v.id === policy.scoringRuleVersionId)) return context.json({ error: "VERSION_NOT_FOUND" }, 400);
+    try {
+      const saved = await options.store.saveDeploymentConfiguration(id, input);
+      return saved ? context.json(saved, id ? 200 : 201) : context.json({ error: "DEPLOYMENT_NOT_FOUND" }, 404);
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") return context.json({ error: "DEPLOYMENT_NAME_EXISTS" }, 409);
+      throw error;
+    }
+  }
+  app.post("/admin/deployments/configuration", context => saveDeploymentConfiguration(context, null));
+  app.put("/admin/deployments/:id/configuration", context => saveDeploymentConfiguration(context, context.req.param("id")));
   app.post("/admin/deployments", async (context) => {
     const parsed = createDeploymentSchema.safeParse(await parseJson(context));
     return parsed.success ? context.json(await options.store.createDeployment(parsed.data), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);

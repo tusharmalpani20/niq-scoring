@@ -107,6 +107,28 @@ describe("scoring API", () => {
     expect((await app.request("/v1/provisional/calculate", jsonRequest(scoringInput(client.id), `Bearer ${credential}`))).status).toBe(200);
   });
 
+  test("creates and edits complete deployment settings without changing ownership or credentials", async () => {
+    const { app, store, client, deployment, credential } = await onboard();
+    const input = { clientId: client.id, name: "Updated deployment", environment: "production", region: "india", hostingType: "CLIENT_CLOUD", enabled: true, scoring: { enabled: true, monthlyLimit: 5 }, faceScan: { enabled: false, monthlyLimit: null }, versionAssignment: { mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id } };
+    const update = (body: unknown) => app.request(`/admin/deployments/${deployment.id}/configuration`, { method: "PUT", headers: adminHeaders, body: JSON.stringify(body) });
+    expect((await update(input)).status).toBe(200);
+    expect(store.deployments.find(d => d.id === deployment.id)).toMatchObject({ name: input.name, hostingType: "CLIENT_CLOUD" });
+    expect(store.entitlements.find(e => e.deploymentId === deployment.id && e.capability === "FACE_SCAN")).toMatchObject({ enabled: false, monthlyLimit: null });
+    expect((await app.request("/v1/provisional/calculate", jsonRequest(scoringInput(client.id), `Bearer ${credential}`))).status).toBe(200);
+    expect((await update({ ...input, scoring: { enabled: true, monthlyLimit: -1 } })).status).toBe(400);
+    expect(store.entitlements.find(e => e.deploymentId === deployment.id && e.capability === "SCORING")?.monthlyLimit).toBe(5);
+    const other = await store.createClient({ name: "Other client" });
+    expect((await update({ ...input, clientId: other.id })).status).toBe(404);
+    expect((await update({ ...input, name: "Final name" })).status).toBe(200);
+    expect(store.usages).toHaveLength(1);
+    const created = await app.request("/admin/deployments/configuration", jsonRequest({ ...input, name: "New deployment" }));
+    expect(created.status).toBe(201);
+    const saved = await created.json() as { id: string };
+    expect(store.entitlements.filter(e => e.deploymentId === saved.id)).toHaveLength(2);
+    expect(store.assignments.find(a => a.deploymentId === saved.id)?.mode).toBe("PINNED");
+    expect((await app.request("/admin/deployments/configuration", jsonRequest({ ...input, name: "New deployment" }))).status).toBe(409);
+  });
+
   test("guards provisional scoring, records usage and returns idempotent result", async () => {
     const { app, store, client, deployment, credential } = await onboard();
     const request = jsonRequest(scoringInput(client.id), `Bearer ${credential}`);

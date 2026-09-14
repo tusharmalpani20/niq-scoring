@@ -39,10 +39,12 @@ export const deployments = pgTable("deployments", {
   name: varchar("name", { length: 120 }).notNull(),
   environment: varchar("environment", { length: 30 }).notNull(),
   region: varchar("region", { length: 50 }).notNull(),
+  hostingType: varchar("hosting_type", { length: 30 }),
   enabled: boolean("enabled").notNull().default(true),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   ...timestamps,
 }, (table) => [
+  check("deployments_hosting_type_ck", sql`${table.hostingType} is null or ${table.hostingType} in ('NIQ_HOSTED','CLIENT_CLOUD','ON_PREMISES')`),
   uniqueIndex("deployments_client_name_uq").on(table.clientId, table.name),
   uniqueIndex("deployments_client_id_uq").on(table.clientId, table.id),
 ]);

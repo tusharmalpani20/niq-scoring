@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import type { CreateDeployment, CreateClient, EntitlementInput, VersionAssignmentInput } from "@niq-scoring/contracts";
+import type { DeploymentConfiguration, CreateDeployment, CreateClient, EntitlementInput, VersionAssignmentInput } from "@niq-scoring/contracts";
 import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
 import { decideEntitlement, type Capability } from "@niq-scoring/entitlements";
 import { createEntityId } from "./lib/id";
@@ -13,7 +13,7 @@ export class PostgresScoringStore implements ScoringStore {
   async overview() {
     const [clients, deployments, entitlements, assignments, versions] = await Promise.all([
       this.database<Client[]>`select id, name, enabled from clients order by created_at`,
-      this.database<Deployment[]>`select id, client_id as "clientId", name, environment, region, enabled from deployments order by created_at`,
+      this.database<Deployment[]>`select id, client_id as "clientId", name, environment, region, hosting_type as "hostingType", enabled from deployments order by created_at`,
       this.database<Array<EntitlementInput & { deploymentId: string }>>`select deployment_id as "deploymentId", capability, enabled, monthly_limit as "monthlyLimit" from entitlements where effective_until is null`,
       this.database<Array<{ deploymentId: string; mode: "LATEST_APPROVED" | "PINNED"; scoringRuleVersionId: string | null }>>`select deployment_id as "deploymentId", mode, scoring_rule_version_id as "scoringRuleVersionId" from deployment_version_assignments where effective_until is null`,
       this.database<Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean }>>`select id, version, lifecycle, clinical_use_permitted as "clinicalUsePermitted" from scoring_rule_versions order by created_at desc`,
@@ -30,8 +30,29 @@ export class PostgresScoringStore implements ScoringStore {
   async createDeployment(input: CreateDeployment) {
     return this.database.begin(async (tx) => {
       const id = createEntityId();
-      const [row] = await tx<Deployment[]>`insert into deployments (id, client_id, name, environment, region) values (${id}, ${input.clientId}, ${input.name}, ${input.environment}, ${input.region}) returning id, client_id as "clientId", name, environment, region, enabled`;
+      const [row] = await tx<Deployment[]>`insert into deployments (id, client_id, name, environment, region) values (${id}, ${input.clientId}, ${input.name}, ${input.environment}, ${input.region}) returning id, client_id as "clientId", name, environment, region, hosting_type as "hostingType", enabled`;
       return row!;
+    });
+  }
+  async saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration) {
+    return this.database.begin(async tx => {
+      const deploymentId = id ?? createEntityId();
+      const [deployment] = id
+        ? await tx<Deployment[]>`update deployments set name=${input.name}, environment=${input.environment}, region=${input.region}, hosting_type=${input.hostingType}, enabled=${input.enabled}, updated_at=now() where id=${id} and client_id=${input.clientId} returning id, client_id as "clientId", name, environment, region, hosting_type as "hostingType", enabled`
+        : await tx<Deployment[]>`insert into deployments (id,client_id,name,environment,region,hosting_type,enabled) values (${deploymentId},${input.clientId},${input.name},${input.environment},${input.region},${input.hostingType},${input.enabled}) returning id, client_id as "clientId", name, environment, region, hosting_type as "hostingType", enabled`;
+      if (!deployment) return null;
+      // Persist the complete form atomically; credentials and usage remain untouched.
+      for (const capability of ["SCORING", "FACE_SCAN"] as const) {
+        const setting = capability === "SCORING" ? input.scoring : input.faceScan;
+        await tx`select pg_advisory_xact_lock(hashtext(${`${deploymentId}:${capability}`}))`;
+        await tx`update entitlements set effective_until=clock_timestamp(), updated_at=clock_timestamp() where deployment_id=${deploymentId} and capability=${capability} and effective_until is null`;
+        await tx`insert into entitlements (id,deployment_id,capability,enabled,monthly_limit) values (${createEntityId()},${deploymentId},${capability},${setting.enabled},${setting.monthlyLimit})`;
+      }
+      const policy = input.versionAssignment;
+      await tx`select pg_advisory_xact_lock(hashtext(${`version:${deploymentId}`}))`;
+      await tx`update deployment_version_assignments set effective_until=clock_timestamp() where deployment_id=${deploymentId} and effective_until is null`;
+      await tx`insert into deployment_version_assignments (id,deployment_id,mode,scoring_rule_version_id) values (${createEntityId()},${deploymentId},${policy.mode},${policy.mode === "PINNED" ? policy.scoringRuleVersionId : null})`;
+      return deployment;
     });
   }
   async setDeploymentEnabled(id: string, enabled: boolean) { const rows = await this.database`update deployments set enabled=${enabled}, updated_at=now() where id=${id} returning id`; return rows.length === 1; }

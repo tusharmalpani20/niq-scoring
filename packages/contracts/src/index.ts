@@ -111,6 +111,15 @@ export const versionAssignmentInputSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("PINNED"), scoringRuleVersionId: ulidSchema }),
 ]);
 
+export const deploymentConfigurationSchema = createDeploymentSchema.extend({
+  hostingType: z.enum(["NIQ_HOSTED", "CLIENT_CLOUD", "ON_PREMISES"]),
+  enabled: z.boolean(),
+  scoring: entitlementInputSchema.omit({ capability: true }),
+  faceScan: entitlementInputSchema.omit({ capability: true }),
+  versionAssignment: versionAssignmentInputSchema,
+});
+export type DeploymentConfiguration = z.infer<typeof deploymentConfigurationSchema>;
+
 export const activationTokenInputSchema = z.object({
   expiresInMinutes: z.number().int().min(5).max(1440).default(30),
 });
