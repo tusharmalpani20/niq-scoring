@@ -12,18 +12,18 @@ export class PostgresScoringStore implements ScoringStore {
 
   async overview() {
     const [clients, deployments, entitlements, assignments, versions] = await Promise.all([
-      this.database<Client[]>`select id, name, external_reference as "externalReference", enabled from clients order by created_at`,
+      this.database<Client[]>`select id, name, enabled from clients order by created_at`,
       this.database<Deployment[]>`select id, client_id as "clientId", name, environment, region, enabled from deployments order by created_at`,
-      this.database<Array<EntitlementInput & { clientId: string }>>`select client_id as "clientId", capability, enabled, monthly_limit as "monthlyLimit" from entitlements where effective_until is null`,
-      this.database<Array<{ clientId: string; mode: "LATEST_APPROVED" | "PINNED"; scoringRuleVersionId: string | null }>>`select client_id as "clientId", mode, scoring_rule_version_id as "scoringRuleVersionId" from client_version_assignments where effective_until is null`,
+      this.database<Array<EntitlementInput & { deploymentId: string }>>`select deployment_id as "deploymentId", capability, enabled, monthly_limit as "monthlyLimit" from entitlements where effective_until is null`,
+      this.database<Array<{ deploymentId: string; mode: "LATEST_APPROVED" | "PINNED"; scoringRuleVersionId: string | null }>>`select deployment_id as "deploymentId", mode, scoring_rule_version_id as "scoringRuleVersionId" from deployment_version_assignments where effective_until is null`,
       this.database<Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean }>>`select id, version, lifecycle, clinical_use_permitted as "clinicalUsePermitted" from scoring_rule_versions order by created_at desc`,
     ]);
-    return { clients: [...clients], deployments: [...deployments], entitlements: [...entitlements], assignments: assignments.map((row) => row.mode === "PINNED" ? { clientId: row.clientId, mode: "PINNED" as const, scoringRuleVersionId: row.scoringRuleVersionId! } : { clientId: row.clientId, mode: "LATEST_APPROVED" as const }), versions: [...versions] };
+    return { clients: [...clients], deployments: [...deployments], entitlements: [...entitlements], assignments: assignments.map((row) => row.mode === "PINNED" ? { deploymentId: row.deploymentId, mode: "PINNED" as const, scoringRuleVersionId: row.scoringRuleVersionId! } : { deploymentId: row.deploymentId, mode: "LATEST_APPROVED" as const }), versions: [...versions] };
   }
 
   async createClient(input: CreateClient) {
     const id = createEntityId();
-    const [row] = await this.database<Client[]>`insert into clients (id, name, external_reference) values (${id}, ${input.name}, ${input.externalReference}) returning id, name, external_reference as "externalReference", enabled`;
+    const [row] = await this.database<Client[]>`insert into clients (id, name) values (${id}, ${input.name}) returning id, name, enabled`;
     return row!;
   }
   async setClientEnabled(id: string, enabled: boolean) { const rows = await this.database`update clients set enabled=${enabled}, updated_at=now() where id=${id} returning id`; return rows.length === 1; }
@@ -35,26 +35,26 @@ export class PostgresScoringStore implements ScoringStore {
     });
   }
   async setDeploymentEnabled(id: string, enabled: boolean) { const rows = await this.database`update deployments set enabled=${enabled}, updated_at=now() where id=${id} returning id`; return rows.length === 1; }
-  async setEntitlement(clientId: string, input: EntitlementInput) {
+  async setEntitlement(deploymentId: string, input: EntitlementInput) {
     await this.database.begin(async (tx) => {
-      await tx`select pg_advisory_xact_lock(hashtext(${`${clientId}:${input.capability}`}))`;
-      await tx`update entitlements set effective_until=now(), updated_at=now() where client_id=${clientId} and capability=${input.capability} and effective_until is null`;
-      await tx`insert into entitlements (id, client_id, capability, enabled, monthly_limit) values (${createEntityId()}, ${clientId}, ${input.capability}, ${input.enabled}, ${input.monthlyLimit})`;
+      await tx`select pg_advisory_xact_lock(hashtext(${`${deploymentId}:${input.capability}`}))`;
+      await tx`update entitlements set effective_until=now(), updated_at=now() where deployment_id=${deploymentId} and capability=${input.capability} and effective_until is null`;
+      await tx`insert into entitlements (id, deployment_id, capability, enabled, monthly_limit) values (${createEntityId()}, ${deploymentId}, ${input.capability}, ${input.enabled}, ${input.monthlyLimit})`;
     });
   }
-  async assignVersion(clientId: string, input: VersionAssignmentInput) {
+  async assignVersion(deploymentId: string, input: VersionAssignmentInput) {
     await this.database.begin(async (tx) => {
-      await tx`select pg_advisory_xact_lock(hashtext(${`version:${clientId}`}))`;
-      await tx`update client_version_assignments set effective_until=now() where client_id=${clientId} and effective_until is null`;
-      await tx`insert into client_version_assignments (id, client_id, mode, scoring_rule_version_id) values (${createEntityId()}, ${clientId}, ${input.mode}, ${input.mode === "PINNED" ? input.scoringRuleVersionId : null})`;
+      await tx`select pg_advisory_xact_lock(hashtext(${`version:${deploymentId}`}))`;
+      await tx`update deployment_version_assignments set effective_until=now() where deployment_id=${deploymentId} and effective_until is null`;
+      await tx`insert into deployment_version_assignments (id, deployment_id, mode, scoring_rule_version_id) values (${createEntityId()}, ${deploymentId}, ${input.mode}, ${input.mode === "PINNED" ? input.scoringRuleVersionId : null})`;
     });
   }
   async storeActivationToken(input: { id: string; deploymentId: string; tokenHash: string; expiresAt: Date }) { await this.database`insert into activation_tokens (id, deployment_id, token_hash, expires_at) values (${input.id}, ${input.deploymentId}, ${input.tokenHash}, ${input.expiresAt})`; }
-  async exchangeActivation(input: { tokenHash: string; clientReference: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
+  async exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
     return this.database.begin(async (tx) => {
       const [token] = await tx<Array<{ deploymentId: string }>>`select deployment_id as "deploymentId" from activation_tokens where token_hash=${input.tokenHash} and used_at is null and expires_at>${input.now} for update`;
       if (!token) return null;
-      const [client] = await tx<Array<{ clientId: string }>>`select client.id as "clientId" from deployments link join clients client on client.id=link.client_id where link.id=${token.deploymentId} and client.external_reference=${input.clientReference}`;
+      const [client] = await tx<Array<{ clientId: string }>>`select client.id as "clientId" from deployments link join clients client on client.id=link.client_id where link.id=${token.deploymentId}`;
       if (!client) return null;
       await tx`update activation_tokens set used_at=${input.now} where token_hash=${input.tokenHash}`;
       await tx`insert into deployment_credentials (id, deployment_id, key_prefix, secret_hash, hash_algorithm) values (${input.credentialId}, ${token.deploymentId}, ${input.keyPrefix}, ${input.secretHash}, 'sha256')`;
@@ -74,13 +74,13 @@ export class PostgresScoringStore implements ScoringStore {
       const [duplicate] = await tx<Array<{ id: string; outcome: string; response: unknown }>>`select id, outcome, response_payload as response from usage_events where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and idempotency_key=${input.idempotencyKey}`;
       if (duplicate?.response != null) return { status: "DUPLICATE", usageId: duplicate.id, response: duplicate.response };
       if (duplicate?.outcome === "PENDING") return { status: "REJECTED", reason: "REQUEST_IN_PROGRESS" };
-      const [entitlement] = await tx<Array<{ enabled: boolean; monthlyLimit: number | null }>>`select enabled, monthly_limit as "monthlyLimit" from entitlements where client_id=${input.clientId} and capability=${input.capability} and effective_until is null for update`;
+      const [entitlement] = await tx<Array<{ enabled: boolean; monthlyLimit: number | null }>>`select enabled, monthly_limit as "monthlyLimit" from entitlements where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and effective_until is null for update`;
       if (!entitlement?.enabled) return { status: "REJECTED", reason: "CAPABILITY_DISABLED" };
-      const [assignment] = await tx<Array<{ mode: "LATEST_APPROVED" | "PINNED"; scoringRuleVersionId: string | null }>>`select mode, scoring_rule_version_id as "scoringRuleVersionId" from client_version_assignments where client_id=${input.clientId} and effective_until is null`;
+      const [assignment] = await tx<Array<{ mode: "LATEST_APPROVED" | "PINNED"; scoringRuleVersionId: string | null }>>`select mode, scoring_rule_version_id as "scoringRuleVersionId" from deployment_version_assignments where deployment_id=${input.identity.deploymentId} and effective_until is null`;
       const [resolvedVersion] = assignment?.mode === "PINNED"
         ? await tx<Array<{ id: string; version: string }>>`select id, version from scoring_rule_versions where id=${assignment.scoringRuleVersionId}`
         : await tx<Array<{ id: string; version: string }>>`select id, version from scoring_rule_versions where lifecycle in ('APPROVED','ACTIVE') order by approved_at desc nulls last, created_at desc limit 1`;
-      const [count] = await tx<Array<{ value: number }>>`select count(*)::int as value from usage_events where client_id=${input.clientId} and capability=${input.capability} and (billable=true or outcome='PENDING') and occurred_at >= (date_trunc('month', now() at time zone 'UTC') at time zone 'UTC')`;
+      const [count] = await tx<Array<{ value: number }>>`select count(*)::int as value from usage_events where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and (billable=true or outcome='PENDING') and occurred_at >= (date_trunc('month', now() at time zone 'UTC') at time zone 'UTC')`;
       const decision = decideEntitlement({ platformEnabled: input.platformEnabled, clientEnabled: scope.clientEnabled, deploymentEnabled: scope.deploymentEnabled, versionActive: input.capability === "FACE_SCAN" || resolvedVersion?.version === PROVISIONAL_SCORING_VERSION, monthlyLimit: entitlement.monthlyLimit, monthlyUsage: count?.value ?? 0 });
       if (!decision.allowed) return { status: "REJECTED", reason: decision.reason };
       const usageId = duplicate?.id ?? createEntityId();

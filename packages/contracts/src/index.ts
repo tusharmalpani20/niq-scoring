@@ -91,7 +91,6 @@ export const updateEnabledSchema = z.object({ enabled: z.boolean() });
 
 export const createClientSchema = z.object({
   name: z.string().trim().min(2).max(200),
-  externalReference: z.string().trim().min(2).max(100),
 });
 
 export const createDeploymentSchema = z.object({
@@ -118,7 +117,6 @@ export const activationTokenInputSchema = z.object({
 
 export const activationExchangeSchema = z.object({
   activationToken: z.string().min(48).max(256),
-  clientReference: z.string().trim().min(2).max(100),
 });
 
 export type CreateClient = z.infer<typeof createClientSchema>;

@@ -20,12 +20,12 @@ function setup() {
 async function onboard() {
   const { app, store } = setup();
 
-  const client = await (await app.request("/admin/clients", jsonRequest({ name: "Apollo Group", externalReference: "apollo-main" }))).json() as { id: string };
+  const client = await (await app.request("/admin/clients", jsonRequest({ name: "Apollo Group" }))).json() as { id: string };
   const deployment = await (await app.request("/admin/deployments", jsonRequest({ name: "Apollo Production", environment: "production", region: "india", clientId: client.id }))).json() as { id: string };
-  for (const capability of ["SCORING", "FACE_SCAN"] as const) await app.request(`/admin/clients/${client.id}/entitlement`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ capability, enabled: true, monthlyLimit: null }) });
-  await app.request(`/admin/clients/${client.id}/version-assignment`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id }) });
+  for (const capability of ["SCORING", "FACE_SCAN"] as const) await app.request(`/admin/deployments/${deployment.id}/entitlement`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ capability, enabled: true, monthlyLimit: null }) });
+  await app.request(`/admin/deployments/${deployment.id}/version-assignment`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id }) });
   const activation = await (await app.request(`/admin/deployments/${deployment.id}/activation-token`, jsonRequest({ expiresInMinutes: 30 }))).json() as { activationToken: string };
-  const activated = await (await app.request("/v1/activate", jsonRequest({ activationToken: activation.activationToken, clientReference: "apollo-main" }, ""))).json() as { credential: string };
+  const activated = await (await app.request("/v1/activate", jsonRequest({ activationToken: activation.activationToken }, ""))).json() as { credential: string };
   return { app, store, client, deployment, activationToken: activation.activationToken, credential: activated.credential };
 }
 
@@ -54,9 +54,9 @@ describe("scoring API", () => {
   });
 
   test("rejects another client's request even when its idempotency key matches a completed request", async () => {
-    const { app, store, client, credential } = await onboard();
+    const { app, store, client, deployment, credential } = await onboard();
     expect((await app.request("/v1/provisional/calculate", jsonRequest(scoringInput(client.id), `Bearer ${credential}`))).status).toBe(200);
-    const other = await store.createClient({ name: "Other client", externalReference: "other" });
+    const other = await store.createClient({ name: "Other client" });
     const response = await app.request("/v1/provisional/calculate", jsonRequest(scoringInput(other.id), `Bearer ${credential}`));
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ reason: "CLIENT_NOT_ALLOWED" });
@@ -66,24 +66,35 @@ describe("scoring API", () => {
   test("activation tokens are one-time and deployment credentials authenticate", async () => {
     const { app, activationToken, credential } = await onboard();
     expect(credential).toStartWith("niq_dep_");
-    expect((await app.request("/v1/activate", jsonRequest({ activationToken, clientReference: "apollo-main" }, ""))).status).toBe(401);
+    expect((await app.request("/v1/activate", jsonRequest({ activationToken }, ""))).status).toBe(401);
     expect((await app.request("/v1/metadata", { headers: { authorization: `Bearer ${credential}` } })).status).toBe(200);
   });
 
-  test("binds activation to a client reference without consuming a mismatched token", async () => {
-    const { app } = setup();
-
-    const client = await (await app.request("/admin/clients", jsonRequest({ name: "Test Client", externalReference: "01J00000000000000000000009" }))).json() as { id: string };
-    const deployment = await (await app.request("/admin/deployments", jsonRequest({ name: "Test Deployment", environment: "test", region: "india", clientId: client.id }))).json() as { id: string };
-    const activation = await (await app.request(`/admin/deployments/${deployment.id}/activation-token`, jsonRequest({ expiresInMinutes: 30 }))).json() as { activationToken: string };
-    expect((await app.request("/v1/activate", jsonRequest({ activationToken: activation.activationToken, clientReference: "wrong-reference" }, ""))).status).toBe(401);
-    const valid = await app.request("/v1/activate", jsonRequest({ activationToken: activation.activationToken, clientReference: "01J00000000000000000000009" }, ""));
-    expect(valid.status).toBe(201);
-    expect(await valid.json()).toMatchObject({ clientId: client.id, deploymentId: deployment.id });
+  test("deployment limits are independent and issuing another credential does not reset usage", async () => {
+    const { app, store, client, deployment, credential } = await onboard();
+    await store.setEntitlement(deployment.id, { capability: "SCORING", enabled: true, monthlyLimit: 1 });
+    const second = await store.createDeployment({ clientId: client.id, name: "Second", environment: "test", region: "india" });
+    await store.setEntitlement(second.id, { capability: "SCORING", enabled: true, monthlyLimit: 2 });
+    await store.assignVersion(second.id, { mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id });
+    async function activate(id: string) {
+      const token = await (await app.request(`/admin/deployments/${id}/activation-token`, jsonRequest({}))).json() as { activationToken: string };
+      return (await (await app.request("/v1/activate", jsonRequest(token))).json() as { credential: string }).credential;
+    }
+    const calculate = (key: string, auth: string) => app.request("/v1/provisional/calculate", jsonRequest({ ...scoringInput(client.id), idempotencyKey: key }, `Bearer ${auth}`));
+    expect((await calculate("first-request", credential)).status).toBe(200);
+    const renewed = await activate(deployment.id);
+    expect((await calculate("second-request", renewed)).status).toBe(409);
+    const secondCredential = await activate(second.id);
+    expect((await calculate("first-request", secondCredential)).status).toBe(200);
+    expect((await calculate("second-request", secondCredential)).status).toBe(200);
+    expect((await calculate("third-request", secondCredential)).status).toBe(409);
+    await store.assignVersion(second.id, { mode: "LATEST_APPROVED" });
+    expect(store.assignments.find(a => a.deploymentId === deployment.id)?.mode).toBe("PINNED");
+    expect(store.entitlements.find(e => e.deploymentId === deployment.id && e.capability === "SCORING")?.monthlyLimit).toBe(1);
   });
 
   test("guards provisional scoring, records usage and returns idempotent result", async () => {
-    const { app, store, client, credential } = await onboard();
+    const { app, store, client, deployment, credential } = await onboard();
     const request = jsonRequest(scoringInput(client.id), `Bearer ${credential}`);
     const first = await app.request("/v1/provisional/calculate", request);
     const firstBody = await first.json();
@@ -95,8 +106,8 @@ describe("scoring API", () => {
   });
 
   test("enforces monthly quota and preserves face-scan stub state", async () => {
-    const { app, client, credential } = await onboard();
-    await app.request(`/admin/clients/${client.id}/entitlement`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ capability: "FACE_SCAN", enabled: true, monthlyLimit: 1 }) });
+    const { app, client, deployment, credential } = await onboard();
+    await app.request(`/admin/deployments/${deployment.id}/entitlement`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ capability: "FACE_SCAN", enabled: true, monthlyLimit: 1 }) });
     const auth = `Bearer ${credential}`;
     const first = await app.request("/v1/face-scans", jsonRequest({ clientId: client.id, assessmentReference: "assessment-1", idempotencyKey: "face-scan-0001" }, auth));
     expect(first.status).toBe(202); expect(await first.json()).toMatchObject({ session: { state: "REQUESTED" }, providerConfigured: false });

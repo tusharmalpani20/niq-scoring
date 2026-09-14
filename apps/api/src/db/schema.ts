@@ -29,12 +29,9 @@ const timestamps = {
 export const clients = pgTable("clients", {
   id: varchar("id", { length: 26 }).primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
-  externalReference: varchar("external_reference", { length: 100 }).notNull(),
   enabled: boolean("enabled").notNull().default(true),
   ...timestamps,
-}, (table) => [
-  uniqueIndex("clients_external_reference_uq").on(table.externalReference),
-]);
+});
 
 export const deployments = pgTable("deployments", {
   id: varchar("id", { length: 26 }).primaryKey(),
@@ -79,7 +76,7 @@ export const activationTokens = pgTable("activation_tokens", {
 
 export const entitlements = pgTable("entitlements", {
   id: varchar("id", { length: 26 }).primaryKey(),
-  clientId: varchar("client_id", { length: 26 }).notNull().references(() => clients.id),
+  deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),
   capability: capabilityEnum("capability").notNull(),
   enabled: boolean("enabled").notNull().default(true),
   monthlyLimit: integer("monthly_limit"), // NULL means unlimited.
@@ -87,8 +84,8 @@ export const entitlements = pgTable("entitlements", {
   effectiveUntil: timestamp("effective_until", { withTimezone: true }),
   ...timestamps,
 }, (table) => [
-  uniqueIndex("entitlements_one_current_uq").on(table.clientId, table.capability).where(sql`${table.effectiveUntil} is null`),
-  index("entitlements_client_history_idx").on(table.clientId, table.capability, table.effectiveFrom),
+  uniqueIndex("entitlements_one_current_uq").on(table.deploymentId, table.capability).where(sql`${table.effectiveUntil} is null`),
+  index("entitlements_deployment_history_idx").on(table.deploymentId, table.capability, table.effectiveFrom),
   check("entitlements_nonnegative_limit_ck", sql`${table.monthlyLimit} is null or ${table.monthlyLimit} >= 0`),
   check("entitlements_valid_period_ck", sql`${table.effectiveUntil} is null or ${table.effectiveUntil} > ${table.effectiveFrom}`),
 ]);
@@ -108,9 +105,9 @@ export const scoringRuleVersions = pgTable("scoring_rule_versions", {
   retiredAt: timestamp("retired_at", { withTimezone: true }),
 }, (table) => [uniqueIndex("scoring_rule_versions_version_uq").on(table.version), uniqueIndex("scoring_rule_versions_checksum_uq").on(table.packageChecksum)]);
 
-export const clientVersionAssignments = pgTable("client_version_assignments", {
+export const deploymentVersionAssignments = pgTable("deployment_version_assignments", {
   id: varchar("id", { length: 26 }).primaryKey(),
-  clientId: varchar("client_id", { length: 26 }).notNull().references(() => clients.id),
+  deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),
   mode: versionAssignmentModeEnum("mode").notNull(),
   scoringRuleVersionId: varchar("scoring_rule_version_id", { length: 26 }).references(() => scoringRuleVersions.id),
   effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull().defaultNow(),
@@ -118,8 +115,8 @@ export const clientVersionAssignments = pgTable("client_version_assignments", {
   assignedBy: varchar("assigned_by", { length: 26 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  uniqueIndex("version_assignments_one_current_uq").on(table.clientId).where(sql`${table.effectiveUntil} is null`),
-  index("version_assignments_client_history_idx").on(table.clientId, table.effectiveFrom),
+  uniqueIndex("version_assignments_one_current_uq").on(table.deploymentId).where(sql`${table.effectiveUntil} is null`),
+  index("version_assignments_deployment_history_idx").on(table.deploymentId, table.effectiveFrom),
   check("version_assignment_mode_ck", sql`(${table.mode} = 'PINNED' and ${table.scoringRuleVersionId} is not null) or (${table.mode} = 'LATEST_APPROVED' and ${table.scoringRuleVersionId} is null)`),
   check("version_assignments_valid_period_ck", sql`${table.effectiveUntil} is null or ${table.effectiveUntil} > ${table.effectiveFrom}`),
 ]);
@@ -141,7 +138,7 @@ export const usageEvents = pgTable("usage_events", {
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("usage_deployment_idempotency_uq").on(table.deploymentId, table.capability, table.idempotencyKey),
-  index("usage_client_capability_month_idx").on(table.clientId, table.capability, table.occurredAt),
+  index("usage_deployment_capability_month_idx").on(table.deploymentId, table.capability, table.occurredAt),
   foreignKey({ columns: [table.clientId, table.deploymentId], foreignColumns: [deployments.clientId, deployments.id], name: "usage_authorized_deployment_client_fk" }),
   foreignKey({ columns: [table.deploymentId, table.credentialId], foreignColumns: [deploymentCredentials.deploymentId, deploymentCredentials.id], name: "usage_credential_deployment_fk" }),
 ]);

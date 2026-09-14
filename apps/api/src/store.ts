@@ -10,7 +10,7 @@ import { createEntityId } from "./lib/id";
 
 export type Client = CreateClient & { id: string; enabled: boolean };
 export type Deployment = CreateDeployment & { id: string; enabled: boolean };
-export type VersionAssignment = VersionAssignmentInput & { clientId: string };
+export type VersionAssignment = VersionAssignmentInput & { deploymentId: string };
 export type DeploymentIdentity = { credentialId: string; deploymentId: string; clientId: string };
 
 export type UsageReservation =
@@ -19,15 +19,15 @@ export type UsageReservation =
   | { status: "REJECTED"; reason: string };
 
 export interface ScoringStore {
-  overview(): Promise<{ clients: Client[]; deployments: Deployment[]; entitlements: Array<EntitlementInput & { clientId: string }>; assignments: VersionAssignment[]; versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean }> }>;
+  overview(): Promise<{ clients: Client[]; deployments: Deployment[]; entitlements: Array<EntitlementInput & { deploymentId: string }>; assignments: VersionAssignment[]; versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean }> }>;
   createClient(input: CreateClient): Promise<Client>;
   setClientEnabled(id: string, enabled: boolean): Promise<boolean>;
   createDeployment(input: CreateDeployment): Promise<Deployment>;
   setDeploymentEnabled(id: string, enabled: boolean): Promise<boolean>;
-  setEntitlement(clientId: string, input: EntitlementInput): Promise<void>;
-  assignVersion(clientId: string, input: VersionAssignmentInput): Promise<void>;
+  setEntitlement(deploymentId: string, input: EntitlementInput): Promise<void>;
+  assignVersion(deploymentId: string, input: VersionAssignmentInput): Promise<void>;
   storeActivationToken(input: { id: string; deploymentId: string; tokenHash: string; expiresAt: Date }): Promise<void>;
-  exchangeActivation(input: { tokenHash: string; clientReference: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }): Promise<{ deploymentId: string; clientId: string } | null>;
+  exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }): Promise<{ deploymentId: string; clientId: string } | null>;
   authenticateDeployment(keyPrefix: string, secretHash: string): Promise<DeploymentIdentity | null>;
   reserveUsage(input: { identity: DeploymentIdentity; clientId: string; capability: Capability; idempotencyKey: string; assessmentReference: string; platformEnabled: boolean }): Promise<UsageReservation>;
   completeUsage(usageId: string, response: unknown): Promise<void>;
@@ -44,7 +44,7 @@ type Usage = { id: string; clientId: string; deploymentId: string; capability: C
 export class MemoryScoringStore implements ScoringStore {
   clients: Client[] = [];
   deployments: Deployment[] = [];
-  entitlements: Array<EntitlementInput & { clientId: string }> = [];
+  entitlements: Array<EntitlementInput & { deploymentId: string }> = [];
   assignments: VersionAssignment[] = [];
   activations: Activation[] = [];
   credentials: Credential[] = [];
@@ -57,14 +57,14 @@ export class MemoryScoringStore implements ScoringStore {
   async setClientEnabled(id: string, enabled: boolean) { const row = this.clients.find((item) => item.id === id); if (!row) return false; row.enabled = enabled; return true; }
   async createDeployment(input: CreateDeployment) { const value = { id: createEntityId(), ...input, enabled: true }; this.deployments.push(value); return value; }
   async setDeploymentEnabled(id: string, enabled: boolean) { const row = this.deployments.find((item) => item.id === id); if (!row) return false; row.enabled = enabled; return true; }
-  async setEntitlement(clientId: string, input: EntitlementInput) { this.entitlements = this.entitlements.filter((item) => item.clientId !== clientId || item.capability !== input.capability); this.entitlements.push({ clientId, ...input }); }
-  async assignVersion(clientId: string, input: VersionAssignmentInput) { this.assignments = this.assignments.filter((item) => item.clientId !== clientId); this.assignments.push({ clientId, ...input }); }
+  async setEntitlement(deploymentId: string, input: EntitlementInput) { this.entitlements = this.entitlements.filter((item) => item.deploymentId !== deploymentId || item.capability !== input.capability); this.entitlements.push({ deploymentId, ...input }); }
+  async assignVersion(deploymentId: string, input: VersionAssignmentInput) { this.assignments = this.assignments.filter((item) => item.deploymentId !== deploymentId); this.assignments.push({ deploymentId, ...input }); }
   async storeActivationToken(input: { deploymentId: string; tokenHash: string; expiresAt: Date }) { this.activations.push({ deploymentId: input.deploymentId, tokenHash: input.tokenHash, expiresAt: input.expiresAt, usedAt: null }); }
-  async exchangeActivation(input: { tokenHash: string; clientReference: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
+  async exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
     const token = this.activations.find((item) => item.tokenHash === input.tokenHash && !item.usedAt && item.expiresAt > input.now);
     if (!token) return null;
     const deployment = this.deployments.find((item) => item.id === token.deploymentId)!;
-    const client = this.clients.find((item) => deployment.clientId === item.id && item.externalReference === input.clientReference);
+    const client = this.clients.find((item) => deployment.clientId === item.id);
     if (!client) return null;
     token.usedAt = input.now;
     this.credentials.push({ credentialId: input.credentialId, deploymentId: token.deploymentId, clientId: deployment.clientId, keyPrefix: input.keyPrefix, secretHash: input.secretHash });
@@ -78,12 +78,12 @@ export class MemoryScoringStore implements ScoringStore {
     const duplicate = this.usages.find((item) => item.deploymentId === input.identity.deploymentId && item.capability === input.capability && item.idempotencyKey === input.idempotencyKey);
     if (duplicate?.response !== undefined) return { status: "DUPLICATE", usageId: duplicate.id, response: duplicate.response };
     if (duplicate?.outcome === "PENDING") return { status: "REJECTED", reason: "REQUEST_IN_PROGRESS" };
-    const entitlement = this.entitlements.find((item) => item.clientId === input.clientId && item.capability === input.capability);
-    const assignment = this.assignments.find((item) => item.clientId === input.clientId);
+    const entitlement = this.entitlements.find((item) => item.deploymentId === input.identity.deploymentId && item.capability === input.capability);
+    const assignment = this.assignments.find((item) => item.deploymentId === input.identity.deploymentId);
     const resolvedVersion = assignment?.mode === "PINNED"
       ? this.versions.find((item) => item.id === assignment.scoringRuleVersionId)
       : this.versions.find((item) => item.lifecycle === "APPROVED" || item.lifecycle === "ACTIVE");
-    const usage = this.usages.filter((item) => item.clientId === input.clientId && item.capability === input.capability && item.outcome !== "FAILED").length;
+    const usage = this.usages.filter((item) => item.deploymentId === input.identity.deploymentId && item.capability === input.capability && item.outcome !== "FAILED").length;
     const decision = decideEntitlement({ platformEnabled: input.platformEnabled, clientEnabled: Boolean(client?.enabled), deploymentEnabled: Boolean(deployment.enabled), versionActive: input.capability === "FACE_SCAN" || resolvedVersion?.version === PROVISIONAL_SCORING_VERSION, monthlyLimit: entitlement?.monthlyLimit ?? null, monthlyUsage: usage });
     if (!entitlement?.enabled) return { status: "REJECTED", reason: "CAPABILITY_DISABLED" };
     if (!decision.allowed) return { status: "REJECTED", reason: decision.reason };

@@ -73,15 +73,17 @@ export function createApp(options: AppOptions) {
     return parsed.success ? context.json(await options.store.createDeployment(parsed.data), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
   });
   app.patch("/admin/deployments/:id/enabled", async (context) => updateEnabled(context, options.store.setDeploymentEnabled.bind(options.store)));
-  app.put("/admin/clients/:id/entitlement", async (context) => {
+  app.put("/admin/deployments/:id/entitlement", async (context) => {
     const id = ulidSchema.safeParse(context.req.param("id")); const body = entitlementInputSchema.safeParse(await parseJson(context));
     if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    await options.store.setEntitlement(id.data, body.data); return context.json({ clientId: id.data, ...body.data });
+    if (!(await options.store.overview()).deployments.some(d => d.id === id.data)) return context.json({ error: "NOT_FOUND" }, 404);
+    await options.store.setEntitlement(id.data, body.data); return context.json({ deploymentId: id.data, ...body.data });
   });
-  app.put("/admin/clients/:id/version-assignment", async (context) => {
+  app.put("/admin/deployments/:id/version-assignment", async (context) => {
     const id = ulidSchema.safeParse(context.req.param("id")); const body = versionAssignmentInputSchema.safeParse(await parseJson(context));
     if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    await options.store.assignVersion(id.data, body.data); return context.json({ clientId: id.data, ...body.data });
+    if (!(await options.store.overview()).deployments.some(d => d.id === id.data)) return context.json({ error: "NOT_FOUND" }, 404);
+    await options.store.assignVersion(id.data, body.data); return context.json({ deploymentId: id.data, ...body.data });
   });
   app.post("/admin/deployments/:id/activation-token", async (context) => {
     const id = ulidSchema.safeParse(context.req.param("id")); const body = activationTokenInputSchema.safeParse(await parseJson(context));
@@ -95,7 +97,7 @@ export function createApp(options: AppOptions) {
   app.post("/v1/activate", async (context) => {
     const parsed = activationExchangeSchema.safeParse(await parseJson(context)); if (!parsed.success) return context.json({ error: "INVALID_REQUEST" }, 400);
     const prefix = randomSecret(9).slice(0, 12); const credential = `niq_dep_${prefix}.${randomSecret(32)}`;
-    const exchanged = await options.store.exchangeActivation({ tokenHash: await sha256(parsed.data.activationToken), clientReference: parsed.data.clientReference, credentialId: createEntityId(), keyPrefix: prefix, secretHash: await sha256(credential), now: now() });
+    const exchanged = await options.store.exchangeActivation({ tokenHash: await sha256(parsed.data.activationToken), credentialId: createEntityId(), keyPrefix: prefix, secretHash: await sha256(credential), now: now() });
     context.header("cache-control", "no-store");
     return exchanged ? context.json({ deploymentId: exchanged.deploymentId, clientId: exchanged.clientId, credential }, 201) : context.json({ error: "ACTIVATION_INVALID_OR_EXPIRED" }, 401);
   });
