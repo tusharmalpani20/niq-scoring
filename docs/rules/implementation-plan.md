@@ -159,3 +159,10 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Independent read-only backend audit found no blocking defect in inspected CRUD/lifecycle/consumption paths. It identified narrower PostgreSQL coverage for ACTIVE, immutable mutations, validation reset and latest-approved resolution; these remain final verification work.
 - Corrected a contract mismatch: supported text fields allow up to 20,000 characters, but answer transport/sample schemas previously reused the 5,000-character condition-literal limit. Answers now accept the field-level maximum while comparison literals retain their smaller bound. Regression checks cover exact maximum, oversized rejection and sample persistence shape.
 - Workspace tests and all six typechecks pass. Two opt-in database tests were skipped in the ordinary workspace run. Final combined browser/build/database verification remains pending.
+
+### PostgreSQL and combined verification checkpoint
+
+- Added rollback-only PostgreSQL checks for validation invalidation on edit, revalidation/approval/ACTIVE, immutable store saves/deletes and direct SQL trigger protection. Latest-approved checks verify new-version selection, fixed prior bindings, retirement fallback and retained retired-version bindings.
+- All three opted-in PostgreSQL tests pass (39 assertions). Complete browser suites pass: 20 controlled-API desktop/mobile runs and 4 real-API runs. Workspace tests and six typechecks pass; production build passes.
+- Build retains a 757.17 kB main bundle warning (230.81 kB gzip) and two upstream Zod annotation warnings. No new dependencies introduced.
+- Updated completion audit evidence. Final migration/data-preservation and changed-scope reconciliation remain before marking the goal complete.
