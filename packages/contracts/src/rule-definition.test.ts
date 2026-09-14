@@ -51,3 +51,20 @@ test("resolved issues require a recorded resolution", () => {
   const d = fixture(); d.issues = [{ id: "issue", path: "scoring", message: "Needs review", resolved: true, blocking: true, resolution: "", sources: [] }];
   expect(validateRuleDefinition(d).map(i => i.code)).toContain("MISSING_RESOLUTION");
 });
+
+test("classifications cover both score endpoints after caps and rounding", () => {
+  const d = fixture(); const rule = d.scoring[0]!;
+  if (rule.kind !== "ranges") throw new Error("fixture");
+  rule.bands = [
+    { id: "low", min: 0, max: 5, minInclusive: true, maxInclusive: false, points: -1.234 },
+    { id: "high", min: 5, max: 10, minInclusive: true, maxInclusive: true, points: 9 },
+  ];
+  d.domains[0]!.cap = 8; d.total.cap = 7; d.total.precision = 2;
+  d.classifications[0]!.min = -1.23; d.classifications[0]!.max = 7;
+  expect(validateRuleDefinition(d)).toEqual([]);
+  d.classifications[0]!.minInclusive = false;
+  expect(validateRuleDefinition(d).map(i => i.code)).toContain("CLASSIFICATION_COVERAGE");
+  d.classifications[0]!.minInclusive = true;
+  d.classifications[0]!.max = 6.99;
+  expect(validateRuleDefinition(d).map(i => i.code)).toContain("CLASSIFICATION_COVERAGE");
+});

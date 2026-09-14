@@ -1,3 +1,4 @@
+import { ruleScoreBounds } from "./rule-score-bounds";
 import { type DefinitionIssue, type RuleCondition, type RuleDefinition, type RuleRange, type RuleReference } from "./rule-definition";
 
 export function inRange(value: number, range: RuleRange): boolean {
@@ -126,6 +127,11 @@ export function validateRuleDefinition(definition: RuleDefinition): DefinitionIs
   });
   definition.classifications.forEach((band, index) => unique(band.id, `classifications.${index}`));
   ranges(definition.classifications, "classifications");
+  const scoreBounds = ruleScoreBounds(definition);
+  if (scoreBounds && definition.classifications.length &&
+    (!definition.classifications.some(b => inRange(scoreBounds.min, b)) || !definition.classifications.some(b => inRange(scoreBounds.max, b)))) {
+    add("classifications", "CLASSIFICATION_COVERAGE", `Classifications must cover the configured score bounds (${scoreBounds.min} to ${scoreBounds.max}), including both endpoints.`, "blocking");
+  }
   if (!definition.sections.length) add("sections", "NO_QUESTIONS", "Add questionnaire sections.", "blocking");
   if (!definition.scoring.length) add("scoring", "NO_SCORING", "Define scoring rules.", "blocking");
   if (!definition.classifications.length) add("classifications", "NO_CLASSIFICATIONS", "Define score classifications.", "blocking");

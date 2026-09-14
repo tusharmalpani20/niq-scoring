@@ -133,3 +133,10 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Browser back-navigation exposed a confirmation bug: the dialog automatic close reset a navigation blocker after Discard proceeded. Both creation and editing now prevent that automatic close when proceeding with blocked navigation.
 - Twelve editor browser runs pass across desktop and mobile, including Keep editing/Discard for creation and editing, template-only cancellation, existing conflicts, reference removal and preview behavior. Admin typecheck and diff whitespace checks pass. The before-unload listener was added but native reload confirmation was not separately exercised in this checkpoint.
 - No new dependencies. Semantic validation review, visual inspection and final requirement audit remain open.
+
+### Classification coverage audit
+
+- Found that existing range validation detected internal gaps/overlaps but allowed classifications to omit the lowest or highest configured score. Added approval-blocking coverage validation using component outcomes, nonempty selection aggregation, domain aggregation/caps and final aggregation/cap/rounding.
+- Documented that these bounds are conservative: validation does not solve correlations between separate rules, and requires continuous classification coverage across the configured interval. No clinical thresholds or missing-answer defaults are generated.
+- Regression checks cover negative points, endpoint exclusivity, rounding, selection sum/max, singleton selections, conditional outcomes and caps. Workspace tests and all six typechecks pass; two database tests remain opt-in and were not rerun for this contracts-only change. All four real-API browser runs pass on desktop/mobile, including synthetic authoring through approval/activation/retirement.
+- Responsive visual inspection and final requirement-by-requirement completion proof remain open.
