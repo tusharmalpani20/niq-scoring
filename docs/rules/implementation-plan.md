@@ -146,3 +146,9 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Inspected desktop and mobile screenshots of the synthetic questionnaire preview. The mobile view clipped the sample-creation action horizontally. Preview actions now wrap, and reviewed screenshots show all three actions within the content area.
 - Added a browser layout regression checking button bounds before any automatic scrolling and checking nested layout containers for horizontal overflow. Two desktop/mobile runs pass. Intentionally clipped screen-reader text is excluded from layout-container checks.
 - Admin typecheck passes. This visual review covers the preview fixture only; broader editor visual review and final completion audit remain open.
+
+### Spreadsheet editor layout audit
+
+- Extended desktop/mobile layout checks across all six tabs using the full spreadsheet template, including an expanded selection question. Found intrinsic fieldset width overflowing option editors on mobile; option fieldsets now shrink to the available width and nested action groups wrap.
+- All four layout runs pass. Reviewed mobile screenshots for Details, Questionnaire, Scoring and Validation, confirming readable single-column controls and the persistent footer. Other tab width checks pass, but this does not represent visual review of every possible authored rule configuration.
+- Admin typecheck passes. Final requirement-by-requirement audit remains outstanding.
