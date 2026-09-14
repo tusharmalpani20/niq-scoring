@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Ban, CircleCheck, Plus, X } from "lucide-react";
 import { z } from "zod";
+import { clientSchema } from "./client-validation";
 import type { Overview } from "./Operations";
 import { request, message } from "./api";
 import { FormInput, ErrorNotice } from "./shared";
@@ -18,7 +19,6 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
 
-const clientSchema = z.object({ name: z.string().trim().min(2, "Enter at least 2 characters.").max(200, "Use at most 200 characters.") });
 export function Clients({ data, refresh }: { data: Overview; refresh: () => Promise<void> }) {
   const [accessClient, setAccessClient] = useState<Overview["clients"][number] | null>(null);
   const [accessBusy, setAccessBusy] = useState(false);
@@ -29,7 +29,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const form = useForm<z.infer<typeof clientSchema>>({ resolver: zodResolver(clientSchema), defaultValues: { name: "" } });
+  const form = useForm<z.infer<ReturnType<typeof clientSchema>>>({ resolver: zodResolver(clientSchema(data.clients)), defaultValues: { name: "" } });
   const { isDirty } = form.formState;
   const query = search.trim().toLocaleLowerCase();
   const clients = paginate(data.clients.filter(client => client.name.toLocaleLowerCase().includes(query)), page);
@@ -39,7 +39,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
     if (!next && isDirty) { setConfirmClose(true); return; }
     if (next) setOpen(true); else close();
   }
-  async function create(values: z.infer<typeof clientSchema>) {
+  async function create(values: z.infer<ReturnType<typeof clientSchema>>) {
     setBusy(true); setError("");
     try {
       await request("/admin/clients", values);
