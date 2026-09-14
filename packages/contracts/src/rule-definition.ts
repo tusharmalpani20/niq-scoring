@@ -44,7 +44,9 @@ export const scoringRuleSchema = z.discriminatedUnion("kind", [
   z.object({ ...scoringBase, kind: z.literal("ranges"), input: z.object({ kind: z.enum(["question", "calculation"]), id: ruleIdSchema }).strict(), bands: z.array(rangeSchema.extend({ id: ruleIdSchema, points: finite })).min(1).max(100) }).strict(),
   z.object({ ...scoringBase, kind: z.literal("condition"), when: conditionSchema, points: finite, otherwise: finite }).strict(),
 ]);
-export const answerValueSchema = z.union([scalarSchema, z.array(z.string().max(80)).max(200), z.null()]);
+// Text answers follow field validation (up to 20,000 characters); comparison
+// literals retain their separate, smaller authoring limit.
+export const answerValueSchema = z.union([z.string().max(20000), finite, z.boolean(), z.array(z.string().max(80)).max(200), z.null()]);
 export const answersSchema = z.record(ruleIdSchema, answerValueSchema).refine(value => Object.keys(value).length <= 500, "Too many answers.");
 export const ruleDefinitionSchema = z.object({
   formatVersion: z.literal(1),

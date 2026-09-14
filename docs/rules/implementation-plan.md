@@ -152,3 +152,10 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Extended desktop/mobile layout checks across all six tabs using the full spreadsheet template, including an expanded selection question. Found intrinsic fieldset width overflowing option editors on mobile; option fieldsets now shrink to the available width and nested action groups wrap.
 - All four layout runs pass. Reviewed mobile screenshots for Details, Questionnaire, Scoring and Validation, confirming readable single-column controls and the persistent footer. Other tab width checks pass, but this does not represent visual review of every possible authored rule configuration.
 - Admin typecheck passes. Final requirement-by-requirement audit remains outstanding.
+
+### Requirement evidence audit
+
+- Added `completion-audit.md`, mapping all thirteen goal sections to implementation and verification evidence, with remaining verification explicitly separated from completion claims.
+- Independent read-only backend audit found no blocking defect in inspected CRUD/lifecycle/consumption paths. It identified narrower PostgreSQL coverage for ACTIVE, immutable mutations, validation reset and latest-approved resolution; these remain final verification work.
+- Corrected a contract mismatch: supported text fields allow up to 20,000 characters, but answer transport/sample schemas previously reused the 5,000-character condition-literal limit. Answers now accept the field-level maximum while comparison literals retain their smaller bound. Regression checks cover exact maximum, oversized rejection and sample persistence shape.
+- Workspace tests and all six typechecks pass. Two opt-in database tests were skipped in the ordinary workspace run. Final combined browser/build/database verification remains pending.

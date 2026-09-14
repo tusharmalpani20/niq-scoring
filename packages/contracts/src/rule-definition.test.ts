@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { blankRuleDefinition, questionSchema, ruleDefinitionSchema } from "./rule-definition";
+import { answersSchema, blankRuleDefinition, conditionSchema, questionSchema, ruleDefinitionSchema } from "./rule-definition";
 import { validateRuleDefinition } from "./rule-validation";
 
 function fixture() {
@@ -67,4 +67,16 @@ test("classifications cover both score endpoints after caps and rounding", () =>
   d.classifications[0]!.minInclusive = true;
   d.classifications[0]!.max = 6.99;
   expect(validateRuleDefinition(d).map(i => i.code)).toContain("CLASSIFICATION_COVERAGE");
+});
+
+
+test("text answer limits match supported field lengths without widening conditions", () => {
+  const d = fixture();
+  d.sections[0]!.questions[0] = questionSchema.parse({ id: "note", label: "Note", type: "long_text", purpose: "assessment", required: false, validation: { maxLength: 20000 } });
+  const answers = { note: "a".repeat(20000) };
+  expect(answersSchema.safeParse(answers).success).toBe(true);
+  d.samples = [{ id: "sample", name: "Long note", answers, expected: { complete: false, score: null, classificationId: null, interventionIds: [], domains: {}, calculations: {} } }];
+  expect(ruleDefinitionSchema.safeParse(d).success).toBe(true);
+  expect(answersSchema.safeParse({ note: "a".repeat(20001) }).success).toBe(false);
+  expect(conditionSchema.safeParse({ match: "all", tests: [{ ref: { kind: "question", id: "note" }, operator: "eq", value: "a".repeat(5001) }] }).success).toBe(false);
 });
