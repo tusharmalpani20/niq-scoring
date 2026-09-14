@@ -1,50 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
-import { blankRuleDefinition, questionSchema, type RuleDefinition } from "@niq-scoring/contracts/rules";
-import type { EditableRule } from "../src/rules/rule-api";
-
-// Every API request is intercepted. These interaction tests never use a real
-// session, database, clinical rule or deployment, including when they fail.
-async function mockConsole(page: Page, definition?: RuleDefinition) {
-  let record: EditableRule | null = null;
-  const state = { createError: "", saveError: "", createRequests: [] as Array<{ requestId: string; name: string }>, getRecord: () => record };
-  await page.route("**/api/**", async route => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-    const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
-    if (path === "/api/auth/status") return json({ setupRequired: false });
-    if (path === "/api/auth/session") return json({ user: { id: "synthetic-admin", displayName: "Browser QA", enabled: true } });
-    if (path === "/api/admin/overview") return json({ clients: [], deployments: [], assignments: [], entitlements: [], versions: [] });
-    if (path === "/api/admin/rules" && request.method() === "GET") return json({ versions: record ? [record] : [] });
-    if (path === "/api/admin/rules" && request.method() === "POST") {
-      const body = request.postDataJSON();
-      state.createRequests.push(body);
-      if (state.createError) return json({ error: state.createError }, 409);
-      record = { id: "synthetic-rule", version: body.name, lifecycle: "DRAFT", clinicalUsePermitted: false,
-        revision: 1, packageChecksum: "synthetic", editable: true, definition: definition ? { ...structuredClone(definition), name: body.name } : blankRuleDefinition(body.name) };
-      return json(record);
-    }
-    if (path === "/api/admin/rules/synthetic-rule" && record) {
-      if (request.method() === "GET") return json(record);
-      if (request.method() === "PUT") {
-        if (state.saveError) return json({ error: state.saveError }, 409);
-        const body = request.postDataJSON();
-        expect(body.revision).toBe(record.revision);
-        record = { ...record, version: body.definition.name, definition: body.definition, revision: record.revision + 1 };
-        return json(record);
-      }
-    }
-    return json({ error: "UNEXPECTED_TEST_REQUEST" }, 500);
-  });
-  return state;
-}
-
-async function startDraft(page: Page) {
-  await page.goto("/versions");
-  await page.getByRole("button", { name: "Create rule version", exact: true }).click();
-  await page.getByLabel("Version name", { exact: true }).fill("Synthetic browser draft");
-  await page.getByLabel("Starting point", { exact: true }).selectOption("blank");
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-}
+import { expect, test } from "@playwright/test";
+import { blankRuleDefinition, questionSchema } from "@niq-scoring/contracts/rules";
+import { mockConsole, startDraft } from "./rule-fixture";
 
 test("creation retry preserves setup and request identity", async ({ page }) => {
   const state = await mockConsole(page);

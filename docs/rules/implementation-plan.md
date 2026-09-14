@@ -94,3 +94,10 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Added desktop and mobile interaction coverage for configuring a boolean visibility condition, explicit yes/no preview behavior, missing comparison validation, and reference-removal warnings. The test checks both keeping a referenced field and deliberately removing it, then proves the invalid definition cannot overwrite the saved draft.
 - Reproduced and fixed a bug where clearing a boolean comparison selected `false`. The unset choice now remains unset, and saving requires an explicit comparison value.
 - All eight browser runs pass. Scoring/intervention/sample authoring, lifecycle interactions, full-stack browser review and final completion audit remain outstanding.
+
+### Scoring and sample interaction checkpoint
+
+- Added desktop/mobile authoring coverage for option points (including explicit zero), domain/total caps, protected referenced-domain removal, classifications, intervention conditions/type/priority, and independent complete sample expectations.
+- Browser checks exercise failing sample validation, expected-versus-actual messages, issue-link focus, correction and validation, approval cancellation/confirmation, and read-only controls after approval.
+- Shared test fixtures use the real pure validators for check results and controlled lifecycle responses for frontend state. They do not prove database lifecycle enforcement; backend and PostgreSQL tests cover that separately.
+- All ten browser runs and frontend typechecking passed. No production data changed. Remaining verification includes range/calculation editing, activation/retirement and duplication/deletion flows, full-stack browser review, further semantic validation audit and the final requirement-by-requirement audit.
