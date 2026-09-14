@@ -1,17 +1,17 @@
 # Administrator accounts
 
-This console is restricted to NIQ staff. Every account currently has the same NIQ administrator permissions, including customer configuration and administrator user management. Customers and clinicians do not sign in here. Customer deployment credentials authenticate a separate set of service-to-service endpoints.
+This console is restricted to NIQ staff. Every account currently has the same NIQ administrator permissions, including client configuration and administrator user management. Clients and clinicians do not sign in here. Client deployment credentials authenticate a separate set of service-to-service endpoints.
 
 ## First administrator
 
 1. Apply the database migrations with `bun run db:migrate`.
-2. Configure an independent high-entropy `ADMIN_BOOTSTRAP_TOKEN` in the protected API environment. Do not reuse a customer activation token or deployment credential.
+2. Configure an independent high-entropy `ADMIN_BOOTSTRAP_TOKEN` in the protected API environment. Do not reuse a client activation token or deployment credential.
 3. Open the console at `http://localhost:4173`. On a fresh database it presents first-administrator setup.
 4. Enter the setup token, administrator name, email address and a password of 8–128 characters.
 5. Sign in with the new account. Setup does not automatically create a session.
 6. Remove `ADMIN_BOOTSTRAP_TOKEN` from the runtime configuration and restart the API. Setup remains closed once an account exists, even if the token is retained accidentally.
 
-Existing customer and deployment records are unaffected. The former shared administration bearer token can no longer unlock the console or authorize `/admin/*` requests.
+Existing client and deployment records are unaffected. The former shared administration bearer token can no longer unlock the console or authorize `/admin/*` requests.
 
 ## Additional administrators
 
@@ -29,6 +29,6 @@ Authentication attempts are rate limited in PostgreSQL, so the limit is shared a
 
 ## Scope of this first phase
 
-The console uses shadcn/ui components and separate pages for Overview, Users, Customers, Organizations, Deployments and Rule versions. Forms use shadcn Field components with React Hook Form and Zod validation, including field-level error messages. This change establishes administrator access and navigation; it does not implement clinical rule approval or provider integration.
+The console uses shadcn/ui components and separate pages for Overview, Users, Clients, Clients, Deployments and Rule versions. Forms use shadcn Field components with React Hook Form and Zod validation, including field-level error messages. This change establishes administrator access and navigation; it does not implement clinical rule approval or provider integration.
 
 MFA/SSO, self-service password recovery and automated invitation email delivery remain follow-up work. Complete the required workforce MFA integration before production rollout. Do not restore the old shared-token administration bypass as a workaround for account recovery.

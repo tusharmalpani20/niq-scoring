@@ -1,3 +1,10 @@
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
+import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
+import { paginate } from "./pagination";
+import { Plus } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./components/ui/dialog";
+import { Card, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,7 +14,7 @@ import type { z } from "zod";
 import { useEffect, useState } from "react";
 import { request, message, type User } from "./api";
 import { Button } from "./components/ui/button";
-import { ErrorNotice, FormInput, Panel, Secret } from "./shared";
+import { ErrorNotice, FormInput } from "./shared";
 type Invitation = {
   id: string;
   email: string;
@@ -21,11 +28,18 @@ export function Users({ currentUser }: { currentUser: User }) {
     invitations: Invitation[];
   } | null>(null);
   const [error, setError] = useState("");
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [userPage, setUserPage] = useState(1);
+  const [invitationPage, setInvitationPage] = useState(1);
+  const [activeTab, setActiveTab] = useState("users");
   const [busy, setBusy] = useState(false);
   const form = useForm<z.infer<typeof invitationSchema>>({
     resolver: zodResolver(invitationSchema),
     defaultValues: { displayName: "", email: "" },
   });
+  const { isDirty } = form.formState;
   const [secret, setSecret] = useState<{
     value: string;
     expiresAt: string;
@@ -57,21 +71,120 @@ export function Users({ currentUser }: { currentUser: User }) {
         invitationToken: string;
         expiresAt: string;
       }>("/admin/users/invitations", { email, displayName });
+      setCopied(false);
       setSecret({
         value: `${location.origin}/accept-invitation#token=${encodeURIComponent(result.invitationToken)}`,
         expiresAt: result.expiresAt,
       });
       form.reset();
+      setInvitationPage(1);
+      setActiveTab("invitations");
     });
   }
+  const users = paginate(data?.users ?? [], userPage);
+  const invitations = paginate(data?.invitations ?? [], invitationPage);
+  const current = activeTab === "users" ? users : invitations;
+  const setPage = activeTab === "users" ? setUserPage : setInvitationPage;
   return (
     <>
-      <ErrorNotice error={error} />
-      <div className="page-grid">
-        <Panel
-          title="NIQ administrators"
-          description="Every enabled user has administrator access to this console."
-        >
+      {!inviteOpen && <ErrorNotice error={error} />}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-5">
+        <div className="flex items-center justify-between gap-3 border-b pb-2">
+          <TabsList variant="line" aria-label="User management" className="gap-2 p-0 sm:gap-5">
+            <TabsTrigger value="users" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Users {data && <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{users.total}</Badge>}</TabsTrigger>
+            <TabsTrigger value="invitations" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Pending invitations {data && <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{invitations.total}</Badge>}</TabsTrigger>
+          </TabsList>
+          <Dialog open={inviteOpen} onOpenChange={(open) => {
+            if (busy) return;
+            if (!open && (secret ? !copied : isDirty)) { setConfirmClose(true); return; }
+            setInviteOpen(open);
+            if (!open) { form.reset(); setSecret(null); setCopied(false); setConfirmClose(false); setError(""); }
+          }}>
+            <DialogTrigger asChild>
+              <Button size="icon" aria-label="Invite user" title="Invite user">
+                <Plus aria-hidden="true" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="min-w-0 max-h-[90dvh] overflow-y-auto [&>*]:min-w-0">
+              <DialogHeader>
+                <DialogTitle>{secret ? "Invitation created" : "Invite user"}</DialogTitle>
+                <DialogDescription>
+                  {secret ? "Share the invite link with your teammate to help them get started." : "Invite a colleague to administer NIQ Scoring."}
+                </DialogDescription>
+              </DialogHeader>
+              <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{secret ? "Close without copying the link?" : "Discard invitation?"}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {secret ? "You haven’t copied the invite link yet. You won’t be able to retrieve it after closing. The invitation will remain active until it expires or you revoke it." : "You have unsaved details. If you leave now, they’ll be discarded and no invitation will be created."}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{secret ? "Keep it open" : "Keep editing"}</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => {
+                      setConfirmClose(false);
+                      setInviteOpen(false);
+                      setSecret(null);
+                      setCopied(false);
+                      setError("");
+                      form.reset();
+                    }}>{secret ? "Close anyway" : "Discard"}</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <ErrorNotice error={error} />
+              {secret ? (
+                <div className="space-y-2">
+                  <Button variant="link" className="h-auto justify-start p-0 text-sm underline underline-offset-4" onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(secret.value);
+                      setCopied(true);
+                      setError("");
+                    } catch {
+                      setError("We couldn’t copy the link. Please try again.");
+                    }
+                  }}>
+                    {copied ? "Link copied · Copy again" : "Copy invite link"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Link expires on {new Date(secret.expiresAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })} at {new Date(secret.expiresAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}.
+                  </p>
+                  <span className="sr-only" role="status">{copied ? "Invitation link copied to clipboard." : ""}</span>
+                </div>
+              ) : (
+          <form
+            noValidate
+            onSubmit={form.handleSubmit(invite)}
+            className="form-stack"
+          >
+            <FormInput
+              control={form.control}
+              name="displayName"
+              label="Full name"
+              required
+              maxLength={120}
+            />
+            <FormInput
+              control={form.control}
+              name="email"
+              label="Email address"
+              type="email"
+              required
+            />
+            <Button disabled={busy}>
+              {busy ? "Please wait…" : "Create invitation"}
+            </Button>
+            <p className="muted">
+              Invitations are not sent by email automatically.
+            </p>
+          </form>
+              )}
+            </DialogContent>
+          </Dialog>
+        </div>
+        <TabsContent value="users">
+          <Card><CardContent className="pt-6">
           {!data ? (
             <p>Loading users…</p>
           ) : (
@@ -85,7 +198,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.users.map((u) => (
+                  {users.rows.map((u) => (
                     <TableRow key={u.id}>
                       <TableCell>
                         <strong>
@@ -123,54 +236,12 @@ export function Users({ currentUser }: { currentUser: User }) {
               </Table>
             </div>
           )}
-        </Panel>
-        <Panel
-          title="Invite administrator"
-          description="Create a one-time invitation link. Share it directly with your NIQ colleague."
-        >
-          <form
-            noValidate
-            onSubmit={form.handleSubmit(invite)}
-            className="form-stack"
-          >
-            <FormInput
-              control={form.control}
-              name="displayName"
-              label="Full name"
-              required
-              maxLength={120}
-            />
-            <FormInput
-              control={form.control}
-              name="email"
-              label="Email address"
-              type="email"
-              required
-            />
-            <Button disabled={busy}>
-              {busy ? "Please wait…" : "Create invitation"}
-            </Button>
-            <p className="muted">
-              Invitations are not sent by email automatically.
-            </p>
-          </form>
-        </Panel>
-      </div>
-      {secret && (
-        <Secret
-          label="One-time invitation link"
-          {...secret}
-          onDismiss={() => setSecret(null)}
-        />
-      )}
-      <Panel
-        title="Pending invitations"
-        description="Revoke an invitation to prevent it from being accepted."
-      >
+          </CardContent></Card>
+        </TabsContent>
+        <TabsContent value="invitations">
+          <Card><CardContent className="pt-6">
         {!data ? (
           <p>Loading invitations…</p>
-        ) : data.invitations.length === 0 ? (
-          <p className="empty">No pending invitations.</p>
         ) : (
           <div>
             <Table>
@@ -182,7 +253,16 @@ export function Users({ currentUser }: { currentUser: User }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.invitations.map((i) => (
+                {invitations.total === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3} className="h-32 text-center">
+                      <Button variant="outline" onClick={() => setInviteOpen(true)}>
+                        <Plus aria-hidden="true" /> Invite teammates
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {invitations.rows.map((i) => (
                   <TableRow key={i.id}>
                     <TableCell>
                       <strong>{i.displayName}</strong>
@@ -213,7 +293,24 @@ export function Users({ currentUser }: { currentUser: User }) {
             </Table>
           </div>
         )}
-      </Panel>
+          </CardContent></Card>
+        </TabsContent>
+        {data && (
+          <Pagination aria-label={`${activeTab === "users" ? "Users" : "Pending invitations"} pagination`} className="mt-4">
+            <PaginationContent>
+              <PaginationItem>
+                <Button variant="outline" size="sm" disabled={current.page === 1} onClick={() => setPage(current.page - 1)}>Previous</Button>
+              </PaginationItem>
+              <PaginationItem>
+                <span className="px-3 text-sm text-muted-foreground" role="status">Page {current.page} of {current.pageCount} · {current.total} total</span>
+              </PaginationItem>
+              <PaginationItem>
+                <Button variant="outline" size="sm" disabled={current.page === current.pageCount} onClick={() => setPage(current.page + 1)}>Next</Button>
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        )}
+      </Tabs>
     </>
   );
 }
