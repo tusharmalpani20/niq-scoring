@@ -19,7 +19,7 @@ function structure(d: RuleDefinition) {
         const { points: _points, cap: _cap, aggregation: _aggregation, ...fixed } = base;
         return fixed;
       }
-      if (base.kind === "ranges") return { ...base, bands: base.bands.map(({ points: _points, min: _min, max: _max, minInclusive: _mi, maxInclusive: _ma, ...band }) => band) };
+      if (base.kind === "ranges") { const { bands: _bands, ...fixed } = base; return fixed; }
       return { ...base, points: undefined, otherwise: undefined, when: { ...base.when, tests: base.when.tests.map(test => ({ ...test, value: typeof test.value === "number" ? undefined : test.value })) } };
     }),
     issues: d.issues.map(({ resolved: _resolved, resolution: _resolution, ...issue }) => issue),

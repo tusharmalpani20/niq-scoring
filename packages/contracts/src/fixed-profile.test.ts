@@ -37,3 +37,20 @@ test("fixed profile permits configured scores, source resolutions and caps", () 
   d.scoring[0]!.domainId = "unassigned";
   expect(validateRuleDefinition(d).some(i => i.code === "UNASSIGNED_DOMAIN")).toBe(true);
 });
+
+test("fixed numeric fields allow different scoring bands without changing input definitions", () => {
+  const d = createSpreadsheetTemplate('Range configuration');
+  const rule = d.scoring.find(r => r.kind === 'ranges');
+  if (!rule || rule.kind !== 'ranges') throw new Error('Expected a configured numeric field');
+  rule.bands = [
+    { id: 'custom_lower', min: null, max: 1, minInclusive: false, maxInclusive: false, points: 0 },
+    { id: 'custom_middle', min: 1, max: 2, minInclusive: true, maxInclusive: false, points: 1 },
+    { id: 'custom_upper', min: 2, max: null, minInclusive: true, maxInclusive: false, points: 2 },
+  ];
+  expect(isFixedRuleDefinition(d)).toBe(true);
+  expect(validateRuleDefinition(d).filter(i => i.severity === 'error')).toEqual([]);
+  rule.bands[0]!.max = 1.5;
+  expect(validateRuleDefinition(d).some(i => i.code === 'OVERLAPPING_RANGES')).toBe(true);
+  rule.input.id = 'height_cm';
+  expect(isFixedRuleDefinition(d)).toBe(false);
+});
