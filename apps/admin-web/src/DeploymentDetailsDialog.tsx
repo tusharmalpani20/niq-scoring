@@ -17,8 +17,8 @@ export function DeploymentDetailsDialog({ data, deployment, clientName, hostingL
     <DialogContent aria-describedby={undefined} className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
       <DialogHeader><DialogTitle>{clientName}</DialogTitle></DialogHeader>
       <Tabs defaultValue={initialTab} className="gap-5">
-        <TabsList variant="line" aria-label="Deployment information">
-          <TabsTrigger value="details">Details</TabsTrigger><TabsTrigger value="tokens">Tokens</TabsTrigger>
+        <TabsList variant="line" aria-label="Deployment information" className="h-11 w-full justify-start gap-6 rounded-none border-b p-0">
+          <TabsTrigger className="h-full flex-none rounded-none border-0 bg-transparent px-1 shadow-none data-[state=active]:bg-transparent data-[state=active]:text-primary after:bottom-0 after:bg-primary" value="details">Details</TabsTrigger><TabsTrigger className="h-full flex-none rounded-none border-0 bg-transparent px-1 shadow-none data-[state=active]:bg-transparent data-[state=active]:text-primary after:bottom-0 after:bg-primary" value="tokens">Tokens</TabsTrigger>
         </TabsList>
         <TabsContent value="details">
           <dl className="grid gap-5 sm:grid-cols-2">

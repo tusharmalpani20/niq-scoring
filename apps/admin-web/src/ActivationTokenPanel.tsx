@@ -1,3 +1,4 @@
+import { Plus, Copy, Check, Ban } from "lucide-react";
 import { useEffect, useState } from "react";
 import { request, message } from "./api";
 import { Button } from "./components/ui/button";
@@ -16,6 +17,7 @@ export function ActivationTokenPanel({ deploymentId, disabled }: { deploymentId:
   const [error, setError] = useState("");
   const [expiry, setExpiry] = useState("7");
   const [date, setDate] = useState("");
+  const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(1);
   async function load() {
     const result = await request<{ tokens: TokenRow[] }>(`/admin/deployments/${deploymentId}/activation-tokens`);
@@ -36,25 +38,31 @@ export function ActivationTokenPanel({ deploymentId, disabled }: { deploymentId:
   }
   const rows = paginate(tokens, page);
   return <section className="space-y-4" aria-label="Activation tokens">
-    <h3 className="font-medium">Activation tokens</h3>
-    <TokenExpirySelect value={expiry} date={date} onValueChange={setExpiry} onDateChange={setDate} disabled={disabled || busy} />
-    <Button type="button" variant="outline" disabled={busy || disabled} onClick={() => action(async () => {
-      await request<ActivationToken>(`/admin/deployments/${deploymentId}/activation-token`, tokenExpiry(expiry, date)); setPage(1);
-    })}>Generate token</Button>
-    <p className="text-sm text-muted-foreground">A new token replaces any unused token. Connected installations keep working.</p>
+    <div className="flex items-center justify-between gap-3"><h3 className="font-medium">Activation tokens</h3>
+      <Button type="button" size="icon" title="Create token" aria-label="Create token" disabled={busy || disabled} onClick={() => { setCreating(value => !value); setError(""); }}><Plus className="size-4" /></Button>
+    </div>
+    {creating && <div className="space-y-4 rounded-lg border p-4">
+      <TokenExpirySelect value={expiry} date={date} onValueChange={setExpiry} onDateChange={setDate} disabled={disabled || busy} />
+      <p className="text-sm text-muted-foreground">A new token replaces any unused token. Connected installations keep working.</p>
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setCreating(false)}>Cancel</Button>
+        <Button type="button" disabled={busy || disabled} onClick={() => action(async () => {
+          await request<ActivationToken>(`/admin/deployments/${deploymentId}/activation-token`, tokenExpiry(expiry, date)); setPage(1); setCreating(false);
+        })}>{busy ? "Creating…" : "Create"}</Button>
+      </div>
+    </div>}
     <Table><TableHeader><TableRow><TableHead>Token</TableHead><TableHead>Created</TableHead><TableHead>Expiry</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
       <TableBody>{rows.rows.map(token => <TableRow key={token.id}>
-        <TableCell className="whitespace-nowrap">Token …{token.id.slice(-6)}</TableCell>
+        <TableCell className="whitespace-nowrap">NIQ …{token.id.slice(-6)}</TableCell>
         <TableCell className="whitespace-nowrap">{new Date(token.createdAt).toLocaleDateString()}</TableCell>
         <TableCell className="whitespace-nowrap">{token.expiresAt ? new Date(token.expiresAt).toLocaleString() : "Never"}</TableCell>
         <TableCell><Badge variant={token.status === "Unused" ? "default" : "secondary"}>{token.status}</Badge></TableCell>
         <TableCell><div className="flex gap-2">
-          {token.status === "Unused" && <><Button type="button" size="sm" variant="ghost" disabled={disabled || busy || !token.canCopy} onClick={() => action(async () => {
+          {token.status === "Unused" && <><Button type="button" size="icon" variant="ghost" title={copied === token.id ? "Copied" : "Copy token"} aria-label={copied === token.id ? "Copied" : "Copy token"} disabled={disabled || busy || !token.canCopy} onClick={() => action(async () => {
             const result = await request<ActivationToken>(`/admin/deployments/${deploymentId}/activation-tokens/${token.id}`);
             await navigator.clipboard.writeText(result.activationToken); setCopied(token.id);
-          })}>{copied === token.id ? "Copied" : "Copy"}</Button><Button type="button" size="sm" variant="outline" disabled={disabled || busy} onClick={() => action(async () => {
+          })}>{copied === token.id ? <Check className="size-4 text-primary" /> : <Copy className="size-4" />}</Button><Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" title="Revoke token" aria-label="Revoke token" disabled={disabled || busy} onClick={() => action(async () => {
             await request(`/admin/deployments/${deploymentId}/activation-tokens/${token.id}`, {}, "DELETE");
-          })}>Revoke</Button></>}
+          })}><Ban className="size-4" /></Button></>}
         </div></TableCell>
       </TableRow>)}
       {!tokens.length && <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">{busy ? "Loading tokens…" : "No tokens yet."}</TableCell></TableRow>}
