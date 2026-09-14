@@ -34,6 +34,7 @@ const errors: Record<string, string> = {
   INVALID_CREDENTIALS:
     "The email or password is incorrect, or your account is disabled.",
   DEPLOYMENT_IDENTITY_IMMUTABLE: "Environment and hosting cannot change after creation.",
+  TOKEN_STORAGE_UNAVAILABLE: "Activation token storage is not configured. Contact your deployment operator.",
   INVALID_REQUEST: "Please check the entered details and try again.",
   INVALID_ORIGIN:
     "This console address is not authorized. Contact your deployment operator.",

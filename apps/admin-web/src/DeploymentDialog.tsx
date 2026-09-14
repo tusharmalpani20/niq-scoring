@@ -1,3 +1,4 @@
+import { ActivationTokenPanel, type ActivationToken } from "./ActivationTokenPanel";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import type { Overview } from "./Operations";
@@ -28,10 +29,9 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
-  const [token, setToken] = useState<{ value: string; expiresAt: string } | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [initialToken, setInitialToken] = useState<ActivationToken | null>(null);
   const dirty = form.formState.isDirty;
-  function close() { if (busy) return; if (dirty || (token && !copied)) setConfirmClose(true); else onClose(); }
+  function close() { if (busy) return; if (dirty) setConfirmClose(true); else onClose(); }
   async function submit(values: Values) {
     form.clearErrors();
     let invalid = false;
@@ -44,15 +44,16 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
     if (invalid) return;
     setBusy(true); setError("");
     try {
-      const saved = await request<{ id: string }>(savedId ? `/admin/deployments/${savedId}/configuration` : "/admin/deployments/configuration", {
+      const saved = await request<{ id: string; activation?: ActivationToken }>(savedId ? `/admin/deployments/${savedId}/configuration` : "/admin/deployments/configuration", {
         clientId: values.clientId, environment: values.environment.trim(), hostingType: values.hostingType, enabled: values.enabled,
         scoring: { enabled: values.scoringEnabled, monthlyLimit: values.scoringUnlimited ? null : (/^\d+$/.test(values.scoringLimit) && Number(values.scoringLimit) <= 2147483647 ? Number(values.scoringLimit) : null) },
         faceScan: { enabled: values.faceEnabled, monthlyLimit: values.faceUnlimited ? null : (/^\d+$/.test(values.faceLimit) && Number(values.faceLimit) <= 2147483647 ? Number(values.faceLimit) : null) },
         versionAssignment: values.ruleVersion === "LATEST_APPROVED" ? { mode: "LATEST_APPROVED" } : { mode: "PINNED", scoringRuleVersionId: values.ruleVersion },
       }, savedId ? "PUT" : "POST");
       setSavedId(saved.id);
+      if (saved.activation) setInitialToken(saved.activation);
       form.reset(values); await refresh();
-      if (!token || copied) onClose();
+      if (!saved.activation) onClose();
     } catch (cause) { setError(message(cause)); } finally { setBusy(false); }
   }
   const select = (name: "clientId" | "hostingType" | "ruleVersion" | "environment", label: string, options: Array<{ value: string; label: string }>, disabled = false) => <Controller control={form.control} name={name} render={({ field, fieldState }) => <Field><FieldLabel htmlFor={`deployment-${name}`}>{label}</FieldLabel><Select value={field.value} onValueChange={field.onChange} disabled={disabled || busy}><SelectTrigger ref={field.ref} onBlur={field.onBlur} id={`deployment-${name}`} aria-invalid={fieldState.invalid}><SelectValue placeholder={`Select ${label.toLowerCase()}`} /></SelectTrigger><SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>{fieldState.error && <FieldError errors={[fieldState.error]} />}</Field>} />;
@@ -91,10 +92,10 @@ export function DeploymentDialog({ data, deployment, refresh, onClose }: { data:
         {capabilityCard("face", "Face scan", "face scans")}
       </div>
       {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: "Latest approved" }, ...data.versions.map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
-      {savedId && <><Separator /><div className="space-y-2"><FieldLabel>Activation token</FieldLabel>{!token ? <Button type="button" variant="outline" disabled={busy || dirty} onClick={async () => { setBusy(true); setError(""); try { const result = await request<{ activationToken: string; expiresAt: string }>(`/admin/deployments/${savedId}/activation-token`, { expiresInMinutes: 30 }); setToken({ value: result.activationToken, expiresAt: result.expiresAt }); setCopied(false); } catch (cause) { setError(message(cause)); } finally { setBusy(false); } }}>Generate token</Button> : <><Button type="button" variant="link" className="h-auto p-0" onClick={async () => { try { await navigator.clipboard.writeText(token.value); setCopied(true); setError(""); } catch { setError("Could not copy the token. Please allow clipboard access and try again."); } }}>{copied ? "Copied · Copy again" : "Copy activation token"}</Button><p className="text-sm text-muted-foreground">Expires {new Date(token.expiresAt).toLocaleString()}.</p></>}{dirty && <p className="text-sm text-muted-foreground">Save your changes before generating a token.</p>}</div></>}
+      {savedId && <><Separator /><ActivationTokenPanel deploymentId={savedId} initialToken={initialToken} disabled={busy || dirty} /></>}
       <ErrorNotice error={error} />
       <DialogFooter className="grid grid-cols-2 gap-2 sm:flex"><Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button><Button disabled={busy || data.clients.length === 0}>{busy ? "Saving…" : savedId ? "Save" : "Create"}</Button></DialogFooter>
     </form>
-    <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Leave this deployment?</AlertDialogTitle><AlertDialogDescription>{dirty && "Your unsaved changes will be lost. "}{token && !copied && "You have not copied the activation token. It cannot be retrieved after closing."}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep editing</AlertDialogCancel><AlertDialogAction onClick={onClose}>Leave</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Leave this deployment?</AlertDialogTitle><AlertDialogDescription>Your unsaved changes will be lost.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep editing</AlertDialogCancel><AlertDialogAction onClick={onClose}>Leave</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </DialogContent></Dialog>;
 }
