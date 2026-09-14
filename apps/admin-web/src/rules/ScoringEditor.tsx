@@ -1,3 +1,4 @@
+import { ScoreGroupsEditor } from './ScoreGroupsEditor';
 import { Fragment, useState } from 'react';
 import type { RuleDefinition, RuleQuestion } from '@niq-scoring/contracts/rules';
 import { Button } from '../components/ui/button';
@@ -21,7 +22,6 @@ function scoreSummary(rule: Score, question?: RuleQuestion) {
 export function ScoringEditor({ definition: d, onChange, disabled = false }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const patch = (rule: Score) => onChange({ ...d, scoring: d.scoring.map(item => item.id === rule.id ? rule : item) });
-  const domains = d.domains.filter(domain => domain.id !== 'unassigned');
   const groups = [
     ...d.sections.map(section => ({ id: section.id, title: section.title, fields: section.questions.map(question => ({ id: question.id, label: question.label, unit: question.unit, question })) })),
     { id: 'calculations', title: 'Calculated values', fields: d.calculations.map(calculation => ({ id: calculation.id, label: calculation.label, unit: calculation.unit, question: undefined })) },
@@ -39,7 +39,7 @@ export function ScoringEditor({ definition: d, onChange, disabled = false }: Pro
             <td className="p-3">{rules.length ? <div className="flex flex-col items-start gap-1">{rules.map(rule => <button key={rule.id} type="button" className="text-primary underline-offset-4 hover:underline" aria-expanded={expanded === `${field.id}:${rule.id}`} aria-controls={`rule-scoring-${rule.id}`} onClick={() => setExpanded(expanded === `${field.id}:${rule.id}` ? null : `${field.id}:${rule.id}`)}>{scoreSummary(rule, field.question)}</button>)}</div> : <span className="text-muted-foreground">{field.question?.purpose === 'scoring' ? 'Not configured' : 'Not applicable'}</span>}</td>
             <td className="p-3">{capRule?.kind === 'options' ? <Input disabled={disabled} type="number" min={0} step="any" aria-label={`${field.label} cap`} placeholder="No cap" value={capRule.cap ?? ''} onChange={event => patch({ ...capRule, cap: event.target.value === '' ? null : Number(event.target.value) })}/> : <span className="text-muted-foreground">—</span>}</td>
           </tr>{rules.filter(rule => expanded === `${field.id}:${rule.id}`).map(rule => <tr key={rule.id}><td colSpan={4} className="border-b bg-muted/10 p-4"><fieldset disabled={disabled} id={`rule-scoring-${rule.id}`} aria-label={`${field.label} scoring`} className="space-y-4">
-            <div className="max-w-sm"><ScoringSelect label="Domain" value={rule.domainId} options={[{ value: 'unassigned', label: 'Choose domain' }, ...domains.map(domain => ({ value: domain.id, label: domain.label }))]} onChange={domainId => patch({ ...rule, domainId })}/></div>
+
             {field.question?.type === 'number' && <p className="text-sm text-muted-foreground">Accepted values: {field.question.validation.min ?? 'no minimum'} to {field.question.validation.max ?? 'no maximum'}{field.unit ? ` ${field.unit}` : ''}.</p>}
             {rule.kind === 'options' && <OptionsScoring question={field.question} rule={rule} onChange={patch}/>}
             {rule.kind === 'ranges' && <div className="space-y-3">{rule.bands.map((band, index) => <div key={band.id} className="space-y-3 rounded-md border p-3"><div className="flex items-center justify-between"><h4 className="font-medium">Range {index + 1}</h4><Button type="button" variant="ghost" onClick={() => patch({ ...rule, bands: rule.bands.filter((_, i) => i !== index) })}>Remove range</Button></div><RangeFields value={band} onChange={value => patch({ ...rule, bands: rule.bands.map((item, i) => i === index ? { ...item, ...value } : item) })}/><ScoringNumber label="Range points" value={band.points} onChange={points => patch({ ...rule, bands: rule.bands.map((item, i) => i === index ? { ...item, points: points ?? 0 } : item) })}/></div>)}<Button type="button" variant="outline" onClick={() => patch({ ...rule, bands: [...rule.bands, { id: newRuleId('range'), min: null, max: null, minInclusive: true, maxInclusive: false, points: 0 }] })}>Add range</Button></div>}
@@ -48,7 +48,7 @@ export function ScoringEditor({ definition: d, onChange, disabled = false }: Pro
         })}
       </Fragment>)}
     </tbody></table></div>
-    <details className="rounded-2xl border border-border/50 bg-card shadow-sm"><summary className="cursor-pointer p-4 font-medium">Domain and total caps</summary><fieldset disabled={disabled} className="grid gap-4 border-t p-4 sm:grid-cols-3">{domains.map(domain => <div key={domain.id} id={`rule-domains-${domain.id}`}><ScoringNumber label={`${domain.label} cap`} min={0} value={domain.cap} onChange={cap => onChange({ ...d, domains: d.domains.map(item => item.id === domain.id ? { ...item, cap } : item) })}/></div>)}<ScoringNumber label="Total cap" min={0} value={d.total.cap} onChange={cap => onChange({ ...d, total: { ...d.total, cap } })}/><p className="text-sm text-muted-foreground sm:col-span-3">Leave a cap blank for no upper limit.</p></fieldset></details>
+    <ScoreGroupsEditor definition={d} onChange={onChange} disabled={disabled}/>
 
   </div>;
 }

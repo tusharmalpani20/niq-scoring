@@ -17,11 +17,19 @@ test("Excel option points and caps persist without changing questionnaire struct
   }
   await page.locator("#rule-field-tumour_type").getByRole("button", { name: /configured/ }).click();
   const tumour = page.locator("#rule-scoring-tumour_type_score");
-  await tumour.getByRole("combobox", { name: "Domain", exact: true }).click();
-  await page.getByRole("option", { name: "Disease", exact: true }).click();
+  const diseaseGroup = page.getByRole("row", { name: "Disease group", exact: true });
+  await diseaseGroup.getByText("0 fields selected", { exact: true }).click();
+  const tumourLabel = original.scoring.find(rule => rule.id === "tumour_type_score")!.label;
+  await diseaseGroup.getByRole("checkbox", { name: tumourLabel, exact: true }).check();
+  await expect(diseaseGroup.getByRole("button", { name: "Remove group" })).toBeDisabled();
+  const clinicalGroup = page.getByRole("row", { name: "Clinical group", exact: true });
+  await clinicalGroup.getByText("0 fields selected", { exact: true }).click();
+  await expect(clinicalGroup.getByRole("checkbox", { name: `${tumourLabel} — Disease`, exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Add group", exact: true }).click();
+  await page.getByLabel("New group group name", { exact: true }).fill("Additional scores");
+  await page.getByLabel("Additional scores cap", { exact: true }).fill("3");
   await page.getByLabel("Solid tumour", { exact: true }).fill("4");
 
-  await page.getByText("Domain and total caps", { exact: true }).click();
   await page.getByLabel("Disease cap", { exact: true }).fill("8");
   await page.getByLabel("Total cap", { exact: true }).fill("40");
   await page.getByRole("tab", { name: "Details", exact: true }).click();
@@ -40,11 +48,11 @@ test("Excel option points and caps persist without changing questionnaire struct
   expect(tumourRule).toMatchObject({ domainId: "disease", points: expect.arrayContaining([{ optionId: "tumour_type_solid", points: 4 }]) });
   expect(saved.domains[0]!.cap).toBe(8);
   expect(saved.total.cap).toBe(40);
+  expect(saved.domains).toContainEqual(expect.objectContaining({ label: "Additional scores", cap: 3 }));
   await page.getByRole("button", { name: "Back to versions", exact: true }).click();
   await page.getByRole("button", { name: "Synthetic browser draft", exact: true }).click();
   await page.locator("#rule-field-tumour_type").getByRole("button", { name: /configured/ }).click();
   await expect(page.getByLabel("Solid tumour", { exact: true })).toHaveValue("4");
-  await page.getByText("Domain and total caps", { exact: true }).click();
   await expect(page.getByLabel("Total cap", { exact: true })).toHaveValue("40");
 });
 
@@ -58,7 +66,6 @@ test("approved history retains fixed content and read-only scoring", async ({ pa
   await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
   await page.locator("#rule-field-tumour_type").getByRole("button", { name: /configured/ }).click();
   await expect(page.getByLabel("Solid tumour", { exact: true })).toBeDisabled();
-  await page.getByText("Domain and total caps", { exact: true }).click();
   await expect(page.getByLabel("Total cap", { exact: true })).toBeDisabled();
   await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
   await expect(page.getByLabel("Classification name", { exact: true }).first()).toBeDisabled();

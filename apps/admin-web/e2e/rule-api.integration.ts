@@ -69,7 +69,6 @@ test("real API persists scoring edits and rejects altered fixed fields", async (
   const created = await response.json() as EditableRule;
   await page.locator("#rule-field-tumour_type").getByRole("button", { name: /configured/ }).click();
   await page.getByLabel("Solid tumour", { exact: true }).fill("4");
-  await page.getByText("Domain and total caps", { exact: true }).click();
   await page.getByLabel("Total cap", { exact: true }).fill("40");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText(/^Draft saved\./)).toBeVisible();
