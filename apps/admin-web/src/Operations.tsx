@@ -1,3 +1,6 @@
+import { Badge } from "./components/ui/badge";
+import { Card, CardContent } from "./components/ui/card";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { request, message } from "./api";
@@ -70,57 +73,46 @@ export function Operations({
             ["Deployments", data.deployments.length, "deployments"],
             ["Rule versions", data.versions.length, "versions"],
           ].map(([label, count, path]) => (
-            <Link to={`/${path}`} className="metric" key={label}>
-              <span>{label}</span>
-              <strong>{count}</strong>
-              <small>View {String(label).toLowerCase()} →</small>
+            <Card key={label}>
+            <CardContent className="pt-6">
+            <Link to={`/${path}`} className="flex flex-col gap-3">
+              <span className="text-sm text-muted-foreground">{label}</span>
+              <strong className="text-4xl">{count}</strong>
+              <small className="text-primary">View {String(label).toLowerCase()} →</small>
             </Link>
+            </CardContent>
+            </Card>
           ))}
         </div>
-        <Panel
-          title="Start with your team"
-          description="Give your NIQ colleagues access before setting up customer operations."
-        >
-          <Button asChild>
-            <Link to="/users">Manage administrators</Link>
-          </Button>
-        </Panel>
-        <Panel title="Central scoring administration">
-          <p className="muted">
-            Use the navigation to manage customers, organization limits,
-            deployment activation and rule versions. Patient records and
-            clinical workflows remain in the NIQ application.
-          </p>
-        </Panel>
       </>
     );
   if (page === "customers")
     return (
       <>
         <Panel title="Customers">
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Customer</th>
-                  <th>Reference</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
+          <div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.customers.map((c) => (
-                  <tr key={c.id}>
-                    <td>
+                  <TableRow key={c.id}>
+                    <TableCell>
                       <strong>{c.legalName}</strong>
                       <small>{c.id}</small>
-                    </td>
-                    <td>{c.externalReference}</td>
-                    <td>{c.enabled ? "Enabled" : "Disabled"}</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell>{c.externalReference}</TableCell>
+                    <TableCell>{c.enabled ? "Enabled" : "Disabled"}</TableCell>
+                  </TableRow>
                 ))}
                 <Empty count={data.customers.length} columns={3} />
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Panel>
         <div className="narrow">
@@ -136,47 +128,47 @@ export function Operations({
     return (
       <>
         <Panel title="Organizations">
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Organization</th>
-                  <th>Customer</th>
-                  <th>Scoring limit</th>
-                  <th>Face-scan limit</th>
-                  <th>Version mode</th>
-                </tr>
-              </thead>
-              <tbody>
+          <div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Organization</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Scoring limit</TableHead>
+                  <TableHead>Face-scan limit</TableHead>
+                  <TableHead>Version mode</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.organizations.map((o) => (
-                  <tr key={o.id}>
-                    <td>
+                  <TableRow key={o.id}>
+                    <TableCell>
                       <strong>{o.name}</strong>
                       <small>{o.id}</small>
-                    </td>
-                    <td>{customer(o.customerId)}</td>
+                    </TableCell>
+                    <TableCell>{customer(o.customerId)}</TableCell>
                     {["SCORING", "FACE_SCAN"].map((cap) => {
                       const e = data.entitlements.find(
                         (e) =>
                           e.organizationId === o.id && e.capability === cap,
                       );
                       return (
-                        <td key={cap}>
+                        <TableCell key={cap}>
                           {!e?.enabled
                             ? "Disabled"
                             : (e.monthlyLimit ?? "Unlimited")}
-                        </td>
+                        </TableCell>
                       );
                     })}
-                    <td>
+                    <TableCell>
                       {data.assignments.find((a) => a.organizationId === o.id)
                         ?.mode ?? "Not assigned"}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
                 <Empty count={data.organizations.length} columns={5} />
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Panel>
         <div className="page-grid">
@@ -212,28 +204,28 @@ export function Operations({
       <>
         <ErrorNotice error={error} />
         <Panel title="Deployments">
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Deployment</th>
-                  <th>Environment</th>
-                  <th>Region</th>
-                  <th>Status</th>
-                  <th>Activation</th>
-                </tr>
-              </thead>
-              <tbody>
+          <div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Deployment</TableHead>
+                  <TableHead>Environment</TableHead>
+                  <TableHead>Region</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Activation</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.deployments.map((d) => (
-                  <tr key={d.id}>
-                    <td>
+                  <TableRow key={d.id}>
+                    <TableCell>
                       <strong>{d.name}</strong>
                       <small>{d.id}</small>
-                    </td>
-                    <td>{d.environment}</td>
-                    <td>{d.region}</td>
-                    <td>{d.enabled ? "Enabled" : "Disabled"}</td>
-                    <td>
+                    </TableCell>
+                    <TableCell>{d.environment}</TableCell>
+                    <TableCell>{d.region}</TableCell>
+                    <TableCell>{d.enabled ? "Enabled" : "Disabled"}</TableCell>
+                    <TableCell>
                       <Button
                         variant="outline"
                         size="sm"
@@ -261,12 +253,12 @@ export function Operations({
                       >
                         Generate token
                       </Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
                 <Empty count={data.deployments.length} columns={5} />
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Panel>
         {activation && (
@@ -314,7 +306,7 @@ export function Operations({
               <strong>{v.version}</strong>
               <small>{v.id}</small>
             </div>
-            <span className="pill">{v.lifecycle}</span>
+            <Badge variant="secondary">{v.lifecycle}</Badge>
             <span className={v.clinicalUsePermitted ? "success" : "danger"}>
               {v.clinicalUsePermitted
                 ? "Clinical use permitted"
@@ -328,10 +320,10 @@ export function Operations({
 }
 function Empty({ count, columns }: { count: number; columns: number }) {
   return count === 0 ? (
-    <tr>
-      <td className="empty" colSpan={columns}>
+    <TableRow>
+      <TableCell className="empty" colSpan={columns}>
         No records configured.
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   ) : null;
 }

@@ -1,3 +1,5 @@
+import { Badge } from "./components/ui/badge";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { invitationSchema } from "./form-validation";
@@ -73,31 +75,31 @@ export function Users({ currentUser }: { currentUser: User }) {
           {!data ? (
             <p>Loading users…</p>
           ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Administrator</th>
-                    <th>Status</th>
-                    <th>Access</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Administrator</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Access</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {data.users.map((u) => (
-                    <tr key={u.id}>
-                      <td>
+                    <TableRow key={u.id}>
+                      <TableCell>
                         <strong>
                           {u.displayName}
                           {u.id === currentUser.id ? " (you)" : ""}
                         </strong>
                         <small>{u.email}</small>
-                      </td>
-                      <td>
-                        <span className={u.enabled ? "pill" : "pill muted"}>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={u.enabled ? "default" : "secondary"}>
                           {u.enabled ? "Enabled" : "Disabled"}
-                        </span>
-                      </td>
-                      <td>
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
                         <Button
                           variant="outline"
                           size="sm"
@@ -114,11 +116,11 @@ export function Users({ currentUser }: { currentUser: User }) {
                         >
                           {u.enabled ? "Disable" : "Enable"}
                         </Button>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </Panel>
@@ -170,24 +172,24 @@ export function Users({ currentUser }: { currentUser: User }) {
         ) : data.invitations.length === 0 ? (
           <p className="empty">No pending invitations.</p>
         ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Invitee</th>
-                  <th>Expires</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
+          <div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invitee</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead>Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.invitations.map((i) => (
-                  <tr key={i.id}>
-                    <td>
+                  <TableRow key={i.id}>
+                    <TableCell>
                       <strong>{i.displayName}</strong>
                       <small>{i.email}</small>
-                    </td>
-                    <td>{new Date(i.expiresAt).toLocaleString()}</td>
-                    <td>
+                    </TableCell>
+                    <TableCell>{new Date(i.expiresAt).toLocaleString()}</TableCell>
+                    <TableCell>
                       <Button
                         variant="outline"
                         size="sm"
@@ -204,11 +206,11 @@ export function Users({ currentUser }: { currentUser: User }) {
                       >
                         Revoke
                       </Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </Panel>

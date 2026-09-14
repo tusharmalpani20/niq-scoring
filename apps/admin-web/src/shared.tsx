@@ -1,3 +1,5 @@
+import { Alert, AlertDescription } from "./components/ui/alert";
+import { Textarea } from "./components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Controller,
@@ -46,9 +48,7 @@ export function Panel({
 }
 export function ErrorNotice({ error }: { error: string }) {
   return error ? (
-    <p className="error" role="alert">
-      {error}
-    </p>
+    <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>
   ) : null;
 }
 export function FormInput<T extends FieldValues>({
@@ -119,13 +119,13 @@ export function Secret({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   return (
-    <div className="secret">
+    <Card className="border-primary"><CardContent className="space-y-4 pt-6">
       <strong>{label}</strong>
       <p>
         Copy this now and share it securely. Expires{" "}
         {new Date(expiresAt).toLocaleString()}.
       </p>
-      <textarea aria-label={label} readOnly value={value} />
+      <Textarea aria-label={label} readOnly value={value} />
       <div className="actions">
         <Button
           type="button"
@@ -145,7 +145,7 @@ export function Secret({
         </Button>
       </div>
       <ErrorNotice error={error} />
-    </div>
+    </CardContent></Card>
   );
 }
 export function DataForm({

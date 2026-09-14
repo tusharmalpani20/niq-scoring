@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { Button } from "./button";
+import { InputGroup, InputGroupInput, InputGroupAddon, InputGroupButton } from "./input-group";
 import { Input } from "./input";
 import { cn } from "../../lib/utils";
 
@@ -17,21 +17,19 @@ export const PasswordInput = React.forwardRef<
   }, [props.value]);
 
   return (
-    <div
-      className="password-input-group"
-      data-invalid={props["aria-invalid"] === true || props["aria-invalid"] === "true"}
-    >
-      <Input
+    <InputGroup className="overflow-hidden">
+      <InputGroupInput
         {...props}
         ref={ref}
         type={visible ? "text" : "password"}
-        className={cn("password-input-control", className)}
+        className={cn("text-foreground", className)}
       />
-      <Button
+      <InputGroupAddon align="inline-end" className="self-stretch border-l bg-accent p-0">
+      <InputGroupButton
         type="button"
         variant="ghost"
-        size="icon"
-        className="password-visibility-toggle"
+        size="icon-sm"
+        className="m-0! h-full w-11 rounded-none text-primary hover:bg-secondary"
         aria-label={`${visible ? "Hide" : "Show"} ${visibilityLabel}`}
         aria-controls={props.id}
         aria-pressed={visible}
@@ -43,8 +41,9 @@ export const PasswordInput = React.forwardRef<
         ) : (
           <Eye aria-hidden="true" size={18} />
         )}
-      </Button>
-    </div>
+      </InputGroupButton>
+      </InputGroupAddon>
+    </InputGroup>
   );
 });
 PasswordInput.displayName = "PasswordInput";
