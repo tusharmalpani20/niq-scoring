@@ -19,6 +19,9 @@ import { Pagination, PaginationContent, PaginationItem } from "./components/ui/p
 
 const clientSchema = z.object({ name: z.string().trim().min(2, "Enter at least 2 characters.").max(200, "Use at most 200 characters.") });
 export function Clients({ data, refresh }: { data: Overview; refresh: () => Promise<void> }) {
+  const [accessClient, setAccessClient] = useState<Overview["clients"][number] | null>(null);
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessError, setAccessError] = useState("");
   const [open, setOpen] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -78,15 +81,16 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
     <TabsContent value="clients" className="space-y-5">
     <Card><CardContent className="pt-6">
       <Table>
-        <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Deployments</TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Deployments</TableHead><TableHead className="text-right">Access</TableHead></TableRow></TableHeader>
         <TableBody>
           {clients.rows.map(client => <TableRow key={client.id}>
             <TableCell className="font-medium">{client.name}</TableCell>
             <TableCell><Badge variant={client.enabled ? "default" : "secondary"}>{client.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
             <TableCell className="text-right tabular-nums">{data.deployments.filter(deployment => deployment.clientId === client.id).length}</TableCell>
+            <TableCell className="text-right"><Button variant="outline" size="sm" aria-label={`${client.enabled ? "Disable" : "Enable"} ${client.name}`} onClick={() => { setAccessError(""); setAccessClient(client); }}>{client.enabled ? "Disable" : "Enable"}</Button></TableCell>
           </TableRow>)}
-          {data.clients.length === 0 && <TableRow><TableCell colSpan={3} className="h-32 text-center"><Button variant="ghost" onClick={() => setOpen(true)}><Plus aria-hidden="true" /> Create your first client</Button></TableCell></TableRow>}
-          {data.clients.length > 0 && clients.total === 0 && <TableRow><TableCell colSpan={3} className="h-32 text-center text-muted-foreground">No clients match your search.</TableCell></TableRow>}
+          {data.clients.length === 0 && <TableRow><TableCell colSpan={4} className="h-32 text-center"><Button variant="ghost" onClick={() => setOpen(true)}><Plus aria-hidden="true" /> Create your first client</Button></TableCell></TableRow>}
+          {data.clients.length > 0 && clients.total === 0 && <TableRow><TableCell colSpan={4} className="h-32 text-center text-muted-foreground">No clients match your search.</TableCell></TableRow>}
         </TableBody>
       </Table>
     </CardContent></Card>
@@ -96,5 +100,28 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
       <PaginationItem><Button variant="outline" size="sm" disabled={clients.page === clients.pageCount} onClick={() => setPage(clients.page + 1)}>Next</Button></PaginationItem>
     </PaginationContent></Pagination>
     </TabsContent>
+    <AlertDialog open={accessClient !== null} onOpenChange={next => { if (!next && !accessBusy) setAccessClient(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{accessClient?.enabled ? "Disable" : "Enable"} {accessClient?.name}?</AlertDialogTitle>
+          <AlertDialogDescription>{accessClient?.enabled ? "This will block new scoring and face-scan requests across this client’s deployments. You can enable the client again later." : "This will allow requests again, subject to each deployment’s status and limits."}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <ErrorNotice error={accessError} />
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={accessBusy}>Cancel</AlertDialogCancel>
+          <AlertDialogAction disabled={accessBusy} onClick={async event => {
+            event.preventDefault();
+            if (!accessClient) return;
+            setAccessBusy(true); setAccessError("");
+            try {
+              await request(`/admin/clients/${accessClient.id}/enabled`, { enabled: !accessClient.enabled }, "PATCH");
+              setAccessClient(null);
+              await refresh();
+            } catch (cause) { setAccessError(message(cause)); setError(message(cause)); }
+            finally { setAccessBusy(false); }
+          }}>{accessBusy ? "Saving…" : accessClient?.enabled ? "Disable" : "Enable"}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </Tabs>;
 }

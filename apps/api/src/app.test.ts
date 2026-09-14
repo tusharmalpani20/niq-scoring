@@ -93,6 +93,20 @@ describe("scoring API", () => {
     expect(store.entitlements.find(e => e.deploymentId === deployment.id && e.capability === "SCORING")?.monthlyLimit).toBe(1);
   });
 
+  test("disabling a client blocks scoring and face scans until enabled again", async () => {
+    const { app, client, credential } = await onboard();
+    const toggle = (enabled: boolean) => app.request(`/admin/clients/${client.id}/enabled`, { method: "PATCH", headers: adminHeaders, body: JSON.stringify({ enabled }) });
+    expect((await toggle(false)).status).toBe(200);
+    const blocked = await app.request("/v1/provisional/calculate", jsonRequest(scoringInput(client.id), `Bearer ${credential}`));
+    expect(blocked.status).toBe(409);
+    expect(await blocked.json()).toMatchObject({ reason: "CLIENT_DISABLED" });
+    const face = await app.request("/v1/face-scans", jsonRequest({ clientId: client.id, assessmentReference: "test", idempotencyKey: "face-disabled" }, `Bearer ${credential}`));
+    expect(face.status).toBe(409);
+    expect(await face.json()).toMatchObject({ reason: "CLIENT_DISABLED" });
+    expect((await toggle(true)).status).toBe(200);
+    expect((await app.request("/v1/provisional/calculate", jsonRequest(scoringInput(client.id), `Bearer ${credential}`))).status).toBe(200);
+  });
+
   test("guards provisional scoring, records usage and returns idempotent result", async () => {
     const { app, store, client, deployment, credential } = await onboard();
     const request = jsonRequest(scoringInput(client.id), `Bearer ${credential}`);
