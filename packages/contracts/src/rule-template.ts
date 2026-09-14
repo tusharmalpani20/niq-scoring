@@ -4,10 +4,10 @@ const document = "NIQ Assessment  Scoring sheet.xlsx";
 const source = (location: string, note = "") => ({ document, location, note });
 const master = (rows: string, note = "") => source(`NIQ master question sheet!${rows}`, note);
 
-/** Source content is preserved separately from executable rules until clinical ambiguities are resolved. */
+/** Fixed workbook fields and sourced points; unresolved clinical mappings still block approval. */
 export function createSpreadsheetTemplate(name: string): RuleDefinition {
   const definition = blankRuleDefinition(name);
-  definition.description = "Questionnaire transcribed from the supplied NIQ assessment workbook. Scoring and intervention mappings require confirmation before approval. No patient data is included.";
+  definition.description = "Fixed questionnaire and scoring defaults from the NIQ assessment workbook. Assign scoring domains and resolve the remaining source questions before approval. No patient data is included.";
   const sections = definition.sections;
   const section = (id: string, title: string, description = "") => {
     const value: RuleDefinition["sections"][number] = { id, title, description, questions: [] };
@@ -126,6 +126,54 @@ export function createSpreadsheetTemplate(name: string): RuleDefinition {
     { id: "weight_change_six_months", label: "Weight change from six months ago", unit: "%", operation: "percentage_change", operands: [{ kind: "question", id: "weight_six_months" }, { kind: "question", id: "weight_kg" }], precision: 2, sources: [master("A151:A156"), source("Assessment!C20", "Baseline for final weight-loss scoring requires confirmation.")] },
   ];
   definition.domains = [["disease", "Disease", 5, "D4:F4"], ["clinical", "Clinical", 10, "D6:F6"], ["history", "History", 5, "D8:F8"], ["treatment", "Treatment", 5, "D10:F10"], ["nutrition", "Nutrition", 10, "D12:F12"]].map(([id, label, cap, row]) => ({ id: id as string, label: label as string, cap: cap as number, sources: [master(row as string)] }));
+  // A technical placeholder avoids inventing a clinical domain assignment.
+  definition.domains.push({ id: "unassigned", label: "Choose a scoring domain", cap: null, sources: [] });
+  const questions = sections.flatMap(section => section.questions);
+  const optionScores = (questionId: string, values: number[], rows: string, aggregation: "sum" | "max" = "sum", cap: number | null = null) => {
+    const q = questions.find(question => question.id === questionId)!;
+    definition.scoring.push({ id: `${questionId}_score`, label: q.label, domainId: "unassigned", kind: "options", questionId, aggregation, cap,
+      points: values.map((points, index) => ({ optionId: q.options[index]!.id, points })), sources: [master(rows)] });
+  };
+  optionScores("tumour_type", [2, 1], "A11:B11");
+  optionScores("tumour_behaviour", [0, 2], "A12:B13");
+  optionScores("tumour_origin", [1, 3], "A14:B15");
+  optionScores("cancer_stage", [1, 2, 3], "A41:B43");
+  // Palliative scoring has conditional time windows, so its missing points stay
+  // explicit and validation blocks approval rather than treating them as zero.
+  optionScores("treatment_status", [0, 2, 1], "A50:B53");
+  optionScores("surgery_status", [1, 2, 0, 3], "A55:B58");
+  optionScores("relapse_status", [0, 1, 2], "A60:B62");
+  optionScores("comorbidities", Array(7).fill(1), "A63:B70", "max");
+  optionScores("appetite", [0, 2, 3], "A81:B83");
+  optionScores("gi_symptoms", Array(9).fill(1), "A85:B93", "sum", 6);
+  optionScores("bowel_pattern", [0, 1, 1, 2], "A95:B98");
+  optionScores("stool_frequency", [0, 1, 2], "A100:B102");
+  optionScores("current_treatment", [3, 2, 1, 1, 1, 1], "A121:B126");
+  optionScores("medications", Array(9).fill(1), "A130:B139");
+  optionScores("supplements", Array(7).fill(1), "A140:A147; B132");
+  optionScores("weight_loss_category", [0, 1, 2, 3], "A153:B156");
+  optionScores("dietary_symptoms", [0, 3, 1, 3, 1, 3, 2, 1, 1, 1, 2, 1, 3, 1, 3, 1], "A166:B181");
+  optionScores("functional_capacity", [0, 1, 2], "A184:B186");
+  optionScores("stress", [2, 1, 0], "A188:B188");
+  optionScores("protein_intake", [0, 1], "A198:B199");
+  optionScores("fluid_intake", [3, 2, 1], "A201:B203");
+  for (const [questionId, rows] of [["family_cancer", "A76:B78"], ["has_intolerance", "A103:B106"]]) {
+    const q = questions.find(question => question.id === questionId)!;
+    q.purpose = "scoring";
+    definition.scoring.push({ id: `${questionId}_score`, label: q.label, domainId: "unassigned", kind: "condition",
+      when: { match: "all", tests: [{ ref: { kind: "question", id: questionId! }, operator: "eq", value: true }] }, points: 1, otherwise: 0, sources: [master(rows!)] });
+  }
+  for (const [questionId, threshold, rows] of [["creatinine", 1.4, "A117:B117"], ["crp", 10, "A118:B118"]] as const) {
+    const q = questions.find(question => question.id === questionId)!;
+    // Preserve the workbook's strict below/above wording. The uncovered equality
+    // is a blocking RANGE_GAP until its clinical interpretation is confirmed.
+    definition.scoring.push({ id: `${questionId}_score`, label: q.label, domainId: "unassigned", kind: "ranges",
+      input: { kind: "question", id: questionId }, sources: [master(rows, "Units and scoring at the exact threshold are unspecified.")],
+      bands: [
+        { id: `${questionId}_below`, min: null, max: threshold, minInclusive: false, maxInclusive: false, points: 1 },
+        { id: `${questionId}_above`, min: threshold, max: null, minInclusive: false, maxInclusive: false, points: 2 },
+      ] });
+  }
   definition.total = { aggregation: "sum", cap: 35, precision: 0 };
   definition.classifications = [
     { id: "low_risk", label: "Low Risk", min: 0, max: 15, minInclusive: true, maxInclusive: true, interpretation: "Stable nutritional status", sources: [master("D19:F19")] },
@@ -133,7 +181,7 @@ export function createSpreadsheetTemplate(name: string): RuleDefinition {
     { id: "high_risk", label: "High Risk", min: 25, max: null, minInclusive: false, maxInclusive: false, interpretation: "Severe nutritional risk / active catabolism", sources: [master("D21:F21")] },
   ];
   const issue = (id: string, path: string, message: string, sources: RuleDefinition["issues"][number]["sources"]) => definition.issues.push({ id, path, message, blocking: true, resolved: false, resolution: "", sources });
-  issue("domain_mapping", "scoring", "The source gives domain caps but no complete question-to-domain mapping or aggregation rules. Source points are retained in source notes; no executable scoring assignments are invented.", [master("D4:F14")]);
+  issue("domain_mapping", "scoring", "Assign each source-derived score to a workbook domain. The workbook supplies domain caps but no question-to-domain mapping. Unassigned is a technical placeholder, not a clinical domain.", [master("D4:F14")]);
   issue("model_difference", "total", "The workbook uses 35 points and three risk categories; the reference prototype uses a different 100-point model. Confirm the authoritative model and cap semantics.", [master("D4:F21"), { document: "nutra-iq-app", location: "src/app/services/assessment.service.ts", note: "Different prototype model; not imported." }]);
   issue("functional_difference", "sections.dietary_assessment.functional_capacity", "Functional capacity is 0/1/2 in the master sheet and 1/2/3 in Assessment. Resolve before scoring.", [master("A183:B186"), source("Assessment!D21")]);
   issue("biomedical_thresholds", "sections.biomedical", "Confirm units and all lab thresholds, including equality boundaries. Haemoglobin bands overlap; SGPT/SGOT/albumin thresholds are incomplete; bilirubin and total proteins have no scoring. Assessment explicitly says Need to confirm.", [master("A112:B118"), source("Assessment!B25:D25")]);
@@ -148,5 +196,16 @@ export function createSpreadsheetTemplate(name: string): RuleDefinition {
   issue("interventions_missing", "interventions", "Goals and dietary-regime fields are present, but automatic triggers, recommendations, priorities, and conflict rules are unspecified. No clinical guidance is generated until defined.", [master("A210:A217")]);
   issue("sga_relationship", "sections.clinician_assessment.sga_score", "Clarify the SGA total calculation and its relationship to the NIQ score; the ≥6 risk note must not be substituted for NIQ risk categories.", [master("A208:A209")]);
   issue("careplix_mapping", "scoring", "No supplied rule defines how CarePlix measurements or wellness scores affect NIQ scoring. They are not combined automatically.", [{ document: "CarePlix-Integration-Reference.pdf", location: "Integration result fields", note: "Integration reference does not define NIQ scoring." }]);
+  issue("previous_history_scoring", "sections.medical_history", "Previous surgery / long-term illness has none 0, present 1 scoring, but the source provides free text without an explicit none answer. Confirm presence capture; unanswered text is not treated as no history.", [master("A71:B75"), source("Assessment!B11:D11")]);
+  issue("medication_aggregation", "sections.treatment_medications", "Each selected medication or supplement carries one source point. Confirm whether categories count once or whether multiple medicines within one category must be captured, and any combined cap.", [master("A130:B147"), source("Assessment!D19")]);
+  for (const [id, resolution] of [
+    ["model_difference", "The user confirmed Excel is the latest authoritative source. Use the workbook domain caps and 35-point total as configurable defaults; do not import the prototype's 100-point model."],
+    ["functional_difference", "Assessment!G3 explicitly directs use of the NIQ master question sheet for dropdowns and scoring. Default to master A184:B186: normal 0, reduced 1, bedridden 2."],
+  ]) {
+    const resolved = definition.issues.find(issue => issue.id === id)!;
+    resolved.resolved = true;
+    resolved.resolution = resolution!;
+    if (id === "functional_difference") resolved.sources.push(source("Assessment!G3"));
+  }
   return ruleDefinitionSchema.parse(definition);
 }

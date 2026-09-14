@@ -30,6 +30,8 @@ export function ruleScoreBounds(definition: RuleDefinition): Bounds | null {
   });
   const domains: Bounds[] = [];
   for (const domain of definition.domains) {
+    // The unassigned bucket is authoring state, never a clinical domain.
+    if (domain.id === "unassigned" && !definition.scoring.some(rule => rule.domainId === domain.id)) continue;
     const members = components.filter(c => c?.domainId === domain.id);
     if (!members.length || definition.scoring.some((r, i) => r.domainId === domain.id && !components[i])) return null;
     domains.push(capped({ min: sum(members.map(c => c!.min)), max: sum(members.map(c => c!.max)) }, domain.cap));

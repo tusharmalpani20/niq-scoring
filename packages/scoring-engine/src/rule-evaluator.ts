@@ -74,6 +74,8 @@ export function evaluateRule(definition: RuleDefinition, answers: RuleAnswers): 
     result.components.push({ id: rule.id, label: rule.label, domainId: rule.domainId, points });
   }
   for (const domain of definition.domains) {
+    // The unassigned bucket is authoring state, never a clinical domain.
+    if (domain.id === "unassigned" && !definition.scoring.some(rule => rule.domainId === domain.id)) continue;
     const components = result.components.filter(c => c.domainId === domain.id);
     if (!components.length || components.some(c => c.points === null)) { result.domains[domain.id] = null; continue; }
     const sum = components.reduce((total, c) => total + c.points!, 0);

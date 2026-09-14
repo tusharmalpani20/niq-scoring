@@ -102,10 +102,11 @@ export function validateRuleDefinition(definition: RuleDefinition): DefinitionIs
   detectCycles(new Map(definition.calculations.map(c => [c.id, c.operands.flatMap(o => o.kind === "calculation" ? [o.id] : [])])), "calculations");
   definition.domains.forEach((domain, index) => {
     unique(domain.id, `domains.${index}`);
-    if (!definition.scoring.some(rule => rule.domainId === domain.id)) add(`domains.${index}`, "EMPTY_DOMAIN", "No scoring rules belong to this domain.", "blocking");
+    if (domain.id !== "unassigned" && !definition.scoring.some(rule => rule.domainId === domain.id)) add(`domains.${index}`, "EMPTY_DOMAIN", "No scoring rules belong to this domain.", "blocking");
   });
   definition.scoring.forEach((rule, index) => {
     const p = `scoring.${index}`; unique(rule.id, p);
+    if (rule.domainId === "unassigned") add(p, "UNASSIGNED_DOMAIN", "Choose a scoring domain from the Excel domains.", "blocking");
     if (!domainIds.has(rule.domainId)) add(p, "MISSING_DOMAIN", "Choose an existing domain.");
     if (rule.kind === "options") {
       const q = questionMap.get(rule.questionId);
