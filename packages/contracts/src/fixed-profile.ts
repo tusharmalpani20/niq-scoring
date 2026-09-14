@@ -12,7 +12,8 @@ function structure(d: RuleDefinition) {
     sections: d.sections,
     calculations: d.calculations,
     total: { aggregation: d.total.aggregation, precision: d.total.precision },
-    domains: d.domains.map(({ cap: _cap, ...domain }) => domain),
+    // Real score groups are editable; the placeholder cannot become a scored group.
+    domains: d.domains.filter(domain => domain.id === "unassigned"),
     scoring: d.scoring.map(rule => {
       const { domainId: _domain, ...base } = rule;
       if (base.kind === "options") {

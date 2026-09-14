@@ -80,3 +80,12 @@ test("text answer limits match supported field lengths without widening conditio
   expect(answersSchema.safeParse({ note: "a".repeat(20001) }).success).toBe(false);
   expect(conditionSchema.safeParse({ match: "all", tests: [{ ref: { kind: "question", id: "note" }, operator: "eq", value: "a".repeat(5001) }] }).success).toBe(false);
 });
+
+
+test("score groups reject duplicate names and references to deleted groups", () => {
+  const d = fixture();
+  d.domains.push({ id: "second_group", label: "  TEST  ", cap: 5, sources: [] });
+  expect(validateRuleDefinition(d).some(issue => issue.code === "DUPLICATE_DOMAIN_NAME" && issue.severity === "error")).toBe(true);
+  d.domains = [];
+  expect(validateRuleDefinition(d).some(issue => issue.code === "MISSING_DOMAIN" && issue.severity === "error")).toBe(true);
+});

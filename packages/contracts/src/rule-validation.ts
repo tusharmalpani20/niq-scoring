@@ -100,14 +100,18 @@ export function validateRuleDefinition(definition: RuleDefinition): DefinitionIs
   };
   detectCycles(new Map(questions.map(q => [q.id, q.visibleWhen?.tests.filter(t => t.ref.kind === "question").map(t => t.ref.id) ?? []])), "sections");
   detectCycles(new Map(definition.calculations.map(c => [c.id, c.operands.flatMap(o => o.kind === "calculation" ? [o.id] : [])])), "calculations");
+  const domainNames = new Set<string>();
   definition.domains.forEach((domain, index) => {
     unique(domain.id, `domains.${index}`);
+    const name = domain.label.trim().replace(/\s+/g, " ").toLowerCase();
+    if (domainNames.has(name)) add(`domains.${index}.label`, "DUPLICATE_DOMAIN_NAME", "Each score group must have a unique name.");
+    domainNames.add(name);
     if (domain.id !== "unassigned" && !definition.scoring.some(rule => rule.domainId === domain.id)) add(`domains.${index}`, "EMPTY_DOMAIN", "No scoring rules belong to this domain.", "blocking");
   });
   definition.scoring.forEach((rule, index) => {
     const p = `scoring.${index}`; unique(rule.id, p);
-    if (rule.domainId === "unassigned") add(p, "UNASSIGNED_DOMAIN", "Choose a scoring domain from the Excel domains.", "blocking");
-    if (!domainIds.has(rule.domainId)) add(p, "MISSING_DOMAIN", "Choose an existing domain.");
+    if (rule.domainId === "unassigned") add(p, "UNASSIGNED_DOMAIN", "Choose a score group.", "blocking");
+    if (!domainIds.has(rule.domainId)) add(p, "MISSING_DOMAIN", "Choose an existing score group.");
     if (rule.kind === "options") {
       const q = questionMap.get(rule.questionId);
       if (!q || !["single_select", "multi_select"].includes(q.type)) add(p, "OPTION_INPUT", "Choose a selection question.");

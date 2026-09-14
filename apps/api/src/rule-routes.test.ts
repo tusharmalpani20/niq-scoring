@@ -271,3 +271,32 @@ test("fixed Excel authoring rejects blank creation and direct field/option tampe
   expect((await request("", "POST", { name: "Legacy copy", requestId: crypto.randomUUID(), duplicateId: draft.id })).status).toBe(409);
   expect((await request(`/${draft.id}/validate`, "POST", { revision: 1 })).status).toBe(409);
 });
+
+test("custom score groups persist and invalid group edits cannot bypass integrity checks", async () => {
+  const { request, create } = setup();
+  const draft = await create("Score groups");
+  const definition = structuredClone(draft.definition as RuleDefinition);
+  definition.domains = definition.domains.filter(group => group.id === "unassigned");
+  definition.domains.push({ id: "custom_group", label: "Custom group", cap: 9, sources: [] });
+  definition.scoring.forEach(rule => { rule.domainId = "custom_group"; });
+  const saved = await request(`/${draft.id}`, "PUT", { revision: 1, definition });
+  expect(saved.status).toBe(200);
+  const persisted = await (await request(`/${draft.id}`)).json() as RuleRecord;
+  expect((persisted.definition as RuleDefinition).domains).toEqual(definition.domains);
+  expect((persisted.definition as RuleDefinition).scoring.every(rule => rule.domainId === "custom_group")).toBe(true);
+
+  for (const [mutate, expectedCode] of [
+    [(d: RuleDefinition) => { d.domains.push({ id: "other_group", label: " CUSTOM GROUP ", cap: null, sources: [] }); }, "DUPLICATE_DOMAIN_NAME"],
+    [(d: RuleDefinition) => { d.domains.push({ ...d.domains[1]!, label: "Different name" }); }, "DUPLICATE_ID"],
+    [(d: RuleDefinition) => { d.domains.pop(); }, "MISSING_DOMAIN"],
+  ] as const) {
+    const invalid = structuredClone(definition); mutate(invalid);
+    const result = await request(`/${draft.id}`, "PUT", { revision: 2, definition: invalid });
+    expect(result.status).toBe(400);
+    expect((await result.json()).issues.some((issue: { code: string }) => issue.code === expectedCode)).toBe(true);
+  }
+  definition.domains[0]!.cap = 5;
+  const reserved = await request(`/${draft.id}`, "PUT", { revision: 2, definition });
+  expect(reserved.status).toBe(409);
+  expect(await reserved.json()).toEqual({ error: "FIXED_RULE_REQUIRED" });
+});

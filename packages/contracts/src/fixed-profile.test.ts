@@ -13,7 +13,7 @@ test("fixed profile protects fields, options, conditions, source decisions and c
     (d: typeof template) => { d.sections.flatMap(s => s.questions).find(q => q.options.length)!.options[0]!.label = "Changed"; },
     (d: typeof template) => { d.calculations[0]!.precision = 6; },
     (d: typeof template) => { d.issues = []; },
-    (d: typeof template) => { d.domains[0]!.label = "Changed"; },
+    (d: typeof template) => { d.domains.find(group => group.id === "unassigned")!.label = "Changed"; },
     (d: typeof template) => { d.scoring.pop(); },
   ]) {
     const changed = structuredClone(template); mutate(changed);
@@ -52,5 +52,24 @@ test("fixed numeric fields allow different scoring bands without changing input 
   rule.bands[0]!.max = 1.5;
   expect(validateRuleDefinition(d).some(i => i.code === 'OVERLAPPING_RANGES')).toBe(true);
   rule.input.id = 'height_cm';
+  expect(isFixedRuleDefinition(d)).toBe(false);
+});
+
+
+test("fixed profile allows custom score groups while preserving the unassigned placeholder", () => {
+  const d = createSpreadsheetTemplate("Custom groups");
+  d.domains = d.domains.filter(group => group.id === "unassigned");
+  d.domains.push({ id: "custom_group", label: "My score group", cap: 12, sources: [] });
+  d.scoring.forEach(rule => { rule.domainId = "custom_group"; });
+  expect(isFixedRuleDefinition(d)).toBe(true);
+  expect(validateRuleDefinition(d).filter(issue => issue.severity === "error")).toEqual([]);
+  d.domains[1]!.label = "Renamed group";
+  d.domains[1]!.cap = null;
+  expect(isFixedRuleDefinition(d)).toBe(true);
+  const placeholder = d.domains[0]!;
+  placeholder.cap = 0;
+  expect(isFixedRuleDefinition(d)).toBe(false);
+  placeholder.cap = null;
+  d.domains.shift();
   expect(isFixedRuleDefinition(d)).toBe(false);
 });
