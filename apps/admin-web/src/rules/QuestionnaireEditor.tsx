@@ -33,9 +33,9 @@ export function QuestionnaireEditor({ definition }: {
     ...definition.calculations.map(calculation => [calculation.id, calculation.label] as const),
   ]);
   return <div className="min-w-0 space-y-5">
-    <p className="text-sm text-muted-foreground">The questionnaire is fixed from the NIQ assessment spreadsheet. Review its fields and answer options here; configure points, thresholds and caps in Scoring.</p>
+    <p className="text-sm text-muted-foreground">Review the fixed fields and answer options. Configure points, thresholds and caps in Scoring.</p>
     {definition.sections.map(section => <section key={section.id} id={`rule-section-${section.id}`} className="overflow-hidden rounded-lg border">
-      <div className="space-y-1 bg-muted/30 p-4"><h3 className="font-medium">{section.title}</h3>{section.description && <p className="text-sm text-muted-foreground">{section.description}</p>}</div>
+      <div className="space-y-1 bg-muted/30 p-4"><h3 className="font-medium">{section.title}</h3>{section.description && section.id !== "dietary_assessment" && <p className="text-sm text-muted-foreground">{section.description}</p>}</div>
       <div className="divide-y">{section.questions.map(question => <details key={question.id} id={`rule-question-${question.id}`} className="p-4">
         <summary className="cursor-pointer font-medium">{question.label}<span className="ml-2 text-sm font-normal text-muted-foreground">{types[question.type]}{question.unit ? ` · ${question.unit}` : ''}{question.required ? ' · Required' : ''}</span></summary>
         <div className="mt-3 space-y-3 text-sm">
@@ -45,7 +45,6 @@ export function QuestionnaireEditor({ definition }: {
           {question.validation.maxLength !== undefined && <p>Maximum length: {question.validation.maxLength} characters.</p>}
           {question.type === 'date' && (question.validation.minDate || question.validation.maxDate) && <p>Accepted dates: {question.validation.minDate ?? 'no earliest date'} to {question.validation.maxDate ?? 'no latest date'}.</p>}
           <p className="text-muted-foreground">{question.visibleWhen ? `Shown when ${describeCondition(definition, question.visibleWhen)}.` : 'Always shown.'}</p>
-          {!!question.sources.length && <p className="text-xs text-muted-foreground">Sources: {question.sources.map(source => `${source.document} · ${source.location}${source.note ? ` — ${source.note}` : ''}`).join('; ')}</p>}
         </div>
       </details>)}</div>
     </section>)}

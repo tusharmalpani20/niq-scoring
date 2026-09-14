@@ -38,7 +38,7 @@ test("unresolved Excel decisions block validation instead of implying approval",
   const state = await mockConsole(page);
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
-  await expect(page.getByText("Source decisions", { exact: true })).toBeVisible();
+  await expect(page.getByText("Configuration decisions", { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Validation", exact: true }).click();
   await page.getByRole("button", { name: "Validate version", exact: true }).click();
   await expect(page.getByRole("list", { name: "Validation issues" })).toBeVisible();

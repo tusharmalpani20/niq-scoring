@@ -15,7 +15,7 @@ test("real API login, spreadsheet draft, reopen, duplicate and protected deletio
   await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
-  await expect(page.getByText("Source decisions", { exact: true })).toBeVisible();
+  await expect(page.getByText("Configuration decisions", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeDisabled();
   await page.getByLabel("Description", { exact: true }).fill("Synthetic browser persistence check");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
