@@ -1,6 +1,6 @@
 import {
   activationExchangeSchema, activationTokenInputSchema, calculateRequestSchema,
-   deploymentConfigurationSchema, createDeploymentSchema, createFaceScanSessionSchema,
+   deploymentConfigurationRequestSchema, createDeploymentSchema, createFaceScanSessionSchema,
   createClientSchema, entitlementInputSchema, PROVISIONAL_SCORING_VERSION,
   PROVISIONAL_VERSION_STATUS, ulidSchema, updateEnabledSchema, versionAssignmentInputSchema,
 } from "@niq-scoring/contracts";
@@ -70,13 +70,24 @@ export function createApp(options: AppOptions) {
   app.patch("/admin/clients/:id/enabled", async (context) => updateEnabled(context, options.store.setClientEnabled.bind(options.store)));
   async function saveDeploymentConfiguration(context: Context, id: string | null) {
     if (id !== null && !ulidSchema.safeParse(id).success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    const parsed = deploymentConfigurationSchema.safeParse(await parseJson(context));
+    const parsed = deploymentConfigurationRequestSchema.safeParse(await parseJson(context));
     if (!parsed.success) return context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
-    const input = parsed.data;
     const current = await options.store.overview();
-    if (!current.clients.some(c => c.id === input.clientId)) return context.json({ error: "CLIENT_NOT_FOUND" }, 404);
-    if (id && !current.deployments.some(d => d.id === id && d.clientId === input.clientId)) return context.json({ error: "DEPLOYMENT_NOT_FOUND" }, 404);
-    if (current.deployments.some(d => d.id !== id && d.clientId === input.clientId && d.name === input.name)) return context.json({ error: "DEPLOYMENT_NAME_EXISTS" }, 409);
+    const client = current.clients.find(c => c.id === parsed.data.clientId);
+    if (!client) return context.json({ error: "CLIENT_NOT_FOUND" }, 404);
+    const existing = id ? current.deployments.find(d => d.id === id && d.clientId === client.id) : undefined;
+    if (id && !existing) return context.json({ error: "DEPLOYMENT_NOT_FOUND" }, 404);
+    if (existing && (existing.environment !== parsed.data.environment || (existing.hostingType && existing.hostingType !== parsed.data.hostingType))) {
+      return context.json({ error: "DEPLOYMENT_IDENTITY_IMMUTABLE" }, 409);
+    }
+    const clientSlug = client.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) || "client";
+    const hosting = parsed.data.hostingType === "NIQ_HOSTED" ? "niq" : "client-cloud";
+    const input = {
+      ...parsed.data,
+      name: existing?.name ?? `${clientSlug}-${parsed.data.environment}-${hosting}-${crypto.randomUUID().slice(0, 8)}`,
+      // A client-cloud installation's region is not the central API's region.
+      region: existing?.region ?? (parsed.data.hostingType === "NIQ_HOSTED" ? options.region : "unknown"),
+    };
     const policy = input.versionAssignment;
     if (policy.mode === "PINNED" && !current.versions.some(v => v.id === policy.scoringRuleVersionId)) return context.json({ error: "VERSION_NOT_FOUND" }, 400);
     try {

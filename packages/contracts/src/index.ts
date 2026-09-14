@@ -118,6 +118,8 @@ export const deploymentConfigurationSchema = createDeploymentSchema.extend({
   faceScan: entitlementInputSchema.omit({ capability: true }),
   versionAssignment: versionAssignmentInputSchema,
 });
+// Admin callers choose configuration; display name and region are server-managed.
+export const deploymentConfigurationRequestSchema = deploymentConfigurationSchema.omit({ name: true, region: true });
 export type DeploymentConfiguration = z.infer<typeof deploymentConfigurationSchema>;
 
 export const activationTokenInputSchema = z.object({
