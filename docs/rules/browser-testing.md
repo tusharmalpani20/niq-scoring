@@ -14,3 +14,13 @@ The suite starts its own Vite server on port 4183 and closes it afterward. It re
 The desktop and mobile-sized Chromium projects exercise the actual React controls. They are not WebKit/iOS compatibility tests. Traces for failures live in ignored `test-results/`; normal unit tests remain `bun run test`. Frontend typechecking includes the browser tests and configuration.
 
 These tests establish frontend behavior against controlled API outcomes. They do not replace PostgreSQL integration tests or the remaining full-stack primary-flow browser review.
+
+## Browser plus real API
+
+```sh
+bun run test:browser:integration
+```
+
+This separate configuration starts the real Hono API on loopback port 4191 and the web interface on 4184. No requests are mocked. Authentication, validation, CRUD, audit and lifecycle routes run against disposable memory stores. The opt-in `NIQ_BROWSER_TEST=1` fixture entry point is not imported by the production server and creates no database connection. Its public synthetic login is valid only within that process. Both processes stop when the test run ends.
+
+Desktop and mobile-sized runs cover login, spreadsheet draft creation, saved-state/reopening, unresolved-template approval prevention, duplication independence and confirmed deletion of the disposable drafts. This proves browser/API integration with memory persistence, not PostgreSQL behavior or persistence across server restarts. Keep the opt-in PostgreSQL test results separate when reporting coverage.

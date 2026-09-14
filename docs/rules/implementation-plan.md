@@ -107,3 +107,9 @@ Rule definitions and operational evidence belong in scoring. Patient identity, f
 - Added desktop/mobile calculation operand editing, range boundaries, zero/missing-input preview behavior, and activation/retirement confirmation coverage. Preview responses in these tests use the pure evaluator with independent expected totals.
 - The new range test reproduced a false unsaved-state bug after successful saving: schema parsing changed JSON property order, which was compared directly with the raw response. Saved definitions are now normalized through the same schema before comparison. Preview and lifecycle actions no longer remain disabled solely because property order differs.
 - All twelve browser runs pass. Duplication/deletion flows, full-stack browser review, semantic validation audit and final completion proof remain outstanding.
+
+### Real API browser checkpoint
+
+- Added a separately invoked browser integration suite with no API interception. A gated loopback fixture starts real Hono/authentication/rule routes with disposable memory stores; it never connects to the user database or changes the normal Vite/API endpoints.
+- Both desktop and mobile runs pass for login, source-template draft creation, save/reopen after page reload, blocked validation of unresolved source content, duplication with independent edits and confirmed unused-draft deletion.
+- This establishes browser-to-real-API behavior with memory persistence. It does not establish PostgreSQL behavior or persistence after a server restart. Complete synthetic scoring/lifecycle integration, database checks, semantic audit and final completion audit remain outstanding.

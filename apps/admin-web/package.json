@@ -9,6 +9,7 @@
     "lint": "tsc --noEmit",
     "test": "bun test --pass-with-no-tests",
     "test:browser": "playwright test",
+    "test:browser:integration": "playwright test --config playwright.integration.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
