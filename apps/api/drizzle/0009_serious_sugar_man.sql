@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "clients_name_uq" ON "clients" USING btree (lower(btrim("name")));

@@ -239,3 +239,14 @@ describe("scoring API", () => {
     expect(setupResult.store.usages.at(-1)?.outcome).toBe("FAILED");
   });
 });
+
+test("client names are unique across case, surrounding spaces, disabled clients and concurrent requests", async () => {
+  const { app, store } = setup();
+  const responses = await Promise.all(["Apollo", " apollo "].map(name => app.request("/admin/clients", jsonRequest({ name }))));
+  expect(responses.map(response => response.status).sort()).toEqual([201, 409]);
+  await store.setClientEnabled(store.clients[0]!.id, false);
+  const duplicate = await app.request("/admin/clients", jsonRequest({ name: "APOLLO" }));
+  expect(duplicate.status).toBe(409);
+  expect(await duplicate.json()).toEqual({ error: "CLIENT_NAME_EXISTS" });
+  expect((await app.request("/admin/clients", jsonRequest({ name: "Apollo Health" }))).status).toBe(201);
+});

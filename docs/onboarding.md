@@ -33,3 +33,7 @@ Set `ACTIVATION_TOKEN_ENCRYPTION_KEY` to 32 random bytes encoded as 64 hexadecim
 The token list retains created date, expiry and Used/Unused/Expired/Revoked status. Only valid unused tokens can be copied. Revoking clears the recoverable ciphertext and prevents activation; it does not affect credentials already issued to an installation.
 
 Disable remains available for clients and deployments regardless of history. Delete is restricted to mistakes: a deployment must have no credentials, consumed activation tokens, usage, scans or audit history. Its unused tokens and configuration are removed with it. A client must have no deployments or history. Deletion eligibility is checked again under database locks when deleting; the UI's eligibility check is not the enforcement boundary.
+
+Client names are unique across enabled and disabled clients, ignoring capitalization and surrounding spaces. The form reports duplicates; the API returns `409 CLIENT_NAME_EXISTS`, and the database enforces uniqueness during concurrent requests.
+
+Before applying migration `0009_serious_sugar_man.sql` to an existing database, resolve any groups returned by `SELECT lower(btrim(name)), count(*) FROM clients GROUP BY lower(btrim(name)) HAVING count(*) > 1`. Delete only unused duplicates through the protected deletion flow. Preserve used clients and resolve their names explicitly; the migration intentionally fails rather than discarding or merging history.

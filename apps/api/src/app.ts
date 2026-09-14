@@ -1,3 +1,4 @@
+import { DuplicateClientNameError } from "./lib/client-name";
 import { installRecordDeletion } from "./record-deletion";
 import { encryptActivationToken, decryptActivationToken } from "./lib/activation-secret";
 import {
@@ -69,7 +70,12 @@ export function createApp(options: AppOptions) {
 
   app.post("/admin/clients", async (context) => {
     const parsed = createClientSchema.safeParse(await parseJson(context));
-    return parsed.success ? context.json(await options.store.createClient(parsed.data), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+    if (!parsed.success) return context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+    try { return context.json(await options.store.createClient(parsed.data), 201); }
+    catch (error) {
+      if (error instanceof DuplicateClientNameError) return context.json({ error: "CLIENT_NAME_EXISTS" }, 409);
+      throw error;
+    }
   });
   app.patch("/admin/clients/:id/enabled", async (context) => updateEnabled(context, options.store.setClientEnabled.bind(options.store)));
   async function saveDeploymentConfiguration(context: Context, id: string | null) {

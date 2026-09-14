@@ -32,7 +32,7 @@ export const clients = pgTable("clients", {
   name: varchar("name", { length: 200 }).notNull(),
   enabled: boolean("enabled").notNull().default(true),
   ...timestamps,
-});
+}, table => [uniqueIndex("clients_name_uq").on(sql`lower(btrim(${table.name}))`)]);
 
 export const deployments = pgTable("deployments", {
   id: varchar("id", { length: 26 }).primaryKey(),

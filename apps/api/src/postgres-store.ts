@@ -1,3 +1,4 @@
+import { DuplicateClientNameError } from "./lib/client-name";
 import { postgresDeletion, type RecordKind } from "./record-deletion";
 import type { StoredActivationToken, TokenRecord } from "./store";
 import postgres from "postgres";
@@ -27,8 +28,9 @@ export class PostgresScoringStore implements ScoringStore {
 
   async createClient(input: CreateClient) {
     const id = createEntityId();
-    const [row] = await this.database<Client[]>`insert into clients (id, name) values (${id}, ${input.name}) returning id, name, enabled`;
-    return row!;
+    const [row] = await this.database<Client[]>`insert into clients (id, name) values (${id}, ${input.name}) on conflict (lower(btrim(name))) do nothing returning id, name, enabled`;
+    if (!row) throw new DuplicateClientNameError();
+    return row;
   }
   async setClientEnabled(id: string, enabled: boolean) { const rows = await this.database`update clients set enabled=${enabled}, updated_at=now() where id=${id} returning id`; return rows.length === 1; }
   async createDeployment(input: CreateDeployment) {
