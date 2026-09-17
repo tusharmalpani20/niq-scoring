@@ -44,7 +44,8 @@ function rangeText(range: { min: number | null; max: number | null; minInclusive
 }
 
 function PointInput({ label, value, draft, disabled, onDraft, onCommit }: { label: string; value: number; draft: string | undefined; disabled: boolean; onDraft: (value: string) => void; onCommit: (value: number) => void }) {
-  return <label className="space-y-1 text-sm"><span className="font-medium">{label}</span><Input type="number" min={0} step="any" disabled={disabled} aria-label={`${label} points`} value={draft ?? String(value)} onChange={event => { const next = event.target.value; onDraft(next); if (next !== "") { const number = Number(next); if (Number.isFinite(number) && number >= 0) onCommit(number); } }} /></label>;
+  const invalid = draft !== undefined && (draft === "" || !Number.isFinite(Number(draft)) || Number(draft) < 0);
+  return <label className="space-y-1 text-sm"><span className="font-medium">{label}</span><Input type="number" min={0} step="any" disabled={disabled} aria-invalid={invalid} aria-label={`${label} points`} value={draft ?? String(value)} onChange={event => { const next = event.target.value; onDraft(next); if (next !== "") { const number = Number(next); if (Number.isFinite(number) && number >= 0) onCommit(number); } }} />{invalid && <span role="alert" className="text-xs text-destructive">Enter a finite number ≥ 0.</span>}</label>;
 }
 
 function BoundaryInput({ label, value, inclusive, disabled, onChange }: { label: string; value: number | null; inclusive: boolean; disabled: boolean; onChange: (value: number | null, inclusive: boolean) => void }) {
@@ -77,6 +78,14 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
   }, [dirty, busy]);
 
   function update(next: FinalAssessmentDefinition) { setDefinition(next); setNotice(""); setIssues([]); }
+  function showIssues(next: Issue[]) {
+    setIssues(next);
+    const path = String(next[0]?.path ?? "");
+    const sectionMatch = path.match(/^sections\.(\d+)/);
+    if (sectionMatch) { setTab("scoring"); setSectionIndex(Number(sectionMatch[1])); }
+    else if (path.startsWith("riskCategories")) setTab("risk categories");
+    requestAnimationFrame(() => document.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
+  }
   function patchField(id: string, change: (field: FinalField) => FinalField) {
     if (!definition) return;
     update({ ...definition, sections: definition.sections.map(section => ({ ...section, fields: section.fields.map(field => field.id === id ? change(field) : field) })) });
@@ -91,15 +100,15 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
     if (!definition) return;
     setError(""); setNotice(""); setIssues([]);
     const draftIssue = Object.entries(pointDrafts).find(([, value]) => value === "" || !Number.isFinite(Number(value)) || Number(value) < 0);
-    if (draftIssue) { setIssues([{ message: "Every point value must be a finite number greater than or equal to zero." }]); return; }
+    if (draftIssue) { showIssues([{ path: draftIssue[0], message: "Every point value must be a finite number greater than or equal to zero." }]); return; }
     const parsed = finalAssessmentDefinitionSchema.safeParse(definition);
-    if (!parsed.success) { setIssues(parsed.error.issues); return; }
+    if (!parsed.success) { showIssues(parsed.error.issues); return; }
     const checks = validateFinalAssessmentDefinition(parsed.data);
     const invalid = checks.filter(issue => issue.severity === "error");
-    if (invalid.length) { setIssues(invalid); return; }
+    if (invalid.length) { showIssues(invalid); return; }
     setBusy(true);
     try { accept(await request<RuleDetail>(`/admin/rules/${record.id}`, { revision: record.revision, definition: parsed.data }, "PUT")); setNotice("Draft saved. Temporary risk thresholds remain blocked from clinical use."); }
-    catch (cause) { setError(message(cause)); if (cause instanceof ApiError) setIssues(cause.issues.filter(issue => issue !== null && typeof issue === "object") as Issue[]); }
+    catch (cause) { setError(message(cause)); if (cause instanceof ApiError) showIssues(cause.issues.filter(issue => issue !== null && typeof issue === "object") as Issue[]); }
     finally { setBusy(false); }
   }
 
