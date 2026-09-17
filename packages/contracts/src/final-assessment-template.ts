@@ -67,6 +67,8 @@ export function createFinalAssessmentTemplate(name: string): FinalAssessmentDefi
       { id: "dietary_details", title: "Dietary details", description: "Weight, symptoms, function, stress, protein and fluids.", accent: "beige", fields: [weightLoss, dietarySymptoms, functional, stress, protein, fluid] },
     ],
     supportingInputs: [
+      { id: "palliative_status", label: "Palliative treatment path", kind: "select", required: false, options: [option("with_cancer", "With Cancer any stage"), option("post_treatment", "Post treatment")], sources: [source("F53:G53")] },
+      { id: "palliative_timing", label: "Palliative post-treatment timing", kind: "select", required: false, options: [option("within_6_months", "Within 6 months"), option("within_12_months", "Within 12 months"), option("post_12_months", "Post 12 months")], sources: [source("F53:G53")] },
       { id: "previous_surgery_count", label: "Number of previous surgeries", kind: "number", unit: "surgeries", required: false, sources: [source("H97")] },
       { id: "previous_weight_kg", label: "Weight 1–2 months ago", kind: "number", unit: "kg", required: false, sources: [source("F120:H121")] },
       { id: "current_weight_kg", label: "Current weight", kind: "number", unit: "kg", required: false, sources: [source("F120:H121")] },

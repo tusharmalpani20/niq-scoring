@@ -77,6 +77,8 @@ export const finalAssessmentFieldSchema = z.discriminatedUnion("kind", [
 ]);
 
 export const finalAssessmentSupportingInputSchema = z.discriminatedUnion("id", [
+  z.object({ id: z.literal("palliative_status"), label, kind: z.literal("select"), options: z.array(finalAssessmentOptionSchema).length(2), required: z.literal(false), sources: sourceList }).strict(),
+  z.object({ id: z.literal("palliative_timing"), label, kind: z.literal("select"), options: z.array(finalAssessmentOptionSchema).length(3), required: z.literal(false), sources: sourceList }).strict(),
   z.object({ id: z.literal("previous_surgery_count"), label, kind: z.literal("number"), unit: z.literal("surgeries"), required: z.literal(false), sources: sourceList }).strict(),
   z.object({ id: z.literal("previous_weight_kg"), label, kind: z.literal("number"), unit: z.literal("kg"), required: z.literal(false), sources: sourceList }).strict(),
   z.object({ id: z.literal("current_weight_kg"), label, kind: z.literal("number"), unit: z.literal("kg"), required: z.literal(false), sources: sourceList }).strict(),
@@ -115,7 +117,7 @@ export const finalAssessmentDefinitionSchema = z.object({
   name: label,
   description: z.string().max(5000),
   sections: z.array(finalAssessmentSectionSchema).length(5),
-  supportingInputs: z.array(finalAssessmentSupportingInputSchema).length(4),
+  supportingInputs: z.array(finalAssessmentSupportingInputSchema).length(6),
   riskCategories: z.array(finalRiskCategorySchema).min(1).max(20),
   provisional: z.object({
     status: z.literal(FINAL_ASSESSMENT_PROVISIONAL_STATUS),
