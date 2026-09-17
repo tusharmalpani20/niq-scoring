@@ -17,7 +17,7 @@ function setup() {
   const app = createApp({ store, authStore, allowedOrigins: [headers.origin], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: false, now: () => new Date(now) });
   const request = (path: string, method = "GET", body?: unknown) => app.request(`/admin/rules${path}`, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const create = async (name = "Synthetic test", extra: Record<string, unknown> = {}) => {
-    const response = await request("", "POST", { name, requestId: crypto.randomUUID(), ...extra });
+    const response = await request("", "POST", { name, requestId: crypto.randomUUID(), template: "spreadsheet", ...extra });
     expect(response.status).toBe(201);
     return await response.json() as RuleRecord;
   };

@@ -52,9 +52,8 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
 
   const fields = definition.sections.flatMap(section => section.fields.map(field => ({ sectionId: section.id, field })));
   const fieldMap = new Map(fields.map(item => [item.field.id, item.field]));
-  const inputMap = new Map(definition.supportingInputs.map(input => [input.id, input]));
   const invalidIds = new Set<string>();
-  const known = new Set([...fieldMap.keys(), ...inputMap.keys()]);
+  const known = new Set([...fieldMap.keys(), ...definition.supportingInputs.map(input => input.id)]);
   const add = (path: string, code: string, message: string) => {
     const issue = { path, code, message } satisfies EvaluationIssue;
     if (!issues.some(existing => issueKey(existing) === issueKey(issue))) issues.push(issue);
@@ -107,7 +106,6 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
   if (hasValue(palliativeTiming) && (treatment !== "treatment_status_palliative_care" || palliativeStatus !== "post_treatment")) { invalidIds.add("palliative_timing"); add("answers.palliative_timing", "INACTIVE_DEPENDENCY", "Clear the palliative timing when its parent path is inactive."); }
   const surgery = raw("previous_surgeries");
   if (hasValue(raw("previous_surgery_count")) && surgery !== "previous_surgeries_yes") { invalidIds.add("previous_surgery_count"); add("answers.previous_surgery_count", "INACTIVE_DEPENDENCY", "A surgery count is only valid when previous surgeries is Yes."); }
-  const knownKeys = new Set<string>();
   const components: FinalAssessmentComponent[] = [];
   let weightLossPercent: number | null = null;
   let proteinAdequacy: "adequate" | "inadequate" | null = null;
@@ -117,7 +115,6 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
   };
   const mapPoints = (mapping: Array<{ optionId: string; points: number }>, ids: string[]) => ids.reduce((sum, id) => sum + (mapping.find(item => item.optionId === id)?.points ?? 0), 0);
   for (const { sectionId, field } of fields) {
-    knownKeys.add(field.id);
     const answer = raw(field.id);
     if (field.kind === "select" || field.kind === "yes_no" || field.kind === "multi_select") {
       if (!hasValue(answer)) { push(sectionId, field, null, "unanswered"); continue; }
@@ -201,4 +198,18 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
   result.classification = { id: category.id, label: category.label, interpretation: category.interpretation };
   result.complete = true;
   return result;
+}
+
+export function validateFinalAssessmentSamples(definition: FinalAssessmentDefinition): EvaluationIssue[] {
+  const issues: EvaluationIssue[] = [];
+  if (!definition.samples.length) issues.push({ path: "samples", code: "NO_SAMPLES", message: "Add independently specified synthetic sample cases before validation." });
+  if (definition.samples.length && !definition.samples.some(sample => sample.expected.complete)) issues.push({ path: "samples", code: "NO_COMPLETE_SAMPLE", message: "Include a complete synthetic sample case." });
+  for (const sample of definition.samples) {
+    const actual = evaluateFinalAssessment(definition, sample.answers);
+    const expected = sample.expected;
+    if (actual.complete !== expected.complete) issues.push({ path: `samples.${sample.id}.complete`, code: "SAMPLE_MISMATCH", message: `Sample ${sample.name}: complete result does not match the independently specified expectation.` });
+    if (actual.score !== expected.score) issues.push({ path: `samples.${sample.id}.score`, code: "SAMPLE_MISMATCH", message: `Sample ${sample.name}: score does not match the independently specified expectation.` });
+    if ((actual.classification?.id ?? null) !== expected.classificationId) issues.push({ path: `samples.${sample.id}.classificationId`, code: "SAMPLE_MISMATCH", message: `Sample ${sample.name}: risk category does not match the independently specified expectation.` });
+  }
+  return issues;
 }
