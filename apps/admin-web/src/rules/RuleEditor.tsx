@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
 import { isFixedRuleDefinition } from '@niq-scoring/contracts/fixed-profile';
 import { ruleDefinitionSchema, type RuleDefinition } from '@niq-scoring/contracts/rules';
+import { finalAssessmentDefinitionSchema } from '@niq-scoring/contracts/final-assessment';
 import { validateRuleDefinition } from '@niq-scoring/contracts/rule-validation';
 import { request, message, ApiError } from '../api';
 import { ErrorNotice } from '../shared';
@@ -16,8 +17,14 @@ import { RiskCategoriesEditor } from './RiskCategoriesEditor';
 import { ScoringEditor } from './ScoringEditor';
 import { descriptionText } from './editor-copy';
 import type { RuleDetail } from './rule-api';
+import { FinalAssessmentEditor } from './FinalAssessmentEditor';
 
 export function RuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; onClose: () => void; onSaved: () => void }) {
+  if (finalAssessmentDefinitionSchema.safeParse(initial.definition).success) return <FinalAssessmentEditor initial={initial} onClose={onClose} onSaved={onSaved} />;
+  return <LegacyRuleEditor initial={initial} onClose={onClose} onSaved={onSaved} />;
+}
+
+function LegacyRuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; onClose: () => void; onSaved: () => void }) {
   const [record, setRecord] = useState(initial);
   const parse = (value: unknown) => { const result = ruleDefinitionSchema.safeParse(value); return result.success ? result.data : null; };
   const [definition, setDefinition] = useState<RuleDefinition | null>(() => parse(initial.definition));
