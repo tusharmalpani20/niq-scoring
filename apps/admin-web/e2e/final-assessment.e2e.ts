@@ -11,6 +11,7 @@ test("final assessment editor follows the audited section layout", async ({ page
   await expect(page.getByRole("columnheader", { name: "Cap", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: /fixed options/ }).first().click();
   await expect(page.getByLabel("Solid Tumour points", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Source:/)).toHaveCount(0);
   await page.getByLabel("Solid Tumour points", { exact: true }).fill("4");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText("Draft saved. Temporary risk thresholds remain blocked from clinical use.", { exact: true })).toBeVisible();
