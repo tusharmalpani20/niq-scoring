@@ -1,5 +1,7 @@
 # Version-bound assessment consumption
 
+The endpoint accepts both versioned definition formats. Format 1 responses and evaluation remain backward compatible. Format 2 is currently an internal draft profile: its public binding and calculation are rejected while `clinicalUsePermitted` is false, even if a legacy or test row has an approved-looking lifecycle. Use the admin preview endpoint for synthetic draft evaluation.
+
 These endpoints authenticate with the existing deployment credential (`Authorization: Bearer …`). The credential determines client and deployment; callers cannot supply another client or arbitrary rule-version ID. Responses use `Cache-Control: no-store`.
 
 ## Start or resume
@@ -28,7 +30,7 @@ POST `/v1/assessments/calculate`
 }
 ```
 
-Start must have established the binding first; otherwise the API returns `ASSESSMENT_NOT_FOUND` (404). Invalid request shapes return 400. Missing/invalid assessment data returns `ASSESSMENT_INCOMPLETE` (422) with explanations and partial results, without billing. No raw answers are persisted in assessment bindings or usage rows.
+Start must have established the binding first; otherwise the API returns `ASSESSMENT_NOT_FOUND` (404). Invalid request shapes return 400. Format 2 invalid answers return `INVALID_ASSESSMENT_ANSWERS` (400) with field-level issues. Missing/all-unanswered assessment data returns `ASSESSMENT_INCOMPLETE` (422) with explanations and partial results, without billing. No raw answers are persisted in assessment bindings or usage rows.
 
 Successful responses contain `result` and `idempotencyKey`. Result evidence includes the concrete rule ID, checksum, binding/reference, calculation timestamp and usage-backed `resultReference`, as well as calculations, component/domain scores, total, classification and guidance.
 
@@ -43,6 +45,12 @@ Client, deployment, platform and scoring-capability disabling prevent retrieval 
 Usage rows now store request fingerprints and the concrete scoring-rule ID. The existing response retention policy continues to apply; result breakdowns are retained for idempotent responses. Deployment and rule deletion checks include bindings.
 
 Draft versions cannot be newly pinned. Existing retired pins may be retained while editing unrelated settings, but cannot start new assessments. The provisional scorer remains a separate non-production endpoint; its historical assignment is preserved.
+
+## Format 2 integration details
+
+The start response projects only the final profile's section/field renderer data and six non-identity supporting inputs: palliative path, palliative timing, previous surgery count, previous/current weight and dietary intake. It omits points, risk ranges, source metadata, samples and provisional authoring data. Answers use the stable field/supporting-input IDs returned by that projection.
+
+The consuming application must not send patient name, contact, age, gender, dates, reports or other identity/non-scoring fields. It should preserve unanswered values as absent/null, preserve explicit empty multi-select arrays, and send calculated/derived inputs rather than calculated field answers. Until threshold confirmation is recorded and a new clinically permitted package is issued, the consuming application should treat final-profile public evaluation as unavailable rather than silently falling back to a different version.
 
 ## Verification
 

@@ -1,4 +1,34 @@
-# Rule definition format 1
+# Versioned rule definition formats
+
+The scoring repository accepts two explicit definition formats. Format 1 is the existing spreadsheet/rule evaluator and its behaviour is unchanged. Format 2 is the audited final NIQ assessment profile described below; it is selected by both `formatVersion: 2` and `profile: "NIQ_FINAL_ASSESSMENT"`. A definition is never reinterpreted across formats.
+
+## Format 2: audited final NIQ assessment
+
+The final profile is a fixed five-section questionnaire with 19 scoring entries:
+
+| Section | Entries |
+| --- | ---: |
+| Disease status | 3 |
+| Treatment | 5 |
+| Health history | 3 |
+| Clinical & GUT health | 2 |
+| Dietary details | 6 |
+
+The field and option IDs, labels, ordering, supporting-input IDs, dependencies, formulas and source-cell references are fixed in `createFinalAssessmentTemplate`. Administrators may edit point values, weight-loss band boundaries/points, protein outcome points, surgery point rate, risk labels/interpretations/ranges and the version description. Structural edits are rejected with `FIXED_RULE_REQUIRED`.
+
+There are no caps in Format 2: no field, section, domain or total cap is accepted by the schema. Selected multi-select options use `aggregation: "sum"`; every selected option contributes its configured points. Interventions are explicitly `NOT_APPLICABLE`, and report uploads and patient identity fields are outside this profile.
+
+### Answer and derivation semantics
+
+Absent or `null` optional inputs are unanswered and contribute `null`. An explicit zero-point choice, `No`, or an empty multi-select array is an answered result with zero points. Duplicate multi-select option IDs, unknown IDs, identity-like keys and submitted values for calculated/derived fields are errors. Conditional and derived entries with missing dependencies are pending, never silently converted to zero.
+
+The profile implements the audited rules exactly: palliative treatment uses the selected path/timing, previous surgery `Yes` uses a positive safe-integer count multiplied by the configured rate, and weight loss is `(previous-current)/previous*100` using the unrounded result. Gain/no change is zero, then the bands are `<5`, `5–10`, and `>10` with the configured inclusive edges. Protein adequacy is derived from dietary intake: normal/more than usual is adequate; reduced/liquid/little-solid/tube intake is inadequate. Fluid and symptom multi-select points are additive without a cap.
+
+An evaluation with at least one answered scoring entry may expose a partial score/classification for internal draft preview. An all-unanswered evaluation has `score: null` and `classification: null` and is incomplete. Invalid answers/configuration are errors. Public calculation bills only a valid complete result; incomplete/invalid requests do not reserve usage.
+
+Format 2 risk categories are deliberately marked `DEVELOPMENT_PLACEHOLDER` with `clinicalUsePermitted: false`. The API allows internal draft preview, but blocks approval, activation, assignment and public evaluation until the client confirms the thresholds. This is a safety gate, not clinical approval.
+
+## Format 1: existing rule definition
 
 Definitions are bounded declarative JSON, validated by `packages/contracts/src/rule-definition.ts`. No scripts, dynamic property access or executable expressions are accepted. Save rejects structural integrity errors; unfinished clinical content remains saveable as a draft with blocking issues. Approval requires structural, content and sample validation of the exact saved revision.
 
