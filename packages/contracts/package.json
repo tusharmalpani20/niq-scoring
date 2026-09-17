@@ -10,7 +10,11 @@
     "./rule-validation": "./src/rule-validation.ts",
     "./rule-template": "./src/rule-template.ts",
     "./rule-public": "./src/rule-public.ts",
-    "./fixed-profile": "./src/fixed-profile.ts"
+    "./fixed-profile": "./src/fixed-profile.ts",
+    "./final-assessment": "./src/final-assessment.ts",
+    "./final-assessment-template": "./src/final-assessment-template.ts",
+    "./final-assessment-validation": "./src/final-assessment-validation.ts",
+    "./versioned-definition": "./src/versioned-definition.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
