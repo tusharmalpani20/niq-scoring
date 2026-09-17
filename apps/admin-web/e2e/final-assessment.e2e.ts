@@ -27,7 +27,8 @@ test("final assessment replaces desktop section navigation with a mobile select"
   await startFinalDraft(page);
   await expect(page.getByLabel("Assessment section", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Scoring sections", exact: true })).toBeHidden();
-  await page.getByLabel("Assessment section", { exact: true }).selectOption("dietary_details");
+  await page.getByLabel("Assessment section", { exact: true }).click();
+  await page.getByRole("option", { name: "Dietary details (6)", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Dietary details", exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("final-assessment-mobile.png"), animations: "disabled", fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
