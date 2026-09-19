@@ -4,7 +4,7 @@ This note is for the separate NIQ Application implementation. It describes the c
 
 ## Current status
 
-NIQ Scoring stores the audited profile as `formatVersion: 2`, `profile: "NIQ_FINAL_ASSESSMENT"`. The risk thresholds are visibly provisional and server-enforced as non-clinical. Admins may create/save/reopen/duplicate the draft and use internal preview. Approval, activation, new deployment assignment and public `/v1/assessments/*` binding are blocked with `PROVISIONAL_THRESHOLDS_UNCONFIRMED` or `VERSION_UNAVAILABLE` until a separately reviewed, clinically permitted package exists.
+NIQ Scoring stores the profile as `formatVersion: 2`, `profile: "NIQ_FINAL_ASSESSMENT"`. New drafts use client-confirmed defaults. Confirmed definitions still require normal validation and approval before deployment assignment or public evaluation. Existing development definitions retain their original thresholds and restrictions until explicitly upgraded and saved with revision checking. The admin editor provides **Apply confirmed rules** for eligible drafts; it changes weight-loss thresholds and risk categories while preserving configured points and does not alter approved history.
 
 Do not silently convert the existing TEST version. The intended handoff is a new final-profile draft with its own rule-version ID, checksum and revision history.
 
@@ -18,7 +18,7 @@ Do not silently convert the existing TEST version. The intended handoff is a new
 
 ## Privacy and clinical boundary
 
-The final scoring profile excludes patient identity, contact details, dates, reports/uploads, BMI/labs and other non-scoring workbook fields. The application should keep those concerns in its own authorized systems and must not add them to `answers`. Do not expose internal points or provisional thresholds to patients or clinicians as clinical guidance. Interventions are `N/A` and report uploads are deferred.
+The final scoring profile excludes patient identity, contact details, dates, reports/uploads, BMI/labs and other non-scoring workbook fields. The application should keep those concerns in its own authorized systems and must not add them to `answers`. Do not expose internal rule configuration through the public questionnaire projection. Interventions are `N/A`. Additional report uploads belong to NIQ Application and are outside this scoring implementation.
 
 ## Scoring invariants for client-side validation
 
@@ -29,4 +29,25 @@ The server is authoritative. Client validation may improve UX but must preserve 
 - Store the returned `ruleVersionId` and checksum with the assessment session evidence.
 - Never choose a rule version from the client request.
 - Never fall back from an unavailable final profile to TEST or another version without an explicit product decision.
-- Keep the final-profile public integration disabled until NIQ Scoring exposes a package with `clinicalUsePermitted: true` after clinical confirmation.
+- Use only an approved, available rule package selected by the server. Source confirmation alone does not approve a draft.
+
+
+## Confirmed assessment defaults
+
+Positive weight loss below 6% gives 1 point; 6–10% inclusive gives 2; above 10% gives 3. Gain/no change gives 0. Calculate from positive previous/current weights before display rounding. Each supplied weight is validated independently even when the other is absent.
+
+Normal intake and More than usual map to Adequate (0); the other four intake choices map to Inadequate (1). Assessment point settings and surgery rates are whole numbers. Risk defaults are Low Risk 0–15, Moderate Risk 16–25, High Risk above 25. All multi-select contributions add without caps.
+
+## Independent face-scan points
+
+`@niq-scoring/scoring-engine/face-scan-scoring` exports `calculateFaceScanScore({ wellnessScore })`. The provider's `wellness_score` (Overall Health Score) must be normalized to this numeric 0–100 input by the future trusted provider adapter. Do not substitute `health_risk_score`, individual vitals or an assessment total.
+
+- Below 70% → 3 points.
+- 70–80%, inclusive → 2 points.
+- Above 80% → 1 point.
+
+The result includes `scoringVersion: "NIQ_FACE_SCAN_2026_09"`, `wellnessScore`, `points` and `status`. Missing/null returns `UNAVAILABLE` with null points; invalid numbers/types are rejected. A real zero score is valid and returns 3 points. No rounding occurs before classification. This result is independent of assessment totals and categories.
+
+The Face scan editor tab shows the fixed mapping. This phase adds the calculation and tests only; it does not enable camera capture, authenticate CarePlix, create provider sessions, process callbacks or charge usage. No new public endpoint accepts unverified face-scan claims. Live integration will connect trusted provider results to this evaluator separately.
+
+Server-only `CAREPLIX_API_BASE_URL`, `CAREPLIX_API_KEY` and `CAREPLIX_API_SECRET` are documented in `.env.example`; local values remain outside Git. Authentication is still awaiting provider clarification. Do not expose these values to the browser.
