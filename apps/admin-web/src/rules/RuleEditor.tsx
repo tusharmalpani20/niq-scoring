@@ -61,7 +61,7 @@ function LegacyRuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; 
     setBusy(true);
     try {
       accept(await request<RuleDetail>(`/admin/rules/${record.id}`, { revision: record.revision, definition: parsed.data }, 'PUT'));
-      setNotice(checks.length ? 'Draft saved. Configuration is incomplete; this version is not ready for use.' : 'Draft saved.');
+      setNotice(checks.length ? 'Draft saved. Complete the scoring settings before using this version.' : 'Draft saved.');
     } catch (cause) { setError(message(cause)); if (cause instanceof ApiError) setIssues(cause.issues.filter((item): item is { message: string } => item !== null && typeof item === 'object' && 'message' in item && typeof item.message === 'string')); }
     finally { setBusy(false); }
   }
@@ -83,7 +83,7 @@ function LegacyRuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; 
       <TabsContent value="scoring" forceMount className="data-[state=inactive]:hidden">
       <ScoringEditor definition={definition} onChange={update} disabled={!editable || busy}/></TabsContent>
       <TabsContent value="risk categories"><RiskCategoriesEditor definition={definition} onChange={update} disabled={!editable || busy}/></TabsContent>
-      <TabsContent value="interventions"><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-6 shadow-sm"><h3 className="font-medium">Interventions</h3><span className="text-sm text-muted-foreground">N/A — not finalized</span></div></TabsContent>
+      <TabsContent value="interventions"><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-6 shadow-sm"><h3 className="font-medium">Interventions</h3><span className="text-sm text-muted-foreground">Not yet available</span></div></TabsContent>
       </Tabs>
     </> : <p>This earlier definition can’t be edited here.</p>}
     <ErrorNotice error={error}/>{notice && <p role="status" className="text-sm">{notice}</p>}

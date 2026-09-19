@@ -43,7 +43,7 @@ test("real API final-profile draft, reopen, duplicate and protected deletion", a
   await page.getByRole("button", { name: "Back to versions", exact: true }).click();
   for (const title of [`${name} copy`, name]) {
     await page.getByRole("button", { name: `Delete ${title}`, exact: true }).click();
-    await expect(page.getByRole("alertdialog")).toContainText("Audit history is retained.");
+    await expect(page.getByRole("alertdialog")).toContainText("Its activity history will be kept.");
     await page.getByRole("alertdialog").getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page.getByRole("button", { name: title, exact: true })).toHaveCount(0);
   }
