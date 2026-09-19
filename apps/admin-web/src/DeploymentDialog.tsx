@@ -1,3 +1,4 @@
+import { defaultVersionLabel } from "./deployment-version";
 import { TokenExpirySelect, tokenExpiry } from "./TokenExpirySelect";
 import { type ActivationToken } from "./ActivationTokenPanel";
 import { useState } from "react";
@@ -72,7 +73,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
     ["Status", values.enabled ? "Enabled" : "Disabled"],
     ["Scoring", !values.enabled || !values.scoringEnabled ? "Disabled" : values.scoringUnlimited ? "Unlimited" : `${values.scoringLimit} / month`],
     ["Face scan", !values.enabled || !values.faceEnabled ? "Disabled" : values.faceUnlimited ? "Unlimited" : `${values.faceLimit} / month`],
-    ["Rule version", values.ruleVersion === "LATEST_APPROVED" ? "Latest approved" : data.versions.find(version => version.id === values.ruleVersion)?.version ?? ""],
+    ["Rule version", values.ruleVersion === "LATEST_APPROVED" ? defaultVersionLabel(data) : data.versions.find(version => version.id === values.ruleVersion)?.version ?? ""],
   ];
   const select = (name: "clientId" | "hostingType" | "ruleVersion" | "environment", label: string, options: Array<{ value: string; label: string }>, disabled = false) => <Controller control={form.control} name={name} render={({ field, fieldState }) => <Field><FieldLabel htmlFor={`deployment-${name}`}>{label}</FieldLabel><Select value={field.value} onValueChange={value => { field.onChange(value); form.clearErrors(name); }} disabled={disabled || busy}><SelectTrigger ref={field.ref} onBlur={field.onBlur} id={`deployment-${name}`} aria-invalid={fieldState.invalid}><SelectValue placeholder={`Select ${label.toLowerCase()}`} /></SelectTrigger><SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>{fieldState.error && <FieldError errors={[fieldState.error]} />}</Field>} />;
   const toggle = (name: "enabled" | "scoringEnabled" | "faceEnabled" | "scoringUnlimited" | "faceUnlimited", label: string, disabled = false) => <Controller control={form.control} name={name} render={({ field }) => <div className="flex items-center justify-between gap-3"><FieldLabel htmlFor={`deployment-${name}`}>{label}</FieldLabel><Switch id={`deployment-${name}`} checked={field.value} onCheckedChange={field.onChange} disabled={busy || disabled} /></div>} />;
@@ -115,7 +116,9 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
         {capabilityCard("scoring", "Scoring", "scores")}
         {capabilityCard("face", "Face scan", "face scans")}
       </div>
-      {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: "Latest approved" }, ...data.versions.filter(version => version.id === values.ruleVersion || version.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(version.lifecycle)).map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
+      {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: defaultVersionLabel(data) }, ...data.versions.filter(version => version.id === values.ruleVersion || version.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(version.lifecycle)).map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
+      <p className="text-sm text-muted-foreground">{values.ruleVersion === "LATEST_APPROVED" ? "New assessments use the default version. If the default changes, assessments already started keep their original rules." : "This deployment stays on the selected version until you change it."}</p>
+      {values.ruleVersion === "LATEST_APPROVED" && !data.versions.some(version => version.isDefault) && <p className="text-sm text-destructive">No default is set. Choose a version or set a default in Rule versions before starting assessments.</p>}
       </div>}
       {!savedId && step === 2 && <div className="space-y-5">
         <dl className="divide-y rounded-xl border">{reviewRows.map(([label, value]) => <div key={label} className="grid grid-cols-2 gap-3 px-4 py-3 text-sm"><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-medium break-words">{value}</dd></div>)}</dl>

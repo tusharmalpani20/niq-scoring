@@ -1,3 +1,4 @@
+import { deploymentVersion } from "./deployment-version";
 import type { Overview } from "./Operations";
 import { ActivationTokenPanel } from "./ActivationTokenPanel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./components/ui/dialog";
@@ -8,8 +9,7 @@ import { Badge } from "./components/ui/badge";
 export function DeploymentDetailsDialog({ data, deployment, clientName, hostingLabel, initialTab = "details", onClose }: {
   data: Overview; deployment: Overview["deployments"][number]; clientName: string; hostingLabel: string; initialTab?: "details" | "tokens"; onClose: () => void;
 }) {
-  const assignment = data.assignments.find(item => item.deploymentId === deployment.id);
-  const version = assignment?.mode === "PINNED" ? data.versions.find(item => item.id === assignment.scoringRuleVersionId)?.version ?? "Not specified" : assignment ? "Latest approved" : "Not specified";
+  const version = deploymentVersion(data, deployment.id).label;
   const allowance = (capability: string) => {
     const entitlement = data.entitlements.find(item => item.deploymentId === deployment.id && item.capability === capability);
     return !entitlement?.enabled ? "Disabled" : entitlement.monthlyLimit === null ? "Unlimited" : `${entitlement.monthlyLimit.toLocaleString()} per month`;

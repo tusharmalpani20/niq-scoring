@@ -29,6 +29,7 @@ export type Overview = {
     version: string;
     lifecycle: string;
     clinicalUsePermitted: boolean;
+    isDefault?: boolean;
   }>;
 };
 export function Operations({

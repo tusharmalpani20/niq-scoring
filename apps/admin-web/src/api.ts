@@ -38,6 +38,8 @@ const errors: Record<string, string> = {
   VERSION_UNAVAILABLE: "Choose an approved, available rule version.",
   RULE_REVISION_CONFLICT: "This version changed in another session. Your edits are preserved. Reload only when you are ready to discard them.",
   RULE_NAME_EXISTS: "A rule version with this name already exists.",
+  RULE_DEFAULT_REQUIRES_ACTIVE: "Activate this version before making it the default.",
+  RULE_IS_DEFAULT: "Choose another default before retiring this version.",
   RULE_IMMUTABLE: "This version is read-only. Duplicate it to make changes.",
   RULE_IN_USE: "This version is in use and cannot be deleted.",
   RULE_NOT_FOUND: "This version is no longer available.",

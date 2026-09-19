@@ -1,3 +1,4 @@
+import { deploymentVersion } from "./deployment-version";
 import { DeploymentDetailsDialog } from "./DeploymentDetailsDialog";
 import { DeleteRecord } from "./DeleteRecord";
 import { useState } from "react";
@@ -22,6 +23,7 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
   const [hosting, setHosting] = useState("all");
   const [status, setStatus] = useState("all");
   const [environment, setEnvironment] = useState("all");
+  const [ruleVersion, setRuleVersion] = useState("all");
   const [page, setPage] = useState(1);
   const clientName = (id: string) => data.clients.find(client => client.id === id)?.name ?? id;
   const query = search.trim().toLocaleLowerCase();
@@ -29,14 +31,15 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
     clientName(deployment.clientId).toLocaleLowerCase().includes(query) &&
     (hosting === "all" || (deployment.hostingType ?? "unspecified") === hosting) &&
     (status === "all" || deployment.enabled === (status === "enabled")) &&
-    (environment === "all" || deployment.environment === environment)
+    (environment === "all" || deployment.environment === environment) &&
+    (ruleVersion === "all" || (ruleVersion === "default" ? deploymentVersion(data, deployment.id).followsDefault : ruleVersion === "unassigned" ? !deploymentVersion(data, deployment.id).id : deploymentVersion(data, deployment.id).id === ruleVersion))
   ), page);
   const filter = (label: string, value: string, setValue: (value: string) => void, options: Array<[string, string]>) =>
     <Select value={value} onValueChange={next => { setValue(next); setPage(1); }}>
       <SelectTrigger aria-label={label} className="w-full sm:w-44"><SelectValue /></SelectTrigger>
       <SelectContent><SelectItem value="all">All {label.toLowerCase()}</SelectItem>{options.map(([key, text]) => <SelectItem key={key} value={key}>{text}</SelectItem>)}</SelectContent>
     </Select>;
-  const filtersActive = hosting !== "all" || status !== "all" || environment !== "all";
+  const filtersActive = hosting !== "all" || status !== "all" || environment !== "all" || ruleVersion !== "all";
   return <Tabs defaultValue="deployments" className="gap-5">
     <div className="flex items-center justify-between gap-3">
       <TabsList variant="line" aria-label="Deployment management" className="p-0"><TabsTrigger value="deployments" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Deployments <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{data.deployments.length}</Badge></TabsTrigger></TabsList>
@@ -46,18 +49,20 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
       {filter("Hosting", hosting, setHosting, [...Object.entries(hostingLabels).filter(([key]) => key !== "ON_PREMISES" || data.deployments.some(d => d.hostingType === key)) as Array<[string, string]>, ...(data.deployments.some(d => !d.hostingType) ? [["unspecified", "Not specified"] as [string, string]] : [])])}
       {filter("Statuses", status, setStatus, [["enabled", "Enabled"], ["disabled", "Disabled"]])}
       {filter("Environments", environment, setEnvironment, ["development", "test", "staging", "production"].map(value => [value, value.charAt(0).toUpperCase() + value.slice(1)]))}
-      {filtersActive && <Button variant="ghost" size="sm" onClick={() => { setHosting("all"); setStatus("all"); setEnvironment("all"); setPage(1); }}>Clear filters</Button>}
+      {filter("Rule versions", ruleVersion, setRuleVersion, [["default", "Following default"], ...data.versions.map(version => [version.id, version.version] as [string, string]), ["unassigned", "No available version"]])}
+      {filtersActive && <Button variant="ghost" size="sm" onClick={() => { setHosting("all"); setStatus("all"); setEnvironment("all"); setRuleVersion("all"); setPage(1); }}>Clear filters</Button>}
     </div>
     <TabsContent value="deployments" className="space-y-5"><Card><CardContent className="pt-6"><Table>
-      <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Hosting</TableHead><TableHead>Environment</TableHead><TableHead>Status</TableHead><TableHead>Scoring</TableHead><TableHead>Face scan</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+      <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Hosting</TableHead><TableHead>Environment</TableHead><TableHead>Status</TableHead><TableHead>Rule version</TableHead><TableHead>Scoring</TableHead><TableHead>Face scan</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
       <TableBody>{deployments.rows.map(deployment => <TableRow key={deployment.id}>
         <TableCell><Button variant="link" className="h-auto p-0 text-left font-medium" onClick={() => setView({ id: deployment.id, tab: "details" })}>{clientName(deployment.clientId)}</Button></TableCell>
         <TableCell>{deployment.hostingType ? hostingLabels[deployment.hostingType] : "Not specified"}</TableCell><TableCell className="capitalize">{deployment.environment}</TableCell><TableCell><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
+        <TableCell>{deploymentVersion(data, deployment.id).label}</TableCell>
         {["SCORING", "FACE_SCAN"].map(capability => { const limit = data.entitlements.find(item => item.deploymentId === deployment.id && item.capability === capability); return <TableCell key={capability}>{!limit?.enabled ? "Disabled" : limit.monthlyLimit === null ? "Unlimited" : `${limit.monthlyLimit.toLocaleString()}/month`}</TableCell>; })}
         <TableCell className="text-right"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" aria-label={`Edit ${clientName(deployment.clientId)} ${deployment.environment} deployment`} title="Edit deployment" onClick={() => setSelected(deployment)}><Pencil className="size-4" /></Button><DeleteRecord iconOnly kind="deployments" id={deployment.id} name={`${clientName(deployment.clientId)} ${deployment.environment} deployment`} refresh={refresh} revision={data} /></div></TableCell>
       </TableRow>)}
-      {data.deployments.length === 0 && <TableRow><TableCell colSpan={7} className="h-32 text-center"><Button variant="ghost" onClick={() => setSelected(null)}><Plus />Create your first deployment</Button></TableCell></TableRow>}
-      {data.deployments.length > 0 && deployments.total === 0 && <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground">No deployments match your search or filters.</TableCell></TableRow>}
+      {data.deployments.length === 0 && <TableRow><TableCell colSpan={8} className="h-32 text-center"><Button variant="ghost" onClick={() => setSelected(null)}><Plus />Create your first deployment</Button></TableCell></TableRow>}
+      {data.deployments.length > 0 && deployments.total === 0 && <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">No deployments match your search or filters.</TableCell></TableRow>}
       </TableBody></Table></CardContent></Card>
       <Pagination aria-label="Deployments pagination"><PaginationContent><PaginationItem><Button variant="outline" size="sm" disabled={deployments.page === 1} onClick={() => setPage(deployments.page - 1)}>Previous</Button></PaginationItem><PaginationItem><span className="flex flex-col items-center gap-1 px-2 text-xs text-muted-foreground sm:block sm:px-3 sm:text-sm" role="status"><span className="whitespace-nowrap">Page {deployments.page} of {deployments.pageCount}</span><span className="whitespace-nowrap"><span className="hidden sm:inline"> · </span>{deployments.total} total</span></span></PaginationItem><PaginationItem><Button variant="outline" size="sm" disabled={deployments.page === deployments.pageCount} onClick={() => setPage(deployments.page + 1)}>Next</Button></PaginationItem></PaginationContent></Pagination>
     </TabsContent>
