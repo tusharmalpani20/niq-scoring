@@ -41,7 +41,7 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
     const fingerprint = ruleChecksum({ actor: actor(c), ...input });
     // Replay before loading the source: the source may have changed or been deleted since creation.
     const prior = await store.replayCreate(input.requestId, fingerprint, actor(c));
-    if (prior) return c.json(prior, 201);
+    if (prior) return c.json({ ...prior, audit: await store.audit(prior.id) }, 201);
     let definition = input.template === "final_assessment" ? createFinalAssessmentTemplate(input.name) : createSpreadsheetTemplate(input.name);
     if (input.duplicateId) {
       const source = await store.get(input.duplicateId);
@@ -52,7 +52,7 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
       definition = { ...sourceDefinition.data, name: input.name };
     }
     const record = await store.create({ id: createEntityId(), definition, checksum: ruleChecksum(definition), actor: actor(c), requestId: input.requestId, fingerprint, now: now().toISOString() });
-    return c.json(record, 201);
+    return c.json({ ...record, audit: await store.audit(record.id) }, 201);
   }));
   const getByName = guard(async (c: Context) => {
     const name = c.req.param("name") ?? c.req.query("name");
@@ -78,7 +78,8 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
     const current = await store.get(c.req.param("id")!);
     if (current && !versionedRuleDefinitionSchema.safeParse(current.definition).success) return c.json({ error: "LEGACY_RULE_FORMAT" }, 409);
     if (current && !isFixedVersionedDefinition(current.definition)) return c.json({ error: "FIXED_RULE_REQUIRED" }, 409);
-    return c.json(await store.save({ id: c.req.param("id")!, ...parsed.data, checksum: ruleChecksum(parsed.data.definition), actor: actor(c), now: now().toISOString() }));
+    const saved = await store.save({ id: c.req.param("id")!, ...parsed.data, checksum: ruleChecksum(parsed.data.definition), actor: actor(c), now: now().toISOString() });
+    return c.json({ ...saved, audit: await store.audit(saved.id) });
   }));
   app.post("/admin/rules/:id/preview", guard(async c => {
     const parsed = z.object({ revision: z.number().int().positive(), answers: answersSchema }).strict().safeParse(await c.req.json().catch(() => null));
@@ -109,7 +110,8 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
       if (issues.length) return c.json({ error: "RULE_VALIDATION_FAILED", issues }, 422);
     }
     if (isFinalAssessmentDefinition(definition.data) && !definition.data.provisional.clinicalUsePermitted && ["approve", "activate"].includes(action.data)) return c.json({ error: "PROVISIONAL_THRESHOLDS_UNCONFIRMED" }, 409);
-    return c.json(await store.transition({ id: record.id, revision: parsed.data.revision, action: action.data as "validate" | "approve" | "activate" | "retire", actor: actor(c), now: now().toISOString() }));
+    const transitioned = await store.transition({ id: record.id, revision: parsed.data.revision, action: action.data as "validate" | "approve" | "activate" | "retire", actor: actor(c), now: now().toISOString() });
+    return c.json({ ...transitioned, audit: await store.audit(transitioned.id) });
   }));
   app.delete("/admin/rules/:id", guard(async c => {
     const parsed = revisionSchema.safeParse(await c.req.json().catch(() => null));

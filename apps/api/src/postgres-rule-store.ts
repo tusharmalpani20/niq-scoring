@@ -134,9 +134,11 @@ export class PostgresRuleStore implements RuleStore {
   }
 
   async audit(id: string): Promise<RuleAudit[]> {
-    const rows = await this.database<Array<Omit<RuleAudit, "at"> & { at: Date | string }>>`select id,actor_reference as actor,action,occurred_at as at,
-      (metadata->>'revision')::integer as revision,metadata->>'checksum' as checksum from audit_events
-      where resource_type='rule_version' and resource_reference=${id} order by occurred_at,id`;
-    return rows.map(row => ({ ...row, at: timestamp(row.at) }));
+    const rows = await this.database<Array<Omit<RuleAudit, "at" | "actorName"> & { at: Date | string; actorName: string | null }>>`select e.id,e.actor_reference as actor,u.display_name as "actorName",e.action,e.occurred_at as at,
+      (e.metadata->>'revision')::integer as revision,e.metadata->>'checksum' as checksum from audit_events e
+      left join admin_users u on u.id=e.actor_reference
+      where e.resource_type='rule_version' and e.resource_reference=${id} order by e.occurred_at,e.id`;
+    // Keep the recorded actor ID even if the account is no longer available.
+    return rows.map(({ actorName, ...row }) => ({ ...row, ...(actorName ? { actorName } : {}), at: timestamp(row.at) }));
   }
 }

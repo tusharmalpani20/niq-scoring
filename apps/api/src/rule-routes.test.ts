@@ -57,6 +57,27 @@ async function savedSynthetic(context: ReturnType<typeof setup>, name = "Synthet
 }
 
 describe("rule management API", () => {
+  test("mutation responses include the recorded lifecycle history", async () => {
+    const context = setup();
+    const input = { name: "Audit response", template: "spreadsheet", requestId: crypto.randomUUID() };
+    let rule = await (await context.request("", "POST", input)).json() as RuleRecord & { audit: RuleAudit[] };
+    expect(rule.audit).toHaveLength(1);
+    expect(rule.audit[0]).toMatchObject({ actor: actorId, action: "RULE_CREATED", at: now, revision: 1, checksum: rule.packageChecksum });
+    const replay = await (await context.request("", "POST", input)).json() as typeof rule;
+    expect(replay.audit).toEqual(rule.audit);
+    rule = await (await context.request(`/${rule.id}`, "PUT", { revision: rule.revision, definition: synthetic(input.name) })).json() as typeof rule;
+    expect(rule.audit.map(event => event.action)).toEqual(["RULE_CREATED", "RULE_SAVED"]);
+    for (const [action, event] of [["validate", "RULE_VALIDATED"], ["approve", "RULE_APPROVED"], ["activate", "RULE_ACTIVE"], ["retire", "RULE_RETIRED"]] as const) {
+      const priorLength = rule.audit.length;
+      const response = await context.request(`/${rule.id}/${action}`, "POST", { revision: rule.revision });
+      expect(response.status).toBe(200);
+      rule = await response.json() as typeof rule;
+      expect(rule.audit).toHaveLength(priorLength + 1);
+      expect(rule.audit.at(-1)).toMatchObject({ actor: actorId, action: event, at: now, revision: rule.revision, checksum: rule.packageChecksum });
+      expect(rule.audit).toEqual(await context.store.rules.audit(rule.id));
+    }
+  });
+
   test("requires an enabled administrator session and allowed origin", async () => {
     const { app, authStore, request, create } = setup();
     const rule = await create();

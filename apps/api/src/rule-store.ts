@@ -6,7 +6,7 @@ export type RuleRecord = {
   validatedRevision: number | null; createdAt: string; updatedAt: string;
   createdBy: string | null; approvedAt: string | null;
 };
-export type RuleAudit = { id: string; actor: string; action: string; at: string; revision: number; checksum: string };
+export type RuleAudit = { id: string; actor: string; actorName?: string; action: string; at: string; revision: number; checksum: string };
 export class RuleStoreError extends Error { constructor(public code: string) { super(code); } }
 export type RuleCreate = { id: string; definition: VersionedRuleDefinition; checksum: string; actor: string; requestId: string; fingerprint: string; now: string };
 export type RuleSave = { id: string; revision: number; definition: VersionedRuleDefinition; checksum: string; actor: string; now: string };

@@ -11,13 +11,14 @@ test.skipIf(process.env.RULE_DATABASE_TEST !== "1")("PostgreSQL drafts are atomi
   const store = new PostgresRuleStore(sql);
   const ids = [createEntityId(), createEntityId()];
   try {
-    const [actor] = await sql<Array<{ id: string }>>`select id from admin_users where enabled=true limit 1`;
+    const [actor] = await sql<Array<{ id: string; displayName: string }>>`select id, display_name as "displayName" from admin_users where enabled=true limit 1`;
     if (!actor) throw new Error("Integration test requires an existing enabled administrator");
     const definition = blankRuleDefinition(`Synthetic persistence ${ids[0]}`);
     const input = { id: ids[0]!, definition, checksum: ruleChecksum(definition), actor: actor.id, requestId: crypto.randomUUID(), fingerprint: crypto.randomUUID(), now: new Date().toISOString() };
     const created = await Promise.all([store.create(input), store.create(input)]);
     expect(created[0]?.id).toBe(created[1]?.id);
     expect(await store.audit(input.id)).toHaveLength(1);
+    expect((await store.audit(input.id))[0]).toMatchObject({ actor: actor.id, actorName: actor.displayName, at: input.now });
     const duplicate = { ...input, id: ids[1]!, requestId: crypto.randomUUID(), definition: { ...definition, name: ` ${definition.name.toUpperCase()} ` } };
     await expect(store.create(duplicate)).rejects.toThrow("RULE_NAME_EXISTS");
     expect(await store.get(ids[1]!)).toBeNull();
