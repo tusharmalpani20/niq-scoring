@@ -156,6 +156,8 @@ test("confirmed drafts validate, approve explicitly and activate without editing
   await page.reload();
   await expect(page.getByText("Default", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Make default", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Retire version", exact: true })).toBeDisabled();
+  await expect(page.getByText("To retire this default, open another active version and choose Make default first.")).toBeVisible();
 });
 
 test("activation can explicitly make a version the default", async ({ page }) => {
@@ -306,4 +308,31 @@ test("editing a checked draft resets progress but retains history", async ({ pag
   await expect(timeline.getByRole("list", { name: "Version stages" }).getByRole("listitem").nth(1)).toContainText("Not completed");
   await timeline.getByText("Activity history", { exact: true }).click();
   await expect(timeline).toContainText("Checks passed");
+});
+
+test("retirement requires confirmation and remains visible in history and filters", async ({ page }) => {
+  const state = await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  await page.getByRole("button", { name: "Check rules", exact: true }).click();
+  await page.getByRole("button", { name: "Continue to approval", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Approve version", exact: true }).click();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await page.getByRole("button", { name: "Retire version", exact: true }).click();
+  await expect(page.getByRole("alertdialog")).toContainText("Move any deployments pinned to it");
+  await page.getByRole("alertdialog").getByRole("button", { name: "Cancel", exact: true }).click();
+  expect(state.getRecord()!.lifecycle).toBe("APPROVED");
+  await page.getByRole("button", { name: "Retire version", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Retire version", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("Version retired");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  expect(state.getRecord()!.lifecycle).toBe("RETIRED");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Retire version", exact: true })).toHaveCount(0);
+  await page.getByText("Activity history", { exact: true }).click();
+  await expect(page.getByText("Version retired", { exact: true })).toBeVisible();
+  await page.goto("/versions");
+  await page.getByRole("combobox", { name: "Filter by lifecycle" }).click();
+  await page.getByRole("option", { name: "Retired", exact: true }).click();
+  await expect(page.getByRole("row").filter({ hasText: "Final assessment browser draft" })).toBeVisible();
 });

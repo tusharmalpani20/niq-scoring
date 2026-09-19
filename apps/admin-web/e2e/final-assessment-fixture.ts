@@ -59,7 +59,8 @@ export async function mockFinalConsole(page: Page) {
         audit("RULE_DEFAULT_SET");
         return json(record);
       }
-      const lifecycle = action === "validate" ? "VALIDATED" : action === "approve" ? "APPROVED" : "ACTIVE";
+      if (action === "retire" && record.isDefault) return json({ error: "RULE_IS_DEFAULT" }, 409);
+      const lifecycle = action === "retire" ? "RETIRED" : action === "validate" ? "VALIDATED" : action === "approve" ? "APPROVED" : "ACTIVE";
       record = { ...record, lifecycle, revision: record.revision + 1, clinicalUsePermitted: lifecycle === "APPROVED" || lifecycle === "ACTIVE" };
       audit(`RULE_${lifecycle}`);
       if (action === "activate" && body.makeDefault) { record.isDefault = true; audit("RULE_DEFAULT_SET"); }

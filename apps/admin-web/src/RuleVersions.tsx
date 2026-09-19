@@ -49,14 +49,14 @@ export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
       </div>
     </div>
     <TabsContent value="versions" className="space-y-5">
-      <div className="max-w-xs"><NativeSelect aria-label="Filter by lifecycle" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">All statuses</option>{["DRAFT", "VALIDATED", "APPROVED", "ACTIVE", "RETIRED"].map(value => <option key={value} value={value}>{value.charAt(0) + value.slice(1).toLowerCase()}</option>)}</NativeSelect></div>
+      <div className="max-w-xs"><NativeSelect aria-label="Filter by lifecycle" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">All statuses</option>{["DRAFT", "VALIDATED", "APPROVED", "ACTIVE", "RETIRED"].map(value => <option key={value} value={value}>{value === "VALIDATED" ? "Checked" : value.charAt(0) + value.slice(1).toLowerCase()}</option>)}</NativeSelect></div>
       {loading && <p role="status" className="text-sm text-muted-foreground">Loading versions…</p>}
       <Card><CardContent className="pt-6"><Table>
         <TableHeader><TableRow><TableHead>Version</TableHead><TableHead>Status</TableHead><TableHead>Clinical use</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
           {versions.rows.map(version => <TableRow key={version.id}>
             <TableCell className="font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-left" disabled={busy} onClick={() => void open(version.version)}>{version.version}</Button>{version.isDefault && <Badge className="ml-2">Default</Badge>}</TableCell>
-            <TableCell><Badge variant={version.lifecycle === "APPROVED" || version.lifecycle === "ACTIVE" ? "default" : "secondary"}>{version.lifecycle.charAt(0) + version.lifecycle.slice(1).toLowerCase()}</Badge></TableCell>
+            <TableCell><Badge variant={version.lifecycle === "APPROVED" || version.lifecycle === "ACTIVE" ? "default" : "secondary"}>{version.lifecycle === "VALIDATED" ? "Checked" : version.lifecycle.charAt(0) + version.lifecycle.slice(1).toLowerCase()}</Badge></TableCell>
             <TableCell><span className={version.clinicalUsePermitted ? "text-primary" : "text-destructive"}>{version.clinicalUsePermitted ? "Permitted" : "Prohibited"}</span></TableCell>
             <TableCell><div className="flex justify-end gap-1">{version.editable && <Button variant="ghost" size="icon" title={`Edit ${version.version}`} aria-label={`Edit ${version.version}`} onClick={() => open(version.version)}><Pencil className="size-4" /></Button>}<Button variant="ghost" size="icon" title={`Duplicate ${version.version}`} aria-label={`Duplicate ${version.version}`} disabled={busy || version.duplicable === false} onClick={() => { setSource(version); setCreating(true); }}><Copy className="size-4" /></Button>{(version.deletable ?? version.editable) && version.lifecycle === "DRAFT" && <Button variant="ghost" size="icon" className="text-destructive" title={`Delete ${version.version}`} aria-label={`Delete ${version.version}`} onClick={() => { setError(""); setDeleting(version); }}><Trash2 className="size-4" /></Button>}</div></TableCell>
           </TableRow>)}
