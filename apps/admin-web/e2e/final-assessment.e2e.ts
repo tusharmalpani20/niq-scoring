@@ -132,7 +132,11 @@ test("confirmed drafts validate, approve explicitly and activate without editing
   await page.getByRole("button", { name: "Done", exact: true }).click();
   const timeline = page.getByRole("region", { name: "Version timeline" });
   await expect(timeline).toContainText("Current: Active");
-  await expect(timeline.locator('[aria-current="step"]')).toContainText("Browser QA");
+  await expect(timeline.locator('[aria-current="step"]')).not.toContainText("Browser QA");
+  await timeline.getByRole("button", { name: "Active details", exact: true }).click();
+  await expect(page.getByRole("tooltip")).toContainText("Browser QA");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
   await expect(timeline.locator('[aria-current="step"] time')).toHaveAttribute("datetime", /2026-09-19/);
   await page.reload();
   await expect(timeline).toContainText("Current: Active");
