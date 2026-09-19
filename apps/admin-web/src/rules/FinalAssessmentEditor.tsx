@@ -131,7 +131,7 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
     try {
       accept(await request<RuleDetail>(`/admin/rules/${record.id}/${action}`, { revision: record.revision }));
       setConfirmationAction(null);
-      setResult({ action, success: true, detail: action === "validate" ? "The saved scoring rules and sample assessments passed the automated checks. This version is ready for approval. You can still edit it; saving changes will require another check." : action === "approve" ? "This version is approved and its scoring settings are now locked. Activate it when you are ready to make it available for deployment assignment. To change the rules, duplicate this version into a new draft." : "This version is active and available for deployment assignment. Activation does not change existing deployment assignments. Assign it from Deployments when you are ready to use it." });
+      setResult({ action, success: true, detail: action === "validate" ? "This version is ready for approval. If you make changes, check the rules again." : action === "approve" ? "This version is approved and its scoring settings are now locked. Activate it when you are ready to make it available for deployment assignment. To change the rules, duplicate this version into a new draft." : "This version is active and available for deployment assignment. Activation does not change existing deployment assignments. Assign it from Deployments when you are ready to use it." });
     } catch (cause) { setConfirmationAction(null); setResult({ action, success: false, detail: message(cause) }); if (cause instanceof ApiError) showIssues(cause.issues.filter(issue => issue !== null && typeof issue === "object") as Issue[]); }
     finally { setBusy(false); }
   }
