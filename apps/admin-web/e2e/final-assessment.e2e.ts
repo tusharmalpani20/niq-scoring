@@ -185,12 +185,7 @@ test("activation can explicitly make a version the default", async ({ page }) =>
   await expect(impact).toContainText("Previous rules");
   await expect(impact).toContainText("Final assessment browser draft");
   await expect(impact).toContainText("2 deployments will use Final assessment browser draft for new assessments.");
-  await expect(impact.getByText("3 deployments currently use Previous rules.")).not.toBeVisible();
-  await impact.getByText("View deployment details", { exact: true }).click();
-  await expect(impact.getByText("3 deployments currently use Previous rules.")).toBeVisible();
-  await expect(impact).toContainText("1 deployment is set to Previous rules directly and will keep using it.");
-  await expect(impact).toContainText("1 deployment already uses Final assessment browser draft directly.");
-  await expect(impact).toContainText("1 paused deployment is included in the switch.");
+  await expect(impact.locator("details")).toHaveCount(0);
   await page.getByRole("alertdialog").getByRole("button", { name: "Activate version", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("Deployments following the default");
   await page.getByRole("button", { name: "Done", exact: true }).click();
