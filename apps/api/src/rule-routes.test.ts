@@ -128,6 +128,15 @@ describe("rule management API", () => {
     expect((await lookup("unknown")).status).toBe(404);
   });
 
+  test("query lookup preserves dot-only names that path normalization would remove", async () => {
+    const { request, create } = setup();
+    for (const name of [".", ".."]) {
+      const draft = await create(name);
+      expect(await (await request(`/by-name?name=${encodeURIComponent(name)}`)).json()).toMatchObject({ id: draft.id, version: name });
+    }
+    expect((await request("/by-name")).status).toBe(400);
+  });
+
   test("save, reopen and duplicate preserve definitions without linking draft edits", async () => {
     const context = setup();
     const saved = await savedSynthetic(context);
