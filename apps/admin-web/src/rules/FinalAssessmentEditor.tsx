@@ -64,7 +64,7 @@ function BoundaryInput({ id, label, value, inclusive, disabled, onChange }: { id
   return <div className="min-w-0 space-y-2 text-sm"><label className="font-medium" htmlFor={id}>{label}</label><NativeSelect disabled={disabled} aria-label={`${label} comparison`} value={mode} onChange={event => { const next = event.target.value; setDrafts(current => { const copy = { ...current }; delete copy[key]; return copy; }); onChange(next === "none" ? null : value ?? 0, next !== "exclusive"); }}><option value="none">No limit</option><option value="inclusive">Include this number</option><option value="exclusive">Exclude this number</option></NativeSelect>{value !== null && <Input id={id} type="number" step="any" disabled={disabled} aria-invalid={invalid} value={drafts[key] ?? value} onChange={event => { const raw = event.target.value; setDrafts(current => ({ ...current, [key]: raw })); if (raw.trim() !== "" && Number.isFinite(Number(raw))) onChange(Number(raw), inclusive); }} />}{invalid && <p role="alert" className="text-xs text-destructive">Enter a number or choose No limit.</p>}</div>;
 }
 
-export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: RuleDetail; onClose: () => void; onSaved: () => void }) {
+export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: RuleDetail; onClose: () => void; onSaved: (record: RuleDetail) => void }) {
   const [record, setRecord] = useState(initial);
   const [definition, setDefinition] = useState(() => parse(initial.definition));
   const saved = useMemo(() => parse(record.definition), [record.definition]);
@@ -107,7 +107,7 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
     if (!definition) return;
     update({ ...definition, sections: definition.sections.map(section => ({ ...section, fields: section.fields.map(field => field.id === id ? change(field) : field) })) });
   }
-  function accept(next: RuleDetail) { const parsed = parse(next.definition); setRecord(next); setDefinition(parsed); setPointDrafts({}); onSaved(); }
+  function accept(next: RuleDetail) { const parsed = parse(next.definition); setRecord(next); setDefinition(parsed); setPointDrafts({}); onSaved(next); }
   async function reload() {
     setBusy(true); setError("");
     try { accept(await request<RuleDetail>(`/admin/rules/${record.id}`)); setIssues([]); setNotice(""); }

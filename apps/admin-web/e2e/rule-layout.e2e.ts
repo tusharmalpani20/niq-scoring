@@ -5,7 +5,7 @@ test("scoring page and expanded options fit narrow and desktop layouts", async (
   await mockConsole(page);
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
-  await expect(page).toHaveURL(/\/versions\/synthetic-rule$/);
+  await expect(page).toHaveURL(/\/versions\/Synthetic%20browser%20draft$/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();
   await page.getByRole("tab", { name: "Details", exact: true }).click();

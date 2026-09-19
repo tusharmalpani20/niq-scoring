@@ -19,12 +19,12 @@ import { descriptionText } from './editor-copy';
 import type { RuleDetail } from './rule-api';
 import { FinalAssessmentEditor } from './FinalAssessmentEditor';
 
-export function RuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; onClose: () => void; onSaved: () => void }) {
+export function RuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; onClose: () => void; onSaved: (record: RuleDetail) => void }) {
   if (finalAssessmentDefinitionSchema.safeParse(initial.definition).success) return <FinalAssessmentEditor initial={initial} onClose={onClose} onSaved={onSaved} />;
   return <LegacyRuleEditor initial={initial} onClose={onClose} onSaved={onSaved} />;
 }
 
-function LegacyRuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; onClose: () => void; onSaved: () => void }) {
+function LegacyRuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; onClose: () => void; onSaved: (record: RuleDetail) => void }) {
   const [record, setRecord] = useState(initial);
   const parse = (value: unknown) => { const result = ruleDefinitionSchema.safeParse(value); return result.success ? result.data : null; };
   const [definition, setDefinition] = useState<RuleDefinition | null>(() => parse(initial.definition));
@@ -44,7 +44,7 @@ function LegacyRuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; 
     return () => window.removeEventListener('beforeunload', unload);
   }, [dirty, busy]);
   function update(next: RuleDefinition) { setDefinition(next); setNotice(''); setIssues([]); }
-  function accept(next: RuleDetail) { setRecord(next); setDefinition(parse(next.definition)); onSaved(); }
+  function accept(next: RuleDetail) { setRecord(next); setDefinition(parse(next.definition)); onSaved(next); }
   async function reload() {
     setBusy(true); setError('');
     try { accept(await request<RuleDetail>(`/admin/rules/${record.id}`)); setIssues([]); setNotice(''); }
