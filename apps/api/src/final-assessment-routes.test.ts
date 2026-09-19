@@ -124,3 +124,57 @@ test("public assessment binding rejects the final profile until clinical use is 
   expect(response.status).toBe(409);
   expect(await response.json()).toEqual({ error: "VERSION_UNAVAILABLE" });
 });
+
+test("approved final assessment supports credential-bound public scoring and exactly-once usage", async () => {
+  const { store, create, request } = adminSetup();
+  let rule = await create("Confirmed public assessment");
+  for (const action of ["validate", "approve", "activate"]) {
+    const response = await request(`/${rule.id}/${action}`, "POST", { revision: rule.revision });
+    expect(response.status).toBe(200);
+    rule = await response.json() as RuleRecord;
+  }
+  const client = await store.createClient({ name: "Confirmed public synthetic client" });
+  const deployment = await store.createDeployment({ clientId: client.id, name: "Confirmed public test", environment: "test" });
+  await store.setEntitlement(deployment.id, { capability: "SCORING", enabled: true, monthlyLimit: 2 });
+  await store.assignVersion(deployment.id, { mode: "PINNED", scoringRuleVersionId: rule.id });
+  const credential = `niq_dep_confirmedtest.${"s".repeat(40)}`;
+  store.credentials.push({ credentialId: createEntityId(), clientId: client.id, deploymentId: deployment.id, keyPrefix: "confirmedtest", secretHash: new Bun.CryptoHasher("sha256").update(credential).digest("hex") });
+  const app = createApp({ store, authStore: new MemoryAdminAuthStore(), region: "test", allowedOrigins: [], runtimeEnvironment: "test", provisionalScoringRequested: false });
+  const call = (action: string, body: unknown) => app.request(`/v1/assessments/${action}`, { method: "POST", headers: { authorization: `Bearer ${credential}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+  const start = await call("start", { assessmentReference: "confirmed-public" });
+  expect(start.status).toBe(200);
+  const binding = await start.json();
+  expect(binding.ruleVersionId).toBe(rule.id);
+  expect(binding.questionnaire.formatVersion).toBe(2);
+  expect(JSON.stringify(binding.questionnaire)).not.toContain('"points"');
+  expect(store.usages).toHaveLength(0);
+  const base = { assessmentReference: "confirmed-public", idempotencyKey: "confirmed-score-zero" };
+  const missing = await call("calculate", { ...base, answers: {} });
+  expect(missing.status).toBe(422);
+  expect((await missing.json()).error).toBe("ASSESSMENT_INCOMPLETE");
+  const invalid = await call("calculate", { ...base, answers: { current_weight_kg: -10, stage: "stage_localized" } });
+  expect(invalid.status).toBe(400);
+  expect((await invalid.json()).error).toBe("INVALID_ASSESSMENT_ANSWERS");
+  expect(store.usages).toHaveLength(0);
+  const zeroInput = { ...base, answers: { previous_surgeries: "previous_surgeries_no" } };
+  const zero = await call("calculate", zeroInput);
+  expect(zero.status).toBe(200);
+  const zeroResult = await zero.json();
+  expect(zeroResult.result).toMatchObject({ score: 0, classification: { label: "Low Risk" }, ruleVersionId: rule.id, checksum: rule.packageChecksum });
+  expect(await (await call("calculate", zeroInput)).json()).toEqual(zeroResult);
+  expect(store.usages).toHaveLength(1);
+  const weightInput = { ...base, idempotencyKey: "confirmed-score-weight", answers: { previous_weight_kg: 80, current_weight_kg: 75.2 } };
+  const weight = await call("calculate", weightInput);
+  expect(weight.status).toBe(200);
+  const weightResult = await weight.json();
+  expect(weightResult.result).toMatchObject({ score: 2, classification: { label: "Low Risk" }, ruleVersionId: rule.id, checksum: rule.packageChecksum });
+  expect(await (await call("calculate", weightInput)).json()).toEqual(weightResult);
+  expect(store.usages).toHaveLength(2);
+  const changed = await call("calculate", { ...weightInput, answers: { previous_weight_kg: 80, current_weight_kg: 70 } });
+  expect(changed.status).toBe(409);
+  expect((await changed.json()).reason).toBe("IDEMPOTENCY_CONFLICT");
+  const quota = await call("calculate", { ...zeroInput, idempotencyKey: "confirmed-third-request" });
+  expect(quota.status).toBe(409);
+  expect((await quota.json()).reason).toBe("MONTHLY_LIMIT_REACHED");
+  expect(store.usages).toHaveLength(2);
+});
