@@ -5,6 +5,8 @@ import { OrganizationInfoError } from "./organization-info";
 import type { DeploymentIdentity } from "./store";
 
 type Snapshot = {
+  assignmentMode: "PINNED" | "LATEST_APPROVED" | null;
+  ruleVersion: string | null;
   clientName: string;
   clientEnabled: boolean;
   deploymentEnabled: boolean;
@@ -30,7 +32,7 @@ export async function postgresOrganizationInfo(database: ReturnType<typeof postg
     // keep credential revocation and ownership/status changes behind this read.
     const [row] = await tx<Snapshot[]>`select
       c.name as "clientName", c.enabled as "clientEnabled", d.enabled as "deploymentEnabled",
-      d.hosting_type as mode, d.environment,
+      d.hosting_type as mode, d.environment, assignment.mode as "assignmentMode", rule.version as "ruleVersion",
       scoring.enabled as "scoringEnabled", face.enabled as "faceScanEnabled",
       scoring.monthly_limit as "scoresPerMonth", face.monthly_limit as "faceScansPerMonth",
       totals.scores, totals.face_scans as "faceScans",
@@ -38,6 +40,9 @@ export async function postgresOrganizationInfo(database: ReturnType<typeof postg
       from deployment_credentials dc
       join deployments d on d.id=dc.deployment_id
       join clients c on c.id=d.client_id
+      left join deployment_version_assignments assignment on assignment.deployment_id=d.id and assignment.effective_until is null
+      left join scoring_rule_default defaults on defaults.singleton=true
+      left join scoring_rule_versions rule on rule.id=case when assignment.mode='PINNED' then assignment.scoring_rule_version_id else defaults.rule_id end
       left join entitlements scoring on scoring.deployment_id=d.id and scoring.capability='SCORING' and scoring.effective_until is null
       left join entitlements face on face.deployment_id=d.id and face.capability='FACE_SCAN' and face.effective_until is null
       cross join lateral (
@@ -56,6 +61,7 @@ export async function postgresOrganizationInfo(database: ReturnType<typeof postg
       throw new OrganizationInfoError("CONFIGURATION_INCOMPLETE");
     }
     const result: OrganizationInfo = {
+      ruleVersion: row.assignmentMode ? { mode: row.assignmentMode === "PINNED" ? "SPECIFIC" : "DEFAULT", version: row.ruleVersion } : null,
       organization: { id: identity.clientId, name: row.clientName, status: row.clientEnabled ? "ACTIVE" : "DISABLED" },
       deployment: { id: identity.deploymentId, mode: row.mode, environment: row.environment, status: row.deploymentEnabled ? "ACTIVE" : "DISABLED" },
       services: { scoring: { enabled: row.scoringEnabled }, faceScan: { enabled: row.faceScanEnabled } },

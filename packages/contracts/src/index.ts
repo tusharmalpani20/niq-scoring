@@ -146,6 +146,7 @@ export type FaceScanSessionState = z.infer<typeof faceScanSessionStateSchema>;
 
 /** Credential-scoped configuration; null monthly limits mean explicitly unlimited. */
 export const organizationInfoSchema = z.object({
+  ruleVersion: z.object({ mode: z.enum(["DEFAULT", "SPECIFIC"]), version: z.string().nullable() }).strict().nullable(),
   organization: z.object({ id: ulidSchema, name: z.string(), status: z.enum(["ACTIVE", "DISABLED"]) }).strict(),
   deployment: z.object({ id: ulidSchema, mode: z.enum(["NIQ_HOSTED", "CLIENT_CLOUD", "ON_PREMISES"]), environment: z.string(), status: z.enum(["ACTIVE", "DISABLED"]) }).strict(),
   services: z.object({ scoring: z.object({ enabled: z.boolean() }).strict(), faceScan: z.object({ enabled: z.boolean() }).strict() }).strict(),

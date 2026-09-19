@@ -106,3 +106,20 @@ test("strict response contract supports finite, zero and unlimited limits and co
     for (const key of ["credential", "secretHash", "activationToken", "tokenCiphertext", "keyPrefix"]) expect(serialized).not.toContain(`"${key}"`);
   }
 });
+
+test("reports the authoritative default and preserves specific assignments when it changes", async () => {
+  const { store, onboard } = await setup();
+  const own = await onboard("Default follower");
+  const first = createEntityId(), second = createEntityId();
+  const record = { lifecycle: "ACTIVE" as const, clinicalUsePermitted: true, definition: {}, packageChecksum: "test", revision: 1, validatedRevision: 1, createdAt: now.toISOString(), updatedAt: now.toISOString(), createdBy: null, approvedAt: now.toISOString() };
+  store.rules.records.push({ ...record, id: first, version: "V1" }, { ...record, id: second, version: "V2" });
+  store.assignments.push({ deploymentId: own.deployment.id, mode: "LATEST_APPROVED" });
+  store.rules.defaultRuleId = first;
+  expect((await (await own.get()).json()).ruleVersion).toEqual({ mode: "DEFAULT", version: "V1" });
+  store.rules.defaultRuleId = second;
+  expect((await (await own.get()).json()).ruleVersion).toEqual({ mode: "DEFAULT", version: "V2" });
+  store.assignments = [{ deploymentId: own.deployment.id, mode: "PINNED", scoringRuleVersionId: first }];
+  expect((await (await own.get()).json()).ruleVersion).toEqual({ mode: "SPECIFIC", version: "V1" });
+  store.assignments = [];
+  expect((await (await own.get()).json()).ruleVersion).toBeNull();
+});

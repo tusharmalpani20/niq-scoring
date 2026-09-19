@@ -144,10 +144,13 @@ export class MemoryScoringStore implements ScoringStore {
     const scoring = this.entitlements.find(e => e.deploymentId === deployment.id && e.capability === "SCORING");
     const faceScan = this.entitlements.find(e => e.deploymentId === deployment.id && e.capability === "FACE_SCAN");
     if (!deployment.hostingType || !scoring || !faceScan) throw new OrganizationInfoError("CONFIGURATION_INCOMPLETE");
+    const assignment = this.assignments.find(a => a.deploymentId === deployment.id);
+    const selectedRule = this.rules.records.find(r => r.id === (assignment?.mode === "PINNED" ? assignment.scoringRuleVersionId : this.rules.defaultRuleId));
     const period = now.toISOString().slice(0, 7);
     const usage = this.usages.filter(u => u.deploymentId === deployment.id && u.clientId === client.id && u.outcome !== "FAILED" && u.occurredAt.toISOString().slice(0, 7) === period);
     this.integrationAuditEvents.push({ action: "ORGANIZATION_INFO_READ", actorReference: credential.credentialId, resourceReference: deployment.id, occurredAt: now });
     return {
+      ruleVersion: assignment ? { mode: assignment.mode === "PINNED" ? "SPECIFIC" : "DEFAULT", version: selectedRule?.version ?? null } : null,
       organization: { id: client.id, name: client.name, status: client.enabled ? "ACTIVE" : "DISABLED" },
       deployment: { id: deployment.id, mode: deployment.hostingType, environment: deployment.environment, status: deployment.enabled ? "ACTIVE" : "DISABLED" },
       services: { scoring: { enabled: scoring.enabled }, faceScan: { enabled: faceScan.enabled } },
