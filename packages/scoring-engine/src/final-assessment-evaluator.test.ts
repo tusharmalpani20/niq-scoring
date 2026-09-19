@@ -121,3 +121,12 @@ describe("client-confirmed assessment", () => {
     }
   });
 });
+
+
+test("invariant approval fixtures tolerate category IDs while explicit expectations remain enforced", () => {
+  const definition = confirmedTemplate("Custom category identifiers");
+  definition.riskCategories[0]!.id = "minimal";
+  expect(validateFinalAssessmentSamples(definition)).toEqual([]);
+  definition.samples.push({ id: "explicit_risk", name: "Explicit risk expectation", answers: { previous_surgeries: "previous_surgeries_no" }, expected: { complete: true, score: 0, classificationId: "low" } });
+  expect(validateFinalAssessmentSamples(definition)).toContainEqual(expect.objectContaining({ code: "SAMPLE_MISMATCH", path: "samples.explicit_risk.classificationId" }));
+});

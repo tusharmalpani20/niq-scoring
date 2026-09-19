@@ -216,7 +216,7 @@ export function validateFinalAssessmentSamples(definition: FinalAssessmentDefini
     const expected = sample.expected;
     if (actual.complete !== expected.complete) issues.push({ path: `samples.${sample.id}.complete`, code: "SAMPLE_MISMATCH", message: `Sample ${sample.name}: complete result does not match the independently specified expectation.` });
     if (actual.score !== expected.score) issues.push({ path: `samples.${sample.id}.score`, code: "SAMPLE_MISMATCH", message: `Sample ${sample.name}: score does not match the independently specified expectation.` });
-    if ((actual.classification?.id ?? null) !== expected.classificationId) issues.push({ path: `samples.${sample.id}.classificationId`, code: "SAMPLE_MISMATCH", message: `Sample ${sample.name}: risk category does not match the independently specified expectation.` });
+    if (expected.classificationId !== undefined && (actual.classification?.id ?? null) !== expected.classificationId) issues.push({ path: `samples.${sample.id}.classificationId`, code: "SAMPLE_MISMATCH", message: `Sample ${sample.name}: risk category does not match the independently specified expectation.` });
   }
   return issues;
 }

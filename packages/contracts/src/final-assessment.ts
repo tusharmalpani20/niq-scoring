@@ -107,7 +107,7 @@ export const finalAssessmentSampleSchema = z.object({
   expected: z.object({
     complete: z.boolean(),
     score: finiteNonNegative.nullable(),
-    classificationId: ruleIdSchema.nullable(),
+    classificationId: ruleIdSchema.nullable().optional(),
   }).strict(),
 }).strict();
 
