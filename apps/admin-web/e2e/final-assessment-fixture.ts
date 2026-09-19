@@ -8,7 +8,7 @@ import type { RuleDetail } from "../src/rules/rule-api";
 export async function mockFinalConsole(page: Page) {
   let record: RuleDetail & { definition: FinalAssessmentDefinition } | null = null;
   const aliases = new Set<string>();
-  const state = { createError: "", saveError: "", transitionError: "", getRecord: () => record };
+  const state = { createError: "", saveError: "", transitionError: "", transitionIssues: [] as Array<{ message: string }>, getRecord: () => record };
   function audit(action: string) {
     if (!record) return;
     record.audit = [...(record.audit ?? []), { id: `event-${record.revision}`, actor: "synthetic-admin", actorName: "Browser QA", action, at: `2026-09-19T10:${String(record.revision).padStart(2, "0")}:00.000Z`, revision: record.revision, checksum: record.packageChecksum }];
@@ -52,7 +52,7 @@ export async function mockFinalConsole(page: Page) {
       const issues = [...validateFinalAssessmentDefinition(record.definition), ...validateFinalAssessmentSamples(record.definition)];
       if (action === "check") return json({ issues });
       if (issues.length) return json({ error: "RULE_VALIDATION_FAILED", issues }, 422);
-      if (state.transitionError) return json({ error: state.transitionError }, 409);
+      if (state.transitionError) return json({ error: state.transitionError, issues: state.transitionIssues }, 409);
       const lifecycle = action === "validate" ? "VALIDATED" : action === "approve" ? "APPROVED" : "ACTIVE";
       record = { ...record, lifecycle, revision: record.revision + 1, clinicalUsePermitted: lifecycle === "APPROVED" || lifecycle === "ACTIVE" };
       audit(`RULE_${lifecycle}`);

@@ -248,8 +248,10 @@ test("failed checks show a result without advancing the timeline", async ({ page
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   state.transitionError = "RULE_VALIDATION_FAILED";
+  state.transitionIssues = [{ message: "The sample assessment score does not match the expected score." }];
   await page.getByRole("button", { name: "Check rules", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("Action not completed");
+  await expect(page.getByRole("dialog").getByRole("list", { name: "Reasons this action failed" })).toContainText("The sample assessment score does not match the expected score.");
   await page.getByRole("button", { name: "Review errors", exact: true }).click();
   await expect(page.getByRole("region", { name: "Version timeline" })).toContainText("Current: Draft");
   expect(state.getRecord()!.lifecycle).toBe("DRAFT");
