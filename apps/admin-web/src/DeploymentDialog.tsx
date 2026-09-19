@@ -11,6 +11,7 @@ import { Card, CardHeader, CardContent } from "./components/ui/card";
 import { Switch } from "./components/ui/switch";
 import { Field, FieldLabel, FieldError } from "./components/ui/field";
 import { Select, SelectValue, SelectTrigger, SelectContent, SelectItem } from "./components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { Separator } from "./components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
@@ -29,6 +30,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
     ruleVersion: assignment?.mode === "PINNED" ? assignment.scoringRuleVersionId ?? "" : "LATEST_APPROVED",
   } });
   const [step, setStep] = useState(0);
+  const [editTab, setEditTab] = useState("rules");
   const [savedId, setSavedId] = useState<string | null>(deployment?.id ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -42,6 +44,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
       if (Object.keys(errors).length) {
         for (const [name, message] of Object.entries(errors)) form.setError(name as keyof Values, { message });
         if (!savedId) setStep(current);
+        else setEditTab(errors.ruleVersion || current === 0 ? "rules" : "limits");
         return;
       }
     }
@@ -69,7 +72,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
   const reviewRows = [
     ["Client", data.clients.find(client => client.id === values.clientId)?.name ?? ""],
     ["Environment", values.environment.charAt(0).toUpperCase() + values.environment.slice(1)],
-    ["Hosting", values.hostingType === "NIQ_HOSTED" ? "NIQ hosted" : "Client cloud"],
+    ["Hosting", values.hostingType === "NIQ_HOSTED" ? "NIQ hosted" : values.hostingType === "ON_PREMISES" ? "On-premises (legacy)" : values.hostingType === "CLIENT_CLOUD" ? "Client cloud" : "Not set"],
     ["Status", values.enabled ? "Enabled" : "Disabled"],
     ["Scoring", !values.enabled || !values.scoringEnabled ? "Disabled" : values.scoringUnlimited ? "Unlimited" : `${values.scoringLimit} / month`],
     ["Face scan", !values.enabled || !values.faceEnabled ? "Disabled" : values.faceUnlimited ? "Unlimited" : `${values.faceLimit} / month`],
@@ -95,13 +98,30 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
       </CardContent>
     </Card>;
   };
-  return <Dialog open onOpenChange={next => { if (!next) close(); }}><DialogContent aria-describedby={undefined} className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
+  const limits = <div className="space-y-4">
+      <div className="space-y-2">{toggle("enabled", "Deployment active")}<p className="text-sm text-muted-foreground">Turn off to pause scoring and face scans for this deployment.</p></div>
+      <Separator />
+      <div className="grid gap-4 sm:grid-cols-2">
+        {capabilityCard("scoring", "Scoring", "scores")}
+        {capabilityCard("face", "Face scan", "face scans")}
+      </div>
+  </div>;
+  const rules = <div className="space-y-4">
+      {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: defaultVersionLabel(data) }, ...data.versions.filter(version => version.id === values.ruleVersion || version.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(version.lifecycle)).map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
+      <p className="text-sm text-muted-foreground">{values.ruleVersion === "LATEST_APPROVED" ? "New assessments use the default version. If the default changes, assessments already started keep their original rules." : "This deployment stays on the selected version until you change it."}</p>
+      {values.ruleVersion === "LATEST_APPROVED" && !data.versions.some(version => version.isDefault) && <p className="text-sm text-destructive">No default is set. Choose a version or set a default in Rule versions before starting assessments.</p>}
+  </div>;
+  return <Dialog open onOpenChange={next => { if (!next) close(); }}><DialogContent aria-describedby={undefined} className="flex max-h-[90svh] flex-col overflow-hidden sm:max-w-2xl">
     <DialogHeader><DialogTitle>{savedId ? "Edit deployment" : "Create deployment"}</DialogTitle></DialogHeader>
     {!savedId && <ol aria-label="Creation progress" className="grid grid-cols-3 gap-2 border-b pb-4">
       {deploymentSteps.map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined} className={`flex items-center gap-2 text-xs sm:text-sm ${step === index ? "font-medium text-primary" : "text-muted-foreground"}`}><span className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${index <= step ? "border-primary bg-primary text-primary-foreground" : ""}`}>{index + 1}</span>{label}</li>)}
     </ol>}
-    <form className="space-y-6" noValidate onSubmit={event => { if (!savedId && step < 2) { event.preventDefault(); continueStep(); } else void form.handleSubmit(submit)(event); }}>
-      {(savedId || step === 0) && <div className="space-y-6">
+    <form className="flex min-h-0 flex-col gap-4" noValidate onSubmit={event => { if (!savedId && step < 2) { event.preventDefault(); continueStep(); } else void form.handleSubmit(submit)(event); }}>
+      <div className="min-h-0 overflow-y-auto px-1 -mx-1 space-y-6">
+      {savedId && <><dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 text-sm sm:grid-cols-3">{reviewRows.slice(0, 3).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium break-words">{value}</dd></div>)}</dl>
+      {!deployment?.hostingType && select("hostingType", "Hosting", [{ value: "NIQ_HOSTED", label: "NIQ hosted" }, { value: "CLIENT_CLOUD", label: "Client cloud" }])}
+      <Tabs value={editTab} onValueChange={setEditTab} className="gap-4"><TabsList aria-label="Deployment settings"><TabsTrigger value="rules">Rules</TabsTrigger><TabsTrigger value="limits">Limits</TabsTrigger></TabsList><TabsContent value="rules">{rules}</TabsContent><TabsContent value="limits">{limits}</TabsContent></Tabs></>}
+      {(!savedId && step === 0) && <div className="space-y-6">
       <fieldset disabled={busy} className="grid min-w-0 gap-4 sm:grid-cols-2">
         {select("clientId", "Client", data.clients.map(client => ({ value: client.id, label: client.name })), Boolean(savedId))}
         {select("environment", "Environment", ["development", "test", "staging", "production"].map(value => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })), Boolean(savedId))}
@@ -109,23 +129,14 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
       {data.clients.length === 0 && <p className="text-sm text-muted-foreground">Create a client before adding a deployment.</p>}
       {select("hostingType", "Hosting", [{ value: "NIQ_HOSTED", label: "NIQ hosted" }, { value: "CLIENT_CLOUD", label: "Client cloud" }, ...(deployment?.hostingType === "ON_PREMISES" ? [{ value: "ON_PREMISES", label: "On-premises (legacy)" }] : [])], Boolean(savedId && deployment?.hostingType))}
       </div>}
-      {(savedId || step === 1) && <div className="space-y-6">
-      <div className="space-y-2">{toggle("enabled", "Deployment active")}<p className="text-sm text-muted-foreground">Turn off to pause scoring and face scans for this deployment.</p></div>
-      <Separator />
-      <div className="grid gap-4 sm:grid-cols-2">
-        {capabilityCard("scoring", "Scoring", "scores")}
-        {capabilityCard("face", "Face scan", "face scans")}
-      </div>
-      {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: defaultVersionLabel(data) }, ...data.versions.filter(version => version.id === values.ruleVersion || version.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(version.lifecycle)).map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
-      <p className="text-sm text-muted-foreground">{values.ruleVersion === "LATEST_APPROVED" ? "New assessments use the default version. If the default changes, assessments already started keep their original rules." : "This deployment stays on the selected version until you change it."}</p>
-      {values.ruleVersion === "LATEST_APPROVED" && !data.versions.some(version => version.isDefault) && <p className="text-sm text-destructive">No default is set. Choose a version or set a default in Rule versions before starting assessments.</p>}
-      </div>}
+      {!savedId && step === 1 && <div className="space-y-6">{limits}{rules}</div>}
       {!savedId && step === 2 && <div className="space-y-5">
         <dl className="divide-y rounded-xl border">{reviewRows.map(([label, value]) => <div key={label} className="grid grid-cols-2 gap-3 px-4 py-3 text-sm"><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-medium break-words">{value}</dd></div>)}</dl>
         <p className="text-sm text-muted-foreground">Client, Environment, and Hosting cannot change after creation.</p>
         <TokenExpirySelect value={form.watch("expiryPreset")} date={form.watch("expiryDate")} onValueChange={value => form.setValue("expiryPreset", value, { shouldDirty: true })} onDateChange={value => form.setValue("expiryDate", value, { shouldDirty: true })} disabled={busy} /></div>}
       <ErrorNotice error={error} />
-      <DialogFooter className="flex flex-row justify-between gap-2 border-t pt-4">
+      </div>
+      <DialogFooter className="flex shrink-0 flex-row justify-between gap-2 border-t pt-4">
         <Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button>
         <div className="flex gap-2">
           {!savedId && step > 0 && <Button type="button" variant="outline" disabled={busy} onClick={() => { setError(""); setStep(step - 1); }}>Back</Button>}

@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-test("deployments show and filter resolved versions and explain the default", async ({ page }) => {
+test("deployments show and filter resolved versions and explain the default", async ({ page }, testInfo) => {
+  if (testInfo.project.name === "desktop") await page.setViewportSize({ width: 1065, height: 797 });
+  let saved: Record<string, unknown> | undefined;
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === "/api/auth/status") return route.fulfill({ json: { setupRequired: false } });
@@ -18,6 +20,10 @@ test("deployments show and filter resolved versions and explain the default", as
         { id: "v2", version: "Rules 2", lifecycle: "ACTIVE", clinicalUsePermitted: true, isDefault: true },
       ],
     } });
+    if (path === "/api/admin/deployments/d1/configuration") {
+      saved = route.request().postDataJSON();
+      return route.fulfill({ json: { id: "d1" } });
+    }
     if (path.includes("/deletion")) return route.fulfill({ json: { deletable: false } });
     return route.fulfill({ status: 404, json: { error: "NOT_FOUND" } });
   });
@@ -34,4 +40,36 @@ test("deployments show and filter resolved versions and explain the default", as
   await page.getByRole("button", { name: "Edit Apollo production deployment", exact: true }).click();
   await expect(page.getByRole("dialog").getByRole("combobox", { name: "Rule version", exact: true })).toContainText("Default (Rules 2)");
   await expect(page.getByRole("dialog")).toContainText("assessments already started keep their original rules");
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("combobox", { name: "Client", exact: true })).toHaveCount(0);
+  await dialog.getByRole("combobox", { name: "Rule version", exact: true }).click();
+  await page.getByRole("option", { name: "Rules 1 (active)", exact: true }).click();
+  await dialog.getByRole("tab", { name: "Limits", exact: true }).click();
+  await dialog.getByRole("switch", { name: "Scoring", exact: true }).click();
+  await dialog.getByRole("spinbutton", { name: "Monthly scores", exact: true }).fill("125");
+  await dialog.getByRole("tab", { name: "Rules", exact: true }).click();
+  await expect(dialog.getByRole("combobox", { name: "Rule version", exact: true })).toContainText("Rules 1");
+  await dialog.getByRole("tab", { name: "Limits", exact: true }).click();
+  await expect(dialog.getByRole("spinbutton", { name: "Monthly scores", exact: true })).toHaveValue("125");
+  const save = dialog.getByRole("button", { name: "Save", exact: true });
+  const bounds = await save.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.y).toBeGreaterThan(0);
+  expect(bounds!.y + bounds!.height).toBeLessThan(page.viewportSize()!.height);
+  await expect(save).toBeInViewport({ ratio: 1 });
+  if (testInfo.project.name === "desktop") {
+    expect(await dialog.evaluate(element => [...element.querySelectorAll("div")].filter(child => getComputedStyle(child).overflowY === "auto").every(child => child.scrollHeight <= child.clientHeight))).toBe(true);
+  }
+  await save.click();
+  await expect(dialog).toHaveCount(0);
+  expect(saved).toMatchObject({ scoring: { enabled: true, monthlyLimit: 125 }, versionAssignment: { mode: "PINNED", scoringRuleVersionId: "v1" } });
+  await page.getByRole("button", { name: "Create deployment", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Client", exact: true }).click();
+  await page.getByRole("option", { name: "Apollo", exact: true }).click();
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(dialog.getByRole("switch", { name: "Scoring", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("combobox", { name: "Rule version", exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(dialog).toContainText("Default (Rules 2)");
 });
