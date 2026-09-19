@@ -1,7 +1,7 @@
 import { isFinalAssessmentDefinition, type VersionedRuleDefinition } from "@niq-scoring/contracts/versioned-definition";
 export type RuleState = "DRAFT" | "VALIDATED" | "APPROVED" | "ACTIVE" | "RETIRED";
 export type RuleRecord = {
-  id: string; version: string; lifecycle: RuleState; clinicalUsePermitted: boolean;
+  id: string; isDefault?: boolean; version: string; lifecycle: RuleState; clinicalUsePermitted: boolean;
   definition: unknown; packageChecksum: string; revision: number;
   validatedRevision: number | null; createdAt: string; updatedAt: string;
   createdBy: string | null; approvedAt: string | null;
@@ -10,7 +10,7 @@ export type RuleAudit = { id: string; actor: string; actorName?: string; action:
 export class RuleStoreError extends Error { constructor(public code: string) { super(code); } }
 export type RuleCreate = { id: string; definition: VersionedRuleDefinition; checksum: string; actor: string; requestId: string; fingerprint: string; now: string };
 export type RuleSave = { id: string; revision: number; definition: VersionedRuleDefinition; checksum: string; actor: string; now: string };
-export type RuleTransition = { id: string; revision: number; action: "validate" | "approve" | "activate" | "retire"; actor: string; now: string };
+export type RuleTransition = { id: string; revision: number; action: "validate" | "approve" | "activate" | "retire"; makeDefault?: boolean; actor: string; now: string };
 export interface RuleStore {
   list(): Promise<RuleRecord[]>;
   get(id: string): Promise<RuleRecord | null>;
@@ -19,6 +19,7 @@ export interface RuleStore {
   create(input: RuleCreate): Promise<RuleRecord>;
   save(input: RuleSave): Promise<RuleRecord>;
   transition(input: RuleTransition): Promise<RuleRecord>;
+  setDefault(input: { id: string; revision: number; actor: string; now: string }): Promise<RuleRecord>;
   delete(id: string, revision: number, actor: string, now: string): Promise<void>;
   audit(id: string): Promise<RuleAudit[]>;
 }

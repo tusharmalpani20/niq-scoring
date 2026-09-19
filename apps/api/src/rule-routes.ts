@@ -94,10 +94,17 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
     if (isFinalAssessmentDefinition(definition.data) && result.issues.length) return c.json({ error: "INVALID_ASSESSMENT_ANSWERS", result }, 400);
     return c.json(result);
   }));
+  app.post("/admin/rules/:id/set-default", guard(async c => {
+    const parsed = revisionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "INVALID_REQUEST" }, 400);
+    const updated = await store.setDefault({ id: c.req.param("id")!, revision: parsed.data.revision, actor: actor(c), now: now().toISOString() });
+    return c.json({ ...updated, audit: await store.audit(updated.id) });
+  }));
   app.post("/admin/rules/:id/:action", guard(async c => {
     const action = z.enum(["validate", "approve", "activate", "retire", "check"]).safeParse(c.req.param("action"));
-    const parsed = revisionSchema.safeParse(await c.req.json().catch(() => null));
+    const parsed = revisionSchema.extend({ makeDefault: z.boolean().optional() }).safeParse(await c.req.json().catch(() => null));
     if (!action.success || !parsed.success) return c.json({ error: "INVALID_REQUEST" }, 400);
+    if (parsed.data.makeDefault !== undefined && action.data !== "activate") return c.json({ error: "INVALID_REQUEST" }, 400);
     const record = await store.get(c.req.param("id")!);
     if (!record) throw new RuleStoreError("RULE_NOT_FOUND");
     if (record.revision !== parsed.data.revision) throw new RuleStoreError("RULE_REVISION_CONFLICT");
@@ -110,7 +117,7 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
       if (issues.length) return c.json({ error: "RULE_VALIDATION_FAILED", issues }, 422);
     }
     if (isFinalAssessmentDefinition(definition.data) && !definition.data.provisional.clinicalUsePermitted && ["approve", "activate"].includes(action.data)) return c.json({ error: "PROVISIONAL_THRESHOLDS_UNCONFIRMED" }, 409);
-    const transitioned = await store.transition({ id: record.id, revision: parsed.data.revision, action: action.data as "validate" | "approve" | "activate" | "retire", actor: actor(c), now: now().toISOString() });
+    const transitioned = await store.transition({ id: record.id, revision: parsed.data.revision, action: action.data as "validate" | "approve" | "activate" | "retire", ...(parsed.data.makeDefault === undefined ? {} : { makeDefault: parsed.data.makeDefault }), actor: actor(c), now: now().toISOString() });
     return c.json({ ...transitioned, audit: await store.audit(transitioned.id) });
   }));
   app.delete("/admin/rules/:id", guard(async c => {

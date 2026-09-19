@@ -50,7 +50,7 @@ test.skipIf(process.env.RULE_DATABASE_TEST !== "1")("PostgreSQL assessment bindi
   finally { await db.end(); }
 });
 
-test.skipIf(process.env.RULE_DATABASE_TEST !== "1")("PostgreSQL lifecycle immutability and latest-approved bindings", async () => {
+test.skipIf(process.env.RULE_DATABASE_TEST !== "1")("PostgreSQL lifecycle immutability and explicit default bindings", async () => {
   const db = postgres(process.env.DATABASE_URL!, { max: 1 });
   const rollback = new Error("rollback lifecycle fixture");
   try {
@@ -75,7 +75,7 @@ test.skipIf(process.env.RULE_DATABASE_TEST !== "1")("PostgreSQL lifecycle immuta
       await expect(store.rules.transition({ id: first.id, revision: first.revision, action: "approve", actor: "synthetic", now })).rejects.toThrow();
       first = await store.rules.transition({ id: first.id, revision: first.revision, action: "validate", actor: "synthetic", now });
       first = await store.rules.transition({ id: first.id, revision: first.revision, action: "approve", actor: "synthetic", now });
-      first = await store.rules.transition({ id: first.id, revision: first.revision, action: "activate", actor: "synthetic", now });
+      first = await store.rules.transition({ id: first.id, revision: first.revision, action: "activate", makeDefault: true, actor: "synthetic", now });
       expect(first.lifecycle).toBe("ACTIVE"); expect(first.clinicalUsePermitted).toBe(true);
       await expect(store.rules.save({ id: first.id, revision: first.revision, definition: changed, checksum: ruleChecksum(changed), actor: "synthetic", now })).rejects.toThrow("RULE_IMMUTABLE");
       await expect(store.rules.delete(first.id, first.revision, "synthetic", now)).rejects.toThrow("RULE_IMMUTABLE");
@@ -90,8 +90,15 @@ test.skipIf(process.env.RULE_DATABASE_TEST !== "1")("PostgreSQL lifecycle immuta
       let second = await create();
       second = await store.rules.transition({ id: second.id, revision: second.revision, action: "validate", actor: "synthetic", now });
       second = await store.rules.transition({ id: second.id, revision: second.revision, action: "approve", actor: "synthetic", now: new Date(base + 1000).toISOString() });
+      expect((await store.bindAssessment({ ...input, assessmentReference: "before-switch" })).binding.ruleVersionId).toBe(first.id);
+      await expect(store.rules.setDefault({ id: second.id, revision: second.revision, actor: "synthetic", now })).rejects.toThrow("RULE_DEFAULT_REQUIRES_ACTIVE");
+      second = await store.rules.transition({ id: second.id, revision: second.revision, action: "activate", makeDefault: true, actor: "synthetic", now });
+      expect(second.isDefault).toBe(true);
+      expect((await store.rules.get(first.id))?.isDefault).toBe(false);
       expect((await store.bindAssessment({ ...input, assessmentReference: "second" })).binding.ruleVersionId).toBe(second.id);
       expect((await store.bindAssessment(input)).binding.ruleVersionId).toBe(first.id);
+      await expect(store.rules.transition({ id: second.id, revision: second.revision, action: "retire", actor: "synthetic", now })).rejects.toThrow("RULE_IS_DEFAULT");
+      await store.rules.setDefault({ id: first.id, revision: first.revision, actor: "synthetic", now });
       await store.rules.transition({ id: second.id, revision: second.revision, action: "retire", actor: "synthetic", now });
       expect((await store.bindAssessment({ ...input, assessmentReference: "third" })).binding.ruleVersionId).toBe(first.id);
       expect((await store.bindAssessment({ ...input, assessmentReference: "second", create: false })).rule.lifecycle).toBe("RETIRED");

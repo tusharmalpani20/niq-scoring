@@ -15,7 +15,7 @@ export class PostgresRuleStore implements RuleStore {
   private async read(sql: Database | Transaction, id?: string, lock = false): Promise<RuleRecord[]> {
     const rows = await sql<RawRecord[]>`select id, version, lifecycle, clinical_use_permitted as "clinicalUsePermitted", definition,
       package_checksum as "packageChecksum", revision, validated_revision as "validatedRevision", created_by as "createdBy",
-      created_at as "createdAt", updated_at as "updatedAt", approved_at as "approvedAt"
+      created_at as "createdAt", updated_at as "updatedAt", approved_at as "approvedAt", exists(select 1 from scoring_rule_default where rule_id=scoring_rule_versions.id) as "isDefault"
       from scoring_rule_versions where (${id ?? null}::varchar is null or id=${id ?? null}) order by created_at desc, id desc ${lock ? sql`for update` : sql``}`;
     return rows.map(record);
   }
@@ -101,7 +101,11 @@ export class PostgresRuleStore implements RuleStore {
 
   async transition(input: RuleTransition): Promise<RuleRecord> {
     return this.write(async sql => {
+      // Serialize default switches and retirement before locking individual versions.
+      await sql`select pg_advisory_xact_lock(hashtext('scoring-rule-default'))`;
       const current = await this.locked(sql, input.id, input.revision);
+      if (input.action === "retire" && current.isDefault) throw new RuleStoreError("RULE_IS_DEFAULT");
+      if (input.makeDefault && input.action !== "activate") throw new RuleStoreError("RULE_DEFAULT_REQUIRES_ACTIVE");
       const lifecycle = nextRuleState(current, input.action);
       // Definition does not change in a transition, so validated evidence follows the event revision.
       const validatedRevision = input.action === "validate" || current.validatedRevision === current.revision ? current.revision + 1 : null;
@@ -113,7 +117,29 @@ export class PostgresRuleStore implements RuleStore {
         retired_at=case when ${input.action}='retire' then ${input.now}::timestamptz else retired_at end where id=${input.id}`;
       const updated = (await this.read(sql, input.id))[0]!;
       await this.log(sql, updated, input.actor, `RULE_${lifecycle}`, input.now);
-      return updated;
+      if (input.makeDefault) await this.selectDefault(sql, updated, input.actor, input.now);
+      return (await this.read(sql, input.id))[0]!;
+    });
+  }
+
+  private async selectDefault(sql: Transaction, row: RuleRecord, actor: string, now: string) {
+    if (row.lifecycle !== "ACTIVE" || !row.clinicalUsePermitted) throw new RuleStoreError("RULE_DEFAULT_REQUIRES_ACTIVE");
+    const [previous] = await sql<Array<{ ruleId: string | null }>>`select rule_id as "ruleId" from scoring_rule_default where singleton=true`;
+    if (previous?.ruleId === row.id) return;
+    if (previous?.ruleId) {
+      const old = (await this.read(sql, previous.ruleId))[0];
+      if (old) await this.log(sql, old, actor, "RULE_DEFAULT_REPLACED", now, { replacementId: row.id });
+    }
+    await sql`insert into scoring_rule_default (singleton,rule_id,updated_at,updated_by) values (true,${row.id},${now},${actor})
+      on conflict (singleton) do update set rule_id=excluded.rule_id,updated_at=excluded.updated_at,updated_by=excluded.updated_by`;
+    await this.log(sql, row, actor, "RULE_DEFAULT_SET", now, { previousId: previous?.ruleId ?? null });
+  }
+  async setDefault(input: { id: string; revision: number; actor: string; now: string }): Promise<RuleRecord> {
+    return this.write(async sql => {
+      await sql`select pg_advisory_xact_lock(hashtext('scoring-rule-default'))`;
+      const current = await this.locked(sql, input.id, input.revision);
+      await this.selectDefault(sql, current, input.actor, input.now);
+      return (await this.read(sql, input.id))[0]!;
     });
   }
 

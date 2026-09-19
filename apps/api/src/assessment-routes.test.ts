@@ -11,12 +11,13 @@ function synthetic(store: MemoryScoringStore, name: string, approvedAt: string) 
   definition.domains = [{ id: "domain", label: "Synthetic domain", cap: null, sources: [] }];
   definition.scoring = [{ id: "points", label: "Points", domainId: "domain", kind: "ranges", input: { kind: "question", id: "amount" }, bands: [{ id: "band", min: 0, max: 10, minInclusive: true, maxInclusive: true, points: 3 }], sources: [] }];
   definition.classifications = [{ id: "category", label: "Synthetic category", min: null, max: null, minInclusive: true, maxInclusive: true, interpretation: "Test only", sources: [] }];
-  const row = { id: createEntityId(), version: name, lifecycle: "APPROVED" as const, clinicalUsePermitted: true, definition, packageChecksum: ruleChecksum(definition), revision: 3, validatedRevision: 3, createdAt: approvedAt, updatedAt: approvedAt, createdBy: null, approvedAt };
+  const row = { id: createEntityId(), version: name, lifecycle: "ACTIVE" as const, clinicalUsePermitted: true, definition, packageChecksum: ruleChecksum(definition), revision: 3, validatedRevision: 3, createdAt: approvedAt, updatedAt: approvedAt, createdBy: null, approvedAt };
   store.rules.records.push(row); return row;
 }
 async function setup() {
   const store = new MemoryScoringStore();
   const rule = synthetic(store, "Synthetic first", "2026-01-01T00:00:00Z");
+  await store.rules.setDefault({ id: rule.id, revision: rule.revision, actor: "test", now: rule.createdAt });
   const client = await store.createClient({ name: "Synthetic client" });
   const deployment = await store.createDeployment({ clientId: client.id, name: "Synthetic deployment", environment: "test" });
   await store.setEntitlement(deployment.id, { capability: "SCORING", enabled: true, monthlyLimit: 1 });
@@ -35,7 +36,9 @@ test("assessment start pins concrete version and exposes only questionnaire rend
   expect(first.questionnaire.sections[0].questions[0].label).toBe("Amount");
   expect(first.questionnaire).not.toHaveProperty("scoring");
   expect(first.questionnaire.sections[0].questions[0]).not.toHaveProperty("sources");
-  synthetic(store, "Synthetic second", "2026-02-01T00:00:00Z");
+  const second = synthetic(store, "Synthetic second", "2026-02-01T00:00:00Z");
+  expect((await (await call("start", { assessmentReference: "before-default-change" })).json()).ruleVersionId).toBe(rule.id);
+  await store.rules.setDefault({ id: second.id, revision: second.revision, actor: "test", now: second.createdAt });
   expect((await (await call("start", { assessmentReference: "test-assessment" })).json()).bindingId).toBe(first.bindingId);
   expect((await (await call("start", { assessmentReference: "new-assessment" })).json()).ruleVersionId).not.toBe(rule.id);
   expect(store.usages).toHaveLength(0);
@@ -44,6 +47,8 @@ test("retired bound assessment completes; new assessments cannot use retired pin
   const { store, rule, call, deployment } = await setup();
   await store.assignVersion(deployment.id, { mode: "PINNED", scoringRuleVersionId: rule.id });
   await call("start", { assessmentReference: "before-retirement" });
+  const replacement = synthetic(store, "Replacement default", "2026-02-01T00:00:00Z");
+  await store.rules.setDefault({ id: replacement.id, revision: replacement.revision, actor: "test", now: replacement.createdAt });
   await store.rules.transition({ id: rule.id, revision: 3, action: "retire", actor: "test", now: "2026-03-01T00:00:00Z" });
   expect((await call("start", { assessmentReference: "after-retirement" })).status).toBe(409);
   const response = await call("calculate", { assessmentReference: "before-retirement", answers: { amount: 0 }, idempotencyKey: "calc-key-1" });
@@ -77,4 +82,16 @@ test("caller cannot select arbitrary rule IDs and drafts cannot be assigned", as
   const draft = synthetic(store, "Synthetic draft", "2026-03-01T00:00:00Z");
   store.rules.records.find(r => r.id === draft.id)!.lifecycle = "DRAFT";
   await expect(store.assignVersion(deployment.id, { mode: "PINNED", scoringRuleVersionId: draft.id })).rejects.toThrow("VERSION_UNAVAILABLE");
+});
+
+test("default changes leave pinned deployments unchanged and missing defaults fail closed", async () => {
+  const { store, rule, call, deployment } = await setup();
+  await store.assignVersion(deployment.id, { mode: "PINNED", scoringRuleVersionId: rule.id });
+  const second = synthetic(store, "New default", "2026-02-01T00:00:00Z");
+  await store.rules.setDefault({ id: second.id, revision: second.revision, actor: "test", now: second.createdAt });
+  expect((await (await call("start", { assessmentReference: "pinned-after-switch" })).json()).ruleVersionId).toBe(rule.id);
+  await store.assignVersion(deployment.id, { mode: "LATEST_APPROVED" });
+  store.rules.defaultRuleId = null;
+  expect((await call("start", { assessmentReference: "no-default" })).status).toBe(409);
+  expect((await (await call("start", { assessmentReference: "pinned-after-switch" })).json()).ruleVersionId).toBe(rule.id);
 });

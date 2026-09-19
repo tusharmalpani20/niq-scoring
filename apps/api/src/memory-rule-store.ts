@@ -3,12 +3,13 @@ import { createEntityId } from "./lib/id";
 
 export class MemoryRuleStore implements RuleStore {
   records: RuleRecord[] = [];
+  defaultRuleId: string | null = null;
   events: Array<RuleAudit & { ruleId: string }> = [];
   private aliases = new Map<string, string>();
   private requests = new Map<string, { fingerprint: string; id: string; actor: string }>();
   constructor(private readonly referenced: (id: string) => boolean = () => false) {}
-  async list() { return structuredClone(this.records); }
-  async get(id: string) { return structuredClone(this.records.find(r => r.id === id) ?? null); }
+  async list() { return structuredClone(this.records.map(r => ({ ...r, isDefault: r.id === this.defaultRuleId }))); }
+  async get(id: string) { const row = this.records.find(r => r.id === id); return row ? structuredClone({ ...row, isDefault: row.id === this.defaultRuleId }) : null; }
   async getByName(name: string) {
     const normalized = normalizedRuleName(name);
     const id = this.aliases.get(normalized) ?? this.records.find(r => normalizedRuleName(r.version) === normalized)?.id;
@@ -57,12 +58,29 @@ export class MemoryRuleStore implements RuleStore {
   }
   async transition(input: RuleTransition) {
     const row = this.row(input.id, input.revision); const state = nextRuleState(row, input.action);
+    if (input.action === "retire" && row.id === this.defaultRuleId) throw new RuleStoreError("RULE_IS_DEFAULT");
+    if (input.makeDefault && input.action !== "activate") throw new RuleStoreError("RULE_DEFAULT_REQUIRES_ACTIVE");
     const validated = input.action === "validate" || row.validatedRevision === row.revision;
     row.lifecycle = state; row.revision++; row.updatedAt = input.now;
     row.validatedRevision = validated ? row.revision : null;
     if (input.action === "approve") row.approvedAt = input.now;
     row.clinicalUsePermitted = state === "APPROVED" || state === "ACTIVE";
-    this.log(row, input.actor, `RULE_${state}`, input.now); return structuredClone(row);
+    this.log(row, input.actor, `RULE_${state}`, input.now);
+    if (input.makeDefault) this.selectDefault(row, input.actor, input.now);
+    return (await this.get(row.id))!;
+  }
+  private selectDefault(row: RuleRecord, actor: string, now: string) {
+    if (row.lifecycle !== "ACTIVE" || !row.clinicalUsePermitted) throw new RuleStoreError("RULE_DEFAULT_REQUIRES_ACTIVE");
+    if (this.defaultRuleId === row.id) return;
+    const previous = this.records.find(r => r.id === this.defaultRuleId);
+    if (previous) this.log(previous, actor, "RULE_DEFAULT_REPLACED", now);
+    this.defaultRuleId = row.id;
+    this.log(row, actor, "RULE_DEFAULT_SET", now);
+  }
+  async setDefault(input: { id: string; revision: number; actor: string; now: string }) {
+    const row = this.row(input.id, input.revision);
+    this.selectDefault(row, input.actor, input.now);
+    return (await this.get(row.id))!;
   }
   async delete(id: string, revision: number, actor: string, now: string) {
     const row = this.row(id, revision);

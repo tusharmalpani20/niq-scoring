@@ -30,7 +30,7 @@ export class PostgresScoringStore implements ScoringStore {
       this.database<Deployment[]>`select id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled from deployments order by created_at`,
       this.database<Array<EntitlementInput & { deploymentId: string }>>`select deployment_id as "deploymentId", capability, enabled, monthly_limit as "monthlyLimit" from entitlements where effective_until is null`,
       this.database<Array<{ deploymentId: string; mode: "LATEST_APPROVED" | "PINNED"; scoringRuleVersionId: string | null }>>`select deployment_id as "deploymentId", mode, scoring_rule_version_id as "scoringRuleVersionId" from deployment_version_assignments where effective_until is null`,
-      this.database<Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean }>>`select id, version, lifecycle, clinical_use_permitted as "clinicalUsePermitted" from scoring_rule_versions order by created_at desc`,
+      this.database<Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault: boolean }>>`select id, version, lifecycle, clinical_use_permitted as "clinicalUsePermitted", exists(select 1 from scoring_rule_default where rule_id=scoring_rule_versions.id) as "isDefault" from scoring_rule_versions order by created_at desc`,
     ]);
     return { clients: [...clients], deployments: [...deployments], entitlements: [...entitlements], assignments: assignments.map((row) => row.mode === "PINNED" ? { deploymentId: row.deploymentId, mode: "PINNED" as const, scoringRuleVersionId: row.scoringRuleVersionId! } : { deploymentId: row.deploymentId, mode: "LATEST_APPROVED" as const }), versions: [...versions] };
   }

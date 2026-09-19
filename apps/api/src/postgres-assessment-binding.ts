@@ -17,9 +17,12 @@ export async function postgresBindAssessment(database: ReturnType<typeof postgre
     if (!existing && !input.create) throw new BindingError("ASSESSMENT_NOT_FOUND");
     const [assignment] = await tx<Array<{ mode: string; versionId: string | null }>>`select mode,scoring_rule_version_id as "versionId" from deployment_version_assignments where deployment_id=${input.identity.deploymentId} and effective_until is null`;
     if (!existing && !assignment) throw new BindingError("VERSION_UNAVAILABLE");
-    const selectedId = existing?.ruleVersionId ?? (assignment?.mode === "PINNED" ? assignment.versionId : null);
+    const [selectedDefault] = !existing && assignment?.mode !== "PINNED"
+      ? await tx<Array<{ ruleId: string | null }>>`select rule_id as "ruleId" from scoring_rule_default where singleton=true` : [];
+    const selectedId = existing?.ruleVersionId ?? (assignment?.mode === "PINNED" ? assignment.versionId : selectedDefault?.ruleId);
+    if (!selectedId) throw new BindingError("VERSION_UNAVAILABLE");
     const [raw] = await tx<RuleRecord[]>`select id,version,lifecycle,clinical_use_permitted as "clinicalUsePermitted",definition,package_checksum as "packageChecksum",revision,validated_revision as "validatedRevision",created_at as "createdAt",updated_at as "updatedAt",created_by as "createdBy",approved_at as "approvedAt" from scoring_rule_versions
-      where (${selectedId}::varchar is null or id=${selectedId}) and (${Boolean(existing)} or (lifecycle in ('APPROVED','ACTIVE') and clinical_use_permitted=true))
+      where id=${selectedId} and (${Boolean(existing)} or (lifecycle in ('APPROVED','ACTIVE') and clinical_use_permitted=true))
       order by approved_at desc nulls last,id desc limit 1 for share`;
     if (!raw || !versionedRuleDefinitionSchema.safeParse(raw.definition).success || isFinalAssessmentDefinition(raw.definition) && (!raw.definition.provisional.clinicalUsePermitted || !existing && !raw.clinicalUsePermitted)) throw new BindingError("VERSION_UNAVAILABLE");
     if (existing && (existing.checksum !== raw.packageChecksum || !["APPROVED", "ACTIVE", "RETIRED"].includes(raw.lifecycle))) throw new BindingError("VERSION_UNAVAILABLE");

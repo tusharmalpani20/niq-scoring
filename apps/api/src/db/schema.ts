@@ -120,6 +120,13 @@ export const scoringRuleNameAliases = pgTable("scoring_rule_name_aliases", {
   ruleId: varchar("rule_id", { length: 26 }).notNull(),
 });
 
+export const scoringRuleDefault = pgTable("scoring_rule_default", {
+  singleton: boolean("singleton").primaryKey().default(true),
+  ruleId: varchar("rule_id", { length: 26 }).references(() => scoringRuleVersions.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: text("updated_by"),
+}, table => [check("scoring_rule_default_singleton_ck", sql`${table.singleton}=true`)]);
+
 export const deploymentVersionAssignments = pgTable("deployment_version_assignments", {
   id: varchar("id", { length: 26 }).primaryKey(),
   deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),

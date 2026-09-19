@@ -349,3 +349,27 @@ test("custom score groups persist and invalid group edits cannot bypass integrit
   expect(reserved.status).toBe(409);
   expect(await reserved.json()).toEqual({ error: "FIXED_RULE_REQUIRED" });
 });
+
+test("default selection is explicit, active-only, audited and protects retirement", async () => {
+  const context = setup();
+  let first = await savedSynthetic(context, "First default");
+  expect((await context.request(`/${first.id}/set-default`, "POST", { revision: first.revision })).status).toBe(409);
+  for (const action of ["validate", "approve"] as const) first = await (await context.request(`/${first.id}/${action}`, "POST", { revision: first.revision })).json();
+  expect((await context.request(`/${first.id}/set-default`, "POST", { revision: first.revision })).status).toBe(409);
+  first = await (await context.request(`/${first.id}/activate`, "POST", { revision: first.revision, makeDefault: true })).json();
+  expect(first.isDefault).toBe(true);
+  expect((await context.request(`/${first.id}/retire`, "POST", { revision: first.revision })).status).toBe(409);
+  let second = await savedSynthetic(context, "Second default");
+  for (const action of ["validate", "approve", "activate"] as const) second = await (await context.request(`/${second.id}/${action}`, "POST", { revision: second.revision })).json();
+  expect(second.isDefault).toBe(false);
+  expect((await context.request(`/${second.id}/set-default`, "POST", { revision: 1 })).status).toBe(409);
+  second = await (await context.request(`/${second.id}/set-default`, "POST", { revision: second.revision })).json();
+  expect(second.isDefault).toBe(true);
+  expect((await context.store.rules.get(first.id))?.isDefault).toBe(false);
+  expect((await context.store.overview()).versions.filter(v => v.isDefault).map(v => v.id)).toEqual([second.id]);
+  const list = await (await context.request("")).json();
+  expect(list.versions.filter((v: RuleRecord) => v.isDefault).map((v: RuleRecord) => v.id)).toEqual([second.id]);
+  expect(await context.store.rules.audit(second.id)).toContainEqual(expect.objectContaining({ action: "RULE_DEFAULT_SET", actor: actorId, at: now }));
+  expect(await context.store.rules.audit(first.id)).toContainEqual(expect.objectContaining({ action: "RULE_DEFAULT_REPLACED", actor: actorId, at: now }));
+  expect((await context.request(`/${first.id}/retire`, "POST", { revision: first.revision })).status).toBe(200);
+});
