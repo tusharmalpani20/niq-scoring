@@ -97,12 +97,12 @@ test("risk names reject duplicates and blank numeric ranges stay invalid", async
   await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
   await page.getByLabel("Category name", { exact: true }).nth(1).fill("Low Risk");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByLabel("Configuration issues")).toContainText(/unique|duplicate/i);
+  await expect(page.getByRole("alert", { name: "Range errors" })).toContainText(/unique|duplicate/i);
   await page.getByLabel("Category name", { exact: true }).nth(1).fill("Moderate Risk");
   const from = page.getByLabel("From score", { exact: true }).nth(1);
   await from.fill("");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByLabel("Configuration issues")).toContainText("Enter valid ranges");
+  await expect(page.getByText("Enter a whole number of 0 or more.", { exact: true })).toBeVisible();
   await expect(from).toHaveValue("");
   await expect(from).toHaveAttribute("aria-invalid", "true");
 });
@@ -147,7 +147,8 @@ test("face scan ranges persist and gaps cannot be saved", async ({ page }) => {
   await page.getByLabel("From (%)", { exact: true }).nth(1).fill("66");
   await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("gap");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByLabel("Configuration issues")).toBeVisible();
+  await expect(page.getByLabel("Configuration issues")).toHaveCount(0);
+  await expect(page.getByRole("alert", { name: "Range errors" })).toBeVisible();
   expect(state.getRecord()!.definition.faceScanScoring).toEqual(saved);
   await page.getByLabel("From (%)", { exact: true }).nth(1).fill("");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
@@ -182,7 +183,7 @@ test("risk overlap is visible before saving and cannot persist", async ({ page }
   await page.getByLabel("From score", { exact: true }).nth(2).fill("20");
   await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("overlaps");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByLabel("Configuration issues")).toContainText("overlaps");
+  await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("overlaps");
   expect(state.getRecord()!.revision).toBe(1);
 });
 
@@ -200,4 +201,23 @@ test("grouped treatment table preserves all seven editable scores", async ({ pag
   const field = state.getRecord()!.definition.sections.flatMap(section => section.fields).find(field => field.id === "treatment_status")!;
   expect(field.kind === "conditional" && field.scoring.palliative.paths.find(path => !path.children.length)!.points).toBe(4);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+});
+
+
+test("overlap feedback identifies rows without duplicate save errors", async ({ page }) => {
+  const state = await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Face scan", exact: true }).click();
+  const saved = structuredClone(state.getRecord()!.definition.faceScanScoring);
+  await page.getByLabel("From (%)", { exact: true }).nth(2).fill("60");
+  const errors = page.getByRole("alert", { name: "Range errors" });
+  await expect(errors).toContainText("Rows 1 and 3 overlap between 60% and 70%");
+  await expect(errors).toContainText("Rows 2 and 3 overlap between 70% and 80%");
+  await expect(errors).not.toContainText("include 100%");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByLabel("Configuration issues")).toHaveCount(0);
+  await expect(errors).toBeFocused();
+  expect(state.getRecord()!.definition.faceScanScoring).toEqual(saved);
+  await page.getByLabel("From (%)", { exact: true }).nth(2).fill("80");
+  await expect(errors).toHaveCount(0);
 });

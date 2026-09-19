@@ -91,7 +91,12 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
 
   function update(next: FinalAssessmentDefinition) { setDefinition(next); setNotice(""); setIssues([]); }
   function showIssues(next: Issue[]) {
-    setIssues(next);
+    // Range editors already display these errors next to their controls.
+    setIssues(next.filter(issue => {
+      const path = Array.isArray(issue.path) ? issue.path.join(".") : String(issue.path ?? "");
+      const inlineRisk = definition?.provisional.status === "CLIENT_CONFIRMED" && (path.startsWith("riskCategories") || path.startsWith("risk:"));
+      return !path.startsWith("face") && !inlineRisk;
+    }));
     const issuePath = next[0]?.path;
     const path = Array.isArray(issuePath) ? issuePath.join(".") : String(issuePath ?? "");
     const draftField = definition?.sections.flatMap((section, sectionIndex) => section.fields.map(field => ({ field, sectionIndex }))).find(({ field }) => path.startsWith(`${field.id}:`) || (field.kind === "calculated" && field.scoring.bands.some(band => path.startsWith(`range:${band.id}-`))));
@@ -101,7 +106,11 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
     const sectionMatch = path.match(/^sections\.(\d+)/);
     if (sectionMatch) { setTab("scoring"); setSectionIndex(Number(sectionMatch[1])); const fieldIndex = path.match(/fields\.(\d+)/)?.[1]; const field = definition?.sections[Number(sectionMatch[1])]?.fields[Number(fieldIndex)]; if (field) setExpanded(current => [...new Set([...current, field.id])]); }
     else if (path.startsWith("riskCategories")) setTab("risk categories");
-    requestAnimationFrame(() => document.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
+    requestAnimationFrame(() => {
+      const rangeErrors = document.querySelector<HTMLElement>('[data-state="active"] [aria-label="Range errors"]');
+      if (rangeErrors) { rangeErrors.tabIndex = -1; rangeErrors.focus(); }
+      else document.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
+    });
   }
   function patchField(id: string, change: (field: FinalField) => FinalField) {
     if (!definition) return;
