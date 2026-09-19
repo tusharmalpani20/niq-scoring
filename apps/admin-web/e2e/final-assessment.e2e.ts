@@ -27,13 +27,22 @@ for (const width of [390, 768, 845, 1065, 1440]) {
     await startFinalDraft(page);
     const navigation = page.getByRole("navigation", { name: "Scoring sections" });
     await expect(navigation).toBeVisible();
+    const navBox = await navigation.boundingBox();
+    const firstSection = await navigation.getByRole("button").first().boundingBox();
+    expect(Math.abs(firstSection!.x - navBox!.x)).toBeLessThanOrEqual(1);
     await expect(page.getByLabel("Assessment section", { exact: true })).toHaveCount(0);
     await navigation.getByRole("button", { name: /Dietary details/ }).click();
     await page.locator("#final-field-weight_loss").getByRole("button").click();
-    await expect(page.getByText("Mild weight loss", { exact: true })).toBeVisible();
+    await expect(page.getByText("Mild weight loss", { exact: true }).filter({ visible: true })).toBeVisible();
     await page.locator("#final-field-protein_intake").getByRole("button").click();
     await expect(page.getByText("Normal intake · More than usual")).toBeVisible();
     await expect(page.getByText(/dietary_intake_/)).toHaveCount(0);
+    // Multiple panels stay open for comparing related scores, as in the design.
+    await expect(page.locator("#final-scoring-weight_loss")).toBeVisible();
+    const weightPoints = page.locator("#final-scoring-weight_loss input[type=number]");
+    for (const input of await weightPoints.all()) {
+      if (await input.isVisible()) expect((await input.boundingBox())!.width).toBeLessThanOrEqual(90);
+    }
     for (const tab of ["Risk categories", "Face scan", "Scoring"]) {
       await page.getByRole("tab", { name: tab, exact: true }).click();
       expect(await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>("main *")).filter(el => el.clientWidth > 1 && !el.classList.contains("sr-only") && el.scrollWidth > el.clientWidth + 2 && getComputedStyle(el).overflowX !== "visible").map(el => el.tagName + "." + el.className))).toEqual([]);
