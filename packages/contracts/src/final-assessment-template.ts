@@ -53,7 +53,7 @@ const protein = { ...fixed("protein_intake", "Protein intake", "derived", [], { 
  ] }, "F126:G131; F152:G153", "Derived from dietary intake. Normal intake and More than usual are Adequate."), sourceInputId: "dietary_intake" };
 const fluid = select("fluid_intake", "Fluid intake", [["below_1_litre", "<1 litre"], ["one_to_two_litres", "1–2 litres"], ["above_2_litres", ">2 litres"]], { kind: "options", aggregation: "sum", points: points([["fluid_intake_below_1_litre", 3], ["fluid_intake_one_to_two_litres", 2], ["fluid_intake_above_2_litres", 1]]) }, "F154:G156");
 
-export function createFinalAssessmentTemplate(name: string): FinalAssessmentDefinition {
+export function createLegacyFinalAssessmentTemplate(name: string): FinalAssessmentDefinition {
   return finalAssessmentDefinitionSchema.parse({
     formatVersion: 2,
     profile: "NIQ_FINAL_ASSESSMENT",
@@ -83,4 +83,41 @@ export function createFinalAssessmentTemplate(name: string): FinalAssessmentDefi
     interventions: { status: "NOT_APPLICABLE", note: "Interventions are not finalized for the final assessment profile." },
     samples: [],
   });
+}
+
+/** Explicitly upgrade a draft; callers must save through revision-checked persistence. */
+export function upgradeFinalAssessmentDefinition(input: FinalAssessmentDefinition): FinalAssessmentDefinition {
+  const definition = structuredClone(input);
+  if (definition.provisional.status === "CLIENT_CONFIRMED") return definition;
+  const weight = definition.sections.flatMap(section => section.fields).find(field => field.id === "weight_loss");
+  const baselineWeight = createLegacyFinalAssessmentTemplate(input.name).sections.flatMap(section => section.fields).find(field => field.id === "weight_loss");
+  if (weight?.kind === "calculated" && baselineWeight?.kind === "calculated") {
+    // Stable identifiers preserve integrations; reset thresholds, preserving configured points.
+    weight.scoring.bands = baselineWeight.scoring.bands.map(band => ({ ...band, points: weight.scoring.bands.find(current => current.id === band.id)?.points ?? band.points }));
+    weight.scoring.bands[1]!.max = 6;
+    weight.scoring.bands[2]!.min = 6;
+  }
+  definition.riskCategories = [
+    { id: "low", label: "Low Risk", interpretation: "", min: 0, max: 15, minInclusive: true, maxInclusive: true, sources: [] },
+    { id: "moderate", label: "Moderate Risk", interpretation: "", min: 16, max: 25, minInclusive: true, maxInclusive: true, sources: [] },
+    { id: "high", label: "High Risk", interpretation: "", min: 25, max: null, minInclusive: false, maxInclusive: false, sources: [] },
+  ];
+  definition.provisional = { status: "CLIENT_CONFIRMED", clinicalUsePermitted: true, notice: "Scoring categories confirmed by the client. Normal approval is required before use." };
+  if (definition.description === createLegacyFinalAssessmentTemplate(input.name).description) definition.description = "Final NIQ assessment scoring profile.";
+  // Invariant package fixtures remain valid when administrators configure points.
+  // Independent engine regression tests verify the client-confirmed nonzero defaults.
+  definition.samples = confirmedAssessmentSamples();
+  return definition;
+}
+
+export function confirmedAssessmentSamples(): FinalAssessmentDefinition["samples"] {
+  return [
+    { id: "unanswered", name: "No answers", answers: {}, expected: { complete: false, score: null, classificationId: null } },
+    { id: "no_surgeries", name: "No previous surgeries gives zero points", answers: { previous_surgeries: "previous_surgeries_no" }, expected: { complete: true, score: 0, classificationId: "low" } },
+    { id: "no_selections", name: "Explicitly empty selections give zero points", answers: { current_medications: [], supplements_intake: [] }, expected: { complete: true, score: 0, classificationId: "low" } },
+  ];
+}
+
+export function createFinalAssessmentTemplate(name: string): FinalAssessmentDefinition {
+  return upgradeFinalAssessmentDefinition(createLegacyFinalAssessmentTemplate(name));
 }

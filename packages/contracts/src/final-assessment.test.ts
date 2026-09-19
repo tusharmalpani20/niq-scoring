@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createFinalAssessmentTemplate } from "./final-assessment-template";
+import { createFinalAssessmentTemplate, createLegacyFinalAssessmentTemplate, upgradeFinalAssessmentDefinition } from "./final-assessment-template";
 import { finalAssessmentDefinitionSchema } from "./final-assessment";
 import { isFixedFinalAssessmentDefinition, validateFinalAssessmentDefinition } from "./final-assessment-validation";
 import { publicQuestionnaire } from "./rule-public";
@@ -41,4 +41,28 @@ describe("final assessment profile contract", () => {
     expect(publicView.supportingInputs.map(input => input.id)).not.toEqual(expect.arrayContaining(["age", "gender", "contact"]));
     expect(publicView.sections.flatMap(section => section.fields)).toHaveLength(19);
   });
+});
+
+
+test("explicit draft upgrade preserves the source and customized option points", () => {
+  const legacy = createLegacyFinalAssessmentTemplate("Existing draft");
+  const stage = legacy.sections[0]!.fields[1]!;
+  if (stage.kind !== "select") throw new Error("stage");
+  stage.scoring.points[0]!.points = 8;
+  const original = structuredClone(legacy);
+  const upgraded = upgradeFinalAssessmentDefinition(legacy);
+  expect(legacy).toEqual(original);
+  expect(isFixedFinalAssessmentDefinition(legacy)).toBe(true);
+  expect(isFixedFinalAssessmentDefinition(upgraded)).toBe(true);
+  expect(upgraded.sections[0]!.fields[1]!.scoring).toEqual(stage.scoring);
+  expect(upgraded.provisional.status).toBe("CLIENT_CONFIRMED");
+});
+
+test("confirmed points require integers while earlier definitions remain readable", () => {
+  const legacy = createLegacyFinalAssessmentTemplate("Legacy");
+  const stage = legacy.sections[0]!.fields[1]!;
+  if (stage.kind !== "select") throw new Error("stage");
+  stage.scoring.points[0]!.points = 1.5;
+  expect(validateFinalAssessmentDefinition(legacy)).toEqual([]);
+  expect(validateFinalAssessmentDefinition(upgradeFinalAssessmentDefinition(legacy))).toContainEqual(expect.objectContaining({ code: "INTEGER_POINTS_REQUIRED" }));
 });

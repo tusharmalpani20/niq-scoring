@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { createFinalAssessmentTemplate } from "@niq-scoring/contracts/final-assessment-template";
-import { evaluateFinalAssessment } from "./final-assessment-evaluator";
+import { createLegacyFinalAssessmentTemplate as createFinalAssessmentTemplate, createFinalAssessmentTemplate as confirmedTemplate } from "@niq-scoring/contracts/final-assessment-template";
+import { evaluateFinalAssessment, validateFinalAssessmentSamples } from "./final-assessment-evaluator";
 
 const definition = () => createFinalAssessmentTemplate("Assessment v2");
 
@@ -89,5 +89,35 @@ describe("final assessment evaluator", () => {
     expect(identity.issues.map(issue => issue.code)).toContain("IDENTITY_FIELD_NOT_ALLOWED");
     const contradiction = evaluateFinalAssessment(definition(), { dietary_symptoms: ["dietary_symptoms_no_problem", "dietary_symptoms_nausea"] });
     expect(contradiction.issues.map(issue => issue.code)).toContain("CONTRADICTORY_ANSWER");
+  });
+});
+
+
+describe("client-confirmed assessment", () => {
+  test("uses six percent and exact ten percent boundaries", () => {
+    for (const [current, expected] of [[94.001, 1], [94, 2], [90, 2], [89.999, 3], [100, 0], [101, 0]]) {
+      expect(evaluateFinalAssessment(confirmedTemplate("Confirmed"), { previous_weight_kg: 100, current_weight_kg: current }).score).toBe(expected!);
+    }
+  });
+  test("uses configured palliative points", () => {
+    const definition = confirmedTemplate("Confirmed");
+    const treatment = definition.sections[1]!.fields[0]!;
+    if (treatment.kind !== "conditional") throw new Error("treatment");
+    treatment.scoring.palliative.paths[0]!.points = 5;
+    expect(evaluateFinalAssessment(definition, { treatment_status: "treatment_status_palliative_care", palliative_status: "with_cancer" }).score).toBe(5);
+  });
+  test("rejects each nonpositive supplied weight even without its counterpart", () => {
+    for (const id of ["previous_weight_kg", "current_weight_kg"]) for (const weight of [0, -10]) {
+      const result = evaluateFinalAssessment(confirmedTemplate("Confirmed"), { [id]: weight, stage: "stage_localized" });
+      expect(result.complete).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({ path: `answers.${id}`, code: "INVALID_WEIGHT" }));
+    }
+  });
+  test("classifies confirmed integer totals and passes independently worked samples", () => {
+    const definition = confirmedTemplate("Confirmed");
+    expect(validateFinalAssessmentSamples(definition)).toEqual([]);
+    for (const [count, label] of [[15, "Low Risk"], [16, "Moderate Risk"], [25, "Moderate Risk"], [26, "High Risk"]] as const) {
+      expect(evaluateFinalAssessment(definition, { previous_surgeries: "previous_surgeries_yes", previous_surgery_count: count }).classification?.label).toBe(label);
+    }
   });
 });

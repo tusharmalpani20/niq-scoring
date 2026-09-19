@@ -1,5 +1,5 @@
 import { finalAssessmentDefinitionSchema, type FinalAssessmentDefinition, type FinalAssessmentField } from "./final-assessment";
-import { createFinalAssessmentTemplate } from "./final-assessment-template";
+import { createFinalAssessmentTemplate, createLegacyFinalAssessmentTemplate } from "./final-assessment-template";
 import type { DefinitionIssue } from "./rule-definition";
 
 function stable(value: unknown): string {
@@ -36,7 +36,7 @@ function fixedStructure(definition: FinalAssessmentDefinition) {
 export function isFixedFinalAssessmentDefinition(value: unknown): value is FinalAssessmentDefinition {
   const parsed = finalAssessmentDefinitionSchema.safeParse(value);
   if (!parsed.success) return false;
-  return stable(fixedStructure(parsed.data)) === stable(fixedStructure(createFinalAssessmentTemplate(parsed.data.name)));
+  return stable(fixedStructure(parsed.data)) === stable(fixedStructure((parsed.data.provisional.status === "CLIENT_CONFIRMED" ? createFinalAssessmentTemplate : createLegacyFinalAssessmentTemplate)(parsed.data.name)));
 }
 
 function rangesAreComplete(bands: Array<{ min: number | null; max: number | null; minInclusive: boolean; maxInclusive: boolean }>) {
@@ -73,13 +73,24 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
   const issues: DefinitionIssue[] = [];
   const add = (path: string, code: string, message: string, severity: DefinitionIssue["severity"] = "error") => issues.push({ path, code, message, severity });
   if (!isFixedFinalAssessmentDefinition(definition)) add("profile", "FIXED_PROFILE_REQUIRED", "The final assessment fields, options and dependencies are fixed.", "blocking");
-  if (!rangesAreComplete(definition.riskCategories)) add("riskCategories", "RISK_RANGE_COVERAGE", "Risk categories must cover every possible non-negative total without gaps or overlaps.", "blocking");
+  if (!(definition.provisional.status === "CLIENT_CONFIRMED" ? integerRangesAreComplete(definition.riskCategories) : rangesAreComplete(definition.riskCategories))) add("riskCategories", "RISK_RANGE_COVERAGE", "Risk categories must cover every possible non-negative total without gaps or overlaps.", "blocking");
   const categoryNames = new Set<string>();
   definition.riskCategories.forEach((category, index) => {
     const normalized = category.label.trim().replace(/\s+/g, " ").toLowerCase();
     if (categoryNames.has(normalized)) add(`riskCategories.${index}.label`, "DUPLICATE_CATEGORY_NAME", "Risk category names must be unique ignoring case and repeated spaces.");
     categoryNames.add(normalized);
   });
+  if (definition.provisional.status === "CLIENT_CONFIRMED") {
+    const checkPoints = (value: unknown, path: string) => {
+      if (!value || typeof value !== "object") return;
+      for (const [key, item] of Object.entries(value)) {
+        const next = `${path}.${key}`;
+        if ((key === "points" || key === "pointsPerCount") && typeof item === "number" && !Number.isSafeInteger(item)) add(next, "INTEGER_POINTS_REQUIRED", "Points must be a whole number within the supported range.");
+        else if (item && typeof item === "object") checkPoints(item, next);
+      }
+    };
+    checkPoints(definition.sections, "sections");
+  }
   definition.sections.forEach((section, sectionIndex) => section.fields.forEach((field, fieldIndex) => {
     const path = `sections.${sectionIndex}.fields.${fieldIndex}`;
     if (field.kind === "select" || field.kind === "multi_select" || field.kind === "yes_no") validateOptionPoints(field, path, add);
@@ -116,4 +127,10 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
     }
   }));
   return issues;
+}
+
+function integerRangesAreComplete(ranges: FinalAssessmentDefinition["riskCategories"]): boolean {
+  const intervals = ranges.map(range => ({ min: range.min === null ? 0 : range.minInclusive ? Math.ceil(range.min) : Math.floor(range.min) + 1, max: range.max === null ? Infinity : range.maxInclusive ? Math.floor(range.max) : Math.ceil(range.max) - 1 })).sort((a, b) => a.min - b.min);
+  if (intervals[0]?.min !== 0 || intervals.at(-1)?.max !== Infinity) return false;
+  return intervals.every((range, index) => range.max >= range.min && (!index || intervals[index - 1]!.max + 1 === range.min));
 }

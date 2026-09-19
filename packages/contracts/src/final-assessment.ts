@@ -119,11 +119,11 @@ export const finalAssessmentDefinitionSchema = z.object({
   sections: z.array(finalAssessmentSectionSchema).length(5),
   supportingInputs: z.array(finalAssessmentSupportingInputSchema).length(6),
   riskCategories: z.array(finalRiskCategorySchema).min(1).max(20),
-  provisional: z.object({
+  provisional: z.union([z.object({
     status: z.literal(FINAL_ASSESSMENT_PROVISIONAL_STATUS),
     clinicalUsePermitted: z.literal(false),
     notice: label,
-  }).strict(),
+  }).strict(), z.object({ status: z.literal("CLIENT_CONFIRMED"), clinicalUsePermitted: z.literal(true), notice: label }).strict()]),
   interventions: z.object({ status: z.literal("NOT_APPLICABLE"), note: label }).strict(),
   samples: z.array(finalAssessmentSampleSchema).max(100),
 }).strict();

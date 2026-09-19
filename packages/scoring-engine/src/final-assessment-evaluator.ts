@@ -16,8 +16,8 @@ export type FinalAssessmentEvaluation = {
   components: FinalAssessmentComponent[];
   answerCoverage: { totalEntries: 19; answeredEntries: number; unansweredEntries: number; pendingEntries: number; allUnanswered: boolean };
   derived: { weightLossPercent: number | null; proteinAdequacy: "adequate" | "inadequate" | null };
-  riskStatus: typeof FINAL_ASSESSMENT_PROVISIONAL_STATUS;
-  clinicalUsePermitted: false;
+  riskStatus: FinalAssessmentDefinition["provisional"]["status"];
+  clinicalUsePermitted: boolean;
   interventions: { status: "NOT_APPLICABLE" };
   issues: EvaluationIssue[];
 };
@@ -48,6 +48,8 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
   const structural = validateFinalAssessmentDefinition(definition);
   const issues: EvaluationIssue[] = structural.map((issue: DefinitionIssue) => ({ path: issue.path, code: "INVALID_CONFIGURATION", message: issue.message }));
   const result = baseResult(issues);
+  result.riskStatus = definition.provisional.status;
+  result.clinicalUsePermitted = definition.provisional.clinicalUsePermitted;
   if (issues.length) return result;
 
   const fields = definition.sections.flatMap(section => section.fields.map(field => ({ sectionId: section.id, field })));
@@ -90,7 +92,12 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
     else if ((field.kind === "calculated" || field.kind === "derived") && hasValue(raw(field.id))) { invalidIds.add(field.id); add(`answers.${field.id}`, "DERIVED_ANSWER_NOT_ALLOWED", "Calculated values cannot be submitted."); }
   }
   for (const input of definition.supportingInputs) {
-    if (input.kind === "number") validateNumber(input.id);
+    if (input.kind === "number") {
+      validateNumber(input.id);
+      if ((input.id === "previous_weight_kg" || input.id === "current_weight_kg") && hasValue(raw(input.id)) && typeof raw(input.id) === "number" && (raw(input.id) as number) <= 0) {
+        invalidIds.add(input.id); add(`answers.${input.id}`, "INVALID_WEIGHT", "Weight must be greater than zero.");
+      }
+    }
     else validateChoice(input.id, input.options);
   }
   const dietarySymptoms = fieldMap.get("dietary_symptoms");
@@ -132,7 +139,7 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
         continue;
       }
       if (!hasValue(palliativeStatus)) { push(sectionId, field, null, "pending", "Choose a palliative treatment path."); continue; }
-      if (palliativeStatus === "with_cancer") { push(sectionId, field, 3, "answered"); continue; }
+      if (palliativeStatus === "with_cancer") { push(sectionId, field, field.scoring.palliative.paths.find(path => path.id === "with_cancer")!.points, "answered"); continue; }
       if (palliativeStatus === "post_treatment") {
         if (!hasValue(palliativeTiming)) { push(sectionId, field, null, "pending", "Choose the post-treatment timing."); continue; }
         const branch = field.scoring.palliative.paths.find(path => path.id === "post_treatment");
@@ -151,7 +158,7 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
       if (!hasValue(count)) { push(sectionId, field, null, "pending", "Enter the number of previous surgeries."); continue; }
       if (typeof count !== "number" || !Number.isSafeInteger(count) || count <= 0) { invalidIds.add(field.countInputId); add(`answers.${field.countInputId}`, "INVALID_COUNT", "Use a positive safe integer for surgery count."); push(sectionId, field, null, "unanswered", "Invalid surgery count"); continue; }
       const points = count * field.scoring.pointsPerCount;
-      if (!Number.isFinite(points)) { add(`answers.${field.id}`, "INVALID_ARITHMETIC", "The surgery count result is outside the supported numeric range."); push(sectionId, field, null, "unanswered", "Invalid surgery calculation"); continue; }
+      if (!Number.isFinite(points) || definition.provisional.status === "CLIENT_CONFIRMED" && !Number.isSafeInteger(points)) { add(`answers.${field.id}`, "INVALID_ARITHMETIC", "The surgery count result is outside the supported numeric range."); push(sectionId, field, null, "unanswered", "Invalid surgery calculation"); continue; }
       push(sectionId, field, points, "answered");
       continue;
     }
@@ -190,7 +197,7 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
   result.answerCoverage = { totalEntries: 19, answeredEntries, unansweredEntries, pendingEntries, allUnanswered: answeredEntries === 0 };
   if (issues.length || answeredEntries === 0) return result;
   const score = components.filter(component => component.points !== null).reduce((sum, component) => sum + component.points!, 0);
-  if (!Number.isFinite(score)) { add("score", "INVALID_ARITHMETIC", "The score is outside the supported numeric range."); return result; }
+  if (!Number.isFinite(score) || definition.provisional.status === "CLIENT_CONFIRMED" && !Number.isSafeInteger(score)) { add("score", "INVALID_ARITHMETIC", "The score is outside the supported numeric range."); return result; }
   result.score = score;
   const matches = definition.riskCategories.filter(category => inRange(score, category));
   if (matches.length !== 1) { add("riskCategories", "UNMATCHED_CLASSIFICATION", "Score must match exactly one provisional risk category."); return result; }
