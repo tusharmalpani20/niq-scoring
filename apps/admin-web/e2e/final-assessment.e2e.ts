@@ -124,7 +124,7 @@ test("confirmed drafts validate, approve explicitly and activate without editing
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(page.getByLabel("Description", { exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Activate version", exact: true }).click();
-  await expect(page.getByRole("alertdialog")).toContainText("Existing assessments keep their original version");
+  await expect(page.getByRole("alertdialog")).toContainText("You can assign Final assessment browser draft in Deployments after activation.");
   await expect(page.getByRole("checkbox", { name: /Make this the default version/ })).not.toBeChecked();
   expect(state.getRecord()!.lifecycle).toBe("APPROVED");
   await page.getByRole("alertdialog").getByRole("button", { name: "Activate version", exact: true }).click();
@@ -145,7 +145,7 @@ test("confirmed drafts validate, approve explicitly and activate without editing
   expect(state.getRecord()!.lifecycle).toBe("ACTIVE");
   expect(state.getRecord()!.isDefault).not.toBe(true);
   await page.getByRole("button", { name: "Make default", exact: true }).click();
-  await expect(page.getByRole("alertdialog")).toContainText("Existing assessments keep their original version");
+  await expect(page.getByRole("alertdialog")).toContainText("Assessments already started keep their original rules.");
   await page.getByRole("alertdialog").getByRole("button", { name: "Cancel", exact: true }).click();
   expect(state.getRecord()!.isDefault).not.toBe(true);
   await page.getByRole("button", { name: "Make default", exact: true }).click();
@@ -184,13 +184,13 @@ test("activation can explicitly make a version the default", async ({ page }) =>
   const impact = page.getByRole("region", { name: "Default change impact" });
   await expect(impact).toContainText("Previous rules");
   await expect(impact).toContainText("Final assessment browser draft");
-  for (const [label, count] of [
-    ["Deployments using the current default version", "3"],
-    ["Following default, will switch", "2"],
-    ["Pinned to current version, will stay", "1"],
-    ["Already pinned to the new version", "1"],
-  ]) await expect(impact.locator("div").filter({ has: page.getByText(label!, { exact: true }) }).locator("dd")).toHaveText(count!);
-  await expect(impact).toContainText("Counts include paused deployments");
+  await expect(impact).toContainText("2 deployments will use Final assessment browser draft for new assessments.");
+  await expect(impact.getByText("3 deployments currently use Previous rules.")).not.toBeVisible();
+  await impact.getByText("View deployment details", { exact: true }).click();
+  await expect(impact.getByText("3 deployments currently use Previous rules.")).toBeVisible();
+  await expect(impact).toContainText("1 deployment is set to Previous rules directly and will keep using it.");
+  await expect(impact).toContainText("1 deployment already uses Final assessment browser draft directly.");
+  await expect(impact).toContainText("1 paused deployment is included in the switch.");
   await page.getByRole("alertdialog").getByRole("button", { name: "Activate version", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("Deployments following the default");
   await page.getByRole("button", { name: "Done", exact: true }).click();
