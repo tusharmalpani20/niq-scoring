@@ -40,14 +40,14 @@ Normal intake and More than usual map to Adequate (0); the other four intake cho
 
 ## Independent face-scan points
 
-`@niq-scoring/scoring-engine/face-scan-scoring` exports `calculateFaceScanScore({ wellnessScore })`. The provider's `wellness_score` (Overall Health Score) must be normalized to this numeric 0–100 input by the future trusted provider adapter. Do not substitute `health_risk_score`, individual vitals or an assessment total.
+`@niq-scoring/scoring-engine/face-scan-scoring` exports `calculateFaceScanScore({ wellnessScore }, definition.faceScanScoring, ruleVersionId)`. The provider's `wellness_score` (Overall Health Score) must be normalized to this numeric 0–100 input by the future trusted provider adapter. Do not substitute `health_risk_score`, individual vitals or an assessment total.
 
 - Below 70% → 3 points.
 - 70–80%, inclusive → 2 points.
 - Above 80% → 1 point.
 
-The result includes `scoringVersion: "NIQ_FACE_SCAN_2026_09"`, `wellnessScore`, `points` and `status`. Missing/null returns `UNAVAILABLE` with null points; invalid numbers/types are rejected. A real zero score is valid and returns 3 points. No rounding occurs before classification. This result is independent of assessment totals and categories.
+The result includes `ruleVersionId`, an exact `configuration` snapshot, `wellnessScore`, `points` and `status`. `scoringVersion` is `NIQ_FACE_SCAN_2026_09` only for the original mapping and null for custom mappings. Missing/null returns `UNAVAILABLE` with null points; invalid numbers/types are rejected. A real zero score is valid and returns 3 points. No rounding occurs before classification. This result is independent of assessment totals and categories.
 
-The Face scan editor tab shows the fixed mapping. This phase adds the calculation and tests only; it does not enable camera capture, authenticate CarePlix, create provider sessions, process callbacks or charge usage. No new public endpoint accepts unverified face-scan claims. Live integration will connect trusted provider results to this evaluator separately.
+The Face scan editor stores `faceScanScoring` in each rule definition: `lowerThreshold`, `upperThreshold`, `belowPoints`, `middlePoints`, and `abovePoints`. Thresholds are percentages from 0–100 with the lower strictly below the upper; points are nonnegative safe integers. The middle range includes both thresholds. Historical definitions may omit this property and retain the defaults above without rewriting historical JSON or checksums. New templates include it explicitly. The trusted integration must resolve the selected persisted rule version and pass its configuration and ID to the evaluator; never accept caller-selected settings. This phase adds the calculation and tests only; it does not enable camera capture, authenticate CarePlix, create provider sessions, process callbacks or charge usage. No new public endpoint accepts unverified face-scan claims. Live integration will connect trusted provider results to this evaluator separately.
 
 Server-only `CAREPLIX_API_BASE_URL`, `CAREPLIX_API_KEY` and `CAREPLIX_API_SECRET` are documented in `.env.example`; local values remain outside Git. Authentication is still awaiting provider clarification. Do not expose these values to the browser.

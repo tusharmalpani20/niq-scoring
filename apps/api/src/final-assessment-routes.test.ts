@@ -178,3 +178,24 @@ test("approved final assessment supports credential-bound public scoring and exa
   expect((await quota.json()).reason).toBe("MONTHLY_LIMIT_REACHED");
   expect(store.usages).toHaveLength(2);
 });
+
+
+test("face-scan settings persist with the version and invalid mappings are rejected", async () => {
+  const { request, create } = adminSetup();
+  const draft = await create("Custom face scan");
+  const definition = structuredClone(draft.definition as FinalAssessmentDefinition);
+  definition.faceScanScoring = { lowerThreshold: 60.5, upperThreshold: 90, belowPoints: 8, middlePoints: 4, abovePoints: 0 };
+  expect((await request(`/${draft.id}`, "PUT", { revision: 1, definition })).status).toBe(200);
+  const reopened = await (await request(`/${draft.id}`)).json() as RuleRecord;
+  expect((reopened.definition as FinalAssessmentDefinition).faceScanScoring).toEqual(definition.faceScanScoring);
+  for (const changes of [{ lowerThreshold: 90 }, { upperThreshold: 50 }, { upperThreshold: 101 }, { middlePoints: -1 }, { belowPoints: 1.5 }]) {
+    const invalid = { ...definition, faceScanScoring: { ...definition.faceScanScoring, ...changes } };
+    expect((await request(`/${draft.id}`, "PUT", { revision: 2, definition: invalid })).status).toBe(400);
+  }
+  expect((await (await request(`/${draft.id}`)).json()).revision).toBe(2);
+  // Old persisted definitions still load and save without an injected property.
+  delete definition.faceScanScoring;
+  expect((await request(`/${draft.id}`, "PUT", { revision: 2, definition })).status).toBe(200);
+  const historical = await (await request(`/${draft.id}`)).json() as RuleRecord;
+  expect(Object.hasOwn(historical.definition!, "faceScanScoring")).toBe(false);
+});

@@ -1,3 +1,4 @@
+import { DEFAULT_FACE_SCAN_SCORING_CONFIG } from "./face-scan-scoring";
 import { finalAssessmentDefinitionSchema, type FinalAssessmentDefinition } from "./final-assessment";
 
 const document = "Final NIQ Assessment Form_with section_field_details.xlsx";
@@ -119,5 +120,5 @@ export function confirmedAssessmentSamples(): FinalAssessmentDefinition["samples
 }
 
 export function createFinalAssessmentTemplate(name: string): FinalAssessmentDefinition {
-  return upgradeFinalAssessmentDefinition(createLegacyFinalAssessmentTemplate(name));
+  return { ...upgradeFinalAssessmentDefinition(createLegacyFinalAssessmentTemplate(name)), faceScanScoring: { ...DEFAULT_FACE_SCAN_SCORING_CONFIG } };
 }

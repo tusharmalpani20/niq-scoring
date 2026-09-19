@@ -1,3 +1,4 @@
+import { faceScanScoringConfigSchema } from "./face-scan-scoring";
 import { z } from "zod";
 import { answerValueSchema, answersSchema, optionSchema, rangeSchema, ruleIdSchema, sourceSchema } from "./rule-definition";
 
@@ -118,6 +119,8 @@ export const finalAssessmentDefinitionSchema = z.object({
   description: z.string().max(5000),
   sections: z.array(finalAssessmentSectionSchema).length(5),
   supportingInputs: z.array(finalAssessmentSupportingInputSchema).length(6),
+  // Absence preserves historical definitions; the evaluator uses the original defaults.
+  faceScanScoring: faceScanScoringConfigSchema.optional(),
   riskCategories: z.array(finalRiskCategorySchema).min(1).max(20),
   provisional: z.union([z.object({
     status: z.literal(FINAL_ASSESSMENT_PROVISIONAL_STATUS),
