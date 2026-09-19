@@ -34,18 +34,34 @@ export const faceScanRangeConfigSchema = z.object({
       fail(range.index, "max", "The range must contain at least one score.");
     }
   }
-  const first = sorted[0];
-  const last = sorted.at(-1);
-  if (first && (first.min !== 0 || !first.minInclusive)) fail(first.index, "min", "Ranges must include 0%.");
-  if (last && (last.max !== 100 || !last.maxInclusive)) fail(last.index, "max", "Ranges must include 100%.");
-  for (let index = 1; index < sorted.length; index++) {
-    const previous = sorted[index - 1]!;
-    const current = sorted[index]!;
-    if (previous.max !== current.min) {
-      fail(current.index, "min", previous.max < current.min ? "There is a gap between ranges." : "Ranges must not overlap.");
-    } else if (previous.maxInclusive === current.minInclusive) {
-      fail(current.index, "minInclusive", previous.maxInclusive ? "The shared score belongs to both ranges." : "The shared score must belong to one range.");
+  // Coverage follows the furthest endpoint, not the final row sorted by its start.
+  // A nested overlap can otherwise falsely report that 100% is missing.
+  const valid = sorted.filter(range => range.min < range.max || range.min === range.max && range.minInclusive && range.maxInclusive);
+  if (valid.length !== sorted.length) return;
+  const first = valid[0];
+  if (!first) return;
+  if (!valid.some(range => range.min === 0 && range.minInclusive)) fail(first.index, "min", "Include 0% in a range so every health score can be scored.");
+  const furthest = valid.reduce((a, b) => b.max > a.max || b.max === a.max && b.maxInclusive ? b : a);
+  if (!valid.some(range => range.max === 100 && range.maxInclusive)) fail(furthest.index, "max", "Extend a range to include 100% so every health score can be scored.");
+  for (let i = 0; i < valid.length; i++) {
+    const a = valid[i]!;
+    for (const b of valid.slice(i + 1)) {
+      const from = Math.max(a.min, b.min);
+      const to = Math.min(a.max, b.max);
+      const contains = (r: typeof a, value: number) => (value > r.min || value === r.min && r.minInclusive) && (value < r.max || value === r.max && r.maxInclusive);
+      if (from < to || from === to && contains(a, from) && contains(b, from)) {
+        const rows = [a.index + 1, b.index + 1].sort((x, y) => x - y);
+        fail(b.index, "min", from === to
+          ? `Rows ${rows[0]} and ${rows[1]} both include ${from}%. In Range details, include this value in only one row.`
+          : `Rows ${rows[0]} and ${rows[1]} overlap between ${from}% and ${to}%. Adjust their From or To values so each score belongs to only one row.`);
+      }
     }
+  }
+  let covered = first;
+  for (const current of valid.slice(1)) {
+    if (current.min > covered.max) fail(current.index, "min", `There is a gap between ${covered.max}% and ${current.min}%. Make row ${covered.index + 1}'s To value meet row ${current.index + 1}'s From value.`);
+    else if (current.min === covered.max && !covered.maxInclusive && !current.minInclusive) fail(current.index, "minInclusive", `${current.min}% is not included in any row. In Range details, include it in row ${covered.index + 1} or row ${current.index + 1}.`);
+    if (current.max > covered.max || current.max === covered.max && current.maxInclusive) covered = current;
   }
 });
 export type FaceScanRangeConfig = z.infer<typeof faceScanRangeConfigSchema>;
