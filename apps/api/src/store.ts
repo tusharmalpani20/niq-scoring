@@ -169,7 +169,7 @@ export class MemoryScoringStore implements ScoringStore {
     if (!existing && !input.create) throw new BindingError("ASSESSMENT_NOT_FOUND");
     const assignment = this.assignments.find(a => a.deploymentId === deployment.id);
     const rule = existing ? this.rules.records.find(r => r.id === existing.ruleVersionId) : !assignment ? undefined : assignment.mode === "PINNED" ? this.rules.records.find(r => r.id === assignment.scoringRuleVersionId && eligibleRule(r)) : [...this.rules.records].filter(eligibleRule).sort((a,b) => (b.approvedAt ?? "").localeCompare(a.approvedAt ?? "") || b.id.localeCompare(a.id))[0];
-    if (!rule || !versionedRuleDefinitionSchema.safeParse(rule.definition).success || isFinalAssessmentDefinition(rule.definition) && !rule.clinicalUsePermitted || existing && (existing.checksum !== rule.packageChecksum || !["APPROVED", "ACTIVE", "RETIRED"].includes(rule.lifecycle))) throw new BindingError("VERSION_UNAVAILABLE");
+    if (!rule || !versionedRuleDefinitionSchema.safeParse(rule.definition).success || isFinalAssessmentDefinition(rule.definition) && (!rule.definition.provisional.clinicalUsePermitted || !existing && !rule.clinicalUsePermitted) || existing && (existing.checksum !== rule.packageChecksum || !["APPROVED", "ACTIVE", "RETIRED"].includes(rule.lifecycle))) throw new BindingError("VERSION_UNAVAILABLE");
     const binding = existing ?? { id: createEntityId(), deploymentId: deployment.id, clientId: client.id, assessmentReference: input.assessmentReference, ruleVersionId: rule.id, checksum: rule.packageChecksum, createdAt: new Date().toISOString() };
     if (!existing) this.bindings.push(binding);
     return structuredClone({ binding, rule });

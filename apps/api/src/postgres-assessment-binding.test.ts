@@ -101,3 +101,42 @@ test.skipIf(process.env.RULE_DATABASE_TEST !== "1")("PostgreSQL lifecycle immuta
   } catch (error) { if (error !== rollback) throw error; }
   finally { await db.end(); }
 });
+
+// Covers the JSONB version upgrade and real SQL lifecycle/binding path, without retaining fixtures.
+test.skipIf(process.env.RULE_DATABASE_TEST !== "1")("PostgreSQL confirmed v2 upgrades retain history and bound evaluations after retirement", async () => {
+  const { createLegacyFinalAssessmentTemplate, upgradeFinalAssessmentDefinition } = await import("@niq-scoring/contracts/final-assessment-template");
+  const { evaluateFinalAssessment, validateFinalAssessmentSamples } = await import("@niq-scoring/scoring-engine/final-assessment");
+  const db = postgres(process.env.DATABASE_URL!, { max: 1 });
+  const rollback = new Error("rollback confirmed assessment fixture");
+  try {
+    await db.begin(async tx => {
+      const scoped = new Proxy(tx, { get(target, key) { return key === "begin" ? (fn: (sql: typeof tx) => Promise<unknown>) => tx.savepoint(fn) : Reflect.get(target, key); } }) as unknown as ReturnType<typeof postgres>;
+      const store = new PostgresScoringStore(scoped);
+      const now = new Date().toISOString();
+      const legacy = createLegacyFinalAssessmentTemplate(`Synthetic confirmed ${createEntityId()}`);
+      let record = await store.rules.create({ id: createEntityId(), definition: legacy, checksum: ruleChecksum(legacy), actor: "synthetic", requestId: crypto.randomUUID(), fingerprint: ruleChecksum(legacy), now });
+      const original = await store.rules.get(record.id);
+      const confirmed = upgradeFinalAssessmentDefinition(legacy);
+      expect(validateFinalAssessmentSamples(confirmed)).toEqual([]);
+      record = await store.rules.save({ id: record.id, revision: record.revision, definition: confirmed, checksum: ruleChecksum(confirmed), actor: "synthetic", now });
+      expect(original?.definition).toEqual(legacy);
+      expect(record.definition).toEqual(confirmed);
+      await expect(store.rules.save({ id: record.id, revision: 1, definition: legacy, checksum: ruleChecksum(legacy), actor: "synthetic", now })).rejects.toThrow("RULE_REVISION_CONFLICT");
+      for (const action of ["validate", "approve", "activate"] as const) record = await store.rules.transition({ id: record.id, revision: record.revision, action, actor: "synthetic", now });
+      const client = await store.createClient({ name: `Synthetic final binding ${createEntityId()}` });
+      const dep = await store.createDeployment({ clientId: client.id, name: "Confirmed assessment", environment: "test" });
+      await store.setEntitlement(dep.id, { capability: "SCORING", enabled: true, monthlyLimit: 5 });
+      await store.assignVersion(dep.id, { mode: "PINNED", scoringRuleVersionId: record.id });
+      const input = { identity: { clientId: client.id, deploymentId: dep.id, credentialId: "synthetic" }, assessmentReference: "confirmed-qa", platformEnabled: true, create: true };
+      const first = await store.bindAssessment(input);
+      expect(first.binding.checksum).toBe(ruleChecksum(confirmed));
+      expect(evaluateFinalAssessment(confirmed, { previous_weight_kg: 100, current_weight_kg: 94 }).score).toBe(2);
+      await store.rules.transition({ id: record.id, revision: record.revision, action: "retire", actor: "synthetic", now });
+      expect((await store.bindAssessment({ ...input, create: false })).binding.id).toBe(first.binding.id);
+      await expect(store.bindAssessment({ ...input, assessmentReference: "new" })).rejects.toThrow("VERSION_UNAVAILABLE");
+      expect((await store.rules.audit(record.id)).map(event => event.action)).toContain("RULE_SAVED");
+      throw rollback;
+    });
+  } catch (error) { if (error !== rollback) throw error; }
+  finally { await db.end(); }
+});

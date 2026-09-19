@@ -99,7 +99,7 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
       if (action.data === "check") return c.json({ issues, revision: record.revision, checksum: record.packageChecksum });
       if (issues.length) return c.json({ error: "RULE_VALIDATION_FAILED", issues }, 422);
     }
-    if (isFinalAssessmentDefinition(definition.data) && ["approve", "activate"].includes(action.data)) return c.json({ error: "PROVISIONAL_THRESHOLDS_UNCONFIRMED" }, 409);
+    if (isFinalAssessmentDefinition(definition.data) && !definition.data.provisional.clinicalUsePermitted && ["approve", "activate"].includes(action.data)) return c.json({ error: "PROVISIONAL_THRESHOLDS_UNCONFIRMED" }, 409);
     return c.json(await store.transition({ id: record.id, revision: parsed.data.revision, action: action.data as "validate" | "approve" | "activate" | "retire", actor: actor(c), now: now().toISOString() }));
   }));
   app.delete("/admin/rules/:id", guard(async c => {

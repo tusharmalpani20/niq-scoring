@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createFinalAssessmentTemplate } from "@niq-scoring/contracts/final-assessment-template";
+import { createFinalAssessmentTemplate, createLegacyFinalAssessmentTemplate, upgradeFinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment-template";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
 import { createApp } from "./app";
 import { MemoryAdminAuthStore } from "./admin-auth-store";
@@ -39,7 +39,7 @@ function completeSample(definition: FinalAssessmentDefinition) {
 test("final assessment creation uses the versioned fixed profile and supports save/reopen", async () => {
   const { request, create } = adminSetup();
   const draft = await create();
-  expect(draft.definition).toMatchObject({ formatVersion: 2, profile: "NIQ_FINAL_ASSESSMENT", provisional: { clinicalUsePermitted: false } });
+  expect(draft.definition).toMatchObject({ formatVersion: 2, profile: "NIQ_FINAL_ASSESSMENT", provisional: { clinicalUsePermitted: true } });
   const definition = draft.definition as FinalAssessmentDefinition;
   expect(definition.sections.map(section => section.fields.length)).toEqual([3, 5, 3, 2, 6]);
   expect(definition.sections.flatMap(section => section.fields)).toHaveLength(19);
@@ -75,17 +75,17 @@ test("final assessment preview evaluates partial answers without recording usage
   const draft = await create();
   const preview = await request(`/${draft.id}/preview`, "POST", { revision: 1, answers: { stage: "stage_localized" } });
   expect(preview.status).toBe(200);
-  expect(await preview.json()).toMatchObject({ complete: true, score: 1, classification: { id: "low" }, preview: true, riskStatus: "DEVELOPMENT_PLACEHOLDER", clinicalUsePermitted: false });
+  expect(await preview.json()).toMatchObject({ complete: true, score: 1, classification: { id: "low" }, preview: true, riskStatus: "CLIENT_CONFIRMED", clinicalUsePermitted: true });
   const invalid = await request(`/${draft.id}/preview`, "POST", { revision: 1, answers: { patient_name: "not accepted" } });
   expect(invalid.status).toBe(400);
   expect((await invalid.json()).result.issues[0]).toMatchObject({ code: "IDENTITY_FIELD_NOT_ALLOWED" });
   expect(store.usages).toHaveLength(0);
 });
 
-test("final assessment validation requires synthetic samples and lifecycle stays blocked by provisional risk", async () => {
+test("legacy drafts stay blocked until explicitly upgraded and approved", async () => {
   const { request, create } = adminSetup();
   const draft = await create();
-  const definition = structuredClone(draft.definition as FinalAssessmentDefinition);
+  const definition = createLegacyFinalAssessmentTemplate(draft.version);
   completeSample(definition);
   let record = await (await request(`/${draft.id}`, "PUT", { revision: 1, definition })).json() as RuleRecord;
   expect((await request(`/${record.id}/validate`, "POST", { revision: record.revision })).status).toBe(200);
@@ -94,6 +94,18 @@ test("final assessment validation requires synthetic samples and lifecycle stays
   const approval = await request(`/${record.id}/approve`, "POST", { revision: record.revision });
   expect(approval.status).toBe(409);
   expect(await approval.json()).toEqual({ error: "PROVISIONAL_THRESHOLDS_UNCONFIRMED" });
+  const upgraded = upgradeFinalAssessmentDefinition(definition);
+  const saved = await request(`/${record.id}`, "PUT", { revision: record.revision, definition: upgraded });
+  expect(saved.status).toBe(200);
+  record = await saved.json() as RuleRecord;
+  for (const action of ["validate", "approve", "activate"]) {
+    const response = await request(`/${record.id}/${action}`, "POST", { revision: record.revision });
+    expect(response.status).toBe(200);
+    record = await response.json() as RuleRecord;
+  }
+  const active = await (await request(`/${record.id}`)).json() as RuleRecord;
+  expect(active).toMatchObject({ lifecycle: "ACTIVE", clinicalUsePermitted: true, revision: 7 });
+  expect((await request(`/${record.id}`, "PUT", { revision: 2, definition: upgraded })).status).not.toBe(200);
 });
 
 test("public assessment binding rejects the final profile until clinical use is permitted", async () => {

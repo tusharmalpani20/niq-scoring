@@ -22,7 +22,7 @@ export interface RuleStore {
   audit(id: string): Promise<RuleAudit[]>;
 }
 export function nextRuleState(record: RuleRecord, action: RuleTransition["action"]): RuleState {
-  if ((action === "approve" || action === "activate") && isFinalAssessmentDefinition(record.definition)) throw new RuleStoreError("PROVISIONAL_THRESHOLDS_UNCONFIRMED");
+  if ((action === "approve" || action === "activate") && isFinalAssessmentDefinition(record.definition) && !record.definition.provisional.clinicalUsePermitted) throw new RuleStoreError("PROVISIONAL_THRESHOLDS_UNCONFIRMED");
   if (action === "validate" && (record.lifecycle === "DRAFT" || record.lifecycle === "VALIDATED")) return "VALIDATED";
   if (action === "approve" && record.lifecycle === "VALIDATED" && record.validatedRevision === record.revision) return "APPROVED";
   if (action === "activate" && record.lifecycle === "APPROVED") return "ACTIVE";
