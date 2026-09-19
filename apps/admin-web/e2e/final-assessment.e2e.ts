@@ -124,3 +124,46 @@ test("confirmed drafts validate, approve explicitly and activate without editing
   await expect(page.getByText("Version activated.", { exact: true })).toBeVisible();
   expect(state.getRecord()!.lifecycle).toBe("ACTIVE");
 });
+
+test("face scan edits persist and invalid cutoffs cannot be saved", async ({ page }) => {
+  const state = await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Face scan", exact: true }).click();
+  await page.getByLabel("First cutoff (%)", { exact: true }).fill("65.5");
+  await page.getByLabel("Second cutoff (%)", { exact: true }).fill("85");
+  await page.getByLabel("Below 65.5% points", { exact: true }).fill("4");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
+  expect(state.getRecord()!.definition.faceScanScoring).toMatchObject({ lowerThreshold: 65.5, upperThreshold: 85, belowPoints: 4 });
+  await page.reload();
+  await page.getByRole("tab", { name: "Face scan", exact: true }).click();
+  await expect(page.getByLabel("First cutoff (%)", { exact: true })).toHaveValue("65.5");
+  await expect(page.getByLabel("Below 65.5% points", { exact: true })).toHaveValue("4");
+  await page.getByLabel("Second cutoff (%)", { exact: true }).fill("60");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByLabel("Configuration issues")).toBeVisible();
+  expect(state.getRecord()!.definition.faceScanScoring!.upperThreshold).toBe(85);
+  await page.getByLabel("Second cutoff (%)", { exact: true }).fill("");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByLabel("Second cutoff (%)", { exact: true })).toHaveAttribute("aria-invalid", "true");
+});
+
+test("simple risk ranges preserve exclusive historical endpoints and save inclusive edits", async ({ page }) => {
+  const state = await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
+  await expect(page.getByRole("combobox")).toHaveCount(0);
+  await expect(page.getByLabel("From score", { exact: true }).nth(2)).toHaveValue("26");
+  await page.getByLabel("To score", { exact: true }).nth(0).fill("14");
+  await page.getByLabel("From score", { exact: true }).nth(1).fill("15");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
+  expect(state.getRecord()!.definition.riskCategories[0]).toMatchObject({ max: 14, maxInclusive: true });
+  expect(state.getRecord()!.definition.riskCategories[1]).toMatchObject({ min: 15, minInclusive: true });
+  await page.getByLabel("No upper limit", { exact: true }).last().uncheck();
+  await page.getByLabel("To score", { exact: true }).last().fill("");
+  await page.getByLabel("No upper limit", { exact: true }).last().check();
+  const save = page.getByRole("button", { name: "Save draft", exact: true });
+  if (await save.isEnabled()) await save.click();
+  await expect(page.getByLabel("Configuration issues")).toHaveCount(0);
+});
