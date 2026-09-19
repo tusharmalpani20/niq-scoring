@@ -97,3 +97,21 @@ test("risk names reject duplicates and blank numeric ranges stay invalid", async
   await expect(from).toHaveValue("");
   await expect(from).toHaveAttribute("aria-invalid", "true");
 });
+
+test("confirmed drafts validate, approve explicitly and activate without editing approved settings", async ({ page }) => {
+  const state = await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  await page.getByLabel("Description", { exact: true }).fill("Pending change");
+  await expect(page.getByRole("button", { name: "Validate draft", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await page.getByRole("button", { name: "Validate draft", exact: true }).click();
+  await page.getByRole("button", { name: "Approve version", exact: true }).click();
+  await expect(page.getByRole("alertdialog")).toContainText("duplicate this version");
+  expect(state.getRecord()!.lifecycle).toBe("VALIDATED");
+  await page.getByRole("alertdialog").getByRole("button", { name: "Approve version", exact: true }).click();
+  await expect(page.getByLabel("Description", { exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Activate version", exact: true }).click();
+  await expect(page.getByText("Version activated.", { exact: true })).toBeVisible();
+  expect(state.getRecord()!.lifecycle).toBe("ACTIVE");
+});

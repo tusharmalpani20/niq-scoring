@@ -39,7 +39,10 @@ export async function mockFinalConsole(page: Page) {
       if (action === "preview") return json({ ...evaluateFinalAssessment(record.definition, body.answers), calculatedAt: "2026-09-17T00:00:00.000Z", ruleVersionId: record.id, checksum: record.packageChecksum });
       const issues = [...validateFinalAssessmentDefinition(record.definition), ...validateFinalAssessmentSamples(record.definition)];
       if (action === "check") return json({ issues });
-      return json({ error: "PROVISIONAL_THRESHOLDS_UNCONFIRMED" }, 409);
+      if (issues.length) return json({ error: "RULE_VALIDATION_FAILED", issues }, 422);
+      const lifecycle = action === "validate" ? "VALIDATED" : action === "approve" ? "APPROVED" : "ACTIVE";
+      record = { ...record, lifecycle, revision: record.revision + 1, clinicalUsePermitted: lifecycle === "APPROVED" || lifecycle === "ACTIVE" };
+      return json(record);
     }
     return json({ error: "UNEXPECTED_TEST_REQUEST" }, 500);
   });
