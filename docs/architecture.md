@@ -34,8 +34,12 @@ Published versions are immutable. Corrections create a new version. An assessmen
 
 A deployment has exactly one current assignment policy:
 
-- `LATEST_APPROVED`: resolve the latest approved version at calculation time and stamp that concrete version on the result.
+- **Default** (`LATEST_APPROVED` remains the API/database value for compatibility): use the explicitly selected default version when an assessment starts. Approval alone does not change the default.
 - `PINNED`: always use the assignment's required concrete version until a new assignment supersedes it.
+
+An administrator can make an eligible active version the default, either during activation or later. Changing the default affects new assessments on deployments that follow Default. Pinned deployments do not change. Each assessment keeps its original version and checksum for subsequent calculations, even if its deployment policy or the default changes. A missing default blocks new assessments on deployments following Default. The default must be replaced before it can be retired.
+
+The migration initializes the default to the version previously selected by the latest-approved policy. This preserves existing behavior at migration time, including an existing approved version. Future default selections require an active version.
 
 Assignments and entitlements are effective-dated history. Changing either closes the current row and creates a new row; history is never overwritten.
 
