@@ -4,10 +4,16 @@ import { createEntityId } from "./lib/id";
 export class MemoryRuleStore implements RuleStore {
   records: RuleRecord[] = [];
   events: Array<RuleAudit & { ruleId: string }> = [];
+  private aliases = new Map<string, string>();
   private requests = new Map<string, { fingerprint: string; id: string; actor: string }>();
   constructor(private readonly referenced: (id: string) => boolean = () => false) {}
   async list() { return structuredClone(this.records); }
   async get(id: string) { return structuredClone(this.records.find(r => r.id === id) ?? null); }
+  async getByName(name: string) {
+    const normalized = normalizedRuleName(name);
+    const id = this.aliases.get(normalized) ?? this.records.find(r => normalizedRuleName(r.version) === normalized)?.id;
+    return id ? this.get(id) : null;
+  }
   private row(id: string, revision: number) {
     const row = this.records.find(r => r.id === id);
     if (!row) throw new RuleStoreError("RULE_NOT_FOUND");
@@ -15,6 +21,8 @@ export class MemoryRuleStore implements RuleStore {
     return row;
   }
   private name(name: string, exclude?: string) {
+    const owner = this.aliases.get(normalizedRuleName(name));
+    if (owner && owner !== exclude) throw new RuleStoreError("RULE_NAME_EXISTS");
     if (this.records.some(r => r.id !== exclude && normalizedRuleName(r.version) === normalizedRuleName(name))) throw new RuleStoreError("RULE_NAME_EXISTS");
   }
   private log(row: RuleRecord, actor: string, action: string, now: string) {
@@ -34,6 +42,7 @@ export class MemoryRuleStore implements RuleStore {
     if (prior) return prior;
     this.name(input.definition.name);
     const record: RuleRecord = { id: input.id, version: input.definition.name, lifecycle: "DRAFT", clinicalUsePermitted: false, definition: structuredClone(input.definition), packageChecksum: input.checksum, revision: 1, validatedRevision: null, createdAt: input.now, updatedAt: input.now, createdBy: input.actor, approvedAt: null };
+    this.aliases.set(normalizedRuleName(record.version), record.id);
     this.records.push(record); this.requests.set(input.requestId, { fingerprint: input.fingerprint, id: input.id, actor: input.actor }); this.log(record, input.actor, "RULE_CREATED", input.now);
     return structuredClone(record);
   }
@@ -41,6 +50,8 @@ export class MemoryRuleStore implements RuleStore {
     const row = this.row(input.id, input.revision);
     if (!["DRAFT", "VALIDATED"].includes(row.lifecycle)) throw new RuleStoreError("RULE_IMMUTABLE");
     this.name(input.definition.name, row.id);
+    this.aliases.set(normalizedRuleName(row.version), row.id);
+    this.aliases.set(normalizedRuleName(input.definition.name), row.id);
     Object.assign(row, { definition: structuredClone(input.definition), version: input.definition.name, packageChecksum: input.checksum, revision: row.revision + 1, lifecycle: "DRAFT", clinicalUsePermitted: false, validatedRevision: null, updatedAt: input.now });
     this.log(row, input.actor, "RULE_SAVED", input.now); return structuredClone(row);
   }
@@ -57,6 +68,7 @@ export class MemoryRuleStore implements RuleStore {
     const row = this.row(id, revision);
     if (row.lifecycle !== "DRAFT") throw new RuleStoreError("RULE_IMMUTABLE");
     if (this.referenced(id)) throw new RuleStoreError("RULE_IN_USE");
+    this.aliases.set(normalizedRuleName(row.version), row.id);
     this.log({ ...row, revision: revision + 1 }, actor, "RULE_DELETED", now); this.records = this.records.filter(r => r.id !== id);
   }
   async audit(id: string) { return structuredClone(this.events.filter(event => event.ruleId === id)); }

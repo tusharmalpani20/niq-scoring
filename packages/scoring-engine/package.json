@@ -6,7 +6,10 @@
   "exports": {
     ".": "./src/index.ts",
     "./rules": "./src/rule-evaluator.ts",
-    "./answers": "./src/rule-answers.ts"
+    "./answers": "./src/rule-answers.ts",
+    "./final-assessment": "./src/final-assessment-evaluator.ts",
+    "./versioned": "./src/versioned-evaluator.ts",
+    "./face-scan-scoring": "./src/face-scan-scoring.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

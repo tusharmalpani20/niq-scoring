@@ -17,7 +17,7 @@ function setup() {
   const app = createApp({ store, authStore, allowedOrigins: [headers.origin], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: false, now: () => new Date(now) });
   const request = (path: string, method = "GET", body?: unknown) => app.request(`/admin/rules${path}`, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const create = async (name = "Synthetic test", extra: Record<string, unknown> = {}) => {
-    const response = await request("", "POST", { name, requestId: crypto.randomUUID(), ...extra });
+    const response = await request("", "POST", { name, requestId: crypto.randomUUID(), template: "spreadsheet", ...extra });
     expect(response.status).toBe(201);
     return await response.json() as RuleRecord;
   };
@@ -60,7 +60,7 @@ describe("rule management API", () => {
   test("requires an enabled administrator session and allowed origin", async () => {
     const { app, authStore, request, create } = setup();
     const rule = await create();
-    for (const [path, method] of [["", "GET"], ["", "POST"], [`/${rule.id}`, "GET"], [`/${rule.id}`, "PUT"], [`/${rule.id}`, "DELETE"], [`/${rule.id}/preview`, "POST"], [`/${rule.id}/validate`, "POST"]] as const) {
+    for (const [path, method] of [["", "GET"], ["", "POST"], [`/${rule.id}`, "GET"], [`/by-name/${encodeURIComponent(rule.version)}`, "GET"], [`/${rule.id}`, "PUT"], [`/${rule.id}`, "DELETE"], [`/${rule.id}/preview`, "POST"], [`/${rule.id}/validate`, "POST"]] as const) {
       const response = await app.request(`/admin/rules${path}`, { method, headers: { origin: headers.origin, "content-type": "application/json" }, ...(method === "GET" ? {} : { body: "{}" }) });
       expect(response.status).toBe(401);
     }
@@ -107,6 +107,34 @@ describe("rule management API", () => {
     expect(renamed.status).toBe(409);
     expect(await renamed.json()).toEqual({ error: "RULE_NAME_EXISTS" });
     expect((await (await request(`/${second.id}`)).json() as RuleRecord).version).toBe("Other");
+  });
+
+  test("readable names retain rename aliases and reserve deleted names", async () => {
+    const { request, create } = setup();
+    const draft = await create("Assessment / A #1");
+    const lookup = (name: string) => request(`/by-name/${encodeURIComponent(name)}`);
+    expect(await (await lookup(" assessment / a #1 ")).json()).toMatchObject({ id: draft.id, audit: [{ action: "RULE_CREATED" }] });
+    const name = "01M2T6J93S5GTN6PCJNFAQ0WJ2";
+    const renamed = await request(`/${draft.id}`, "PUT", { revision: 1, definition: { ...(draft.definition as RuleDefinition), name } });
+    expect(renamed.status).toBe(200);
+    for (const alias of [draft.version, name]) expect(await (await lookup(alias)).json()).toMatchObject({ id: draft.id, version: name, revision: 2 });
+    const other = await create("Other version");
+    expect((await request(`/${other.id}`, "PUT", { revision: 1, definition: { ...(other.definition as RuleDefinition), name: draft.version } })).status).toBe(409);
+    expect((await request(`/${draft.id}`, "DELETE", { revision: 2 })).status).toBe(200);
+    for (const alias of [draft.version, name]) {
+      expect((await lookup(alias)).status).toBe(404);
+      expect((await request("", "POST", { name: alias, requestId: crypto.randomUUID() })).status).toBe(409);
+    }
+    expect((await lookup("unknown")).status).toBe(404);
+  });
+
+  test("query lookup preserves dot-only names that path normalization would remove", async () => {
+    const { request, create } = setup();
+    for (const name of [".", ".."]) {
+      const draft = await create(name);
+      expect(await (await request(`/by-name?name=${encodeURIComponent(name)}`)).json()).toMatchObject({ id: draft.id, version: name });
+    }
+    expect((await request("/by-name")).status).toBe(400);
   });
 
   test("save, reopen and duplicate preserve definitions without linking draft edits", async () => {

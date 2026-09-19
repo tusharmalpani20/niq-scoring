@@ -92,6 +92,13 @@
       "when": 1789400000009,
       "tag": "0012_fresh_bloodstorm",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789805615076,
+      "tag": "0013_whole_shinko_yamashiro",
+      "breakpoints": true
     }
   ]
 }

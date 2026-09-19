@@ -9,6 +9,7 @@ import type { EditableRule } from "../src/rules/rule-api";
 // session, database, clinical rule or deployment, including when they fail.
 export async function mockConsole(page: Page, definition?: RuleDefinition) {
   let record: EditableRule | null = null;
+  const aliases = new Set<string>();
   const state = { createError: "", saveError: "", createRequests: [] as Array<{ requestId: string; name: string }>, getRecord: () => record, freezeRecord: () => { if (record) record = { ...record, lifecycle: "APPROVED", editable: false, clinicalUsePermitted: true }; } };
   await page.route("**/api/**", async route => {
     const request = route.request();
@@ -17,6 +18,10 @@ export async function mockConsole(page: Page, definition?: RuleDefinition) {
     if (path === "/api/auth/status") return json({ setupRequired: false });
     if (path === "/api/auth/session") return json({ user: { id: "synthetic-admin", displayName: "Browser QA", enabled: true } });
     if (path === "/api/admin/overview") return json({ clients: [], deployments: [], assignments: [], entitlements: [], versions: [] });
+    if (path.startsWith("/api/admin/rules/by-name/") && request.method() === "GET") {
+      const name = decodeURIComponent(path.slice("/api/admin/rules/by-name/".length)).trim().toLowerCase();
+      return record && (name === record.version.trim().toLowerCase() || aliases.has(name)) ? json(record) : json({ error: "RULE_NOT_FOUND" }, 404);
+    }
     if (path === "/api/admin/rules" && request.method() === "GET") return json({ versions: record ? [record] : [] });
     if (path === "/api/admin/rules" && request.method() === "POST") {
       const body = request.postDataJSON();
@@ -32,6 +37,7 @@ export async function mockConsole(page: Page, definition?: RuleDefinition) {
         if (state.saveError) return json({ error: state.saveError }, 409);
         const body = request.postDataJSON();
         expect(body.revision).toBe(record.revision);
+        aliases.add(record.version.trim().toLowerCase());
         record = { ...record, version: body.definition.name, definition: body.definition, revision: record.revision + 1 };
         return json(record);
       }

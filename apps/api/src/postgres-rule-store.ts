@@ -22,6 +22,17 @@ export class PostgresRuleStore implements RuleStore {
   async list() { return this.read(this.database); }
   async get(id: string) { return (await this.read(this.database, id))[0] ?? null; }
 
+  async getByName(name: string) {
+    const [alias] = await this.database<Array<{ ruleId: string }>>`select rule_id as "ruleId" from scoring_rule_name_aliases where name=lower(btrim(${name}))`;
+    return alias ? this.get(alias.ruleId) : null;
+  }
+  private async claimName(sql: Transaction, name: string, id: string) {
+    // Keep deleted names reserved so a bookmark never resolves to another version.
+    const claimed = await sql`insert into scoring_rule_name_aliases (name,rule_id) values (lower(btrim(${name})),${id})
+      on conflict (name) do update set rule_id=excluded.rule_id
+      where scoring_rule_name_aliases.rule_id=excluded.rule_id returning name`;
+    if (!claimed.length) throw new RuleStoreError("RULE_NAME_EXISTS");
+  }
   private async locked(sql: Transaction, id: string, revision: number) {
     const row = (await this.read(sql, id, true))[0];
     if (!row) throw new RuleStoreError("RULE_NOT_FOUND");
@@ -65,6 +76,7 @@ export class PostgresRuleStore implements RuleStore {
         if (!existing) throw new RuleStoreError("RULE_REQUEST_DELETED");
         return existing;
       }
+      await this.claimName(sql, input.definition.name, input.id);
       await sql`insert into scoring_rule_versions (id,version,lifecycle,clinical_use_permitted,package_checksum,definition,created_by,created_at,updated_at,revision,create_request_id,create_fingerprint)
         values (${input.id},${input.definition.name.trim()},'DRAFT',false,${input.checksum},${sql.json(input.definition)},${input.actor},${input.now},${input.now},1,${input.requestId},${input.fingerprint})`;
       const created = (await this.read(sql, input.id))[0]!;
@@ -77,6 +89,8 @@ export class PostgresRuleStore implements RuleStore {
     return this.write(async sql => {
       const current = await this.locked(sql, input.id, input.revision);
       if (current.lifecycle !== "DRAFT" && current.lifecycle !== "VALIDATED") throw new RuleStoreError("RULE_IMMUTABLE");
+      await this.claimName(sql, current.version, input.id);
+      await this.claimName(sql, input.definition.name, input.id);
       await sql`update scoring_rule_versions set version=${input.definition.name.trim()},definition=${sql.json(input.definition)},package_checksum=${input.checksum},
         revision=revision+1,lifecycle='DRAFT',clinical_use_permitted=false,validated_revision=null,validated_at=null,updated_at=${input.now} where id=${input.id}`;
       const saved = (await this.read(sql, input.id))[0]!;

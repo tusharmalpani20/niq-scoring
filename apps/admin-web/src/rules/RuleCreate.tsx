@@ -30,7 +30,7 @@ export function RuleCreate({ source, onClose, onCreated }: { source?: { id: stri
       if (!name.trim() || name.trim().length > 80) { setError("Enter a version name between 1 and 80 characters."); return; }
       setBusy(true);
       try {
-        const record = await request<RuleDetail>("/admin/rules", { name: name.trim(), requestId, ...(source ? { duplicateId: source.id } : { template: "spreadsheet" }) });
+        const record = await request<RuleDetail>("/admin/rules", { name: name.trim(), requestId, ...(source ? { duplicateId: source.id } : { template: "final_assessment" }) });
         // Successful creation is an intentional navigation, not an unsaved exit.
         completed.current = true;
         onCreated(record);

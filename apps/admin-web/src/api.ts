@@ -46,6 +46,8 @@ const errors: Record<string, string> = {
   RULE_VALIDATION_FAILED: "Resolve the validation issues before continuing.",
   INVALID_RULE_DEFINITION: "The definition contains invalid fields or references. Review the listed issues.",
   INVALID_RULE_TRANSITION: "This lifecycle action is not available for the current version.",
+  PROVISIONAL_THRESHOLDS_UNCONFIRMED: "Temporary risk thresholds are not confirmed. This profile remains blocked from approval, activation, and clinical use.",
+  INVALID_ASSESSMENT_ANSWERS: "The assessment answers are invalid. Review the highlighted inputs and try again.",
   LEGACY_RULE_FORMAT: "This version uses the earlier definition format and is read-only.",
   INVALID_CREDENTIALS:
     "The email or password is incorrect, or your account is disabled.",

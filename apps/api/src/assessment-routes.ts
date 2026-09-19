@@ -1,8 +1,9 @@
 import type { Context, Hono } from "hono";
 import { z } from "zod";
-import { answersSchema, ruleDefinitionSchema } from "@niq-scoring/contracts/rules";
+import { answersSchema } from "@niq-scoring/contracts/rules";
+import { isFinalAssessmentDefinition, versionedRuleDefinitionSchema } from "@niq-scoring/contracts/versioned-definition";
 import { publicQuestionnaire } from "@niq-scoring/contracts/rule-public";
-import { evaluateRule } from "@niq-scoring/scoring-engine/rules";
+import { evaluateVersionedRule } from "@niq-scoring/scoring-engine/versioned";
 import { BindingError } from "./assessment-binding";
 import { ruleChecksum } from "./rule-routes";
 import type { DeploymentIdentity, ScoringStore } from "./store";
@@ -17,11 +18,12 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
     if (!parsed.success) return c.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
     try {
       const { binding, rule } = await store.bindAssessment({ identity, assessmentReference: parsed.data.assessmentReference, platformEnabled, create: action === "start" });
-      const definition = ruleDefinitionSchema.parse(rule.definition);
+      const definition = versionedRuleDefinitionSchema.parse(rule.definition);
       const evidence = { assessmentReference: binding.assessmentReference, bindingId: binding.id, ruleVersionId: rule.id, checksum: binding.checksum, version: rule.version };
       if (action === "start") return c.json({ ...evidence, questionnaire: publicQuestionnaire(definition) });
       const input = parsed.data as { assessmentReference: string; idempotencyKey: string; answers: z.infer<typeof answersSchema> };
-      const result = { ...evaluateRule(definition, input.answers), ...evidence, calculatedAt: now().toISOString() };
+      const result = { ...evaluateVersionedRule(definition, input.answers), ...evidence, calculatedAt: now().toISOString() };
+      if (isFinalAssessmentDefinition(definition) && result.issues.length) return c.json({ error: "INVALID_ASSESSMENT_ANSWERS", result }, 400);
       if (!result.complete) return c.json({ error: "ASSESSMENT_INCOMPLETE", result }, 422);
       const reservation = await store.reserveUsage({ identity, clientId: identity.clientId, capability: "SCORING", assessmentReference: binding.assessmentReference, idempotencyKey: input.idempotencyKey, platformEnabled, binding, fingerprint: ruleChecksum({ endpoint: "assessment", bindingId: binding.id, checksum: binding.checksum, answers: input.answers }) });
       if (reservation.status === "REJECTED") return c.json({ error: "SCORING_UNAVAILABLE", reason: reservation.reason }, 409);

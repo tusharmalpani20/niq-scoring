@@ -1,3 +1,4 @@
+import { versionUrl } from "./rules/version-url";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Plus, X, Copy, Trash2, Pencil } from "lucide-react";
@@ -28,7 +29,7 @@ export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   async function load() { setLoading(true); setError(""); try { setRecords((await request<{ versions: RuleMetadata[] }>("/admin/rules")).versions); } catch(cause) { setError(message(cause)); } finally { setLoading(false); } }
   useEffect(() => { void load(); }, []);
-  function open(id: string) { navigate(`/versions/${id}`); }
+  function open(name: string) { navigate(versionUrl(name)); }
   function updated() { void load(); void refresh().catch(cause => setError(message(cause))); }
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -54,10 +55,10 @@ export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
         <TableHeader><TableRow><TableHead>Version</TableHead><TableHead>Status</TableHead><TableHead>Clinical use</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
           {versions.rows.map(version => <TableRow key={version.id}>
-            <TableCell className="font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-left" disabled={busy} onClick={() => void open(version.id)}>{version.version}</Button></TableCell>
+            <TableCell className="font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-left" disabled={busy} onClick={() => void open(version.version)}>{version.version}</Button></TableCell>
             <TableCell><Badge variant={version.lifecycle === "APPROVED" || version.lifecycle === "ACTIVE" ? "default" : "secondary"}>{version.lifecycle.charAt(0) + version.lifecycle.slice(1).toLowerCase()}</Badge></TableCell>
             <TableCell><span className={version.clinicalUsePermitted ? "text-primary" : "text-destructive"}>{version.clinicalUsePermitted ? "Permitted" : "Prohibited"}</span></TableCell>
-            <TableCell><div className="flex justify-end gap-1">{version.editable && <Button variant="ghost" size="icon" title={`Edit ${version.version}`} aria-label={`Edit ${version.version}`} onClick={() => open(version.id)}><Pencil className="size-4" /></Button>}<Button variant="ghost" size="icon" title={`Duplicate ${version.version}`} aria-label={`Duplicate ${version.version}`} disabled={busy || version.duplicable === false} onClick={() => { setSource(version); setCreating(true); }}><Copy className="size-4" /></Button>{(version.deletable ?? version.editable) && version.lifecycle === "DRAFT" && <Button variant="ghost" size="icon" className="text-destructive" title={`Delete ${version.version}`} aria-label={`Delete ${version.version}`} onClick={() => { setError(""); setDeleting(version); }}><Trash2 className="size-4" /></Button>}</div></TableCell>
+            <TableCell><div className="flex justify-end gap-1">{version.editable && <Button variant="ghost" size="icon" title={`Edit ${version.version}`} aria-label={`Edit ${version.version}`} onClick={() => open(version.version)}><Pencil className="size-4" /></Button>}<Button variant="ghost" size="icon" title={`Duplicate ${version.version}`} aria-label={`Duplicate ${version.version}`} disabled={busy || version.duplicable === false} onClick={() => { setSource(version); setCreating(true); }}><Copy className="size-4" /></Button>{(version.deletable ?? version.editable) && version.lifecycle === "DRAFT" && <Button variant="ghost" size="icon" className="text-destructive" title={`Delete ${version.version}`} aria-label={`Delete ${version.version}`} onClick={() => { setError(""); setDeleting(version); }}><Trash2 className="size-4" /></Button>}</div></TableCell>
           </TableRow>)}
           {versions.total === 0 && <TableRow><TableCell colSpan={4} className="h-32 text-center text-muted-foreground">{records.length ? "No rule versions match your search." : "No rule versions configured."}</TableCell></TableRow>}
         </TableBody>
@@ -69,6 +70,6 @@ export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
       </PaginationContent></Pagination>
     </TabsContent>
   </Tabs>
-  {creating && <RuleCreate {...(source ? { source } : {})} onClose={() => setCreating(false)} onCreated={record => { setCreating(false); updated(); open(record.id); }} />}
+  {creating && <RuleCreate {...(source ? { source } : {})} onClose={() => setCreating(false)} onCreated={record => { setCreating(false); updated(); open(record.version); }} />}
   <AlertDialog open={deleting !== null} onOpenChange={open => { if (!open && !busy) setDeleting(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {deleting?.version}?</AlertDialogTitle><AlertDialogDescription>Only unused drafts can be deleted. Audit history is retained. This cannot be undone.</AlertDialogDescription></AlertDialogHeader><ErrorNotice error={error} /><AlertDialogFooter><AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel><AlertDialogAction disabled={busy} className="bg-destructive" onClick={async event => { event.preventDefault(); if (!deleting) return; setBusy(true); setError(""); try { await request(`/admin/rules/${deleting.id}`, { revision: deleting.revision }, "DELETE"); setDeleting(null); updated(); } catch(cause) { setError(message(cause)); } finally { setBusy(false); } }}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></>;
 }

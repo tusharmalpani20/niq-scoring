@@ -1,36 +1,115 @@
 import * as React from "react"
 import { cn } from "../../lib/utils"
-import { ChevronDownIcon } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select"
 
-function NativeSelect({
+const EMPTY_VALUE = "__native_select_empty__"
+
+type NativeSelectProps = Omit<React.ComponentPropsWithoutRef<"button">, "children" | "value" | "defaultValue" | "onChange" | "onBlur" | "onFocus"> & {
+  size?: "sm" | "default"
+  children?: React.ReactNode
+  value?: string | number | readonly string[]
+  defaultValue?: string | number | readonly string[]
+  onChange?: React.ChangeEventHandler<HTMLSelectElement>
+  onBlur?: React.FocusEventHandler<HTMLButtonElement>
+  onFocus?: React.FocusEventHandler<HTMLButtonElement>
+  required?: boolean
+}
+
+type SelectOption = {
+  value: string
+  label: React.ReactNode
+  disabled?: boolean | undefined
+  key: React.Key
+}
+
+function collectOptions(children: React.ReactNode, options: SelectOption[] = []) {
+  React.Children.forEach(children, child => {
+    if (!React.isValidElement(child)) return
+    const element = child as React.ReactElement<{ children?: React.ReactNode }>
+    if (child.type === React.Fragment) {
+      collectOptions(element.props.children, options)
+      return
+    }
+    if (child.type === NativeSelectOptGroup || child.type === "optgroup") {
+      collectOptions(element.props.children, options)
+      return
+    }
+    if (child.type !== NativeSelectOption && child.type !== "option") return
+    const optionProps = child.props as React.ComponentProps<"option">
+    options.push({
+      value: optionProps.value == null ? "" : String(optionProps.value),
+      label: optionProps.children,
+      disabled: optionProps.disabled,
+      key: child.key ?? `${options.length}`,
+    })
+  })
+  return options
+}
+
+function normalizeValue(value: NativeSelectProps["value"]) {
+  const raw = Array.isArray(value) ? value[0] : value
+  if (raw == null) return undefined
+  const stringValue = String(raw)
+  return stringValue === "" ? EMPTY_VALUE : stringValue
+}
+
+/**
+ * Compatibility adapter for the existing select call sites. The rendered
+ * control is the shared Radix select so legacy option-based consumers get the
+ * same popup and focus treatment as the rest of the admin UI.
+ */
+const NativeSelect = React.forwardRef<HTMLButtonElement, NativeSelectProps>(function NativeSelect({
   className,
   size = "default",
+  children,
+  value,
+  defaultValue,
+  onChange,
+  onBlur,
+  onFocus,
+  name,
+  required,
   ...props
-}: Omit<React.ComponentProps<"select">, "size"> & { size?: "sm" | "default" }) {
+}, ref) {
+  const options = collectOptions(children)
+  const emptyOption = options.find(option => option.value === "")
+  const normalizedValue = normalizeValue(value)
+  const normalizedDefaultValue = normalizeValue(defaultValue)
+  const emitChange = (nextValue: string) => {
+    const actualValue = nextValue === EMPTY_VALUE ? "" : nextValue
+    const target = { value: actualValue } as HTMLSelectElement
+    onChange?.({ target, currentTarget: target } as unknown as React.ChangeEvent<HTMLSelectElement>)
+  }
+
   return (
-    <div
-      className="group/native-select relative w-full has-[select:disabled]:opacity-50"
-      data-slot="native-select-wrapper"
+    <Select
+      {...(normalizedValue === undefined ? {} : { value: normalizedValue })}
+      {...(normalizedDefaultValue === undefined ? {} : { defaultValue: normalizedDefaultValue })}
+      onValueChange={emitChange}
+      {...(name === undefined ? {} : { name })}
+      {...(required === undefined ? {} : { required })}
+      {...(props.disabled === undefined ? {} : { disabled: props.disabled })}
     >
-      <select
-        data-slot="native-select"
-        data-size={size}
-        className={cn(
-          "h-9 w-full min-w-0 appearance-none rounded-md border border-input bg-transparent px-3 py-2 pr-9 text-sm shadow-xs transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed data-[size=sm]:h-8 data-[size=sm]:py-1 dark:bg-input/30 dark:hover:bg-input/50",
-          "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-          "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
-          className
-        )}
+      <SelectTrigger
         {...props}
-      />
-      <ChevronDownIcon
-        className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground opacity-50 select-none"
-        aria-hidden="true"
-        data-slot="native-select-icon"
-      />
-    </div>
+        ref={ref}
+        data-size={size}
+        onBlur={onBlur}
+        onFocus={onFocus}
+        className={cn(size === "sm" && "h-8 py-1", className)}
+      >
+        <SelectValue placeholder={emptyOption?.label ?? "Select…"} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map(option => (
+          <SelectItem key={option.key} value={option.value === "" ? EMPTY_VALUE : option.value} {...(option.disabled === undefined ? {} : { disabled: option.disabled })}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
-}
+})
 
 function NativeSelectOption({
   className,

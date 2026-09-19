@@ -1,11 +1,11 @@
-# Rule draft management API
+# Versioned rule draft management API
 
-All `/admin/rules` operations require an enabled administrator session. Mutations also require an allowed Origin. Definitions use format version 1; legacy packages can be read but cannot be edited, duplicated, previewed or transitioned through this API.
+All `/admin/rules` operations require an enabled administrator session. Mutations also require an allowed Origin. Definitions use explicit format versions. Existing Format 1 packages retain their original evaluator and authoring behaviour; Format 2 final-assessment packages use the fixed profile contract described in `definition-format.md`.
 
 | Method and path | Request | Result |
 | --- | --- | --- |
 | GET `/admin/rules` | — | Metadata list, including revision and editability |
-| POST `/admin/rules` | `name`, UUID `requestId`, optional `template` (`spreadsheet` only), optional `duplicateId` | Created draft |
+| POST `/admin/rules` | `name`, UUID `requestId`, optional `template` (`final_assessment` default or legacy `spreadsheet`), optional `duplicateId` | Created draft |
 | GET `/admin/rules/:id` | — | Definition, metadata and audit events |
 | PUT `/admin/rules/:id` | Current `revision`, complete `definition` | Saved draft with incremented revision |
 | POST `/admin/rules/:id/preview` | Current `revision`, `answers` | Non-billable evaluation with version/checksum evidence |
@@ -25,6 +25,8 @@ Saves atomically replace the definition and increment the revision. A stale revi
 DRAFT and VALIDATED contents matching the fixed Excel profile are configurable; saving resets lifecycle to DRAFT and removes validation evidence. Every lifecycle transition increments the operational revision while retaining checksum-bound evidence for unchanged content. APPROVED, ACTIVE and RETIRED contents are immutable. Transitioning back to draft is forbidden. Duplicate to make corrections.
 
 Semantic errors prevent saving; incomplete clinical mappings may remain in drafts as blocking issues. Validation and approval require no outstanding issues and successful independently specified sample expectations. Technical validation does not perform clinical approval.
+
+Format 2 final-assessment drafts remain reviewable and previewable internally, but `approve` and `activate` return `PROVISIONAL_THRESHOLDS_UNCONFIRMED`. A final profile cannot be newly assigned or publicly evaluated while its provisional marker says `clinicalUsePermitted: false`. This restriction is enforced in both the in-memory test store and PostgreSQL binding path; it is not only a UI rule.
 
 Audit records retain actor, time, action, revision and checksum. Definition writes and audit events commit together. Deletion checks deployment-assignment history and historical usage; foreign keys prevent concurrent references being erased. Assessment bindings also prevent deletion.
 
@@ -46,7 +48,7 @@ The Preview tab can copy entered answers into a new sample, but deliberately lea
 
 Preview answers are transient. Tab navigation retains them; changing the definition clears them. Responses from evaluations started before a definition or answer change are discarded to avoid showing stale results.
 
-## Fixed Excel authoring (current workflow)
+## Format 1 fixed spreadsheet authoring
 
 New versions always start from the latest NIQ Excel profile. `template` may be omitted or set to `spreadsheet`; `blank` is rejected. Administrators cannot add, remove, reorder or change questions, field types, answer options, visibility, calculation formulas, domain identities or scoring-component references. The API verifies those constraints independently of the UI and returns `409 FIXED_RULE_REQUIRED` for structural changes or attempts to edit/duplicate an earlier custom profile.
 
@@ -58,10 +60,14 @@ The workbook does not provide question-to-domain assignments. `unassigned` is a 
 
 Incomplete source content remains documented in the version's Source decisions: palliative time-window rules; lab units and boundaries; symptom overlap; required/none-answer policies; therapy aggregation; weight-loss baseline; intervention triggers. Where executable rules are not justified (such as overlapping haemoglobin bands), they are not invented. Such content needs a reviewed update to the fixed profile. Merely resolving a note is not implementation of a missing algorithm.
 
+## Format 2 final-assessment authoring
+
+The final editor uses the audited five-section layout and 19 scoring entries. It exposes inline option points, conditional paths, surgery rate, weight-loss bands, derived protein outcomes and temporary risk ranges. It intentionally has no cap controls, no intervention editor, no report-upload editor and no patient identity fields. The section navigation becomes a labelled native select on narrow screens. Edits are guarded by before-unload/router discard protection; saves include the current revision and preserve local edits when the API returns `RULE_REVISION_CONFLICT`.
+
 ## Scoring page
 
 The administration UI opens each version at `/versions/:id`, including after creation. The list has an edit icon for editable versions. URLs support direct opening and refresh; leaving unsaved changes requires discard confirmation.
 
-The page uses underlined Details, Scoring and Interventions tabs, with Scoring selected initially. One Scoring table replaces the separate questionnaire and scoring views: Field name, Type, Score and Cap. Fixed fields and calculated values are listed together; score summaries open inline controls. Selection fields show configured option counts, numeric scoring shows range counts, and unscored fields distinguish Not applicable from Not configured. Scoring bands can be added or removed without changing the underlying input field. Domain/total caps and risk categories are compact expandable sections.
+The Format 1 page uses underlined Details, Scoring and Interventions tabs, with Scoring selected initially. One Scoring table replaces the separate questionnaire and scoring views: Field name, Type, Score and Cap. Fixed fields and calculated values are listed together; score summaries open inline controls. Selection fields show configured option counts, numeric scoring shows range counts, and unscored fields distinguish Not applicable from Not Configured. Scoring bands can be added or removed without changing the underlying input field. Domain/total caps and risk categories are compact expandable sections.
 
 Interventions displays N/A because its design is not finalized. The UI no longer offers Preview, Validation, source-decision editing, sample authoring or lifecycle approval controls. Saving still enforces schema and reference checks on the client and server; incomplete rules remain drafts and do not gain clinical eligibility. Existing API validation/approval enforcement and historical assessment evaluation are retained. UI simplification does not automatically approve versions or erase historical interventions.
