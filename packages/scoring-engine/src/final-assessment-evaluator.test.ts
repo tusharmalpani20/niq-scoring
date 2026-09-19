@@ -130,3 +130,10 @@ test("invariant approval fixtures tolerate category IDs while explicit expectati
   definition.samples.push({ id: "explicit_risk", name: "Explicit risk expectation", answers: { previous_surgeries: "previous_surgeries_no" }, expected: { complete: true, score: 0, classificationId: "low" } });
   expect(validateFinalAssessmentSamples(definition)).toContainEqual(expect.objectContaining({ code: "SAMPLE_MISMATCH", path: "samples.explicit_risk.classificationId" }));
 });
+
+
+test("confirmed decimal weights classify mathematical boundaries without percentage rounding", () => {
+  for (const [previous, current, expected] of [[80, 75.2, 2], [80, 75.200000001, 1], [80, 75.199999999, 2], [71, 63.9, 2], [71, 63.899999999, 3], [0.01, 0.0094, 2]]) {
+    expect(evaluateFinalAssessment(confirmedTemplate("Decimal boundaries"), { previous_weight_kg: previous!, current_weight_kg: current! }).score).toBe(expected!);
+  }
+});

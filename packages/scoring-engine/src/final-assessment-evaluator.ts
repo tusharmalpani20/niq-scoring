@@ -1,3 +1,4 @@
+import { weightLossInRange } from "./weight-loss-range";
 import { inRange } from "@niq-scoring/contracts/rule-validation";
 import type { DefinitionIssue } from "@niq-scoring/contracts/rules";
 import { validateFinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment-validation";
@@ -173,7 +174,7 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
       if (typeof previous !== "number" || typeof current !== "number" || previous <= 0 || current <= 0) { add("answers.weight", "INVALID_WEIGHT", "Weights must be finite and greater than zero."); push(sectionId, field, null, "unanswered", "Invalid weight input"); continue; }
       weightLossPercent = (previous - current) / previous * 100;
       if (!Number.isFinite(weightLossPercent)) { add("answers.weight", "INVALID_ARITHMETIC", "Weight-loss calculation is outside the supported numeric range."); push(sectionId, field, null, "unanswered", "Invalid weight calculation"); continue; }
-      const match = field.scoring.bands.filter(band => inRange(weightLossPercent!, band));
+      const match = field.scoring.bands.filter(band => definition.provisional.status === "CLIENT_CONFIRMED" ? weightLossInRange(previous, current, band) : inRange(weightLossPercent!, band));
       push(sectionId, field, match.length === 1 ? match[0]!.points : null, match.length === 1 ? "answered" : "pending", match.length === 1 ? undefined : "Weight-loss bands do not define one result.");
       continue;
     }
