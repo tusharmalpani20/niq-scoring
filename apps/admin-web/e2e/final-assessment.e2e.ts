@@ -4,17 +4,15 @@ import { mockFinalConsole, startFinalDraft } from "./final-assessment-fixture";
 test("final assessment editor follows the audited section layout", async ({ page }, info) => {
   const state = await mockFinalConsole(page);
   await startFinalDraft(page);
-  await expect(page.getByText(/Temporary risk thresholds/)).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Field name", exact: true })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Type", exact: true })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Scoring", exact: true })).toBeVisible();
+  await expect(page.getByText(/Temporary risk thresholds/)).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Scoring sections" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Cap", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: /fixed options/ }).first().click();
+  await page.getByRole("button", { name: /options configured/ }).first().click();
   await expect(page.getByLabel("Solid Tumour points", { exact: true })).toBeVisible();
   await expect(page.getByText(/^Source:/)).toHaveCount(0);
   await page.getByLabel("Solid Tumour points", { exact: true }).fill("4");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByText("Draft saved. Temporary risk thresholds remain blocked from clinical use.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
   expect(state.getRecord()!.definition.sections[0]!.fields[0]!.kind).toBe("multi_select");
   const tumour = state.getRecord()!.definition.sections[0]!.fields[0]!;
   expect(tumour.kind === "multi_select" && tumour.scoring.points.find(point => point.optionId === "tumour_type_solid")?.points).toBe(4);
@@ -22,17 +20,55 @@ test("final assessment editor follows the audited section layout", async ({ page
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
 
-test("final assessment replaces desktop section navigation with a mobile select", async ({ page }, info) => {
-  test.skip((page.viewportSize()?.width ?? 0) > 700, "Mobile navigation assertion");
-  await mockFinalConsole(page);
+for (const width of [390, 768, 845, 1065, 1440]) {
+  test(`final assessment has no clipping at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 797 });
+    await mockFinalConsole(page);
+    await startFinalDraft(page);
+    const navigation = page.getByRole("navigation", { name: "Scoring sections" });
+    await expect(navigation).toBeVisible();
+    await expect(page.getByLabel("Assessment section", { exact: true })).toHaveCount(0);
+    await navigation.getByRole("button", { name: /Dietary details/ }).click();
+    await page.locator("#final-field-weight_loss").getByRole("button").click();
+    await expect(page.getByText("Mild weight loss", { exact: true })).toBeVisible();
+    await page.locator("#final-field-protein_intake").getByRole("button").click();
+    await expect(page.getByText("Normal intake · More than usual")).toBeVisible();
+    await expect(page.getByText(/dietary_intake_/)).toHaveCount(0);
+    for (const tab of ["Risk categories", "Face scan", "Scoring"]) {
+      await page.getByRole("tab", { name: tab, exact: true }).click();
+      expect(await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>("main *")).filter(el => el.clientWidth > 1 && !el.classList.contains("sr-only") && el.scrollWidth > el.clientWidth + 2 && getComputedStyle(el).overflowX !== "visible").map(el => el.tagName + "." + el.className))).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    }
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const lastField = await page.locator("#final-field-fluid_intake").boundingBox();
+    const saveBar = await page.getByRole("button", { name: "Save draft", exact: true }).locator("../..").boundingBox();
+    expect(lastField!.y + lastField!.height).toBeLessThanOrEqual(saveBar!.y + 1);
+    const footer = page.getByRole("button", { name: "Save draft", exact: true });
+    const box = await footer.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(797);
+    await page.screenshot({ path: info.outputPath(`confirmed-scoring-${width}.png`), animations: "disabled", fullPage: true });
+  });
+}
+
+test("blank and fractional points remain unsaved and cannot be submitted", async ({ page }) => {
+  const state = await mockFinalConsole(page);
   await startFinalDraft(page);
-  await expect(page.getByLabel("Assessment section", { exact: true })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Scoring sections", exact: true })).toBeHidden();
-  await page.getByLabel("Assessment section", { exact: true }).click();
-  await page.getByRole("option", { name: "Dietary details (6)", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Dietary details", exact: true })).toBeVisible();
-  await page.screenshot({ path: info.outputPath("final-assessment-mobile.png"), animations: "disabled", fullPage: true });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await page.locator("#final-field-tumour_type").getByRole("button").click();
+  const points = page.getByLabel("Solid Tumour points", { exact: true });
+  await points.fill("");
+  await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Enter valid ranges and whole-number points of 0 or more.")).toBeVisible();
+  await points.fill("1.5");
+  await expect(points).toHaveAttribute("aria-invalid", "true");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  const field = state.getRecord()!.definition.sections[0]!.fields[0]!;
+  expect(field.kind === "multi_select" && field.scoring.points[0]!.points).toBe(2);
+  await page.getByRole("button", { name: "Discard changes", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Discard", exact: true }).click();
+  await expect(points).toHaveValue("2");
 });
 
 test("final assessment save conflicts preserve edits", async ({ page }) => {
@@ -44,4 +80,20 @@ test("final assessment save conflicts preserve edits", async ({ page }) => {
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText(/This version changed in another session/)).toBeVisible();
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Unsaved final profile change");
+});
+
+test("risk names reject duplicates and blank numeric ranges stay invalid", async ({ page }) => {
+  await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
+  await page.getByLabel("Category name", { exact: true }).nth(1).fill("Low Risk");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByLabel("Configuration issues")).toContainText(/unique|duplicate/i);
+  await page.getByLabel("Category name", { exact: true }).nth(1).fill("Moderate Risk");
+  const from = page.getByLabel("From score", { exact: true }).nth(1);
+  await from.fill("");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByLabel("Configuration issues")).toContainText("Enter valid ranges");
+  await expect(from).toHaveValue("");
+  await expect(from).toHaveAttribute("aria-invalid", "true");
 });

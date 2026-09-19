@@ -25,11 +25,11 @@ test("real API final-profile draft, reopen, duplicate and protected deletion", a
   await signIn(page);
   await createFinalDraft(page, name);
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
-  await expect(page.getByText(/Temporary risk thresholds.*awaiting confirmation/)).toBeVisible();
+  await expect(page.getByText(/Temporary risk thresholds.*awaiting confirmation/)).toHaveCount(0);
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   await page.getByLabel("Description", { exact: true }).fill("Synthetic final-profile persistence check");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByText("Draft saved. Temporary risk thresholds remain blocked from clinical use.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Back to versions", exact: true }).click();
   await page.reload();
   await page.getByRole("button", { name, exact: true }).click();
@@ -53,10 +53,10 @@ test("real API persists final scoring edits and rejects altered fixed fields", a
   const name = `Final fixed browser ${info.project.name} ${Date.now()}`;
   await signIn(page);
   const created = await createFinalDraft(page, name);
-  await page.locator("#final-field-tumour_type").getByRole("button", { name: /fixed options/ }).click();
+  await page.locator("#final-field-tumour_type").getByRole("button", { name: /options configured/ }).click();
   await page.getByLabel("Solid Tumour points", { exact: true }).fill("4");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByText("Draft saved. Temporary risk thresholds remain blocked from clinical use.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
   const savedResponse = await page.request.get(`/api/admin/rules/${created.id}`);
   const saved = await savedResponse.json() as { revision: number; definition: FinalAssessmentDefinition };
   expect(saved.definition.formatVersion).toBe(2);
