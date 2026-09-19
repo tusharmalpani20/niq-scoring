@@ -199,3 +199,19 @@ test("face-scan settings persist with the version and invalid mappings are rejec
   const historical = await (await request(`/${draft.id}`)).json() as RuleRecord;
   expect(Object.hasOwn(historical.definition!, "faceScanScoring")).toBe(false);
 });
+
+
+test("face-scan editable rows persist and invalid range edits leave stored version intact", async () => {
+  const { request, create } = adminSetup();
+  const draft = await create("Face scan rows");
+  const definition = structuredClone(draft.definition as FinalAssessmentDefinition);
+  definition.faceScanScoring = { ranges: [
+    { id: "first", min: 0, max: 50, minInclusive: true, maxInclusive: true, points: 8 },
+    { id: "second", min: 50, max: 100, minInclusive: false, maxInclusive: true, points: 0 },
+  ] };
+  expect((await request(`/${draft.id}`, "PUT", { revision: 1, definition })).status).toBe(200);
+  expect((await (await request(`/${draft.id}`)).json()).definition.faceScanScoring).toEqual(definition.faceScanScoring);
+  definition.faceScanScoring.ranges[1]!.minInclusive = true;
+  expect((await request(`/${draft.id}`, "PUT", { revision: 2, definition })).status).toBe(400);
+  expect((await (await request(`/${draft.id}`)).json()).revision).toBe(2);
+});
