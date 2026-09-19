@@ -162,6 +162,17 @@ test("confirmed drafts validate, approve explicitly and activate without editing
 
 test("activation can explicitly make a version the default", async ({ page }) => {
   const state = await mockFinalConsole(page);
+  await page.route("**/api/admin/overview", route => route.fulfill({ json: {
+    clients: [], entitlements: [],
+    deployments: ["following", "paused", "pinned-old", "pinned-new"].map(id => ({ id, enabled: id !== "paused" })),
+    versions: [{ id: "old", version: "Previous rules", isDefault: true }],
+    assignments: [
+      { deploymentId: "following", mode: "LATEST_APPROVED" },
+      { deploymentId: "paused", mode: "LATEST_APPROVED" },
+      { deploymentId: "pinned-old", mode: "PINNED", scoringRuleVersionId: "old" },
+      { deploymentId: "pinned-new", mode: "PINNED", scoringRuleVersionId: "final-assessment-rule" },
+    ],
+  } }));
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   await page.getByRole("button", { name: "Check rules", exact: true }).click();
@@ -170,6 +181,16 @@ test("activation can explicitly make a version the default", async ({ page }) =>
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await page.getByRole("button", { name: "Activate version", exact: true }).click();
   await page.getByRole("checkbox", { name: /Make this the default version/ }).check();
+  const impact = page.getByRole("region", { name: "Default change impact" });
+  await expect(impact).toContainText("Previous rules");
+  await expect(impact).toContainText("Final assessment browser draft");
+  for (const [label, count] of [
+    ["Deployments using the current default version", "3"],
+    ["Following default, will switch", "2"],
+    ["Pinned to current version, will stay", "1"],
+    ["Already pinned to the new version", "1"],
+  ]) await expect(impact.locator("div").filter({ has: page.getByText(label!, { exact: true }) }).locator("dd")).toHaveText(count!);
+  await expect(impact).toContainText("Counts include paused deployments");
   await page.getByRole("alertdialog").getByRole("button", { name: "Activate version", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("Deployments following the default");
   await page.getByRole("button", { name: "Done", exact: true }).click();
