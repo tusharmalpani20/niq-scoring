@@ -53,6 +53,7 @@ test("one scoring page replaces questionnaire, preview and validation authoring"
   for (const name of ["Add section", "Add question", "Add option", "Add calculation", "Remove question", "Approve version"]) {
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
   }
+  await page.getByRole("tab", { name: "Scoring", exact: true }).click();
   await expect(page.getByRole("columnheader", { name: "Field name", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Type", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Score", exact: true })).toBeVisible();
@@ -71,7 +72,7 @@ test("version link and edit action open a refreshable page", async ({ page }) =>
   await page.getByRole("button", { name: "Synthetic browser draft", exact: true }).click();
   await expect(page).toHaveURL(/\/versions\/Synthetic%20browser%20draft$/);
   await page.reload();
-  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Synthetic browser draft");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.goto("/versions");

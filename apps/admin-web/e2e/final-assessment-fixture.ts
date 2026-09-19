@@ -61,4 +61,6 @@ export async function startFinalDraft(page: Page) {
   await page.getByLabel("Name", { exact: true }).fill("Final assessment browser draft");
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await expect(page).toHaveURL(/\/versions\/Final%20assessment%20browser%20draft$/);
+  await expect(page.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tab", { name: "Scoring", exact: true }).click();
 }

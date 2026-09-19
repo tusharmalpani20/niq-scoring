@@ -68,7 +68,7 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
   const [record, setRecord] = useState(initial);
   const [definition, setDefinition] = useState(() => parse(initial.definition));
   const saved = useMemo(() => parse(record.definition), [record.definition]);
-  const [tab, setTab] = useState<Tab>("scoring");
+  const [tab, setTab] = useState<Tab>("details");
   const [sectionIndex, setSectionIndex] = useState(0);
   const [expanded, setExpanded] = useState<string[]>([]);
   const [pointDrafts, setPointDrafts] = useState<Record<string, string>>({});

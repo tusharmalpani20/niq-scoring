@@ -7,6 +7,7 @@ test('name links reload, rename and preserve old bookmarks', async ({ page }) =>
   await startFinalDraft(page);
   const oldUrl = page.url();
   await page.reload();
+  await expect(page.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole('heading', { name: 'Final assessment browser draft', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Details', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill('TEST-1 / follow-up #2');

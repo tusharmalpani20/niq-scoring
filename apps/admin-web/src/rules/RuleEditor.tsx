@@ -72,7 +72,7 @@ function LegacyRuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; 
     </header>
     {definition ? <>
       {!editable && <p className="text-sm text-muted-foreground">This version is read-only. Create a new version to change its scoring configuration.</p>}
-      <Tabs defaultValue="scoring" className="gap-5">
+      <Tabs defaultValue="details" className="gap-5">
         <TabsList variant="line" aria-label="Rule version sections" className="h-auto min-h-11 w-full flex-wrap justify-start gap-x-6 gap-y-1 rounded-none border-b p-0">
           {['details', 'scoring', 'risk categories', 'interventions'].map(tab => <TabsTrigger key={tab} value={tab} className="h-11 flex-none rounded-none border-0 bg-transparent px-1 shadow-none data-[state=active]:bg-transparent data-[state=active]:text-primary after:bottom-0 after:bg-primary">{tab.charAt(0).toUpperCase() + tab.slice(1)}</TabsTrigger>)}
         </TabsList>
