@@ -145,6 +145,7 @@ test("face scan ranges persist and gaps cannot be saved", async ({ page }) => {
   await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
   const saved = structuredClone(state.getRecord()!.definition.faceScanScoring);
   await page.getByLabel("From (%)", { exact: true }).nth(1).fill("66");
+  await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("gap");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByLabel("Configuration issues")).toBeVisible();
   expect(state.getRecord()!.definition.faceScanScoring).toEqual(saved);
@@ -171,4 +172,32 @@ test("simple risk ranges preserve exclusive historical endpoints and save inclus
   const save = page.getByRole("button", { name: "Save draft", exact: true });
   if (await save.isEnabled()) await save.click();
   await expect(page.getByLabel("Configuration issues")).toHaveCount(0);
+});
+
+
+test("risk overlap is visible before saving and cannot persist", async ({ page }) => {
+  const state = await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
+  await page.getByLabel("From score", { exact: true }).nth(2).fill("20");
+  await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("overlaps");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByLabel("Configuration issues")).toContainText("overlaps");
+  expect(state.getRecord()!.revision).toBe(1);
+});
+
+test("grouped treatment table preserves all seven editable scores", async ({ page }) => {
+  const state = await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("navigation", { name: "Scoring sections" }).getByRole("button", { name: /Treatment/ }).click();
+  await page.locator("#final-field-treatment_status").getByRole("button").click();
+  const editor = page.locator("#final-scoring-treatment_status");
+  await expect(editor.getByRole("spinbutton")).toHaveCount(7);
+  await expect(editor.getByText("Treatment choice", { exact: true })).toBeVisible();
+  await editor.getByRole("spinbutton", { name: /With Cancer/ }).fill("4");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
+  const field = state.getRecord()!.definition.sections.flatMap(section => section.fields).find(field => field.id === "treatment_status")!;
+  expect(field.kind === "conditional" && field.scoring.palliative.paths.find(path => !path.children.length)!.points).toBe(4);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
