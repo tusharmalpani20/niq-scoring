@@ -107,21 +107,37 @@ test("risk names reject duplicates and blank numeric ranges stay invalid", async
   await expect(from).toHaveAttribute("aria-invalid", "true");
 });
 
-test("confirmed drafts validate, approve explicitly and activate without editing approved settings", async ({ page }) => {
+test("confirmed drafts validate, approve explicitly and activate without editing approved settings", async ({ page }, info) => {
   const state = await mockFinalConsole(page);
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   await page.getByLabel("Description", { exact: true }).fill("Pending change");
-  await expect(page.getByRole("button", { name: "Validate draft", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Check rules", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await page.getByRole("button", { name: "Validate draft", exact: true }).click();
+  await page.getByRole("button", { name: "Check rules", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("Checks passed");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
   await page.getByRole("button", { name: "Approve version", exact: true }).click();
   await expect(page.getByRole("alertdialog")).toContainText("duplicate this version");
   expect(state.getRecord()!.lifecycle).toBe("VALIDATED");
   await page.getByRole("alertdialog").getByRole("button", { name: "Approve version", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("Version approved");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(page.getByLabel("Description", { exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Activate version", exact: true }).click();
-  await expect(page.getByText("Version activated.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("alertdialog")).toContainText("Existing assignments will stay unchanged");
+  expect(state.getRecord()!.lifecycle).toBe("APPROVED");
+  await page.getByRole("alertdialog").getByRole("button", { name: "Activate version", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("Version activated");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  const timeline = page.getByRole("region", { name: "Version timeline" });
+  await expect(timeline).toContainText("Current: Active");
+  await expect(timeline.locator('[aria-current="step"]')).toContainText("Browser QA");
+  await expect(timeline.locator('[aria-current="step"] time')).toHaveAttribute("datetime", /2026-09-19/);
+  await page.reload();
+  await expect(timeline).toContainText("Current: Active");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await timeline.screenshot({ path: info.outputPath("version-timeline.png") });
   expect(state.getRecord()!.lifecycle).toBe("ACTIVE");
 });
 
@@ -220,4 +236,33 @@ test("overlap feedback identifies rows without duplicate save errors", async ({ 
   expect(state.getRecord()!.definition.faceScanScoring).toEqual(saved);
   await page.getByLabel("From (%)", { exact: true }).nth(2).fill("80");
   await expect(errors).toHaveCount(0);
+});
+
+
+test("failed checks show a result without advancing the timeline", async ({ page }) => {
+  const state = await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  state.transitionError = "RULE_VALIDATION_FAILED";
+  await page.getByRole("button", { name: "Check rules", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("Action not completed");
+  await page.getByRole("button", { name: "Review errors", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Version timeline" })).toContainText("Current: Draft");
+  expect(state.getRecord()!.lifecycle).toBe("DRAFT");
+});
+
+
+test("editing a checked draft resets progress but retains history", async ({ page }) => {
+  await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  await page.getByRole("button", { name: "Check rules", exact: true }).click();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await page.getByLabel("Description", { exact: true }).fill("Changed after checks");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  const timeline = page.getByRole("region", { name: "Version timeline" });
+  await expect(timeline).toContainText("Current: Draft");
+  await expect(timeline.getByRole("list", { name: "Version stages" }).getByRole("listitem").nth(1)).toContainText("Not completed");
+  await timeline.getByText("Activity history", { exact: true }).click();
+  await expect(timeline).toContainText("Checks passed");
 });
