@@ -116,8 +116,7 @@ test("confirmed drafts validate, approve explicitly and activate without editing
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await page.getByRole("button", { name: "Check rules", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("Checks passed");
-  await page.getByRole("button", { name: "Done", exact: true }).click();
-  await page.getByRole("button", { name: "Approve version", exact: true }).click();
+  await page.getByRole("button", { name: "Continue to approval", exact: true }).click();
   await expect(page.getByRole("alertdialog")).toContainText("duplicate this version");
   expect(state.getRecord()!.lifecycle).toBe("VALIDATED");
   await page.getByRole("alertdialog").getByRole("button", { name: "Approve version", exact: true }).click();
@@ -263,7 +262,9 @@ test("editing a checked draft resets progress but retains history", async ({ pag
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   await page.getByRole("button", { name: "Check rules", exact: true }).click();
-  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await page.getByRole("button", { name: "Edit rules", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Scoring", exact: true })).toHaveAttribute("data-state", "active");
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
   await page.getByLabel("Description", { exact: true }).fill("Changed after checks");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   const timeline = page.getByRole("region", { name: "Version timeline" });
