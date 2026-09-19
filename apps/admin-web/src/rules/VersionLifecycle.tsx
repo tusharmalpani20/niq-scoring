@@ -4,7 +4,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import type { RuleDetail } from './rule-api';
 
 type AuditEntry = NonNullable<RuleDetail['audit']>[number];
-const labels: Record<string, string> = { RULE_CREATED: 'Draft created', RULE_SAVED: 'Draft saved', RULE_VALIDATED: 'Checks passed', RULE_APPROVED: 'Version approved', RULE_ACTIVE: 'Version activated', RULE_RETIRED: 'Version retired' };
+const labels: Record<string, string> = { RULE_CREATED: 'Draft created', RULE_SAVED: 'Draft saved', RULE_VALIDATED: 'Checks passed', RULE_APPROVED: 'Version approved', RULE_ACTIVE: 'Version activated', RULE_RETIRED: 'Version retired', RULE_DEFAULT_SET: 'Made default', RULE_DEFAULT_REPLACED: 'Default replaced' };
 const stages = [
   { state: 'DRAFT', label: 'Draft', action: 'RULE_CREATED', icon: FilePenLine },
   { state: 'VALIDATED', label: 'Checked', action: 'RULE_VALIDATED', icon: ClipboardCheck },

@@ -124,7 +124,8 @@ test("confirmed drafts validate, approve explicitly and activate without editing
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(page.getByLabel("Description", { exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Activate version", exact: true }).click();
-  await expect(page.getByRole("alertdialog")).toContainText("Existing assignments will stay unchanged");
+  await expect(page.getByRole("alertdialog")).toContainText("Existing assessments keep their original version");
+  await expect(page.getByRole("checkbox", { name: /Make this the default version/ })).not.toBeChecked();
   expect(state.getRecord()!.lifecycle).toBe("APPROVED");
   await page.getByRole("alertdialog").getByRole("button", { name: "Activate version", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("Version activated");
@@ -142,6 +143,39 @@ test("confirmed drafts validate, approve explicitly and activate without editing
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   await timeline.screenshot({ path: info.outputPath("version-timeline.png") });
   expect(state.getRecord()!.lifecycle).toBe("ACTIVE");
+  expect(state.getRecord()!.isDefault).not.toBe(true);
+  await page.getByRole("button", { name: "Make default", exact: true }).click();
+  await expect(page.getByRole("alertdialog")).toContainText("Existing assessments keep their original version");
+  await page.getByRole("alertdialog").getByRole("button", { name: "Cancel", exact: true }).click();
+  expect(state.getRecord()!.isDefault).not.toBe(true);
+  await page.getByRole("button", { name: "Make default", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Make default", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("Default updated");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  expect(state.getRecord()!.isDefault).toBe(true);
+  await page.reload();
+  await expect(page.getByText("Default", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Make default", exact: true })).toHaveCount(0);
+});
+
+test("activation can explicitly make a version the default", async ({ page }) => {
+  const state = await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  await page.getByRole("button", { name: "Check rules", exact: true }).click();
+  await page.getByRole("button", { name: "Continue to approval", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Approve version", exact: true }).click();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await page.getByRole("button", { name: "Activate version", exact: true }).click();
+  await page.getByRole("checkbox", { name: /Make this the default version/ }).check();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Activate version", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("Deployments following the default");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  expect(state.getRecord()!.isDefault).toBe(true);
+  await page.getByText("Activity history", { exact: true }).click();
+  await expect(page.getByText("Made default", { exact: true })).toBeVisible();
+  await page.goto("/versions");
+  await expect(page.getByRole("row").filter({ hasText: "Final assessment browser draft" })).toContainText("Default");
 });
 
 test("face scan ranges persist and gaps cannot be saved", async ({ page }) => {

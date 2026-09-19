@@ -11,7 +11,7 @@ export async function mockFinalConsole(page: Page) {
   const state = { createError: "", saveError: "", transitionError: "", transitionIssues: [] as Array<{ message: string }>, getRecord: () => record };
   function audit(action: string) {
     if (!record) return;
-    record.audit = [...(record.audit ?? []), { id: `event-${record.revision}`, actor: "synthetic-admin", actorName: "Browser QA", action, at: `2026-09-19T10:${String(record.revision).padStart(2, "0")}:00.000Z`, revision: record.revision, checksum: record.packageChecksum }];
+    record.audit = [...(record.audit ?? []), { id: `event-${record.revision}-${action}`, actor: "synthetic-admin", actorName: "Browser QA", action, at: `2026-09-19T10:${String(record.revision).padStart(2, "0")}:00.000Z`, revision: record.revision, checksum: record.packageChecksum }];
   }
   await page.route("**/api/**", async route => {
     const request = route.request();
@@ -53,9 +53,16 @@ export async function mockFinalConsole(page: Page) {
       if (action === "check") return json({ issues });
       if (issues.length) return json({ error: "RULE_VALIDATION_FAILED", issues }, 422);
       if (state.transitionError) return json({ error: state.transitionError, issues: state.transitionIssues }, 409);
+      if (action === "set-default") {
+        expect(record.lifecycle).toBe("ACTIVE");
+        record = { ...record, isDefault: true, revision: record.revision + 1 };
+        audit("RULE_DEFAULT_SET");
+        return json(record);
+      }
       const lifecycle = action === "validate" ? "VALIDATED" : action === "approve" ? "APPROVED" : "ACTIVE";
       record = { ...record, lifecycle, revision: record.revision + 1, clinicalUsePermitted: lifecycle === "APPROVED" || lifecycle === "ACTIVE" };
       audit(`RULE_${lifecycle}`);
+      if (action === "activate" && body.makeDefault) { record.isDefault = true; audit("RULE_DEFAULT_SET"); }
       return json(record);
     }
     return json({ error: "UNEXPECTED_TEST_REQUEST" }, 500);
