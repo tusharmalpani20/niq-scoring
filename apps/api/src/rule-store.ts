@@ -14,6 +14,7 @@ export type RuleTransition = { id: string; revision: number; action: "validate" 
 export interface RuleStore {
   list(): Promise<RuleRecord[]>;
   get(id: string): Promise<RuleRecord | null>;
+  getByName(name: string): Promise<RuleRecord | null>;
   replayCreate(requestId: string, fingerprint: string, actor: string): Promise<RuleRecord | null>;
   create(input: RuleCreate): Promise<RuleRecord>;
   save(input: RuleSave): Promise<RuleRecord>;

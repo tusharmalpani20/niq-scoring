@@ -114,6 +114,12 @@ export const scoringRuleVersions = pgTable("scoring_rule_versions", {
   retiredAt: timestamp("retired_at", { withTimezone: true }),
 }, (table) => [uniqueIndex("scoring_rule_versions_name_uq").on(sql`lower(btrim(${table.version}))`), uniqueIndex("scoring_rule_versions_create_request_uq").on(table.createRequestId), index("scoring_rule_versions_checksum_idx").on(table.packageChecksum)]);
 
+// No foreign key: aliases survive draft deletion as reserved-name tombstones.
+export const scoringRuleNameAliases = pgTable("scoring_rule_name_aliases", {
+  name: text("name").primaryKey(),
+  ruleId: varchar("rule_id", { length: 26 }).notNull(),
+});
+
 export const deploymentVersionAssignments = pgTable("deployment_version_assignments", {
   id: varchar("id", { length: 26 }).primaryKey(),
   deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),

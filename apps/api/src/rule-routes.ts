@@ -54,6 +54,11 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
     const record = await store.create({ id: createEntityId(), definition, checksum: ruleChecksum(definition), actor: actor(c), requestId: input.requestId, fingerprint, now: now().toISOString() });
     return c.json(record, 201);
   }));
+  app.get("/admin/rules/by-name/:name", guard(async c => {
+    const record = await store.getByName(c.req.param("name")!);
+    if (!record) throw new RuleStoreError("RULE_NOT_FOUND");
+    return c.json({ ...record, audit: await store.audit(record.id) });
+  }));
   app.get("/admin/rules/:id", guard(async c => {
     const record = await store.get(c.req.param("id")!);
     if (!record) throw new RuleStoreError("RULE_NOT_FOUND");

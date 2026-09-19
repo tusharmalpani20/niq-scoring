@@ -21,16 +21,20 @@ test.skipIf(process.env.RULE_DATABASE_TEST !== "1")("PostgreSQL drafts are atomi
     const duplicate = { ...input, id: ids[1]!, requestId: crypto.randomUUID(), definition: { ...definition, name: ` ${definition.name.toUpperCase()} ` } };
     await expect(store.create(duplicate)).rejects.toThrow("RULE_NAME_EXISTS");
     expect(await store.get(ids[1]!)).toBeNull();
-    const changed = { ...definition, description: "Edited synthetic draft" };
+    const changed = { ...definition, name: `Renamed ${ids[0]}`, description: "Edited synthetic draft" };
     const save = { ...input, definition: changed, checksum: ruleChecksum(changed), revision: 1 };
     const saves = await Promise.allSettled([store.save(save), store.save(save)]);
     expect(saves.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(saves.filter(result => result.status === "rejected")).toHaveLength(1);
     expect((await store.get(input.id))?.revision).toBe(2);
     expect(await store.audit(input.id)).toHaveLength(2);
+    expect((await store.getByName(definition.name))?.id).toBe(input.id);
+    expect((await store.getByName(changed.name))?.id).toBe(input.id);
     await store.delete(input.id, 2, actor.id, input.now);
     expect(await store.get(input.id)).toBeNull();
     expect((await store.audit(input.id)).map(event => event.action)).toEqual(["RULE_CREATED", "RULE_SAVED", "RULE_DELETED"]);
+    expect(await store.getByName(changed.name)).toBeNull();
+    await expect(store.create({ ...duplicate, definition })).rejects.toThrow("RULE_NAME_EXISTS");
     await expect(store.create(input)).rejects.toThrow("RULE_REQUEST_DELETED");
   } finally {
     await sql`delete from scoring_rule_versions where id in ${sql(ids)}`;
