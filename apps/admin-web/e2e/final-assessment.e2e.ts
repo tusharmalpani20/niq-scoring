@@ -125,27 +125,32 @@ test("confirmed drafts validate, approve explicitly and activate without editing
   expect(state.getRecord()!.lifecycle).toBe("ACTIVE");
 });
 
-test("face scan edits persist and invalid cutoffs cannot be saved", async ({ page }) => {
+test("face scan ranges persist and gaps cannot be saved", async ({ page }) => {
   const state = await mockFinalConsole(page);
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Face scan", exact: true }).click();
-  await page.getByLabel("First cutoff (%)", { exact: true }).fill("65.5");
-  await page.getByLabel("Second cutoff (%)", { exact: true }).fill("85");
-  await page.getByLabel("Below 65.5% points", { exact: true }).fill("4");
+  await expect(page.getByText(/cutoff/i)).toHaveCount(0);
+  await page.getByLabel("To (%)", { exact: true }).nth(0).fill("65.5");
+  await page.getByLabel("From (%)", { exact: true }).nth(1).fill("65.5");
+  await page.getByLabel("Points", { exact: true }).nth(0).fill("4");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
-  expect(state.getRecord()!.definition.faceScanScoring).toMatchObject({ lowerThreshold: 65.5, upperThreshold: 85, belowPoints: 4 });
   await page.reload();
   await page.getByRole("tab", { name: "Face scan", exact: true }).click();
-  await expect(page.getByLabel("First cutoff (%)", { exact: true })).toHaveValue("65.5");
-  await expect(page.getByLabel("Below 65.5% points", { exact: true })).toHaveValue("4");
-  await page.getByLabel("Second cutoff (%)", { exact: true }).fill("60");
+  await expect(page.getByLabel("To (%)", { exact: true }).nth(0)).toHaveValue("65.5");
+  await expect(page.getByLabel("Points", { exact: true }).nth(0)).toHaveValue("4");
+  await page.getByRole("button", { name: "Add range", exact: true }).click();
+  await expect(page.getByLabel("Points", { exact: true })).toHaveCount(4);
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
+  const saved = structuredClone(state.getRecord()!.definition.faceScanScoring);
+  await page.getByLabel("From (%)", { exact: true }).nth(1).fill("66");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByLabel("Configuration issues")).toBeVisible();
-  expect(state.getRecord()!.definition.faceScanScoring!.upperThreshold).toBe(85);
-  await page.getByLabel("Second cutoff (%)", { exact: true }).fill("");
+  expect(state.getRecord()!.definition.faceScanScoring).toEqual(saved);
+  await page.getByLabel("From (%)", { exact: true }).nth(1).fill("");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByLabel("Second cutoff (%)", { exact: true })).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByLabel("From (%)", { exact: true }).nth(1)).toHaveAttribute("aria-invalid", "true");
 });
 
 test("simple risk ranges preserve exclusive historical endpoints and save inclusive edits", async ({ page }) => {
