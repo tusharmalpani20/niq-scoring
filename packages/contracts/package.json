@@ -15,7 +15,8 @@
     "./final-assessment-template": "./src/final-assessment-template.ts",
     "./final-assessment-validation": "./src/final-assessment-validation.ts",
     "./versioned-definition": "./src/versioned-definition.ts",
-    "./face-scan-scoring": "./src/face-scan-scoring.ts"
+    "./face-scan-scoring": "./src/face-scan-scoring.ts",
+    "./face-scan-session": "./src/face-scan-session.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
