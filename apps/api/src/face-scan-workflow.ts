@@ -18,7 +18,7 @@ type Row = {
  result: FaceScanResult | null; score: ReturnType<typeof calculateFaceScanScore> | null; dispatch_phase: string | null;
  failure_code: string | null; created_at: Date; updated_at: Date; completed_at: Date | null; capture_expires_at: Date; fence: string | null;
 };
-export class FaceScanError extends Error { constructor(public code: string, public status: 400 | 403 | 404 | 409 | 413 | 503 = 409) { super(code); } }
+export class FaceScanError extends Error { constructor(public code: string, public status: 400 | 403 | 404 | 408 | 409 | 413 | 503 = 409) { super(code); } }
 export const faceScanHash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const semanticHash = (result: FaceScanResult) => { const { providerCompletedAt: _timestamp, ...fields } = result; return faceScanHash(fields); };
 export class FaceScanWorkflow {

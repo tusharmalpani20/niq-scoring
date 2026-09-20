@@ -4,16 +4,36 @@ import { FACE_SCAN_MAX_BODY_BYTES, faceScanCreateSchema, faceScanSignalSchema } 
 import { FaceScanError, type FaceScanWorkflow } from "./face-scan-workflow";
 import type { DeploymentIdentity } from "./store";
 
-export async function boundedFaceScanJson(request: Request, limit = FACE_SCAN_MAX_BODY_BYTES): Promise<unknown> {
+export async function boundedFaceScanJson(request: Request, limit = FACE_SCAN_MAX_BODY_BYTES, timeoutMs = 30_000): Promise<unknown> {
   if (Number(request.headers.get("content-length")) > limit) throw new FaceScanError("PAYLOAD_TOO_LARGE", 413);
   const reader = request.body?.getReader(); if (!reader) throw new FaceScanError("INVALID_REQUEST", 400);
   let bytes = 0; const chunks: Uint8Array[] = [];
-  const timeout = setTimeout(() => { void reader.cancel(); }, 30_000);
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      // Reject before cancelling: cancellation may otherwise look like a valid end of body.
+      reject(new FaceScanError("REQUEST_TIMEOUT", 408));
+      void reader.cancel().catch(() => {});
+    }, timeoutMs);
+  });
   try {
-    for (;;) { const { done, value } = await reader.read(); if (done) break; bytes += value.length; if (bytes > limit) { await reader.cancel(); throw new FaceScanError("PAYLOAD_TOO_LARGE", 413); } chunks.push(value); }
+    for (;;) {
+      const { done, value } = await Promise.race([reader.read(), deadline]);
+      if (done) break;
+      bytes += value.length;
+      if (bytes > limit) { void reader.cancel().catch(() => {}); throw new FaceScanError("PAYLOAD_TOO_LARGE", 413); }
+      chunks.push(value);
+    }
     try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new FaceScanError("INVALID_REQUEST", 400); }
-  } finally { clearTimeout(timeout); }
+  } finally { clearTimeout(timer!); }
 }
+/** A timeout returns a retryable response; an in-flight transaction may still durably finish. */
+export async function withinReceiptDeadline<T>(operation: Promise<T>, timeoutMs = 12_000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new FaceScanError("RECEIPT_TIMEOUT", 503)), timeoutMs); });
+  try { return await Promise.race([operation, deadline]); } finally { clearTimeout(timer!); }
+}
+
 export function validWebhookBearer(actual: string | undefined, expected: string | undefined): boolean {
   if (!expected || !actual) return false;
   const left = Buffer.from(actual), right = Buffer.from(`Bearer ${expected}`);
@@ -44,7 +64,7 @@ export function installFaceScanRoutes(app: Hono, options: { workflow?: FaceScanW
     c.header("cache-control", "no-store");
     if (!options.webhookConfirmed || !options.workflow) return c.json({ error: "WEBHOOK_DISABLED" }, 503);
     if (!validWebhookBearer(c.req.header("authorization"), options.webhookSecret)) return c.json({ error: "UNAUTHORIZED" }, 401);
-    try { await options.workflow.webhook(await boundedFaceScanJson(c.req.raw, 1024 * 1024)); return c.json({ accepted: true }, 200); }
+    try { await withinReceiptDeadline((async () => options.workflow!.webhook(await boundedFaceScanJson(c.req.raw, 1024 * 1024, 5_000)))()); return c.json({ accepted: true }, 200); }
     catch (error) { if (error instanceof FaceScanError) return c.json({ error: error.code }, error.status); return c.json({ error: "RECEIPT_UNAVAILABLE" }, 503); }
   });
 }

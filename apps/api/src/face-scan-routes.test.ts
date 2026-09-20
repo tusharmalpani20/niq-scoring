@@ -27,3 +27,19 @@ test("HTTP scan and webhook gates reject unauthorized callers and never expose s
   expect(disabled.headers.get("cache-control")).toBe("no-store");
   expect((await app.request("/webhooks/careplix", { method: "POST", body: JSON.stringify({ api_key: "not-authentication" }) })).status).toBe(503);
 });
+
+test("request deadline rejects a complete JSON prefix when the stream never finishes", async () => {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) { controller.enqueue(new TextEncoder().encode('{"complete":"prefix"}')); },
+    // Cancellation itself can stall; it must not stall the response deadline.
+    cancel() { return new Promise<void>(() => {}); },
+  });
+  const request = new Request("https://example.invalid", { method: "POST", body });
+  await expect(boundedFaceScanJson(request, 1024, 10)).rejects.toThrow("REQUEST_TIMEOUT");
+});
+
+test("callback deadline returns retryable failure instead of acknowledging unfinished persistence", async () => {
+  const { withinReceiptDeadline } = await import("./face-scan-routes");
+  await expect(withinReceiptDeadline(new Promise<void>(() => {}), 10)).rejects.toThrow("RECEIPT_TIMEOUT");
+  expect(await withinReceiptDeadline(Promise.resolve("persisted"), 10)).toBe("persisted");
+});
