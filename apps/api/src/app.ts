@@ -1,3 +1,5 @@
+import { installFaceScanRoutes } from "./face-scan-routes";
+import type { FaceScanWorkflow } from "./face-scan-workflow";
 import { installOrganizationInfoRoute } from "./organization-info";
 import { RuleStoreError } from "./rule-store";
 import { installAssessmentRoutes } from "./assessment-routes";
@@ -8,7 +10,7 @@ import { installRecordDeletion } from "./record-deletion";
 import { encryptActivationToken, decryptActivationToken } from "./lib/activation-secret";
 import {
   activationExchangeSchema, activationTokenInputSchema, calculateRequestSchema,
-   deploymentConfigurationRequestSchema, createDeploymentSchema, createFaceScanSessionSchema,
+   deploymentConfigurationRequestSchema, createDeploymentSchema,
   createClientSchema, entitlementInputSchema, PROVISIONAL_SCORING_VERSION,
   PROVISIONAL_VERSION_STATUS, ulidSchema, updateEnabledSchema, versionAssignmentInputSchema,
 } from "@niq-scoring/contracts";
@@ -33,6 +35,9 @@ export interface AppOptions {
   provisionalScoringRequested: boolean;
   platformEnabled?: boolean;
   faceScanAdapter?: FaceScanAdapter;
+  faceScanWorkflow?: FaceScanWorkflow;
+  faceScanWebhookConfirmed?: boolean;
+  faceScanWebhookSecret?: string;
   readinessCheck?: () => Promise<boolean>;
   now?: () => Date;
 }
@@ -213,7 +218,7 @@ export function createApp(options: AppOptions) {
 
   app.get("/v1/metadata", async (context) => {
     if (!(await authenticateDeployment(context))) return context.json({ error: "UNAUTHORIZED" }, 401);
-    return context.json({ service: "niq-scoring-api", region: options.region, provisionalVersion: { version: PROVISIONAL_SCORING_VERSION, status: PROVISIONAL_VERSION_STATUS, clinicalUsePermitted: false, calculationEnabled: provisionalScoringEnabled }, faceScanProvider: { configured: faceScanAdapter.configured, mode: faceScanAdapter.name } });
+    return context.json({ service: "niq-scoring-api", region: options.region, provisionalVersion: { version: PROVISIONAL_SCORING_VERSION, status: PROVISIONAL_VERSION_STATUS, clinicalUsePermitted: false, calculationEnabled: provisionalScoringEnabled }, faceScanProvider: { configured: Boolean(options.faceScanWorkflow), mode: options.faceScanWorkflow ? "careplix" : faceScanAdapter.name } });
   });
 
   installOrganizationInfoRoute(app, options.store, authenticateDeployment, now);
@@ -231,19 +236,10 @@ export function createApp(options: AppOptions) {
     catch (error) { await options.store.failUsage(reservation.usageId); throw error; }
   });
 
-  app.post("/v1/face-scans", async (context) => {
-    const identity = await authenticateDeployment(context); if (!identity) return context.json({ error: "UNAUTHORIZED" }, 401);
-    const parsed = createFaceScanSessionSchema.safeParse(await parseJson(context)); if (!parsed.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    const reservation = await options.store.reserveUsage({ identity, clientId: parsed.data.clientId, capability: "FACE_SCAN", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.assessmentReference, fingerprint: ruleChecksum({ endpoint: "face-scan", input: parsed.data }), platformEnabled: options.platformEnabled ?? true });
-    if (reservation.status === "DUPLICATE") return context.json(reservation.response as never);
-    if (reservation.status === "REJECTED") return context.json({ error: "FACE_SCAN_UNAVAILABLE", reason: reservation.reason }, 409);
-    try {
-      const providerSession = await faceScanAdapter.createSession({ clientId: parsed.data.clientId, assessmentReference: parsed.data.assessmentReference });
-      const session = await options.store.createFaceScanSession({ identity, clientId: parsed.data.clientId, usageId: reservation.usageId, assessmentReference: parsed.data.assessmentReference, idempotencyKey: parsed.data.idempotencyKey, provider: faceScanAdapter.name, ...(providerSession.providerSessionReference ? { providerSessionReference: providerSession.providerSessionReference } : {}) });
-      const response = { session, providerConfigured: faceScanAdapter.configured };
-      await options.store.storePendingUsageResponse(reservation.usageId, response);
-      return context.json(response, 202);
-    } catch (error) { await options.store.failUsage(reservation.usageId); throw error; }
+  installFaceScanRoutes(app, { authenticate: authenticateDeployment,
+    ...(options.faceScanWorkflow ? { workflow: options.faceScanWorkflow } : {}),
+    ...(options.faceScanWebhookConfirmed ? { webhookConfirmed: true } : {}),
+    ...(options.faceScanWebhookSecret ? { webhookSecret: options.faceScanWebhookSecret } : {}),
   });
 
   app.notFound((context) => context.json({ error: "NOT_FOUND" }, 404));

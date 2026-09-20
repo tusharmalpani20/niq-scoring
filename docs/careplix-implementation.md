@@ -1,0 +1,43 @@
+# CarePlix implementation and operations
+
+Implemented 20 September 2026 behind `FACE_SCAN_ENABLED=false`. No live vendor request, credentials, callback registration or patient capture was used for verification.
+
+## Runtime contract
+
+Authenticated `POST /v1/face-scans` accepts schemaVersion 1, clientId, organizationReference, immutable internal assessmentReference, stable idempotencyKey and context `{dob,gender,heightCm,weightKg,posture,employeeId}`. Gender accepts male/female only; posture explicitly resting. Missing/unsupported demographics remain validation failures; no age cutoff is invented.
+
+Create atomically reserves usage and stores an encrypted context, pinned approved mapping (when explicitly present), and session before any provider I/O. Identical create replay returns the same session even when new scans are disabled. Different content conflicts. A database uniqueness constraint permits one active attempt per deployment/organization/assessment.
+
+`POST /v1/face-scans/:id/signal?organizationReference=...` takes RGB objects `{r,g,b}`, timing array, average_fps and optional deviceModel. SchemaVersion defaults to 1. Upload commits encrypted PostgreSQL signal storage before returning 202. Identical replays succeed; different signals conflict. GET at the session URL returns `{session,providerConfigured}` without signal or token. POST `/:id/cancel` cancels only before dispatch. All session operations require the authenticated deployment/client and organization query. Responses are non-cacheable.
+
+State is REQUESTED (ready for capture), UPLOAD_ACCEPTED, PAUSED, PROCESSING, COMPLETED, RECONCILIATION_REQUIRED, EXPIRED, CANCELLED or FAILED. Context and result accompany status. `score=null` means an explicit approved mapping was unavailable; provider wellness never inherits provisional defaults. When available, a separate score contains points, configuration and rule version; mapping evidence stores assignment ID and package checksum at acceptance. Questionnaire totals are untouched.
+
+Refinement from the original plan: create-token runs immediately before add-scan after durable upload, because capture does not consume the server token. This avoids assuming token validity during camera capture. Confirm sequencing with CarePlix before enabling.
+
+## Enablement and retention
+
+Apply migrations through `0016_bitter_bucky.sql` through normal Drizzle migrations first. Existing stub sessions have no workflow and cannot dispatch. Set server-only `FACE_SCAN_PROVIDER=careplix`, HTTPS CAREPLIX_API_BASE_URL, CAREPLIX_API_KEY, CAREPLIX_API_SECRET, CAREPLIX_ACCOUNT_REFERENCE (stable environment/account identity), and independent 64-hex FACE_SCAN_ENCRYPTION_KEY. Keep the encryption key while records exist; a key rotation migration is not implemented. Confirm vendor contracts before setting CAREPLIX_CONTRACT_CONFIRMED and FACE_SCAN_ENABLED true. Startup rejects incomplete enabled configuration without printing credentials.
+
+FACE_SCAN_RETENTION_HOURS defaults to 24, bounded 1–168. Confirm policy before capture. Successful results erase retained signal/token immediately; expired unsent attempts release NIQ reservation; ambiguous submitted work keeps accounting/correlation evidence and loses raw signal/token at retention expiry. Context and normalized results remain assessment evidence; their deletion follows the deployment's separate approved retention policy. A trusted completion marks NIQ usage billable consistently with existing quota reports. Vendor billing/refund and retention are not inferred from NIQ usage.
+
+Keep account/environment identity and encryption settings configured when disabling capture: authenticated retrieval, callbacks, cleanup and reconciliation remain active. Revoked API credentials still fail authentication. Credential rotation for the same identity does not change session ownership. Staging and production need distinct account identity, database/service configuration and callback credentials.
+
+## Worker and recovery
+
+The API service's supervised Bun process runs a non-overlapping worker every five seconds. A PostgreSQL lock limits each provider account to one PROCESSING job across replicas and enforces FACE_SCAN_MIN_DISPATCH_INTERVAL_MS (default 5 seconds) between dispatches globally for that account. Confirm this conservative limit with the vendor. Dispatch intent is committed before create-token, then separately before add-scan; stale dispatch is never automatically resent. Expired PROCESSING leases become RECONCILIATION_REQUIRED after five minutes. Any exception after dispatch remains unresolved with PENDING usage. Callback completion can settle it later. Entitlement and gate are checked at dispatch and again before add-scan.
+
+Monitor redacted `face_scan_worker_metrics` logs (backlog, oldest pending seconds, reconciliation required, invalid/conflicting receipts) and `face_scan_worker_error`. Configure alerts and supervision in deployment tooling. Investigate unresolved sessions using session ID/provider account/provider scan ID and vendor-supported lookup; no retry/reset endpoint is deliberately exposed while safe provider retry semantics remain unconfirmed. Do not manually reset dispatch_phase or create a fresh key to replay unknown work. A timed-out create-token without an ID requires vendor/account reconciliation.
+
+Limits are conservative NIQ resource bounds, pending SDK measurements/vendor approval: 2 MiB request bodies, 12,000 RGB samples, matching strictly increasing timing values, FPS ≤240; create bodies 16 KiB and callback/provider responses 1 MiB. Routes bound streamed reads before JSON parsing and time out inbound reads at 30 seconds. Set application and reverse proxy body/time limits consistently. Provider calls time out after 90 seconds. Tokens/signals/context are AES-256-GCM encrypted; raw request bodies/headers/provider messages are not logged.
+
+## Result and callback trust
+
+The adapter sends raw `Authorization: <secret>` plus body api_key, SDK RGB/timings unchanged, rounded FPS, WEB device enum, real demographics/operator and string height/weight. Device model is retained with capture, not substituted for the device enum. No telemetry call is currently sent; confirm its operational requirement before live staging. HTTP outcome, body statusCode and expected scan ID are validated. Known numeric string values normalize; null/absent/`--` remain null. Health-risk, wellness, physiological scalar and mental wellbeing stay distinct. Unsupported blocks, beta glucose and input echoes are withheld from clinical display. Provider completion time is preserved separately from NIQ receipt completion time.
+
+Callbacks stay closed unless FACE_SCAN_WEBHOOK_BEARER_CONFIRMED explicitly records agreed Bearer setup and FACE_SCAN_WEBHOOK_SECRET is configured. This is an available implementation, not a claim the vendor selected Bearer. Authenticate before parsing; body API keys never authenticate. Outer scan ID must match nested scan ID and event_key scan_completion. Unknown IDs get 404. Known but unprocessable authenticated events retain a hash and encrypted allowlisted result blocks for mapping repair, with credential-like keys recursively removed; full request bodies and headers are never retained. HTTP 200 only follows durable receipt. Storage failure returns 503. Semantically equal direct/callback results deduplicate even if timestamps or envelopes differ. Optional scoring failure preserves COMPLETED provider evidence with SCORE_MAPPING_UNAVAILABLE and null points. Conflicts retain allowlisted evidence and leave accepted results intact with RESULT_CONFLICT.
+
+## Validation and remaining rollout work
+
+Fake-transport tests cover documented auth/body shape, normalization, bounded parsing and gate validation. A disposable PostgreSQL database passed migrations and synthetic concurrency, scope, quota reservation, encrypted upload replay, restart, ambiguous token/submission, interrupted dispatch, pause, cancellation, duplicate/conflicting/invalid callbacks and pinned mapping checks. Use FACE_SCAN_DATABASE_TEST=1 with DATABASE_URL pointing only to a disposable database; approved rule fixtures intentionally remain immutable. No live-provider validation is implied.
+
+Before rollout: vendor token lifetime/recovery/charging, acceptance of delayed token creation and signal bounds, confirmed callback contract/auth and registration, deployed proxy limits, supervised worker alerts, performance/load tests, deployment licensing, supported ages/devices/demographics and a consented end-to-end staging capture remain open. There is no automated recovery lookup or blind provider retry. Callback error-event schema and provider telemetry must be finalized from vendor examples.

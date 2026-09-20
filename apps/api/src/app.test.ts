@@ -101,8 +101,8 @@ describe("scoring API", () => {
     expect(blocked.status).toBe(409);
     expect(await blocked.json()).toMatchObject({ reason: "CLIENT_DISABLED" });
     const face = await app.request("/v1/face-scans", jsonRequest({ clientId: client.id, assessmentReference: "test", idempotencyKey: "face-disabled" }, `Bearer ${credential}`));
-    expect(face.status).toBe(409);
-    expect(await face.json()).toMatchObject({ reason: "CLIENT_DISABLED" });
+    expect(face.status).toBe(503);
+    expect(await face.json()).toMatchObject({ error: "FACE_SCAN_DISABLED" });
     expect((await toggle(true)).status).toBe(200);
     expect((await app.request("/v1/provisional/calculate", jsonRequest(scoringInput(client.id), `Bearer ${credential}`))).status).toBe(200);
   });
@@ -215,14 +215,13 @@ describe("scoring API", () => {
     expect(store.usages).toHaveLength(1);
   });
 
-  test("enforces monthly quota and preserves face-scan stub state", async () => {
-    const { app, client, deployment, credential } = await onboard();
-    await app.request(`/admin/deployments/${deployment.id}/entitlement`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ capability: "FACE_SCAN", enabled: true, monthlyLimit: 1 }) });
-    const auth = `Bearer ${credential}`;
-    const first = await app.request("/v1/face-scans", jsonRequest({ clientId: client.id, assessmentReference: "assessment-1", idempotencyKey: "face-scan-0001" }, auth));
-    expect(first.status).toBe(202); expect(await first.json()).toMatchObject({ session: { state: "REQUESTED" }, providerConfigured: false });
-    const second = await app.request("/v1/face-scans", jsonRequest({ clientId: client.id, assessmentReference: "assessment-2", idempotencyKey: "face-scan-0002" }, auth));
-    expect(await second.json()).toEqual({ error: "FACE_SCAN_UNAVAILABLE", reason: "MONTHLY_LIMIT_REACHED" });
+  test("disabled face scan routes never create stub sessions or reserve usage", async () => {
+    const { app, client, credential, store } = await onboard();
+    const response = await app.request("/v1/face-scans", jsonRequest({ clientId: client.id, assessmentReference: "assessment-1", idempotencyKey: "face-scan-0001" }, `Bearer ${credential}`));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "FACE_SCAN_DISABLED" });
+    expect(store.faceScans).toHaveLength(0);
+    expect(store.usages).toHaveLength(0);
   });
 
   test("production cannot enable provisional scoring", async () => {
@@ -234,9 +233,9 @@ describe("scoring API", () => {
     const setupResult = await onboard();
     const app = createApp({ authStore: new MemoryAdminAuthStore(), store: setupResult.store, adminBootstrapToken: adminToken, allowedOrigins: [], region: "india", runtimeEnvironment: "test", provisionalScoringRequested: true, faceScanAdapter: new UnconfiguredCarePlixAdapter() });
     const response = await app.request("/v1/face-scans", jsonRequest({ clientId: setupResult.client.id, assessmentReference: "assessment-careplix", idempotencyKey: "face-scan-careplix" }, `Bearer ${setupResult.credential}`));
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(503);
     expect(setupResult.store.faceScans).toHaveLength(0);
-    expect(setupResult.store.usages.at(-1)?.outcome).toBe("FAILED");
+    expect(setupResult.store.usages).toHaveLength(0);
   });
 });
 
