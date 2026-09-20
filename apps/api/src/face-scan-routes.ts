@@ -59,6 +59,7 @@ export function installFaceScanRoutes(app: Hono, options: { workflow?: FaceScanW
     if (!parsed.success) throw new FaceScanError("INVALID_SIGNAL", 400);
     return workflow.upload(identity, c.req.param("id")!, organization(c), parsed.data);
   }, true));
+  app.post("/v1/face-scans/:id/score-retry", run((c, identity, workflow) => workflow.retryScore(identity, c.req.param("id")!, organization(c))));
   app.post("/v1/face-scans/:id/cancel", run((c, identity, workflow) => workflow.cancel(identity, c.req.param("id")!, organization(c))));
   app.post("/webhooks/careplix", async c => {
     c.header("cache-control", "no-store");

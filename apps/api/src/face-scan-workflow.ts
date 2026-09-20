@@ -95,6 +95,21 @@ export class FaceScanWorkflow {
    });
    return this.get(identity, id, organization);
  }
+ /** Local repair uses only the accepted result and pinned mapping; it never reserves or dispatches. */
+ async retryScore(identity: DeploymentIdentity, id: string, organization: string) {
+   await this.scoped(identity, id, organization);
+   const row = await this.sql.begin(async tx => {
+     const [stored] = await tx<Row[]>`select * from face_scan_workflows where session_id=${id} for update`;
+     if (!stored || stored.state !== "COMPLETED" || !stored.result || !stored.mapping) throw new FaceScanError("SCORING_RETRY_UNAVAILABLE");
+     if (stored.score) return stored;
+     let score: ReturnType<typeof calculateFaceScanScore>;
+     try { score = calculateFaceScanScore({ wellnessScore: stored.result.wellnessScore }, stored.mapping.configuration, stored.mapping.ruleVersionId); }
+     catch { throw new FaceScanError("SCORING_RETRY_UNAVAILABLE"); }
+     const [updated] = await tx<Row[]>`update face_scan_workflows set score=${tx.json(score)},failure_code=case when failure_code='SCORE_MAPPING_UNAVAILABLE' then null else failure_code end,updated_at=now() where session_id=${id} returning *`;
+     return updated!;
+   });
+   return this.envelope(row);
+ }
  /** Durable dispatch intent is never re-leased into another outbound call after a crash. */
  async tick(): Promise<void> {
    await this.sql.begin(async tx => {
@@ -156,7 +171,15 @@ export class FaceScanWorkflow {
      if (!row) throw new FaceScanError("UNKNOWN_PROVIDER_SCAN", 404);
      const disposition = !result ? "UNPROCESSABLE" : row.result ? semanticHash(row.result) === hash ? "DUPLICATE" : "CONFLICT" : "ACCEPTED";
      await tx`insert into face_scan_receipts(id,session_id,channel,payload_hash,normalized_result,disposition,receipt_ciphertext) values(${createEntityId()},${id},${channel},${hash},${tx.json(result)},${disposition},${receipt ? this.encrypt(receipt) : null}) on conflict(session_id,channel,payload_hash) do nothing`;
-     if (disposition === "DUPLICATE") return;
+     if (disposition === "DUPLICATE") {
+       // Replayed trusted evidence can repair only local scoring, using the original mapping.
+       if (!row.score && row.mapping && row.result) {
+         let score: ReturnType<typeof calculateFaceScanScore> | null = null;
+         try { score = calculateFaceScanScore({ wellnessScore: row.result.wellnessScore }, row.mapping.configuration, row.mapping.ruleVersionId); } catch { /* Leave the durable scoring failure available for explicit repair. */ }
+         if (score) await tx`update face_scan_workflows set score=${tx.json(score)},failure_code=case when failure_code='SCORE_MAPPING_UNAVAILABLE' then null else failure_code end,updated_at=now() where session_id=${id}`;
+       }
+       return;
+     }
      if (disposition !== "ACCEPTED") {
        await tx`update face_scan_workflows set state=case when result is null then 'RECONCILIATION_REQUIRED' else state end,failure_code=${disposition === "CONFLICT" ? "RESULT_CONFLICT" : "INVALID_PROVIDER_RESULT"},updated_at=now() where session_id=${id}`;
        return;
