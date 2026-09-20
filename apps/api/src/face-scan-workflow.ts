@@ -4,6 +4,7 @@ import type { FaceScanCreate, FaceScanContext, FaceScanSignal, FaceScanResult, F
 import { faceScanScoringConfigSchema, type FaceScanScoringConfig } from "@niq-scoring/contracts/face-scan-scoring";
 import { calculateFaceScanScore } from "@niq-scoring/scoring-engine/face-scan-scoring";
 import { encryptActivationToken, decryptActivationToken } from "./lib/activation-secret";
+import { ruleChecksum } from "./rule-routes";
 import { createEntityId } from "./lib/id";
 import type { DeploymentIdentity } from "./store";
 import type { CarePlixProvider } from "./careplix-provider";
@@ -20,7 +21,7 @@ type Row = {
 };
 export class FaceScanError extends Error { constructor(public code: string, public status: 400 | 403 | 404 | 408 | 409 | 413 | 503 = 409) { super(code); } }
 export const faceScanHash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
-const semanticHash = (result: FaceScanResult) => { const { providerCompletedAt: _timestamp, ...fields } = result; return faceScanHash(fields); };
+const semanticHash = (result: FaceScanResult) => { const { providerCompletedAt: _timestamp, ...fields } = result; return ruleChecksum(fields); };
 export class FaceScanWorkflow {
  constructor(private sql: Database, private options: { enabled: () => boolean; encryptionKey: string; providerAccount: string; retentionHours: number; minDispatchIntervalMs?: number; provider: CarePlixProvider }) {}
  private encrypt(value: unknown) { return encryptActivationToken(JSON.stringify(value), this.options.encryptionKey); }
