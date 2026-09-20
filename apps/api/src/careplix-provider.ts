@@ -1,9 +1,14 @@
 import type { FaceScanContext, FaceScanResult, FaceScanSignal } from "@niq-scoring/contracts/face-scan-session";
 import { z } from "zod";
+import { allowlistedFaceScanReceipt } from "./face-scan-receipt";
 
 const record = z.record(z.string(), z.unknown());
 const scanId = z.string().min(1).max(160);
 export class CarePlixResponseError extends Error { constructor() { super("PROVIDER_OUTCOME_UNCONFIRMED"); } }
+/** Only a successful, correlated HTTP response can become repair evidence. */
+export class CarePlixUnprocessableResultError extends CarePlixResponseError {
+  constructor(readonly receipt: unknown) { super(); }
+}
 function numberOrNull(value: unknown, maximum = Number.MAX_SAFE_INTEGER): number | null {
   if (value === undefined || value === null || value === "--" || value === "") return null;
   const number = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
@@ -56,6 +61,8 @@ export class HttpCarePlixProvider implements CarePlixProvider {
       scan_token: token, employee_id: context.employeeId, dob: context.dob, gender: context.gender === "male" ? "Male" : "Female", posture: context.posture,
       metadata: { physiological_scores: { height: String(context.heightCm), weight: String(context.weightKg) }, ppg_time: signal.ppg_time, raw_intensity: signal.raw_intensity, device: "RPPG_CAREPLIX_FACE_WEB", fps: Math.round(signal.average_fps) },
     });
-    return normalizeCarePlixResult(data, expectedId);
+    if (scanId.parse(data.scan_id) !== expectedId) throw new CarePlixResponseError();
+    try { return normalizeCarePlixResult(data, expectedId); }
+    catch { throw new CarePlixUnprocessableResultError(allowlistedFaceScanReceipt({ scan_id: expectedId, event_data: data })); }
   }
 }

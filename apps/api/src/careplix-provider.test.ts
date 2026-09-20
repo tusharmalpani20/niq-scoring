@@ -31,3 +31,23 @@ test("contracts reject shape mismatches, invalid dates and nonmonotonic signal",
   expect(faceScanSignalSchema.safeParse({ ...signal, average_fps: NaN }).success).toBe(false);
   expect(faceScanCreateSchema.safeParse({ clientId: "c", assessmentReference: "a", organizationReference: "o", idempotencyKey: "k", context: { ...context, dob: "1990-02-31" } }).success).toBe(false);
 });
+
+test("unsupported successful direct responses retain sanitized repair evidence only for the expected scan", async () => {
+  const { CarePlixUnprocessableResultError } = await import("./careplix-provider");
+  let response = { ...body, wellness_score: "unsupported-format", api_key: "secret-value", metadata: { physiological_score: "unsupported", raw_intensity: [1, 2, 3], arbitrary: "unapproved" } };
+  const provider = new HttpCarePlixProvider({ baseUrl: "https://example.invalid", apiKey: "key", apiSecret: "secret" }, (async (_url: URL | RequestInfo, _init?: RequestInit) => Response.json(response)) as typeof fetch);
+  try {
+    await provider.submit(context, signal, "token", "scan-1");
+    throw new Error("Expected an unprocessable direct result");
+  } catch (error) {
+    expect(error).toBeInstanceOf(CarePlixUnprocessableResultError);
+    const retained = JSON.stringify((error as InstanceType<typeof CarePlixUnprocessableResultError>).receipt);
+    expect(retained).toContain("unsupported-format");
+    expect(retained).not.toContain("secret-value");
+    expect(retained).not.toContain("raw_intensity");
+    expect(retained).not.toContain("unapproved");
+  }
+  response = { ...response, scan_id: "another-scan" };
+  try { await provider.submit(context, signal, "token", "scan-1"); }
+  catch (error) { expect(error).not.toBeInstanceOf(CarePlixUnprocessableResultError); }
+});

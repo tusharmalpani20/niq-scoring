@@ -8,7 +8,8 @@ import { ruleChecksum } from "./rule-routes";
 import { createEntityId } from "./lib/id";
 import type { DeploymentIdentity } from "./store";
 import type { CarePlixProvider } from "./careplix-provider";
-import { normalizeCarePlixResult } from "./careplix-provider";
+import { allowlistedFaceScanReceipt } from "./face-scan-receipt";
+import { CarePlixUnprocessableResultError, normalizeCarePlixResult } from "./careplix-provider";
 
 type Database = ReturnType<typeof postgres>;
 type Mapping = { ruleVersionId: string; checksum: string; assignmentId: string; configuration: FaceScanScoringConfig };
@@ -42,13 +43,13 @@ export class FaceScanWorkflow {
    if (input.clientId !== identity.clientId) throw new FaceScanError("CLIENT_NOT_ALLOWED", 403);
    const fingerprint = faceScanHash(input);
    const row = await this.sql.begin(async tx => {
-     // Same lock as generic reservations: shared FACE_SCAN quota remains atomic across versions.
+     // Serialize this workflow's keys; the entitlement row lock below also coordinates legacy quota reservations.
      await tx`select pg_advisory_xact_lock(hashtext(${`${identity.deploymentId}:FACE_SCAN`}))`;
      const [old] = await tx<Row[]>`select w.* from face_scan_workflows w join face_scan_sessions s on s.id=w.session_id where s.deployment_id=${identity.deploymentId} and s.idempotency_key=${input.idempotencyKey}`;
      if (old) { if (old.request_fingerprint !== fingerprint) throw new FaceScanError("IDEMPOTENCY_CONFLICT"); return old; }
      if (!this.options.enabled()) throw new FaceScanError("FACE_SCAN_DISABLED", 503);
      const [entitlement] = await tx<{ monthly_limit: number | null }[]>`select e.monthly_limit from entitlements e join deployments d on d.id=e.deployment_id join clients c on c.id=d.client_id
-       where d.id=${identity.deploymentId} and c.id=${identity.clientId} and c.enabled and d.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now()) order by e.effective_from desc limit 1`;
+       where d.id=${identity.deploymentId} and c.id=${identity.clientId} and c.enabled and d.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now()) order by e.effective_from desc limit 1 for update of e`;
      if (!entitlement) throw new FaceScanError("CAPABILITY_DISABLED", 403);
      const [active] = await tx`select session_id from face_scan_workflows where deployment_id=${identity.deploymentId} and organization_reference=${input.organizationReference} and assessment_reference=${input.assessmentReference} and state in ('REQUESTED','UPLOAD_ACCEPTED','PROCESSING','RECONCILIATION_REQUIRED','PAUSED')`;
      if (active) throw new FaceScanError("ACTIVE_FACE_SCAN_EXISTS");
@@ -97,14 +98,14 @@ export class FaceScanWorkflow {
  /** Durable dispatch intent is never re-leased into another outbound call after a crash. */
  async tick(): Promise<void> {
    await this.sql.begin(async tx => {
-     await tx`update face_scan_workflows set state='RECONCILIATION_REQUIRED',failure_code='DISPATCH_INTERRUPTED',updated_at=now() where state='PROCESSING' and dispatch_started_at<now()-interval '5 minutes'`;
-     const expired = await tx<{ usage_id: string }[]>`update face_scan_workflows set state='EXPIRED',signal_ciphertext=null,token_ciphertext=null,updated_at=now() where state in ('REQUESTED','UPLOAD_ACCEPTED','PAUSED') and capture_expires_at<=now() and dispatch_phase is null returning usage_id`;
+     await tx`update face_scan_workflows set state='RECONCILIATION_REQUIRED',failure_code='DISPATCH_INTERRUPTED',updated_at=now() where provider_account=${this.options.providerAccount} and state='PROCESSING' and dispatch_started_at<now()-interval '5 minutes'`;
+     const expired = await tx<{ usage_id: string }[]>`update face_scan_workflows set state='EXPIRED',signal_ciphertext=null,token_ciphertext=null,updated_at=now() where provider_account=${this.options.providerAccount} and state in ('REQUESTED','UPLOAD_ACCEPTED','PAUSED') and capture_expires_at<=now() and dispatch_phase is null returning usage_id`;
      for (const row of expired) await tx`update usage_events set outcome='FAILED',completed_at=now() where id=${row.usage_id}`;
      // Submitted uncertainty retains correlation and accounting evidence, but not raw signals forever.
-     await tx`update face_scan_workflows set signal_ciphertext=null,token_ciphertext=null where capture_expires_at<=now()`;
+     await tx`update face_scan_workflows set signal_ciphertext=null,token_ciphertext=null where provider_account=${this.options.providerAccount} and capture_expires_at<=now() and (signal_ciphertext is not null or token_ciphertext is not null)`;
    });
    if (!this.options.enabled()) {
-     await this.sql`update face_scan_workflows set state='PAUSED',failure_code='FACE_SCAN_DISABLED',updated_at=now() where state='UPLOAD_ACCEPTED'`;
+     await this.sql`update face_scan_workflows set state='PAUSED',failure_code='FACE_SCAN_DISABLED',updated_at=now() where provider_account=${this.options.providerAccount} and state='UPLOAD_ACCEPTED'`;
      return;
    }
    const fence = crypto.randomUUID();
@@ -117,7 +118,7 @@ export class FaceScanWorkflow {
      await tx`update face_scan_workflows w set state='PAUSED',failure_code='CAPABILITY_DISABLED',updated_at=now()
        where w.provider_account=${this.options.providerAccount} and w.state='UPLOAD_ACCEPTED' and not exists(
          select 1 from entitlements e join deployments d on d.id=e.deployment_id join clients c on c.id=d.client_id where d.id=w.deployment_id and d.enabled and c.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now()))`;
-     const [candidate] = await tx<Row[]>`select w.* from face_scan_workflows w where w.provider_account=${this.options.providerAccount} and w.state in ('UPLOAD_ACCEPTED','PAUSED') and w.dispatch_phase is null and w.signal_ciphertext is not null and exists(select 1 from entitlements e join deployments d on d.id=e.deployment_id join clients c on c.id=d.client_id where d.id=w.deployment_id and d.enabled and c.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now())) order by w.created_at for update skip locked limit 1`;
+     const [candidate] = await tx<Row[]>`select w.* from face_scan_workflows w where w.provider_account=${this.options.providerAccount} and w.state in ('UPLOAD_ACCEPTED','PAUSED') and w.dispatch_phase is null and w.signal_ciphertext is not null and w.capture_expires_at>clock_timestamp() and exists(select 1 from entitlements e join deployments d on d.id=e.deployment_id join clients c on c.id=d.client_id where d.id=w.deployment_id and d.enabled and c.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now())) order by w.created_at for update skip locked limit 1`;
      if (!candidate) return null;
      const [allowed] = await tx`select e.id from entitlements e join deployments d on d.id=e.deployment_id join clients c on c.id=d.client_id where d.id=${candidate.deployment_id} and d.enabled and c.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now())`;
      if (!allowed) { await tx`update face_scan_workflows set state='PAUSED',failure_code='CAPABILITY_DISABLED',updated_at=now() where session_id=${candidate.session_id}`; return null; }
@@ -128,17 +129,22 @@ export class FaceScanWorkflow {
    try {
      const context = this.decrypt<FaceScanContext>(row.context_ciphertext);
      const token = await this.options.provider.createToken(context);
-     const saved = await this.sql`update face_scan_workflows set provider_scan_id=${token.scanId},token_ciphertext=${this.encrypt(token.token)},updated_at=now() where session_id=${row.session_id} and fence=${fence} and state='PROCESSING' returning session_id`;
+     const saved = await this.sql`update face_scan_workflows set provider_scan_id=${token.scanId},token_ciphertext=case when capture_expires_at>clock_timestamp() then ${this.encrypt(token.token)} else null end,updated_at=now() where session_id=${row.session_id} and fence=${fence} and state in ('PROCESSING','RECONCILIATION_REQUIRED') returning session_id`;
      if (!saved.length) return;
      // Stop between token and submission if the gate changed. No automatic token recreation.
      if (!this.options.enabled()) throw new FaceScanError("DISPATCH_PAUSED_AFTER_TOKEN");
-     const [stillAllowed] = await this.sql`select e.id from entitlements e join deployments d on d.id=e.deployment_id join clients c on c.id=d.client_id where d.id=${row.deployment_id} and d.enabled and c.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now())`;
-     if (!stillAllowed) throw new FaceScanError("CAPABILITY_DISABLED_AFTER_TOKEN");
-     const submitted = await this.sql`update face_scan_workflows set dispatch_phase='SUBMIT',dispatch_started_at=now() where session_id=${row.session_id} and fence=${fence} and state='PROCESSING' returning session_id`;
-     if (!submitted.length) return;
+     const submitted = await this.sql`update face_scan_workflows w set dispatch_phase='SUBMIT',dispatch_started_at=now()
+       where w.session_id=${row.session_id} and w.fence=${fence} and w.state='PROCESSING'
+         and w.signal_ciphertext is not null and w.capture_expires_at>clock_timestamp()
+         and exists(select 1 from entitlements e join deployments d on d.id=e.deployment_id join clients c on c.id=d.client_id
+           where d.id=w.deployment_id and d.enabled and c.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now()))
+       returning session_id`;
+     if (!submitted.length) throw new FaceScanError("SUBMISSION_NO_LONGER_ALLOWED");
+     if (!this.options.enabled()) throw new FaceScanError("DISPATCH_PAUSED_AFTER_TOKEN");
      const result = await this.options.provider.submit(context, this.decrypt<FaceScanSignal>(row.signal_ciphertext!), token.token, token.scanId);
      await this.receive(row.session_id, "DIRECT", result);
-   } catch {
+   } catch (error) {
+     if (error instanceof CarePlixUnprocessableResultError) await this.receive(row.session_id, "DIRECT", null, faceScanHash(error.receipt), error.receipt);
      // Every post-dispatch exception is conservatively ambiguous, including malformed HTTP responses.
      await this.sql`update face_scan_workflows set state='RECONCILIATION_REQUIRED',failure_code='PROVIDER_OUTCOME_UNCONFIRMED',updated_at=now() where session_id=${row.session_id} and fence=${fence} and state='PROCESSING'`;
    }
@@ -167,9 +173,9 @@ export class FaceScanWorkflow {
  async metrics() {
    const [counts] = await this.sql`select count(*) filter(where state in ('UPLOAD_ACCEPTED','PAUSED'))::integer as backlog,
      count(*) filter(where state='RECONCILIATION_REQUIRED')::integer as reconciliation_required,
-     coalesce(extract(epoch from now()-min(created_at) filter(where state in ('UPLOAD_ACCEPTED','PAUSED'))),0)::integer as oldest_pending_seconds from face_scan_workflows`;
+     coalesce(extract(epoch from now()-min(created_at) filter(where state in ('UPLOAD_ACCEPTED','PAUSED'))),0)::integer as oldest_pending_seconds from face_scan_workflows where provider_account=${this.options.providerAccount}`;
    const [receipts] = await this.sql`select count(*) filter(where disposition='UNPROCESSABLE')::integer as invalid_receipts,
-     count(*) filter(where disposition='CONFLICT')::integer as conflicting_receipts from face_scan_receipts`;
+     count(*) filter(where disposition='CONFLICT')::integer as conflicting_receipts from face_scan_receipts r join face_scan_workflows w on w.session_id=r.session_id where w.provider_account=${this.options.providerAccount}`;
    return { ...counts, ...receipts };
  }
  async webhook(body: unknown) {
@@ -182,20 +188,6 @@ export class FaceScanWorkflow {
      if (!event || typeof event !== "object" || !("event_key" in event) || event.event_key !== "scan_completion") throw new Error("INVALID_EVENT");
      result = normalizeCarePlixResult({ ...event, scan_completion_time: (event as Record<string, unknown>).scan_completion_time ?? (body as Record<string, unknown>).scan_completion_time }, row.provider_scan_id!);
    } catch { /* Persist an allowlisted receipt hash; no API keys or raw body retention. */ }
-   await this.receive(row.session_id, "WEBHOOK", result, result ? undefined : faceScanHash(body), allowlistedReceipt(body));
+   await this.receive(row.session_id, "WEBHOOK", result, result ? undefined : faceScanHash(body), allowlistedFaceScanReceipt(body));
  }
-}
-
-/** Preserve known provider result blocks for repair, removing secrets recursively before encryption. */
-function allowlistedReceipt(body: object): unknown {
-  const source = body as Record<string, unknown>;
-  const event = source.event_data && typeof source.event_data === "object" ? source.event_data as Record<string, unknown> : {};
-  const keys = ["scan_id", "event_key", "scan_completion_time", "wellness_score", "health_risk_score", "vitals", "metadata", "posture"];
-  const clean = (value: unknown): unknown => {
-    if (Array.isArray(value)) return value.map(clean);
-    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([key]) => !/api.?key|secret|token|authorization|password/i.test(key)).map(([key, entry]) => [key, clean(entry)]));
-    return value;
-  };
-  return { scan_id: source.scan_id, scan_completion_time: source.scan_completion_time ?? null,
-    event_data: Object.fromEntries(keys.filter(key => key in event).map(key => [key, clean(event[key])])) };
 }
