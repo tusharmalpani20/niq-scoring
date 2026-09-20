@@ -1,0 +1,1 @@
+ALTER TABLE "face_scan_receipts" ADD COLUMN "receipt_ciphertext" text;

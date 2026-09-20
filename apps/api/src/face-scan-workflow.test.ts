@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import postgres from "postgres";
 import { FaceScanWorkflow } from "./face-scan-workflow";
+import { decryptActivationToken } from "./lib/activation-secret";
 import { createEntityId } from "./lib/id";
 import { faceScanCreateSchema, faceScanSignalSchema } from "@niq-scoring/contracts/face-scan-session";
 import { normalizeCarePlixResult } from "./careplix-provider";
@@ -15,7 +16,7 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
     async createToken() { tokenCalls++; if (mode === "token-timeout") throw new Error("timeout"); return { scanId: `synthetic-${tokenCalls}`, token: "secret-token" }; },
     async submit(_context, _signal, _token, id) { submitCalls++; if (mode === "submit-timeout") throw new Error("timeout"); return normalizeCarePlixResult({ scan_id: id, wellness_score: 78, vitals: { heart_rate: 70 } }, id); },
   };
-  const options = { enabled: () => enabled, provider, encryptionKey: "a".repeat(64), providerAccount: "synthetic:staging", retentionHours: 24 };
+  const options = { enabled: () => enabled, provider, encryptionKey: "a".repeat(64), providerAccount: "synthetic:staging", retentionHours: 24, minDispatchIntervalMs: 0 };
   let workflow = new FaceScanWorkflow(db, options);
   const identity = { clientId, deploymentId, credentialId };
   const input = (key: string) => faceScanCreateSchema.parse({ clientId, organizationReference: "organization-a", assessmentReference: key, idempotencyKey: key, context: { dob: "1990-01-01", gender: "female", heightCm: 170, weightKg: 70, posture: "resting", employeeId: `${deploymentId}:operator` } });
@@ -79,6 +80,17 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
     await workflow.webhook({ scan_id: `synthetic-${tokenCalls}`, event_data: { scan_id: "wrong", event_key: "scan_completion" } });
     expect((await workflow.get(identity, pinned.session.id, "organization-a")).session.state).toBe("COMPLETED");
     await expect(workflow.webhook({ scan_id: "unknown", event_data: {} })).rejects.toThrow("UNKNOWN_PROVIDER_SCAN");
+    const invalidMapping = await workflow.create(identity, input("mapping-failure"));
+    await db`update face_scan_workflows set mapping=${db.json({ ruleVersionId: ruleId, configuration: { bad: true } })} where session_id=${invalidMapping.session.id}`;
+    await workflow.upload(identity, invalidMapping.session.id, "organization-a", signal);
+    await workflow.tick();
+    expect((await workflow.get(identity, invalidMapping.session.id, "organization-a")).session).toMatchObject({ state: "COMPLETED", failureCode: "SCORE_MAPPING_UNAVAILABLE", score: null });
+    const [billable] = await db`select u.billable from usage_events u join face_scan_workflows w on w.usage_id=u.id where w.session_id=${invalidMapping.session.id}`;
+    expect(billable?.billable).toBe(true);
+    await workflow.webhook({ scan_id: `synthetic-${tokenCalls}`, api_key: "outer-secret", event_data: { scan_id: "wrong", event_key: "scan_completion", metadata: { api_key: "inner-secret", physiological_score: "bad" } } });
+    const [receipt] = await db`select receipt_ciphertext from face_scan_receipts where session_id=${invalidMapping.session.id} and disposition='UNPROCESSABLE'`;
+    const retained = decryptActivationToken(receipt!.receipt_ciphertext, options.encryptionKey);
+    expect(retained).toContain('physiological_score'); expect(retained).not.toContain('secret');
     const cancelled = await workflow.create(identity, input("cancelled"));
     await workflow.cancel(identity, cancelled.session.id, "organization-a");
     await expect(workflow.upload(identity, cancelled.session.id, "organization-a", signal)).rejects.toThrow("CAPTURE_NOT_ALLOWED");
@@ -100,4 +112,36 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
     await db`delete from clients where id=${clientId}`;
     await db.end();
   }
+});
+
+test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("a disabled tenant cannot starve other deployments in the provider queue", async () => {
+  const db = postgres(process.env.DATABASE_URL!, { max: 1 });
+  const rollback = new Error("synthetic rollback");
+  try {
+    await db.begin(async tx => {
+      const scoped = new Proxy(tx, { get(target, key) { return key === "begin" ? (fn: (sql: typeof tx) => Promise<unknown>) => tx.savepoint(fn) : Reflect.get(target, key); } }) as unknown as ReturnType<typeof postgres>;
+      const clientId = createEntityId();
+      await tx`insert into clients(id,name) values(${clientId},${`Queue fixture ${clientId}`})`;
+      const workflow = new FaceScanWorkflow(scoped, { enabled: () => true, encryptionKey: "a".repeat(64), providerAccount: "queue:test", retentionHours: 24, minDispatchIntervalMs: 0,
+        provider: { async createToken() { return { scanId: "queue-result", token: "synthetic" }; }, async submit(_context, _signal, _token, id) { return normalizeCarePlixResult({ scan_id: id, wellness_score: 75, vitals: {} }, id); } } });
+      const fixtures = [];
+      for (const label of ["blocked", "eligible"]) {
+        const deploymentId = createEntityId(), credentialId = createEntityId();
+        await tx`insert into deployments(id,client_id,name,environment) values(${deploymentId},${clientId},${label},'test')`;
+        await tx`insert into deployment_credentials(id,deployment_id,key_prefix,secret_hash) values(${credentialId},${deploymentId},${credentialId.slice(0,20)},${"b".repeat(64)})`;
+        await tx`insert into entitlements(id,deployment_id,capability,enabled) values(${createEntityId()},${deploymentId},'FACE_SCAN',true)`;
+        const identity = { clientId, deploymentId, credentialId };
+        const input = faceScanCreateSchema.parse({ clientId, organizationReference: "same-org-reference", assessmentReference: "same-assessment-reference", idempotencyKey: "same-key", context: { dob: "1990-01-01", gender: "male", heightCm: 180, weightKg: 80, posture: "resting", employeeId: label } });
+        const session = await workflow.create(identity, input);
+        await workflow.upload(identity, session.session.id, input.organizationReference, signal);
+        fixtures.push({ identity, id: session.session.id, organization: input.organizationReference });
+      }
+      await tx`update deployments set enabled=false where id=${fixtures[0]!.identity.deploymentId}`;
+      await workflow.tick();
+      expect((await workflow.get(fixtures[0]!.identity, fixtures[0]!.id, fixtures[0]!.organization)).session.state).toBe("PAUSED");
+      expect((await workflow.get(fixtures[1]!.identity, fixtures[1]!.id, fixtures[1]!.organization)).session.state).toBe("COMPLETED");
+      throw rollback;
+    });
+  } catch (error) { if (error !== rollback) throw error; }
+  finally { await db.end(); }
 });

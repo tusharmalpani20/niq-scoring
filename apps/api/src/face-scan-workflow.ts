@@ -20,8 +20,9 @@ type Row = {
 };
 export class FaceScanError extends Error { constructor(public code: string, public status: 400 | 403 | 404 | 409 | 413 | 503 = 409) { super(code); } }
 export const faceScanHash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+const semanticHash = (result: FaceScanResult) => { const { providerCompletedAt: _timestamp, ...fields } = result; return faceScanHash(fields); };
 export class FaceScanWorkflow {
- constructor(private sql: Database, private options: { enabled: () => boolean; encryptionKey: string; providerAccount: string; retentionHours: number; provider: CarePlixProvider }) {}
+ constructor(private sql: Database, private options: { enabled: () => boolean; encryptionKey: string; providerAccount: string; retentionHours: number; minDispatchIntervalMs?: number; provider: CarePlixProvider }) {}
  private encrypt(value: unknown) { return encryptActivationToken(JSON.stringify(value), this.options.encryptionKey); }
  private decrypt<T>(value: string): T { return JSON.parse(decryptActivationToken(value, this.options.encryptionKey)) as T; }
  private envelope(row: Row) {
@@ -50,7 +51,7 @@ export class FaceScanWorkflow {
      if (!entitlement) throw new FaceScanError("CAPABILITY_DISABLED", 403);
      const [active] = await tx`select session_id from face_scan_workflows where deployment_id=${identity.deploymentId} and organization_reference=${input.organizationReference} and assessment_reference=${input.assessmentReference} and state in ('REQUESTED','UPLOAD_ACCEPTED','PROCESSING','RECONCILIATION_REQUIRED','PAUSED')`;
      if (active) throw new FaceScanError("ACTIVE_FACE_SCAN_EXISTS");
-     const [usage] = await tx<{ count: number }[]>`select count(*)::integer as count from usage_events where deployment_id=${identity.deploymentId} and capability='FACE_SCAN' and outcome in ('PENDING','SUCCEEDED') and occurred_at>=date_trunc('month',now())`;
+     const [usage] = await tx<{ count: number }[]>`select count(*)::integer as count from usage_events where deployment_id=${identity.deploymentId} and capability='FACE_SCAN' and outcome in ('PENDING','SUCCEEDED') and occurred_at>=date_trunc('month',now() at time zone 'UTC') at time zone 'UTC'`;
      if (entitlement.monthly_limit !== null && (usage?.count ?? 0) >= entitlement.monthly_limit) throw new FaceScanError("MONTHLY_LIMIT_REACHED");
      // Only an explicit approved mapping qualifies. Missing mappings never inherit a provisional default.
      const [rule] = await tx<{ id: string; package_checksum: string; assignment_id: string; configuration: unknown }[]>`select r.id,r.package_checksum,a.id as assignment_id,r.definition->'faceScanScoring' as configuration
@@ -110,7 +111,12 @@ export class FaceScanWorkflow {
      await tx`select pg_advisory_xact_lock(hashtext(${`face-scan-dispatch:${this.options.providerAccount}`}))`;
      const [busy] = await tx`select session_id from face_scan_workflows where provider_account=${this.options.providerAccount} and state='PROCESSING' limit 1`;
      if (busy) return null;
-     const [candidate] = await tx<Row[]>`select w.* from face_scan_workflows w where w.provider_account=${this.options.providerAccount} and w.state in ('UPLOAD_ACCEPTED','PAUSED') and w.dispatch_phase is null and w.signal_ciphertext is not null order by w.created_at for update skip locked limit 1`;
+     const [rateLimited] = await tx`select session_id from face_scan_workflows where provider_account=${this.options.providerAccount} and dispatch_started_at>now()-${this.options.minDispatchIntervalMs ?? 5000}*interval '1 millisecond' limit 1`;
+     if (rateLimited) return null;
+     await tx`update face_scan_workflows w set state='PAUSED',failure_code='CAPABILITY_DISABLED',updated_at=now()
+       where w.provider_account=${this.options.providerAccount} and w.state='UPLOAD_ACCEPTED' and not exists(
+         select 1 from entitlements e join deployments d on d.id=e.deployment_id join clients c on c.id=d.client_id where d.id=w.deployment_id and d.enabled and c.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now()))`;
+     const [candidate] = await tx<Row[]>`select w.* from face_scan_workflows w where w.provider_account=${this.options.providerAccount} and w.state in ('UPLOAD_ACCEPTED','PAUSED') and w.dispatch_phase is null and w.signal_ciphertext is not null and exists(select 1 from entitlements e join deployments d on d.id=e.deployment_id join clients c on c.id=d.client_id where d.id=w.deployment_id and d.enabled and c.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now())) order by w.created_at for update skip locked limit 1`;
      if (!candidate) return null;
      const [allowed] = await tx`select e.id from entitlements e join deployments d on d.id=e.deployment_id join clients c on c.id=d.client_id where d.id=${candidate.deployment_id} and d.enabled and c.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now())`;
      if (!allowed) { await tx`update face_scan_workflows set state='PAUSED',failure_code='CAPABILITY_DISABLED',updated_at=now() where session_id=${candidate.session_id}`; return null; }
@@ -136,23 +142,34 @@ export class FaceScanWorkflow {
      await this.sql`update face_scan_workflows set state='RECONCILIATION_REQUIRED',failure_code='PROVIDER_OUTCOME_UNCONFIRMED',updated_at=now() where session_id=${row.session_id} and fence=${fence} and state='PROCESSING'`;
    }
  }
- async receive(id: string, channel: "DIRECT" | "WEBHOOK", result: FaceScanResult | null, invalidHash?: string) {
-   const hash = invalidHash ?? faceScanHash(result);
+ async receive(id: string, channel: "DIRECT" | "WEBHOOK", result: FaceScanResult | null, invalidHash?: string, receipt?: unknown) {
+   const hash = invalidHash ?? (result ? semanticHash(result) : faceScanHash(null));
    await this.sql.begin(async tx => {
      const [row] = await tx<Row[]>`select * from face_scan_workflows where session_id=${id} for update`;
      if (!row) throw new FaceScanError("UNKNOWN_PROVIDER_SCAN", 404);
-     const disposition = !result ? "UNPROCESSABLE" : row.result ? faceScanHash(row.result) === hash ? "DUPLICATE" : "CONFLICT" : "ACCEPTED";
-     await tx`insert into face_scan_receipts(id,session_id,channel,payload_hash,normalized_result,disposition) values(${createEntityId()},${id},${channel},${hash},${tx.json(result)},${disposition}) on conflict(session_id,channel,payload_hash) do nothing`;
+     const disposition = !result ? "UNPROCESSABLE" : row.result ? semanticHash(row.result) === hash ? "DUPLICATE" : "CONFLICT" : "ACCEPTED";
+     await tx`insert into face_scan_receipts(id,session_id,channel,payload_hash,normalized_result,disposition,receipt_ciphertext) values(${createEntityId()},${id},${channel},${hash},${tx.json(result)},${disposition},${receipt ? this.encrypt(receipt) : null}) on conflict(session_id,channel,payload_hash) do nothing`;
      if (disposition === "DUPLICATE") return;
      if (disposition !== "ACCEPTED") {
        await tx`update face_scan_workflows set state=case when result is null then 'RECONCILIATION_REQUIRED' else state end,failure_code=${disposition === "CONFLICT" ? "RESULT_CONFLICT" : "INVALID_PROVIDER_RESULT"},updated_at=now() where session_id=${id}`;
        return;
      }
-     const score = row.mapping ? calculateFaceScanScore({ wellnessScore: result!.wellnessScore }, row.mapping.configuration, row.mapping.ruleVersionId) : null;
-     await tx`update face_scan_workflows set state='COMPLETED',result=${tx.json(result)},score=${tx.json(score)},signal_ciphertext=null,token_ciphertext=null,completed_at=now(),updated_at=now(),failure_code=null where session_id=${id}`;
+     let score: ReturnType<typeof calculateFaceScanScore> | null = null;
+     let scoringFailure: string | null = null;
+     try { if (row.mapping) score = calculateFaceScanScore({ wellnessScore: result!.wellnessScore }, row.mapping.configuration, row.mapping.ruleVersionId); }
+     catch { scoringFailure = "SCORE_MAPPING_UNAVAILABLE"; } // Trusted provider evidence must survive optional scoring failure.
+     await tx`update face_scan_workflows set state='COMPLETED',result=${tx.json(result)},score=${tx.json(score)},signal_ciphertext=null,token_ciphertext=null,completed_at=now(),updated_at=now(),failure_code=${scoringFailure} where session_id=${id}`;
      await tx`update face_scan_sessions set state='COMPLETED',provider_session_reference=${row.provider_scan_id},completed_at=now(),updated_at=now() where id=${id}`;
-     await tx`update usage_events set outcome='SUCCEEDED',completed_at=now() where id=${row.usage_id}`;
+     await tx`update usage_events set outcome='SUCCEEDED',billable=true,completed_at=now() where id=${row.usage_id}`;
    });
+ }
+ async metrics() {
+   const [counts] = await this.sql`select count(*) filter(where state in ('UPLOAD_ACCEPTED','PAUSED'))::integer as backlog,
+     count(*) filter(where state='RECONCILIATION_REQUIRED')::integer as reconciliation_required,
+     coalesce(extract(epoch from now()-min(created_at) filter(where state in ('UPLOAD_ACCEPTED','PAUSED'))),0)::integer as oldest_pending_seconds from face_scan_workflows`;
+   const [receipts] = await this.sql`select count(*) filter(where disposition='UNPROCESSABLE')::integer as invalid_receipts,
+     count(*) filter(where disposition='CONFLICT')::integer as conflicting_receipts from face_scan_receipts`;
+   return { ...counts, ...receipts };
  }
  async webhook(body: unknown) {
    if (!body || typeof body !== "object" || !("scan_id" in body) || typeof body.scan_id !== "string") throw new FaceScanError("INVALID_WEBHOOK", 400);
@@ -162,8 +179,22 @@ export class FaceScanWorkflow {
    try {
      const event = (body as Record<string, unknown>).event_data;
      if (!event || typeof event !== "object" || !("event_key" in event) || event.event_key !== "scan_completion") throw new Error("INVALID_EVENT");
-     result = normalizeCarePlixResult(event, row.provider_scan_id!);
+     result = normalizeCarePlixResult({ ...event, scan_completion_time: (event as Record<string, unknown>).scan_completion_time ?? (body as Record<string, unknown>).scan_completion_time }, row.provider_scan_id!);
    } catch { /* Persist an allowlisted receipt hash; no API keys or raw body retention. */ }
-   await this.receive(row.session_id, "WEBHOOK", result, result ? undefined : faceScanHash(body));
+   await this.receive(row.session_id, "WEBHOOK", result, result ? undefined : faceScanHash(body), allowlistedReceipt(body));
  }
+}
+
+/** Preserve known provider result blocks for repair, removing secrets recursively before encryption. */
+function allowlistedReceipt(body: object): unknown {
+  const source = body as Record<string, unknown>;
+  const event = source.event_data && typeof source.event_data === "object" ? source.event_data as Record<string, unknown> : {};
+  const keys = ["scan_id", "event_key", "scan_completion_time", "wellness_score", "health_risk_score", "vitals", "metadata", "posture"];
+  const clean = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(clean);
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([key]) => !/api.?key|secret|token|authorization|password/i.test(key)).map(([key, entry]) => [key, clean(entry)]));
+    return value;
+  };
+  return { scan_id: source.scan_id, scan_completion_time: source.scan_completion_time ?? null,
+    event_data: Object.fromEntries(keys.filter(key => key in event).map(key => [key, clean(event[key])])) };
 }

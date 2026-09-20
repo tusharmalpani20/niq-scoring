@@ -264,7 +264,7 @@ export const faceScanWorkflows = pgTable("face_scan_workflows", {
 ]);
 export const faceScanReceipts = pgTable("face_scan_receipts", {
   id: varchar("id", { length: 26 }).primaryKey(), sessionId: varchar("session_id", { length: 26 }).notNull().references(() => faceScanWorkflows.sessionId),
-  channel: text("channel").notNull(), payloadHash: varchar("payload_hash", { length: 64 }).notNull(), normalizedResult: jsonb("normalized_result"), disposition: text("disposition").notNull(),
+  channel: text("channel").notNull(), payloadHash: varchar("payload_hash", { length: 64 }).notNull(), normalizedResult: jsonb("normalized_result"), receiptCiphertext: text("receipt_ciphertext"), disposition: text("disposition").notNull(),
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => [uniqueIndex("face_scan_receipt_replay_uq").on(t.sessionId, t.channel, t.payloadHash),
   check("face_scan_receipt_channel_ck", sql`${t.channel} in ('DIRECT','WEBHOOK')`),

@@ -18,6 +18,7 @@ export function normalizeCarePlixResult(input: unknown, expectedId: string): Fac
   const metadata = data.metadata === undefined ? {} : record.parse(data.metadata);
   const result: FaceScanResult = {
     schemaVersion: 1, providerScanId: expectedId,
+    providerCompletedAt: data.scan_completion_time === undefined || data.scan_completion_time === null ? null : z.string().refine(v => Number.isFinite(Date.parse(v))).parse(data.scan_completion_time),
     wellnessScore: numberOrNull(data.wellness_score, 100), healthRiskScore: numberOrNull(data.health_risk_score, 100),
     vitals: { heartRate: numberOrNull(vitals.heart_rate), oxygenSaturation: numberOrNull(vitals.oxy_sat_prcnt, 100), respiratoryRate: numberOrNull(vitals.resp_rate), systolic: numberOrNull(vitals.bp_sys), diastolic: numberOrNull(vitals.bp_dia) },
     physiologicalScore: numberOrNull(metadata.physiological_score, 100), mentalWellbeingScore: numberOrNull(metadata.mental_wellbeing_score, 100),

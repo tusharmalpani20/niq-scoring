@@ -32,7 +32,7 @@ export type FaceScanContext = z.infer<typeof faceScanContextSchema>;
 export type FaceScanSignal = z.infer<typeof faceScanSignalSchema>;
 export type FaceScanState = "REQUESTED" | "UPLOAD_ACCEPTED" | "PROCESSING" | "COMPLETED" | "RECONCILIATION_REQUIRED" | "FAILED" | "EXPIRED" | "CANCELLED" | "PAUSED";
 export type FaceScanResult = {
-  schemaVersion: 1; providerScanId: string; wellnessScore: number | null; healthRiskScore: number | null;
+  schemaVersion: 1; providerScanId: string; providerCompletedAt: string | null; wellnessScore: number | null; healthRiskScore: number | null;
   vitals: { heartRate: number | null; oxygenSaturation: number | null; respiratoryRate: number | null; systolic: number | null; diastolic: number | null };
   physiologicalScore: number | null; mentalWellbeingScore: number | null;
 };
