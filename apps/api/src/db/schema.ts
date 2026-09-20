@@ -235,3 +235,38 @@ export const adminAuthAttempts = pgTable("admin_auth_attempts", {
   count: integer("count").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+// Separate from legacy stub sessions: only these rows can enter the durable worker.
+export const faceScanWorkflows = pgTable("face_scan_workflows", {
+  sessionId: varchar("session_id", { length: 26 }).primaryKey().references(() => faceScanSessions.id),
+  usageId: varchar("usage_id", { length: 26 }).notNull().unique().references(() => usageEvents.id),
+  deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),
+  organizationReference: varchar("organization_reference", { length: 128 }).notNull(),
+  assessmentReference: varchar("assessment_reference", { length: 128 }).notNull(),
+  requestFingerprint: varchar("request_fingerprint", { length: 64 }).notNull(),
+  contextCiphertext: text("context_ciphertext").notNull(),
+  state: text("state").notNull().default("REQUESTED"),
+  providerAccount: text("provider_account").notNull(), providerScanId: varchar("provider_scan_id", { length: 160 }),
+  tokenCiphertext: text("token_ciphertext"), signalCiphertext: text("signal_ciphertext"),
+  signalChecksum: varchar("signal_checksum", { length: 64 }), signalBytes: integer("signal_bytes"),
+  mapping: jsonb("mapping"), result: jsonb("result"), score: jsonb("score"),
+  dispatchPhase: text("dispatch_phase"), dispatchStartedAt: timestamp("dispatch_started_at", { withTimezone: true }),
+  fence: text("fence"), failureCode: text("failure_code"),
+  captureExpiresAt: timestamp("capture_expires_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }), ...timestamps,
+}, t => [
+  uniqueIndex("face_scan_provider_identity_uq").on(t.providerAccount, t.providerScanId),
+  uniqueIndex("face_scan_one_active_uq").on(t.deploymentId, t.organizationReference, t.assessmentReference).where(sql`${t.state} in ('REQUESTED','UPLOAD_ACCEPTED','PROCESSING','RECONCILIATION_REQUIRED','PAUSED')`),
+  index("face_scan_workflows_pending_idx").on(t.state, t.createdAt),
+  check("face_scan_workflow_state_ck", sql`${t.state} in ('REQUESTED','UPLOAD_ACCEPTED','PROCESSING','COMPLETED','RECONCILIATION_REQUIRED','FAILED','EXPIRED','CANCELLED','PAUSED')`),
+  check("face_scan_signal_bytes_ck", sql`${t.signalBytes} between 0 and 2097152`),
+  check("face_scan_dispatch_phase_ck", sql`${t.dispatchPhase} in ('TOKEN','SUBMIT')`),
+]);
+export const faceScanReceipts = pgTable("face_scan_receipts", {
+  id: varchar("id", { length: 26 }).primaryKey(), sessionId: varchar("session_id", { length: 26 }).notNull().references(() => faceScanWorkflows.sessionId),
+  channel: text("channel").notNull(), payloadHash: varchar("payload_hash", { length: 64 }).notNull(), normalizedResult: jsonb("normalized_result"), disposition: text("disposition").notNull(),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [uniqueIndex("face_scan_receipt_replay_uq").on(t.sessionId, t.channel, t.payloadHash),
+  check("face_scan_receipt_channel_ck", sql`${t.channel} in ('DIRECT','WEBHOOK')`),
+  check("face_scan_receipt_disposition_ck", sql`${t.disposition} in ('ACCEPTED','DUPLICATE','CONFLICT','UNPROCESSABLE')`),
+]);
