@@ -95,3 +95,51 @@ test("default changes leave pinned deployments unchanged and missing defaults fa
   expect((await call("start", { assessmentReference: "no-default" })).status).toBe(409);
   expect((await (await call("start", { assessmentReference: "pinned-after-switch" })).json()).ruleVersionId).toBe(rule.id);
 });
+
+test("reviewed classification pins evidence and keeps durable retries separate from calculations", async () => {
+  const { store, rule, call } = await setup();
+  const start = await (await call("start", { assessmentReference: "reviewed" })).json();
+  const second = synthetic(store, "Later default", "2026-02-01T00:00:00Z");
+  await store.rules.setDefault({ id: second.id, revision: second.revision, actor: "test", now: second.createdAt });
+  const input = { assessmentReference: "reviewed", idempotencyKey: "review-key-1", score: 68 };
+  const response = await call("classify-reviewed", input);
+  expect(response.status).toBe(200);
+  const first = await response.json();
+  expect(first.result).toMatchObject({ assessmentReference: "reviewed", bindingId: start.bindingId, ruleVersionId: rule.id, checksum: rule.packageChecksum, score: 68, classification: { id: "category" }, resultReference: store.usages[0]!.id });
+  expect(await (await call("classify-reviewed", input)).json()).toEqual(first);
+  expect(await (await call("classify-reviewed", { ...input, score: 69 })).json()).toMatchObject({ reason: "IDEMPOTENCY_CONFLICT" });
+  expect(await (await call("calculate", { assessmentReference: input.assessmentReference, idempotencyKey: input.idempotencyKey, answers: { amount: 0 } })).json()).toMatchObject({ reason: "IDEMPOTENCY_CONFLICT" });
+  expect(await (await call("classify-reviewed", { ...input, idempotencyKey: "review-key-2" })).json()).toMatchObject({ reason: "MONTHLY_LIMIT_REACHED" });
+  expect(store.usages).toHaveLength(1);
+});
+
+test("reviewed classification rejects invalid numbers, missing bindings, arbitrary versions and disabled owners", async () => {
+  const { store, client, call, app } = await setup();
+  const input = { assessmentReference: "reviewed", idempotencyKey: "review-key-1", score: 68 };
+  expect((await app.request("/v1/assessments/classify-reviewed", { method: "POST", body: JSON.stringify(input) })).status).toBe(401);
+  expect((await call("classify-reviewed", input)).status).toBe(404);
+  await call("start", { assessmentReference: input.assessmentReference });
+  for (const score of [-1, Number.MAX_SAFE_INTEGER + 1, null, "68"]) expect((await call("classify-reviewed", { ...input, score })).status).toBe(400);
+  expect((await call("classify-reviewed", { ...input, ruleVersionId: createEntityId() })).status).toBe(400);
+  expect(store.usages).toHaveLength(0);
+  await call("classify-reviewed", input);
+  await store.setClientEnabled(client.id, false);
+  expect(await (await call("classify-reviewed", input)).json()).toEqual({ error: "CLIENT_DISABLED" });
+});
+
+test("reviewed classification uses final-profile thresholds and rejects uncovered fractional scores without billing", async () => {
+  const { createFinalAssessmentTemplate } = await import("@niq-scoring/contracts/final-assessment-template");
+  const { store, rule, call } = await setup();
+  const definition = createFinalAssessmentTemplate("Final reviewed");
+  // This fixture publishes the final profile before its first binding.
+  Object.assign(rule, { definition, packageChecksum: ruleChecksum(definition) });
+  await call("start", { assessmentReference: "final-reviewed" });
+  const input = { assessmentReference: "final-reviewed", idempotencyKey: "review-key-1", score: 15.5 };
+  const gap = await call("classify-reviewed", input);
+  expect(gap.status).toBe(422);
+  expect(await gap.json()).toEqual({ error: "UNMATCHED_CLASSIFICATION" });
+  expect(store.usages).toHaveLength(0);
+  const success = await call("classify-reviewed", { ...input, score: 68 });
+  expect(success.status).toBe(200);
+  expect((await success.json()).result).toMatchObject({ score: 68, classification: { id: "high" } });
+});

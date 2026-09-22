@@ -3,7 +3,7 @@ import { z } from "zod";
 import { answersSchema } from "@niq-scoring/contracts/rules";
 import { isFinalAssessmentDefinition, versionedRuleDefinitionSchema } from "@niq-scoring/contracts/versioned-definition";
 import { publicQuestionnaire } from "@niq-scoring/contracts/rule-public";
-import { evaluateVersionedRule } from "@niq-scoring/scoring-engine/versioned";
+import { classifyScore, evaluateVersionedRule } from "@niq-scoring/scoring-engine/versioned";
 import { BindingError } from "./assessment-binding";
 import { ruleChecksum } from "./rule-routes";
 import type { DeploymentIdentity, ScoringStore } from "./store";
@@ -38,4 +38,29 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
       throw cause;
     }
   });
+  app.post("/v1/assessments/classify-reviewed", async c => {
+    c.header("Cache-Control", "no-store");
+    const identity = await authenticate(c);
+    if (!identity) return c.json({ error: "UNAUTHORIZED" }, 401);
+    const parsed = z.object({ assessmentReference: reference, idempotencyKey: z.string().min(8).max(128), score: z.number().finite().min(0).max(Number.MAX_SAFE_INTEGER) }).strict().safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+    const input = parsed.data;
+    try {
+      const { binding, rule } = await store.bindAssessment({ identity, assessmentReference: input.assessmentReference, platformEnabled, create: false });
+      const classification = classifyScore(versionedRuleDefinitionSchema.parse(rule.definition), input.score);
+      if (!classification) return c.json({ error: "UNMATCHED_CLASSIFICATION" }, 422);
+      const reservation = await store.reserveUsage({ identity, clientId: identity.clientId, capability: "SCORING", assessmentReference: binding.assessmentReference, idempotencyKey: input.idempotencyKey, platformEnabled, binding, fingerprint: ruleChecksum({ endpoint: "classify-reviewed", bindingId: binding.id, checksum: binding.checksum, score: input.score }) });
+      if (reservation.status === "REJECTED") return c.json({ error: "SCORING_UNAVAILABLE", reason: reservation.reason }, 409);
+      if (reservation.status === "DUPLICATE") return c.json(reservation.response as never);
+      try {
+        const response = { result: { assessmentReference: binding.assessmentReference, bindingId: binding.id, ruleVersionId: rule.id, checksum: binding.checksum, version: rule.version, resultReference: reservation.usageId, score: input.score, classification, calculatedAt: now().toISOString() }, idempotencyKey: input.idempotencyKey };
+        await store.completeUsage(reservation.usageId, response);
+        return c.json(response);
+      } catch (cause) { await store.failUsage(reservation.usageId); throw cause; }
+    } catch (cause) {
+      if (cause instanceof BindingError) return c.json({ error: cause.code }, cause.code === "ASSESSMENT_NOT_FOUND" ? 404 : 409);
+      throw cause;
+    }
+  });
+
 }

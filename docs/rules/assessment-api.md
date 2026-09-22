@@ -61,3 +61,21 @@ RULE_DATABASE_TEST=1 bun --env-file=../../.env test src/postgres-assessment-bind
 ```
 
 The binding test uses a rollback-only synthetic transaction. The CRUD test removes its synthetic drafts and retains append-only audit evidence. These do not replace the full editor/browser review.
+
+## Classify a reviewed total
+
+POST `/v1/assessments/classify-reviewed`
+
+```json
+{"assessmentReference":"opaque-assessment-reference","idempotencyKey":"unique-review-classification-request","score":68}
+```
+
+The deployment must already own a binding for this reference. The server uses that binding's immutable rule package and its original classification thresholds, for both legacy and final definitions. It does not reevaluate questionnaire answers, generate interventions, or modify the original calculation. The consuming application calculates the effective reviewed total, including manual overrides, before requesting classification.
+
+The score must be a finite nonnegative number no greater than `Number.MAX_SAFE_INTEGER`. It must match exactly one configured risk range; unsupported totals (including decimals in gaps between integer-only thresholds) return `UNMATCHED_CLASSIFICATION` (422), without reserving usage. Clients must not guess a classification or round the total to fit a threshold.
+
+Successful responses have `{result, idempotencyKey}`. The result contains `assessmentReference`, `bindingId`, `ruleVersionId`, `checksum`, `version`, `resultReference`, `score`, `classification: {id, label, interpretation}`, and `calculatedAt`. Consumers should verify the binding evidence and exact score before applying the result to the current review revision.
+
+Each new classification uses one SCORING entitlement unit under the existing durable usage accounting. Identical completed retries with the same key return the original result without another unit; changed totals, bindings, or endpoint payloads with a reused key conflict. A new score revision requires a new request key. Authorization, disabled-client/deployment/capability checks, quota enforcement and retained response policies are the same as ordinary calculation. No database migration is needed.
+
+Verified with route tests covering authentication, original version after default changes, binding absence, malformed input, final-profile gap rejection, durable retries, cross-endpoint conflicts, exhausted quota and disabled-client replay. Both evaluator suites continue to pass against the shared classification helper.
