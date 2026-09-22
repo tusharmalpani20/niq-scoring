@@ -4,7 +4,8 @@ import { FaceScanWorkflow } from "./face-scan-workflow";
 import { decryptActivationToken } from "./lib/activation-secret";
 import { createEntityId } from "./lib/id";
 import { faceScanCreateSchema, faceScanSignalSchema } from "@niq-scoring/contracts/face-scan-session";
-import { normalizeCarePlixResult } from "./careplix-provider";
+import { faceScanDiagnostic } from "./face-scan-diagnostic";
+import { CarePlixResponseError, normalizeCarePlixResult } from "./careplix-provider";
 import type { CarePlixProvider } from "./careplix-provider";
 
 const signal = faceScanSignalSchema.parse({ raw_intensity: [{ r: 1, g: 2, b: 3 }, { r: 2, g: 3, b: 4 }], ppg_time: [0, 1], average_fps: 30 });
@@ -12,9 +13,11 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
   const db = postgres(process.env.DATABASE_URL!, { max: 4 });
   const clientId = createEntityId(), deploymentId = createEntityId(), credentialId = createEntityId(), ruleId = createEntityId();
   let enabled = true, mode = "success", tokenCalls = 0, submitCalls = 0;
+  const statusReports: string[] = [];
   const provider: CarePlixProvider = {
-    async createToken() { tokenCalls++; if (mode === "token-timeout") throw new Error("timeout"); return { scanId: `synthetic-${tokenCalls}`, token: "secret-token" }; },
-    async submit(_context, _signal, _token, id) { submitCalls++; if (mode === "submit-timeout") throw new Error("timeout"); return normalizeCarePlixResult({ scan_id: id, wellness_score: 78, vitals: { heart_rate: 70 } }, id); },
+    async updateStatus(_employee, _token, report) { statusReports.push(report.fireType); throw new Error("synthetic telemetry delivery failure"); },
+    async createToken() { tokenCalls++; if (mode === "token-timeout") throw new CarePlixResponseError(faceScanDiagnostic("/vitals/create-token", null, null, [], "TIMEOUT")); return { scanId: `synthetic-${tokenCalls}`, token: "secret-token" }; },
+    async submit(_context, _signal, _token, id) { submitCalls++; if (mode === "submit-rejected") throw new CarePlixResponseError(faceScanDiagnostic("/vitals/add-scan",200,{statusCode:500,message:"Device is invalid."},[],"PROVIDER_REJECTION")); if (mode === "submit-timeout") throw new Error("timeout"); return normalizeCarePlixResult({ scan_id: id, wellness_score: 78, vitals: { heart_rate: 70 } }, id); },
   };
   const options = { enabled: () => enabled, provider, encryptionKey: "a".repeat(64), providerAccount: "synthetic:staging", retentionHours: 24, minDispatchIntervalMs: 0 };
   let workflow = new FaceScanWorkflow(db, options);
@@ -57,18 +60,59 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
     await workflow.webhook({ scan_id: "synthetic-1", event_data: { scan_id: "synthetic-1", event_key: "scan_completion", wellness_score: 10, vitals: { heart_rate: 70 } } });
     const conflict = await workflow.get(identity, id, "organization-a");
     expect(conflict.session.state).toBe("COMPLETED"); expect(conflict.session.failureCode).toBe("RESULT_CONFLICT"); expect(conflict.session.result).toEqual(completed.session.result);
+    expect(statusReports).toEqual(["on_success"]);
+    const [telemetry] = await db`select status_report_started_at,status_report_ciphertext from face_scan_workflows where session_id=${id}`;
+    expect(telemetry?.status_report_started_at).toBeTruthy();
+    expect(telemetry?.status_report_ciphertext).not.toContain("on_success");
+    expect(JSON.parse(decryptActivationToken(telemetry!.status_report_ciphertext, options.encryptionKey)).delivery).toBe("UNCONFIRMED");
     for (const failureMode of ["token-timeout", "submit-timeout"]) {
       mode = failureMode;
       const pending = await workflow.create(identity, input(failureMode));
       await workflow.upload(identity, pending.session.id, "organization-a", signal);
       await workflow.tick();
+      if (failureMode === "token-timeout") {
+        const [receipt] = await db`select receipt_ciphertext from face_scan_receipts where session_id=${pending.session.id}`;
+        expect(receipt?.receipt_ciphertext).toBeTruthy();
+        expect(receipt?.receipt_ciphertext).not.toContain("TIMEOUT");
+        expect(JSON.parse(decryptActivationToken(receipt!.receipt_ciphertext, options.encryptionKey)).failure).toBe("TIMEOUT");
+      }
+      expect(statusReports).toEqual(failureMode === "token-timeout" ? ["on_success"] : ["on_success", "on_error"]);
+      const reportsBefore = statusReports.length;
       const calls = tokenCalls + submitCalls;
       await new FaceScanWorkflow(db, options).tick();
       expect(tokenCalls + submitCalls).toBe(calls);
-      expect((await workflow.get(identity, pending.session.id, "organization-a")).session.state).toBe("RECONCILIATION_REQUIRED");
+      expect(statusReports.length).toBe(reportsBefore);
+      expect((await workflow.get(identity, pending.session.id, "organization-a")).session.state).toBe(failureMode === "token-timeout" ? "FAILED" : "RECONCILIATION_REQUIRED");
       const [usage] = await db`select u.outcome from usage_events u join face_scan_workflows w on w.usage_id=u.id where w.session_id=${pending.session.id}`;
-      expect(usage?.outcome).toBe("PENDING");
+      expect(usage?.outcome).toBe(failureMode === "token-timeout" ? "FAILED" : "PENDING");
+      if (failureMode === "token-timeout") {
+        // Old versions left token failures blocked. Recovery must not make an outbound call.
+        await db`update face_scan_workflows set state='RECONCILIATION_REQUIRED',failure_code='PROVIDER_OUTCOME_UNCONFIRMED' where session_id=${pending.session.id}`;
+        await workflow.tick();
+        expect(tokenCalls + submitCalls).toBe(calls);
+        const recovered = await workflow.get(identity, pending.session.id, "organization-a");
+        expect(recovered.session.state).toBe("FAILED");
+        expect(recovered.session.failureCode).toBe("SCAN_NOT_SUBMITTED");
+        const retry = await workflow.create(identity, {...input(failureMode), idempotencyKey:"explicit-retry"});
+        expect(retry.session.id).not.toBe(pending.session.id);
+        expect(tokenCalls + submitCalls).toBe(calls);
+        await workflow.cancel(identity, retry.session.id, "organization-a");
+      } else {
+        await expect(workflow.create(identity, {...input(failureMode), idempotencyKey:"unsafe-retry"})).rejects.toThrow("ACTIVE_FACE_SCAN_EXISTS");
+      }
     }
+    mode = "submit-rejected";
+    const rejected = await workflow.create(identity, input("device-rejected"));
+    await workflow.upload(identity, rejected.session.id, "organization-a", signal);
+    await workflow.tick();
+    const rejectedState = await workflow.get(identity, rejected.session.id, "organization-a");
+    expect(rejectedState.session.state).toBe("FAILED");
+    expect(rejectedState.session.failureCode).toBe("DEVICE_NOT_SUPPORTED");
+    const callsBeforeRetry = submitCalls;
+    const retry = await workflow.create(identity, {...input("device-rejected"),idempotencyKey:"rejected-retry"});
+    expect(retry.session.id).not.toBe(rejected.session.id);
+    expect(submitCalls).toBe(callsBeforeRetry);
+    await workflow.cancel(identity, retry.session.id, "organization-a");
     mode = "success";
     const configuration = { ranges: [{ id: "all", min: 0, max: 100, minInclusive: true, maxInclusive: true, points: 7 }] };
     await db`insert into scoring_rule_versions(id,version,lifecycle,clinical_use_permitted,package_checksum,definition) values(${ruleId},${`scan-fixture-${ruleId}`},'APPROVED',true,${"c".repeat(64)},${db.json({ faceScanScoring: configuration })})`;
@@ -115,7 +159,12 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
     await workflow.upload(identity, interrupted.session.id, "organization-a", signal);
     await db`update face_scan_workflows set state='PROCESSING',dispatch_phase='TOKEN',dispatch_started_at=now()-interval '6 minutes' where session_id=${interrupted.session.id}`;
     const calls = tokenCalls; await workflow.tick(); expect(tokenCalls).toBe(calls);
-    expect((await workflow.get(identity, interrupted.session.id, "organization-a")).session.state).toBe("RECONCILIATION_REQUIRED");
+    expect((await workflow.get(identity, interrupted.session.id, "organization-a")).session.state).toBe("FAILED");
+    const submittedCrash = await workflow.create(identity, input("submitted-crash"));
+    await workflow.upload(identity, submittedCrash.session.id, "organization-a", signal);
+    await db`update face_scan_workflows set state='PROCESSING',dispatch_phase='SUBMIT',dispatch_started_at=now()-interval '6 minutes' where session_id=${submittedCrash.session.id}`;
+    await workflow.tick(); expect(tokenCalls).toBe(calls);
+    expect((await workflow.get(identity, submittedCrash.session.id, "organization-a")).session.state).toBe("RECONCILIATION_REQUIRED");
   } finally {
     await db`delete from face_scan_receipts where session_id in(select session_id from face_scan_workflows where deployment_id=${deploymentId})`;
     await db`delete from face_scan_workflows where deployment_id=${deploymentId}`;

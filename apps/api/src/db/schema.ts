@@ -252,6 +252,8 @@ export const faceScanWorkflows = pgTable("face_scan_workflows", {
   mapping: jsonb("mapping"), result: jsonb("result"), score: jsonb("score"),
   dispatchPhase: text("dispatch_phase"), dispatchStartedAt: timestamp("dispatch_started_at", { withTimezone: true }),
   fence: text("fence"), failureCode: text("failure_code"),
+  statusReportStartedAt: timestamp("status_report_started_at", { withTimezone: true }),
+  statusReportCiphertext: text("status_report_ciphertext"),
   captureExpiresAt: timestamp("capture_expires_at", { withTimezone: true }).notNull(),
   completedAt: timestamp("completed_at", { withTimezone: true }), ...timestamps,
 }, t => [

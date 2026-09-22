@@ -51,3 +51,57 @@ test("unsupported successful direct responses retain sanitized repair evidence o
   try { await provider.submit(context, signal, "token", "scan-1"); }
   catch (error) { expect(error).not.toBeInstanceOf(CarePlixUnprocessableResultError); }
 });
+
+test("all documented postures survive validation and reach CarePlix unchanged", async () => {
+  for (const posture of ["resting", "standing", "walking", "exercising"] as const) {
+    const parsed = faceScanCreateSchema.parse({clientId:"client",assessmentReference:"assessment",organizationReference:"org",idempotencyKey:"key",context:{...context,posture}});
+    let sent: any;
+    const provider = new HttpCarePlixProvider({baseUrl:"https://example.invalid",apiKey:"key",apiSecret:"secret"}, (async (_url: URL | RequestInfo, init?: RequestInit) => { sent = JSON.parse(String(init?.body)); return Response.json(body); }) as typeof fetch);
+    await provider.submit(parsed.context, signal, "token", "scan-1");
+    expect(sent.posture).toBe(posture);
+  }
+});
+
+test("retains redacted provider rejection diagnostics without tokens or signal", async () => {
+  const provider = new HttpCarePlixProvider({baseUrl:"https://example.invalid",apiKey:"private-key",apiSecret:"private-secret"}, (async (_url: URL | RequestInfo, _init?: RequestInit) => Response.json({statusCode:400,message:"Invalid employee deployment:operator private-key private-secret response-token",scan_token:"response-token",raw_intensity:[1,2,3]}, {status:401})) as typeof fetch);
+  try { await provider.createToken(context); throw new Error("Expected rejection"); }
+  catch (error) {
+    const { CarePlixResponseError } = await import("./careplix-provider");
+    expect(error).toBeInstanceOf(CarePlixResponseError);
+    const diagnostic = (error as InstanceType<typeof CarePlixResponseError>).diagnostic!;
+    expect(diagnostic.httpStatus).toBe(401);
+    expect(diagnostic.statusCode).toBe(400);
+    expect(diagnostic.message).toContain("Invalid employee");
+    const text = JSON.stringify(diagnostic);
+    for (const secret of ["private-key", "private-secret", "response-token", "deployment:operator", "[1,2,3]"]) expect(text).not.toContain(secret);
+  }
+});
+test("retains malformed token response and timeout classifications without raw bodies", async () => {
+  const { CarePlixResponseError } = await import("./careplix-provider");
+  for (const [transport, failure] of [
+    [async () => Response.json({statusCode:200,scan_token:"private-token"}), "INVALID_TOKEN_RESPONSE"],
+    [async () => { throw new DOMException("private endpoint details", "TimeoutError"); }, "TIMEOUT"],
+  ] as const) {
+    const provider = new HttpCarePlixProvider({baseUrl:"https://example.invalid",apiKey:"key",apiSecret:"secret"}, transport as unknown as typeof fetch);
+    try { await provider.createToken(context); throw new Error("Expected error"); }
+    catch (error) {
+      expect(error).toBeInstanceOf(CarePlixResponseError);
+      expect((error as InstanceType<typeof CarePlixResponseError>).diagnostic?.failure).toBe(failure);
+      expect(JSON.stringify((error as InstanceType<typeof CarePlixResponseError>).diagnostic)).not.toContain("private-token");
+    }
+  }
+});
+
+test("status reporting uses documented telemetry fields without scan or patient data", async () => {
+  const calls: Array<{path:string; body:any; auth:string|null}> = [];
+  const provider = new HttpCarePlixProvider({baseUrl:"https://example.invalid",apiKey:"key",apiSecret:"secret"}, (async (url: URL | RequestInfo, init?: RequestInit) => {
+    calls.push({path:String(url),body:JSON.parse(String(init?.body)),auth:new Headers(init?.headers).get("authorization")});
+    return Response.json({statusCode:200,message:"saved"});
+  }) as typeof fetch);
+  for (const fireType of ["on_success","on_error","on_halt"] as const)
+    await provider.updateStatus("operator", "private-token", {fireType,reason:"Scan event",...(fireType === "on_error" ? {errorCode:"SCAN_REQUEST_ERROR"} : {})});
+  expect(calls[0]).toEqual({path:"https://example.invalid/vitals/update-scan-status",auth:"secret",body:{api_key:"key",employee_id:"operator",scan_token:"private-token",device_model:"RPPG_CAREPLIX_FACE_WEB",fire_type:"on_success",fire_reason:"Scan event",error_list:[]}});
+  expect(calls[1]!.body.error_list).toEqual([{code:"SCAN_REQUEST_ERROR"}]);
+  expect(calls[2]!.body.fire_type).toBe("on_halt");
+  for (const call of calls) expect(Object.keys(call.body).sort()).toEqual(["api_key","device_model","employee_id","error_list","fire_reason","fire_type","scan_token"]);
+});

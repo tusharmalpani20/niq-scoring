@@ -1,3 +1,4 @@
+import { reportFaceScanStatus } from "./face-scan-status-report";
 import type postgres from "postgres";
 import { createHash } from "node:crypto";
 import type { FaceScanCreate, FaceScanContext, FaceScanSignal, FaceScanResult, FaceScanState } from "@niq-scoring/contracts/face-scan-session";
@@ -9,7 +10,7 @@ import { createEntityId } from "./lib/id";
 import type { DeploymentIdentity } from "./store";
 import type { CarePlixProvider } from "./careplix-provider";
 import { allowlistedFaceScanReceipt } from "./face-scan-receipt";
-import { CarePlixUnprocessableResultError, normalizeCarePlixResult } from "./careplix-provider";
+import { CarePlixResponseError, CarePlixUnprocessableResultError, normalizeCarePlixResult } from "./careplix-provider";
 
 type Database = ReturnType<typeof postgres>;
 type Mapping = { ruleVersionId: string; checksum: string; assignmentId: string; configuration: FaceScanScoringConfig };
@@ -114,6 +115,15 @@ export class FaceScanWorkflow {
  async tick(): Promise<void> {
    await this.sql.begin(async tx => {
      await tx`update face_scan_workflows set state='RECONCILIATION_REQUIRED',failure_code='DISPATCH_INTERRUPTED',updated_at=now() where provider_account=${this.options.providerAccount} and state='PROCESSING' and dispatch_started_at<now()-interval '5 minutes'`;
+     // TOKEN intent cannot have sent scan data: SUBMIT is persisted before that call.
+     // Terminalizing it also fences out a late token response. Never retry dispatch automatically.
+     const recoverable = await tx<{ usage_id: string }[]>`update face_scan_workflows
+       set state='FAILED',failure_code='SCAN_NOT_SUBMITTED',signal_ciphertext=null,token_ciphertext=null,updated_at=now()
+       where provider_account=${this.options.providerAccount} and state='RECONCILIATION_REQUIRED'
+         and dispatch_phase='TOKEN' and result is null
+         and failure_code in ('PROVIDER_OUTCOME_UNCONFIRMED','DISPATCH_INTERRUPTED')
+       returning usage_id`;
+     for (const item of recoverable) await tx`update usage_events set outcome='FAILED',completed_at=now() where id=${item.usage_id}`;
      const expired = await tx<{ usage_id: string }[]>`update face_scan_workflows set state='EXPIRED',signal_ciphertext=null,token_ciphertext=null,updated_at=now() where provider_account=${this.options.providerAccount} and state in ('REQUESTED','UPLOAD_ACCEPTED','PAUSED') and capture_expires_at<=now() and dispatch_phase is null returning usage_id`;
      for (const row of expired) await tx`update usage_events set outcome='FAILED',completed_at=now() where id=${row.usage_id}`;
      // Submitted uncertainty retains correlation and accounting evidence, but not raw signals forever.
@@ -141,9 +151,13 @@ export class FaceScanWorkflow {
      return candidate;
    });
    if (!row) return;
+   let statusContext: FaceScanContext | null = null;
+   let statusToken: string | null = null;
+   let submissionReturned = false;
    try {
      const context = this.decrypt<FaceScanContext>(row.context_ciphertext);
      const token = await this.options.provider.createToken(context);
+     statusContext = context; statusToken = token.token;
      const saved = await this.sql`update face_scan_workflows set provider_scan_id=${token.scanId},token_ciphertext=case when capture_expires_at>clock_timestamp() then ${this.encrypt(token.token)} else null end,updated_at=now() where session_id=${row.session_id} and fence=${fence} and state in ('PROCESSING','RECONCILIATION_REQUIRED') returning session_id`;
      if (!saved.length) return;
      // Stop between token and submission if the gate changed. No automatic token recreation.
@@ -157,11 +171,42 @@ export class FaceScanWorkflow {
      if (!submitted.length) throw new FaceScanError("SUBMISSION_NO_LONGER_ALLOWED");
      if (!this.options.enabled()) throw new FaceScanError("DISPATCH_PAUSED_AFTER_TOKEN");
      const result = await this.options.provider.submit(context, this.decrypt<FaceScanSignal>(row.signal_ciphertext!), token.token, token.scanId);
+     submissionReturned = true;
      await this.receive(row.session_id, "DIRECT", result);
    } catch (error) {
+     if (error instanceof CarePlixResponseError && error.diagnostic) {
+       const diagnostic = error.diagnostic;
+       await this.sql`insert into face_scan_receipts(id,session_id,channel,payload_hash,normalized_result,disposition,receipt_ciphertext)
+         values(${createEntityId()},${row.session_id},'DIRECT',${faceScanHash(diagnostic)},null,'UNPROCESSABLE',${this.encrypt(diagnostic)})
+         on conflict(session_id,channel,payload_hash) do nothing`;
+     }
      if (error instanceof CarePlixUnprocessableResultError) await this.receive(row.session_id, "DIRECT", null, faceScanHash(error.receipt), error.receipt);
-     // Every post-dispatch exception is conservatively ambiguous, including malformed HTTP responses.
-     await this.sql`update face_scan_workflows set state='RECONCILIATION_REQUIRED',failure_code='PROVIDER_OUTCOME_UNCONFIRMED',updated_at=now() where session_id=${row.session_id} and fence=${fence} and state='PROCESSING'`;
+     await this.sql.begin(async tx => {
+       const failed = await tx<{ usage_id: string }[]>`update face_scan_workflows
+         set state='FAILED',failure_code='SCAN_NOT_SUBMITTED',signal_ciphertext=null,token_ciphertext=null,updated_at=now()
+         where session_id=${row.session_id} and fence=${fence} and state='PROCESSING' and dispatch_phase='TOKEN' returning usage_id`;
+       for (const item of failed) await tx`update usage_events set outcome='FAILED',completed_at=now() where id=${item.usage_id}`;
+       // A confirmed device rejection permits a fresh manual attempt. Keep its usage reservation
+       // because the provider has not confirmed whether rejected submissions consume allowance.
+       const deviceRejected = error instanceof CarePlixResponseError &&
+         error.diagnostic?.stage === "/vitals/add-scan" && error.diagnostic.failure === "PROVIDER_REJECTION" &&
+         error.diagnostic.message === "Device is invalid.";
+       const failureCode = error instanceof CarePlixResponseError && error.diagnostic?.failure === "PROVIDER_REJECTION"
+         ? deviceRejected ? "DEVICE_NOT_SUPPORTED" : "PROVIDER_REJECTED" : "PROVIDER_OUTCOME_UNCONFIRMED";
+       await tx`update face_scan_workflows set state=${deviceRejected ? 'FAILED' : 'RECONCILIATION_REQUIRED'},failure_code=${failureCode},updated_at=now()
+         where session_id=${row.session_id} and fence=${fence} and state='PROCESSING' and dispatch_phase='SUBMIT'`;
+     });
+   } finally {
+     // No token means there is nothing valid to report. Never invent one or recreate it for telemetry.
+     if (statusContext && statusToken && this.options.enabled()) {
+       try {
+         await reportFaceScanStatus(this.sql, this.options.provider, this.options.encryptionKey,
+           row.session_id, statusContext.employeeId, statusToken,
+           submissionReturned
+             ? { fireType: "on_success", reason: "Scan result received" }
+             : { fireType: "on_error", reason: "Scan request did not complete normally", errorCode: "SCAN_REQUEST_ERROR" });
+       } catch { /* Telemetry persistence/delivery must never replace or fail the scan result. */ }
+     }
    }
  }
  async receive(id: string, channel: "DIRECT" | "WEBHOOK", result: FaceScanResult | null, invalidHash?: string, receipt?: unknown) {

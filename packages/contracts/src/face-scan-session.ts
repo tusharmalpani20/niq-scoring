@@ -11,7 +11,7 @@ export const faceScanContextSchema = z.object({
   }, "A valid date of birth is required"),
   gender: z.enum(["male", "female"]),
   heightCm: finite.positive().max(300), weightKg: finite.positive().max(700),
-  posture: z.literal("resting"), employeeId: reference,
+  posture: z.enum(["resting", "standing", "walking", "exercising"]), employeeId: reference,
 }).strict();
 export const faceScanCreateSchema = z.object({
   schemaVersion: z.literal(1).default(1), clientId: reference, organizationReference: reference,
