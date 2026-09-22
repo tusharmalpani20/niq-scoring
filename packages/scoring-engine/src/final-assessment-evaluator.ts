@@ -1,3 +1,4 @@
+import { classifyScore } from "./score-classification";
 import { weightLossInRange } from "./weight-loss-range";
 import { inRange } from "@niq-scoring/contracts/rule-validation";
 import type { DefinitionIssue } from "@niq-scoring/contracts/rules";
@@ -200,10 +201,9 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
   const score = components.filter(component => component.points !== null).reduce((sum, component) => sum + component.points!, 0);
   if (!Number.isFinite(score) || definition.provisional.status === "CLIENT_CONFIRMED" && !Number.isSafeInteger(score)) { add("score", "INVALID_ARITHMETIC", "The score is outside the supported numeric range."); return result; }
   result.score = score;
-  const matches = definition.riskCategories.filter(category => inRange(score, category));
-  if (matches.length !== 1) { add("riskCategories", "UNMATCHED_CLASSIFICATION", "Score must match exactly one provisional risk category."); return result; }
-  const category = matches[0]!;
-  result.classification = { id: category.id, label: category.label, interpretation: category.interpretation };
+  const classification = classifyScore(definition, score);
+  if (!classification) { add("riskCategories", "UNMATCHED_CLASSIFICATION", "Score must match exactly one provisional risk category."); return result; }
+  result.classification = classification;
   result.complete = true;
   return result;
 }

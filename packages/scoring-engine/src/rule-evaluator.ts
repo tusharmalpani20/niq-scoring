@@ -1,3 +1,4 @@
+import { classifyScore } from "./score-classification";
 import { type RuleAnswers, type RuleDefinition, type RuleReference } from "@niq-scoring/contracts/rules";
 import { inRange, validateRuleDefinition } from "@niq-scoring/contracts/rule-validation";
 import { evaluateCondition, prepareAnswers, type EvaluationIssue, type RuntimeValue } from "./rule-answers";
@@ -90,9 +91,9 @@ export function evaluateRule(definition: RuleDefinition, answers: RuleAnswers): 
     if (!Number.isFinite(score)) add("total", "INVALID_TOTAL", "Total exceeds the numeric range.");
     else {
       result.score = rounded(score, definition.total.precision);
-      const matches = definition.classifications.filter(band => inRange(result.score!, band));
-      if (matches.length !== 1) add("classifications", "UNMATCHED_CLASSIFICATION", "Score must match exactly one classification.");
-      else { const band = matches[0]!; result.classification = { id: band.id, label: band.label, interpretation: band.interpretation }; }
+      const classification = classifyScore(definition, result.score!);
+      if (!classification) add("classifications", "UNMATCHED_CLASSIFICATION", "Score must match exactly one classification.");
+      else result.classification = classification;
     }
   }
   if (!result.issues.length && result.classification) {

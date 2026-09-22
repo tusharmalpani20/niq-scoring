@@ -8,3 +8,5 @@ export type VersionedEvaluation = RuleEvaluation | FinalAssessmentEvaluation;
 export function evaluateVersionedRule(definition: VersionedRuleDefinition, answers: RuleAnswers): VersionedEvaluation {
   return isFinalAssessmentDefinition(definition) ? evaluateFinalAssessment(definition, answers) : evaluateRule(definition, answers);
 }
+
+export { classifyScore } from "./score-classification";
