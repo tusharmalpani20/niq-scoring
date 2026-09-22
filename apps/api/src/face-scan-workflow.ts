@@ -154,8 +154,10 @@ export class FaceScanWorkflow {
    let statusContext: FaceScanContext | null = null;
    let statusToken: string | null = null;
    let submissionReturned = false;
+   let signal: FaceScanSignal | null = null;
    try {
      const context = this.decrypt<FaceScanContext>(row.context_ciphertext);
+     signal = this.decrypt<FaceScanSignal>(row.signal_ciphertext!);
      const token = await this.options.provider.createToken(context);
      statusContext = context; statusToken = token.token;
      const saved = await this.sql`update face_scan_workflows set provider_scan_id=${token.scanId},token_ciphertext=case when capture_expires_at>clock_timestamp() then ${this.encrypt(token.token)} else null end,updated_at=now() where session_id=${row.session_id} and fence=${fence} and state in ('PROCESSING','RECONCILIATION_REQUIRED') returning session_id`;
@@ -170,7 +172,7 @@ export class FaceScanWorkflow {
        returning session_id`;
      if (!submitted.length) throw new FaceScanError("SUBMISSION_NO_LONGER_ALLOWED");
      if (!this.options.enabled()) throw new FaceScanError("DISPATCH_PAUSED_AFTER_TOKEN");
-     const result = await this.options.provider.submit(context, this.decrypt<FaceScanSignal>(row.signal_ciphertext!), token.token, token.scanId);
+     const result = await this.options.provider.submit(context, signal, token.token, token.scanId);
      submissionReturned = true;
      await this.receive(row.session_id, "DIRECT", result);
    } catch (error) {
@@ -203,8 +205,8 @@ export class FaceScanWorkflow {
          await reportFaceScanStatus(this.sql, this.options.provider, this.options.encryptionKey,
            row.session_id, statusContext.employeeId, statusToken,
            submissionReturned
-             ? { fireType: "on_success", reason: "Scan result received" }
-             : { fireType: "on_error", reason: "Scan request did not complete normally", errorCode: "SCAN_REQUEST_ERROR" });
+             ? { fireType: "on_success", reason: "Scan result received", device: signal?.device }
+             : { fireType: "on_error", reason: "Scan request did not complete normally", errorCode: "SCAN_REQUEST_ERROR", device: signal?.device });
        } catch { /* Telemetry persistence/delivery must never replace or fail the scan result. */ }
      }
    }

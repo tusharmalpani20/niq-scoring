@@ -105,3 +105,17 @@ test("status reporting uses documented telemetry fields without scan or patient 
   expect(calls[2]!.body.fire_type).toBe("on_halt");
   for (const call of calls) expect(Object.keys(call.body).sort()).toEqual(["api_key","device_model","employee_id","error_list","fire_reason","fire_type","scan_token"]);
 });
+
+test("browser device survives validation and is shared by submission and telemetry", async () => {
+  for (const device of ["RPPG_CAREPLIX_FACE_IOS", "RPPG_CAREPLIX_FACE_ANDROID"] as const) {
+    const calls: any[] = [];
+    const provider = new HttpCarePlixProvider({baseUrl:"https://example.invalid",apiKey:"key",apiSecret:"secret"}, (async (_url: unknown, init?: RequestInit) => {
+      calls.push(JSON.parse(String(init?.body))); return Response.json(body);
+    }) as typeof fetch);
+    await provider.submit(context, faceScanSignalSchema.parse({...signal, device}), "token", "scan-1");
+    await provider.updateStatus("operator", "token", {fireType:"on_success",reason:"Done",device});
+    expect(calls[0].metadata.device).toBe(device);
+    expect(calls[1].device_model).toBe(device);
+  }
+  expect(faceScanSignalSchema.safeParse({...signal,device:"arbitrary"}).success).toBe(false);
+});

@@ -33,7 +33,7 @@ export function normalizeCarePlixResult(input: unknown, expectedId: string): Fac
   if (result.wellnessScore === null && Object.values(result.vitals).every(v => v === null)) throw new CarePlixResponseError();
   return result;
 }
-export type ScanStatusReport = { fireType: "on_success" | "on_error" | "on_halt"; reason: string; errorCode?: string };
+export type ScanStatusReport = { fireType: "on_success" | "on_error" | "on_halt"; reason: string; errorCode?: string; device?: FaceScanSignal["device"] };
 export interface CarePlixProvider {
   updateStatus?(employeeId: string, token: string, report: ScanStatusReport): Promise<void>;
   createToken(context: FaceScanContext): Promise<{ scanId: string; token: string }>;
@@ -79,7 +79,7 @@ export class HttpCarePlixProvider implements CarePlixProvider {
 
   async updateStatus(employeeId: string, token: string, report: ScanStatusReport) {
     await this.post("/vitals/update-scan-status", {
-      employee_id: employeeId, scan_token: token, device_model: "RPPG_CAREPLIX_FACE_WEB",
+      employee_id: employeeId, scan_token: token, device_model: report.device ?? "RPPG_CAREPLIX_FACE_WEB",
       fire_type: report.fireType, fire_reason: report.reason,
       error_list: report.errorCode ? [{ code: report.errorCode }] : [],
     }, 15_000);
@@ -93,7 +93,7 @@ export class HttpCarePlixProvider implements CarePlixProvider {
   async submit(context: FaceScanContext, signal: FaceScanSignal, token: string, expectedId: string) {
     const data = await this.post("/vitals/add-scan", {
       scan_token: token, employee_id: context.employeeId, dob: context.dob, gender: context.gender === "male" ? "Male" : "Female", posture: context.posture,
-      metadata: { physiological_scores: { height: String(context.heightCm), weight: String(context.weightKg) }, ppg_time: signal.ppg_time, raw_intensity: signal.raw_intensity, device: "RPPG_CAREPLIX_FACE_WEB", fps: Math.round(signal.average_fps) },
+      metadata: { physiological_scores: { height: String(context.heightCm), weight: String(context.weightKg) }, ppg_time: signal.ppg_time, raw_intensity: signal.raw_intensity, device: signal.device ?? "RPPG_CAREPLIX_FACE_WEB", fps: Math.round(signal.average_fps) },
     });
     if (!scanId.safeParse(data.scan_id).success || data.scan_id !== expectedId) throw new CarePlixResponseError(faceScanDiagnostic("/vitals/add-scan", 200, data, [this.settings.apiKey, this.settings.apiSecret, token, context.employeeId, context.dob], "SCAN_ID_MISMATCH"));
     try { return normalizeCarePlixResult(data, expectedId); }

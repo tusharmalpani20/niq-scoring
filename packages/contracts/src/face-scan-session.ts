@@ -22,7 +22,8 @@ export const faceScanSignalSchema = z.object({
   schemaVersion: z.literal(1).default(1),
   raw_intensity: z.array(z.object({ r: finite.nonnegative(), g: finite.nonnegative(), b: finite.nonnegative() }).strict()).min(1).max(FACE_SCAN_MAX_SAMPLES),
   ppg_time: z.array(finite.nonnegative()).min(1).max(FACE_SCAN_MAX_SAMPLES),
-  average_fps: finite.positive().max(240), deviceModel: z.string().min(1).max(200).optional(),
+  average_fps: finite.positive().max(240), device: z.enum(["RPPG_CAREPLIX_FACE_IOS", "RPPG_CAREPLIX_FACE_ANDROID"]).optional(),
+  deviceModel: z.string().min(1).max(200).optional(),
 }).strict().superRefine((value, ctx) => {
   if (value.raw_intensity.length !== value.ppg_time.length) ctx.addIssue({ code: "custom", message: "Signal and timing lengths differ" });
   if (value.ppg_time.some((time, index) => index > 0 && time <= value.ppg_time[index - 1]!)) ctx.addIssue({ code: "custom", message: "Timings must strictly increase" });
