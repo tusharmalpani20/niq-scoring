@@ -55,7 +55,7 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
     <TabsContent value="deployments" className="space-y-5"><Card><CardContent className="pt-6"><Table>
       <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Hosting</TableHead><TableHead>Environment</TableHead><TableHead>Status</TableHead><TableHead>Rule version</TableHead><TableHead>Scoring</TableHead><TableHead>Face scan</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
       <TableBody>{deployments.rows.map(deployment => <TableRow key={deployment.id}>
-        <TableCell><Button variant="link" className="h-auto p-0 text-left font-medium" onClick={() => setView({ id: deployment.id, tab: "details" })}>{clientName(deployment.clientId)}</Button></TableCell>
+        <TableCell><Button variant="link" className="h-auto p-0 text-left font-medium text-foreground" onClick={() => setView({ id: deployment.id, tab: "details" })}>{clientName(deployment.clientId)}</Button></TableCell>
         <TableCell>{deployment.hostingType ? hostingLabels[deployment.hostingType] : "Not specified"}</TableCell><TableCell className="capitalize">{deployment.environment}</TableCell><TableCell><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
         <TableCell>{deploymentVersion(data, deployment.id).label}</TableCell>
         {["SCORING", "FACE_SCAN"].map(capability => { const limit = data.entitlements.find(item => item.deploymentId === deployment.id && item.capability === capability); return <TableCell key={capability}>{!limit?.enabled ? "Disabled" : limit.monthlyLimit === null ? "Unlimited" : `${limit.monthlyLimit.toLocaleString()}/month`}</TableCell>; })}
