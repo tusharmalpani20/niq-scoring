@@ -270,5 +270,5 @@ export const faceScanReceipts = pgTable("face_scan_receipts", {
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => [uniqueIndex("face_scan_receipt_replay_uq").on(t.sessionId, t.channel, t.payloadHash),
   check("face_scan_receipt_channel_ck", sql`${t.channel} in ('DIRECT','WEBHOOK')`),
-  check("face_scan_receipt_disposition_ck", sql`${t.disposition} in ('ACCEPTED','DUPLICATE','CONFLICT','UNPROCESSABLE')`),
+  check("face_scan_receipt_disposition_ck", sql`${t.disposition} in ('RECEIVED','ACCEPTED','DUPLICATE','CONFLICT','UNPROCESSABLE')`),
 ]);

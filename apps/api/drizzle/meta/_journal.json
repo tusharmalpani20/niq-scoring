@@ -127,6 +127,13 @@
       "when": 1790063725339,
       "tag": "0017_glorious_doctor_doom",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790086000000,
+      "tag": "0018_preserve_scan_responses",
+      "breakpoints": true
     }
   ]
 }
