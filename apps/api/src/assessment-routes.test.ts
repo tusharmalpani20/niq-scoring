@@ -143,3 +143,17 @@ test("reviewed classification uses final-profile thresholds and rejects uncovere
   expect(success.status).toBe(200);
   expect((await success.json()).result).toMatchObject({ score: 68, classification: { id: "high" } });
 });
+
+test("reviewed classification cannot access another deployment's binding", async () => {
+  const { store, client, call, app } = await setup();
+  await call("start", { assessmentReference: "private-binding" });
+  const other = await store.createDeployment({ clientId: client.id, name: "Other deployment", environment: "test" });
+  await store.setEntitlement(other.id, { capability: "SCORING", enabled: true, monthlyLimit: 5 });
+  await store.assignVersion(other.id, { mode: "LATEST_APPROVED" });
+  const token = `niq_dep_other123456.${"b".repeat(40)}`;
+  store.credentials.push({ credentialId: createEntityId(), clientId: client.id, deploymentId: other.id, keyPrefix: "other123456", secretHash: new Bun.CryptoHasher("sha256").update(token).digest("hex") });
+  const response = await app.request("/v1/assessments/classify-reviewed", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ assessmentReference: "private-binding", score: 68, idempotencyKey: "other-review-key" }) });
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "ASSESSMENT_NOT_FOUND" });
+  expect(store.usages).toHaveLength(0);
+});
