@@ -55,7 +55,7 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
     await workflow.webhook({ scan_id: "synthetic-1", api_key: "do-not-store", event_data: { scan_id: "synthetic-1", event_key: "scan_completion", wellness_score: "78", vitals: { heart_rate: "70" } } });
     expect((await workflow.get(identity, id, "organization-a")).session.result).toEqual(completed.session.result);
     expect((await workflow.get(identity, id, "organization-a")).session.failureCode).toBeNull();
-    const [duplicateReceipt] = await db`select disposition from face_scan_receipts where session_id=${id} and channel='WEBHOOK'`;
+    const [duplicateReceipt] = await db`select disposition from face_scan_receipts where session_id=${id} and channel='WEBHOOK' and disposition <> 'RECEIVED'`;
     expect(duplicateReceipt?.disposition).toBe("DUPLICATE");
     await workflow.webhook({ scan_id: "synthetic-1", event_data: { scan_id: "synthetic-1", event_key: "scan_completion", wellness_score: 10, vitals: { heart_rate: 70 } } });
     const conflict = await workflow.get(identity, id, "organization-a");

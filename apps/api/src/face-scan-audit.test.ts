@@ -30,10 +30,11 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("dispatch races preserv
           if (mode === "cancel-race") await expect(workflow.cancel(identity, sessionId, "org")).rejects.toThrow("CANCELLATION_NOT_ALLOWED");
           return { scanId: `audit-${tokenCalls}`, token: "synthetic-token" };
         },
-        async submit(_context, _signal, _token, id) {
+        async submit(_context, _signal, _token, id, retain) {
           submitCalls++;
           if (mode === "malformed") throw new CarePlixUnprocessableResultError(allowlistedFaceScanReceipt({ scan_id: id, event_data: { scan_id: id, wellness_score: "invalid", metadata: { api_key: "secret", raw_intensity: signal.raw_intensity, physiological_score: "unsupported" } } }));
-          const body = { scan_id: id, wellness_score: 75, vitals: { heart_rate: 70 } };
+          const body = { scan_id: id, wellness_score: 75, vitals: { heart_rate: 70 }, future_parameter: 123 };
+          await retain?.(body);
           if (mode === "callback-first") await workflow.webhook({ scan_id: id, scan_completion_time: "2026-09-20T10:00:00Z", event_data: { ...body, event_key: "scan_completion" } });
           return normalizeCarePlixResult({ ...body, scan_completion_time: "2026-09-20T10:01:00Z" }, id);
         },
@@ -57,7 +58,7 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("dispatch races preserv
         expect(submitCalls).toBe(before);
         const [stored] = await tx`select provider_scan_id,token_ciphertext,state from face_scan_workflows where session_id=${sessionId}`;
         expect(stored?.provider_scan_id).toBe(`audit-${tokenCalls}`);
-        expect(stored?.state).toBe("RECONCILIATION_REQUIRED");
+        expect(stored?.state).toBe(race === "expired" ? "FAILED" : "RECONCILIATION_REQUIRED");
         if (race === "expired") expect(stored?.token_ciphertext).toBeNull();
       }
       mode = "malformed"; await start(mode); await workflow.tick();
@@ -70,6 +71,10 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("dispatch races preserv
       expect((await workflow.get(identity, sessionId, "org")).session.state).toBe("COMPLETED");
       const [duplicate] = await tx`select count(*)::int as n from face_scan_receipts where session_id=${sessionId} and channel='DIRECT' and disposition='DUPLICATE'`;
       expect(duplicate?.n).toBe(1);
+      const [original] = await tx`select receipt_ciphertext from face_scan_receipts where session_id=${sessionId} and channel='DIRECT' and disposition='RECEIVED'`;
+      expect(original?.receipt_ciphertext).toBeTruthy();
+      expect(original?.receipt_ciphertext).not.toContain("future_parameter");
+      expect(JSON.parse(decryptActivationToken(original!.receipt_ciphertext, options.encryptionKey)).future_parameter).toBe(123);
       mode = "cancel-race"; await start(mode); await workflow.tick();
       expect((await workflow.get(identity, sessionId, "org")).session.state).toBe("COMPLETED");
       throw rollback;

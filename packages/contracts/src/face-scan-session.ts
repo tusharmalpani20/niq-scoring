@@ -35,5 +35,6 @@ export type FaceScanState = "REQUESTED" | "UPLOAD_ACCEPTED" | "PROCESSING" | "CO
 export type FaceScanResult = {
   schemaVersion: 1; providerScanId: string; providerCompletedAt: string | null; wellnessScore: number | null; healthRiskScore: number | null;
   vitals: { heartRate: number | null; oxygenSaturation: number | null; respiratoryRate: number | null; systolic: number | null; diastolic: number | null };
+  additionalMetrics?: Record<string, number | string | null>;
   physiologicalScore: number | null; mentalWellbeingScore: number | null;
 };

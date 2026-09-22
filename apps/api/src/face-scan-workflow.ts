@@ -172,7 +172,7 @@ export class FaceScanWorkflow {
        returning session_id`;
      if (!submitted.length) throw new FaceScanError("SUBMISSION_NO_LONGER_ALLOWED");
      if (!this.options.enabled()) throw new FaceScanError("DISPATCH_PAUSED_AFTER_TOKEN");
-     const result = await this.options.provider.submit(context, signal, token.token, token.scanId);
+     const result = await this.options.provider.submit(context, signal, token.token, token.scanId, receipt => this.retainReceipt(row.session_id, "DIRECT", receipt));
      submissionReturned = true;
      await this.receive(row.session_id, "DIRECT", result);
    } catch (error) {
@@ -210,6 +210,12 @@ export class FaceScanWorkflow {
        } catch { /* Telemetry persistence/delivery must never replace or fail the scan result. */ }
      }
    }
+ }
+ async retainReceipt(id: string, channel: "DIRECT" | "WEBHOOK", receipt: unknown) {
+   const clean = allowlistedFaceScanReceipt(receipt as object);
+   await this.sql`insert into face_scan_receipts(id,session_id,channel,payload_hash,normalized_result,disposition,receipt_ciphertext)
+     values(${createEntityId()},${id},${channel},${faceScanHash({ originalResponse: clean })},null,'RECEIVED',${this.encrypt(clean)})
+     on conflict(session_id,channel,payload_hash) do nothing`;
  }
  async receive(id: string, channel: "DIRECT" | "WEBHOOK", result: FaceScanResult | null, invalidHash?: string, receipt?: unknown) {
    const hash = invalidHash ?? (result ? semanticHash(result) : faceScanHash(null));
@@ -252,6 +258,7 @@ export class FaceScanWorkflow {
    if (!body || typeof body !== "object" || !("scan_id" in body) || typeof body.scan_id !== "string") throw new FaceScanError("INVALID_WEBHOOK", 400);
    const [row] = await this.sql<Row[]>`select * from face_scan_workflows where provider_account=${this.options.providerAccount} and provider_scan_id=${body.scan_id}`;
    if (!row) throw new FaceScanError("UNKNOWN_PROVIDER_SCAN", 404);
+   await this.retainReceipt(row.session_id, "WEBHOOK", body);
    let result: FaceScanResult | null = null;
    try {
      const event = (body as Record<string, unknown>).event_data;

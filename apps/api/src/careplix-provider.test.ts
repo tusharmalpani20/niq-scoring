@@ -45,7 +45,7 @@ test("unsupported successful direct responses retain sanitized repair evidence o
     expect(retained).toContain("unsupported-format");
     expect(retained).not.toContain("secret-value");
     expect(retained).not.toContain("raw_intensity");
-    expect(retained).not.toContain("unapproved");
+    expect(retained).toContain("unapproved");
   }
   response = { ...response, scan_id: "another-scan" };
   try { await provider.submit(context, signal, "token", "scan-1"); }
@@ -118,4 +118,33 @@ test("browser device survives validation and is shared by submission and telemet
     expect(calls[1].device_model).toBe(device);
   }
   expect(faceScanSignalSchema.safeParse({...signal,device:"arbitrary"}).success).toBe(false);
+});
+
+
+test("retains complete sanitised response before extracting extended metrics", async () => {
+  const rich = {...body, future_result: {unknown_measurement: 19}, api_key: "private-key", metadata: {
+    heart_scores: {sdnn: 47.5, rmssd: "25.44", pNN50_per: 37.5, THRR: "< 95", rr_hist: [1, 2]},
+    cardiovascular: {cardiac_out: 5.04, map: 89.67}, glucose_info: {status: "beta", hba1c: "<5.7", diabetes_control_score: 87.5},
+    physiological_scores: {vo2max: "39.98", bmi: "26.37"}, overall_heart_score: 75,
+    heartrate_time: [72, 73], raw_intensity: ["camera data"], note: "private-secret", scan_token: "private-token"
+  }};
+  const provider = new HttpCarePlixProvider({baseUrl:"https://example.invalid",apiKey:"private-key",apiSecret:"private-secret"}, (async () => Response.json(rich)) as unknown as typeof fetch);
+  let retained: any;
+  const result = await provider.submit(context, signal, "private-token", "scan-1", async receipt => { retained = receipt; });
+  expect(retained.future_result).toEqual({unknown_measurement:19});
+  expect(retained.metadata.glucose_info).toEqual(rich.metadata.glucose_info);
+  expect(retained.metadata.heartrate_time).toEqual([72,73]);
+  expect(JSON.stringify(retained)).not.toContain("private-");
+  expect(retained.metadata.raw_intensity).toBeUndefined();
+  expect(result.additionalMetrics).toMatchObject({hba1c:"<5.7",sdnn:47.5,rmssd:"25.44",vo2max:"39.98",heartHealthScore:75});
+  expect(result.additionalMetrics?.stressIndex).toBeNull();
+});
+
+test("retains rejected and unparseable result structures before raising failure", async () => {
+  for (const response of [{...body,statusCode:500,message:"Rejected",extra:{detail:1}}, {...body,wellness_score:"invalid"}]) {
+    let retained: unknown;
+    const provider = new HttpCarePlixProvider({baseUrl:"https://example.invalid",apiKey:"private-key",apiSecret:"private-secret"}, (async () => Response.json(response)) as unknown as typeof fetch);
+    await expect(provider.submit(context,signal,"token","scan-1",async data=>{retained=data;})).rejects.toThrow();
+    expect(retained).toEqual(response);
+  }
 });
