@@ -20,6 +20,7 @@ test("deployments show and filter resolved versions and explain the default", as
         { id: "v2", version: "Rules 2", lifecycle: "ACTIVE", clinicalUsePermitted: true, isDefault: true },
       ],
     } });
+    if (path === "/api/admin/clients/c1/usage") return route.fulfill({ json: { deployments: [{ deploymentId: "d1", assessments: 0, vitalIq: 0, monthly: [] }] } });
     if (path === "/api/admin/deployments/d1/configuration") {
       saved = route.request().postDataJSON();
       return route.fulfill({ json: { id: "d1" } });
@@ -33,10 +34,14 @@ test("deployments show and filter resolved versions and explain the default", as
   await expect(table.getByText("Rules 1", { exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: "Rules", exact: true }).click();
   await page.getByRole("option", { name: "Rules 2", exact: true }).click();
-  await expect(table.getByRole("button", { name: "Apollo", exact: true })).toBeVisible();
-  await expect(table.getByRole("button", { name: "Beta", exact: true })).toHaveCount(0);
+  await expect(table.getByRole("link", { name: "Apollo", exact: true })).toBeVisible();
+  await expect(table.getByRole("link", { name: "Beta", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Clear filters", exact: true }).click();
-  await expect(table.getByRole("button", { name: "Beta", exact: true })).toBeVisible();
+  await expect(table.getByRole("link", { name: "Beta", exact: true })).toBeVisible();
+  await table.getByRole("link", { name: "Apollo", exact: true }).click();
+  await expect(page).toHaveURL(/\/deployments\/d1$/);
+  await expect(page.getByRole("heading", { name: "Production" })).toBeVisible();
+  await page.goto("/deployments");
   await page.getByRole("button", { name: "Edit Apollo production deployment", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("list", { name: "Editing progress" })).toHaveCount(0);

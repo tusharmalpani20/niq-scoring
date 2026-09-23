@@ -28,4 +28,13 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("link", { name: "Production" })).toBeVisible();
   await page.getByRole("button", { name: "Create deployment" }).click();
   await expect(page.getByRole("dialog").getByRole("combobox", { name: "Client" })).toHaveText("Apollo");
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("link", { name: "Production" }).click();
+  await expect(page).toHaveURL(/\/deployments\/d1$/);
+  await expect(page.getByRole("heading", { name: "Production" })).toBeVisible();
+  await expect(page.locator(".recharts-surface")).toBeVisible();
+  await page.getByRole("tab", { name: "Settings & limits" }).click();
+  await expect(page.getByText("NIQ hosted", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Edit deployment" }).click();
+  await expect(page.getByRole("dialog")).toContainText("Apollo");
 });

@@ -1,7 +1,7 @@
 import { deploymentVersion } from "./deployment-version";
-import { DeploymentDetailsDialog } from "./DeploymentDetailsDialog";
 import { DeleteRecord } from "./DeleteRecord";
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Plus, X, Pencil } from "lucide-react";
 import type { Overview } from "./Operations";
 import { DeploymentDialog } from "./DeploymentDialog";
@@ -16,9 +16,8 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from ".
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
 export const hostingLabels = { NIQ_HOSTED: "NIQ hosted", CLIENT_CLOUD: "Client cloud", ON_PREMISES: "On-premises" };
 export function Deployments({ data, refresh }: { data: Overview; refresh: () => Promise<void> }) {
+  const navigate = useNavigate();
   const [selected, setSelected] = useState<Overview["deployments"][number] | null | undefined>(undefined);
-  const [view, setView] = useState<{ id: string; tab: "details" | "tokens" } | null>(null);
-  const viewed = data.deployments.find(item => item.id === view?.id);
   const [search, setSearch] = useState("");
   const [hosting, setHosting] = useState("all");
   const [status, setStatus] = useState("all");
@@ -55,7 +54,7 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
     <TabsContent value="deployments" className="space-y-5"><Card><CardContent className="pt-6"><Table>
       <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Hosting</TableHead><TableHead>Environment</TableHead><TableHead>Status</TableHead><TableHead>Rule</TableHead><TableHead>Assessments</TableHead><TableHead>Vital IQ</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
       <TableBody>{deployments.rows.map(deployment => <TableRow key={deployment.id}>
-        <TableCell><Button variant="link" className="h-auto p-0 text-left font-medium text-foreground" onClick={() => setView({ id: deployment.id, tab: "details" })}>{clientName(deployment.clientId)}</Button></TableCell>
+        <TableCell><Link to={`/deployments/${deployment.id}`} className="font-medium text-primary hover:underline">{clientName(deployment.clientId)}</Link></TableCell>
         <TableCell>{deployment.hostingType ? hostingLabels[deployment.hostingType] : "Not specified"}</TableCell><TableCell className="capitalize">{deployment.environment}</TableCell><TableCell><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
         <TableCell>{deploymentVersion(data, deployment.id).label}</TableCell>
         {["SCORING", "FACE_SCAN"].map(capability => { const limit = data.entitlements.find(item => item.deploymentId === deployment.id && item.capability === capability); return <TableCell key={capability}>{!limit?.enabled ? "Disabled" : limit.monthlyLimit === null ? "Unlimited" : `${limit.monthlyLimit.toLocaleString()}/month`}</TableCell>; })}
@@ -66,7 +65,6 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
       </TableBody></Table></CardContent></Card>
       <Pagination aria-label="Deployments pagination"><PaginationContent><PaginationItem><Button variant="outline" size="sm" disabled={deployments.page === 1} onClick={() => setPage(deployments.page - 1)}>Previous</Button></PaginationItem><PaginationItem><span className="flex flex-col items-center gap-1 px-2 text-xs text-muted-foreground sm:block sm:px-3 sm:text-sm" role="status"><span className="whitespace-nowrap">Page {deployments.page} of {deployments.pageCount}</span><span className="whitespace-nowrap"><span className="hidden sm:inline"> · </span>{deployments.total} total</span></span></PaginationItem><PaginationItem><Button variant="outline" size="sm" disabled={deployments.page === deployments.pageCount} onClick={() => setPage(deployments.page + 1)}>Next</Button></PaginationItem></PaginationContent></Pagination>
     </TabsContent>
-    {view && viewed && <DeploymentDetailsDialog data={data} deployment={viewed} clientName={clientName(viewed.clientId)} hostingLabel={viewed.hostingType ? hostingLabels[viewed.hostingType] : "Not specified"} initialTab={view.tab} onClose={() => setView(null)} />}
-    {selected !== undefined && <DeploymentDialog data={data} deployment={selected} refresh={refresh} onClose={() => setSelected(undefined)} onCreated={id => { setSelected(undefined); setView({ id, tab: "tokens" }); }} />}
+    {selected !== undefined && <DeploymentDialog data={data} deployment={selected} refresh={refresh} onClose={() => setSelected(undefined)} onCreated={id => { setSelected(undefined); navigate(`/deployments/${id}?tab=tokens`); }} />}
   </Tabs>;
 }
