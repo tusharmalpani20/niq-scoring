@@ -15,6 +15,7 @@ test("client opens a detail page with usage and its deployments", async ({ page 
       { month: "2026-06", assessments: 4, vitalIq: 2 }, { month: "2026-07", assessments: 2, vitalIq: 1 },
       { month: "2026-08", assessments: 3, vitalIq: 1 }, { month: "2026-09", assessments: 4, vitalIq: 1 },
     ] }] } });
+    if (path === "/api/admin/deployments/d1/activation-tokens") return route.fulfill({ json: { tokens: [] } });
     return route.fulfill({ status: 404, json: { error: "NOT_FOUND" } });
   });
   await page.goto("/clients");
@@ -37,4 +38,8 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByText("NIQ hosted", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Edit deployment" }).click();
   await expect(page.getByRole("dialog")).toContainText("Apollo");
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("tab", { name: "Tokens" }).click();
+  await expect(page.getByRole("region", { name: "Activation tokens" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });

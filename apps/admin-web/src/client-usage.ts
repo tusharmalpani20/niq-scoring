@@ -12,6 +12,7 @@ export function useClientUsage(clientId: string) {
     let active = true;
     setUsage(null);
     setError("");
+    if (!clientId) { setUsage([]); return () => { active = false; }; }
     void request<{ deployments: DeploymentUsage[] }>(`/admin/clients/${clientId}/usage`).then(result => {
       if (active) setUsage(result.deployments);
     }).catch(cause => { if (active) setError(message(cause)); });
