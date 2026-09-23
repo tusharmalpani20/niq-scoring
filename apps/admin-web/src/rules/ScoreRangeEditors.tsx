@@ -72,8 +72,15 @@ export function SimpleRiskEditor({ definition, disabled, onChange, drafts, setDr
   };
   const coverage = riskCoverageIssues(definition.riskCategories);
   const affectedRangeId = editedRangeId && coverage.has(editedRangeId) ? editedRangeId : coverage.keys().next().value;
-  const messages = validateFinalAssessmentDefinition(definition).filter(issue => issue.path.startsWith("riskCategories") && issue.code !== "RISK_RANGE_COVERAGE").map(issue => issue.message);
-  if (definition.riskCategories.some(category => !category.label.trim())) messages.push("Enter a name for every category.");
+  const nameIssues = new Map<string, string>();
+  const seenNames = new Set<string>();
+  for (const category of definition.riskCategories) {
+    const name = category.label.trim().replace(/\s+/g, " ").toLowerCase();
+    if (!name) nameIssues.set(category.id, "Enter a category name.");
+    else if (seenNames.has(name)) nameIssues.set(category.id, "Use a different category name.");
+    seenNames.add(name);
+  }
+  const messages = validateFinalAssessmentDefinition(definition).filter(issue => issue.path.startsWith("riskCategories") && issue.code !== "RISK_RANGE_COVERAGE" && issue.code !== "DUPLICATE_CATEGORY_NAME").map(issue => issue.message);
   const clearDraft = (prefix: string) => setDrafts(current => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(prefix))));
   return <fieldset disabled={disabled} className="min-w-0 space-y-4 rounded-xl border bg-card p-4 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Risk categories</h2><p className="mt-1 text-sm text-muted-foreground">Give each total score a risk category.</p></div><Button type="button" variant="outline" size="sm" disabled={definition.riskCategories.length >= 20} onClick={() => { const id = newRuleId("category"); setEditedRangeId(id); onChange({ ...definition, riskCategories: [...definition.riskCategories, { id, label: "New category", interpretation: "", min: 0, max: null, minInclusive: true, maxInclusive: true, sources: [] }] }); }}><Plus className="size-4" aria-hidden="true" />Add category</Button></div>
     <div className="divide-y rounded-lg border">{definition.riskCategories.map(category => {
@@ -87,7 +94,7 @@ export function SimpleRiskEditor({ definition, disabled, onChange, drafts, setDr
           <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0 text-destructive" aria-label={`Remove ${category.label}`} title={`Remove ${category.label}`} disabled={definition.riskCategories.length <= 1} onClick={() => { clearDraft(`risk:${category.id}:`); if (editedRangeId === category.id) setEditedRangeId(null); onChange({ ...definition, riskCategories: definition.riskCategories.filter(item => item.id !== category.id) }); }}><Trash2 className="size-4" aria-hidden="true" /></Button>
         </div>
         {rowIssues.length > 0 && <p role="alert" aria-label="Score range issue" className="text-sm text-destructive"><span className="font-medium">Fix this score range.</span> {rowIssues.join(" ")}</p>}
-        <label className="block min-w-0 space-y-1 text-sm"><span className="text-xs text-muted-foreground">Category name</span><Input className="h-9 shadow-none" value={category.label} onChange={event => patch(category.id, { label: event.target.value })} /></label>
+        <label className="block min-w-0 space-y-1 text-sm"><span className="text-xs text-muted-foreground">Category name</span><Input id={`risk-category-name-${category.id}`} className="h-9 shadow-none" value={category.label} aria-invalid={nameIssues.has(category.id)} aria-describedby={nameIssues.has(category.id) ? `risk-category-name-error-${category.id}` : undefined} onChange={event => patch(category.id, { label: event.target.value })} />{nameIssues.has(category.id) && <span id={`risk-category-name-error-${category.id}`} role="alert" className="text-xs text-destructive">{nameIssues.get(category.id)}</span>}</label>
         <details className="text-sm"><summary className="cursor-pointer text-primary">Edit score range</summary>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <NumberCell label="From score" draftKey={`risk:${category.id}:from`} value={from} drafts={drafts} setDrafts={setDrafts} onChange={min => patch(category.id, { min, minInclusive: true })} />

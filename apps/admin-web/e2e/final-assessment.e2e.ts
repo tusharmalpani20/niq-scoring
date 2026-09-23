@@ -114,10 +114,15 @@ test("risk names reject duplicates and blank numeric ranges stay invalid", async
   await mockFinalConsole(page);
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
-  await page.getByLabel("Category name", { exact: true }).nth(1).fill("Low Risk");
+  const editedName = page.getByRole("group", { name: "Risk category Moderate Risk" }).getByLabel("Category name", { exact: true });
+  await editedName.fill("Low Risk");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByRole("alert", { name: "Range errors" })).toContainText(/unique|duplicate/i);
-  await page.getByLabel("Category name", { exact: true }).nth(1).fill("Moderate Risk");
+  const duplicateName = page.locator("#risk-category-name-moderate");
+  await expect(duplicateName).toBeFocused();
+  await expect(duplicateName).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText("Use a different category name.")).toBeVisible();
+  await expect(page.getByRole("alert", { name: "Range errors" })).toHaveCount(0);
+  await page.locator("#risk-category-name-moderate").fill("Moderate Risk");
   await page.getByText("Edit score range", { exact: true }).nth(1).click();
   const from = page.getByLabel("From score", { exact: true }).nth(1);
   await from.fill("");
@@ -125,6 +130,22 @@ test("risk names reject duplicates and blank numeric ranges stay invalid", async
   await expect(page.getByText("Enter a whole number of 0 or more.", { exact: true })).toBeVisible();
   await expect(from).toHaveValue("");
   await expect(from).toHaveAttribute("aria-invalid", "true");
+});
+
+test("empty risk category name is highlighted and focused on save", async ({ page }) => {
+  await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
+  const name = page.locator("#risk-category-name-low");
+  await name.fill("");
+  await expect(name).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText("Enter a category name.")).toBeVisible();
+  await expect(page.getByRole("alert", { name: "Range errors" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(name).toBeFocused();
+  await name.fill("Low Risk");
+  await expect(name).toHaveAttribute("aria-invalid", "false");
+  await expect(page.getByText("Enter a category name.")).toHaveCount(0);
 });
 
 test("confirmed drafts validate, approve explicitly and activate without editing approved settings", async ({ page }, info) => {

@@ -139,6 +139,14 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
         return;
       }
       if (path.startsWith("riskCategories") || path.startsWith("risk:")) {
+        const categoryIndex = Number(path.match(/^riskCategories\.(\d+)\.label$/)?.[1]);
+        const categoryId = definition?.riskCategories[categoryIndex]?.id;
+        const nameInput = categoryId ? document.getElementById(`risk-category-name-${categoryId}`) : null;
+        if (nameInput) {
+          nameInput.focus();
+          nameInput.scrollIntoView({ block: "center" });
+          return;
+        }
         const row = document.querySelector<HTMLElement>('[role="group"][aria-invalid="true"][aria-label^="Risk category"]');
         if (row) {
           row.focus();
