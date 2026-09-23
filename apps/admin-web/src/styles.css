@@ -59,6 +59,8 @@
   --border: #dce3eb;
   --input: var(--border);
   --ring: var(--primary);
+  --chart-1: var(--primary);
+  --chart-2: #588fab;
   --popover: var(--card);
   --popover-foreground: var(--foreground);
   --sidebar: var(--card);

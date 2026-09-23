@@ -14,23 +14,25 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
+    "@niq-scoring/contracts": "workspace:*",
+    "@niq-scoring/scoring-engine": "workspace:*",
     "@radix-ui/react-slot": "^1.3.3",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^5.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cn": "^0.4.0",
     "lucide-react": "^1.45.0",
     "radix-ui": "^1.6.7",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-hook-form": "^7.88.0",
     "react-router-dom": "^7.18.3",
+    "recharts": "3.8.0",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",
     "vite": "^7.1.4",
-    "zod": "^4.6.4",
-    "@niq-scoring/contracts": "workspace:*",
-    "@niq-scoring/scoring-engine": "workspace:*"
+    "zod": "^4.6.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
