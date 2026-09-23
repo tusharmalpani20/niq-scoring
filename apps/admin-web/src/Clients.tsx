@@ -86,7 +86,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
         <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Deployments</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
           {clients.rows.map(client => <TableRow key={client.id}>
-            <TableCell className="font-medium"><Link to={`/clients/${client.id}`} className="text-primary hover:underline">{client.name}</Link></TableCell>
+            <TableCell className="font-medium"><Link to={`/clients/${client.id}`} className="text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{client.name}</Link></TableCell>
             <TableCell><Badge variant={client.enabled ? "default" : "secondary"}>{client.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
             <TableCell className="text-right tabular-nums">{data.deployments.filter(deployment => deployment.clientId === client.id).length}</TableCell>
             <TableCell className="text-right"><div className="flex items-center justify-end gap-1">
