@@ -99,6 +99,7 @@ test("risk names reject duplicates and blank numeric ranges stay invalid", async
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByRole("alert", { name: "Range errors" })).toContainText(/unique|duplicate/i);
   await page.getByLabel("Category name", { exact: true }).nth(1).fill("Moderate Risk");
+  await page.getByText("Edit score range", { exact: true }).nth(1).click();
   const from = page.getByLabel("From score", { exact: true }).nth(1);
   await from.fill("");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
@@ -235,6 +236,9 @@ test("simple risk ranges preserve exclusive historical endpoints and save inclus
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
   await expect(page.getByRole("combobox")).toHaveCount(0);
+  await expect(page.getByText("0–15 points", { exact: true })).toBeVisible();
+  await expect(page.getByText("26 points and above", { exact: true })).toBeVisible();
+  for (const control of await page.getByText("Edit score range", { exact: true }).all()) await control.click();
   await expect(page.getByLabel("From score", { exact: true }).nth(2)).toHaveValue("26");
   await page.getByLabel("To score", { exact: true }).nth(0).fill("14");
   await page.getByLabel("From score", { exact: true }).nth(1).fill("15");
@@ -255,6 +259,7 @@ test("risk overlap is visible before saving and cannot persist", async ({ page }
   const state = await mockFinalConsole(page);
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
+  await page.getByText("Edit score range", { exact: true }).nth(2).click();
   await page.getByLabel("From score", { exact: true }).nth(2).fill("20");
   await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("overlaps");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
