@@ -35,11 +35,15 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("heading", { name: "Production" })).toBeVisible();
   await expect(page.locator(".recharts-surface")).toBeVisible();
   await page.getByRole("tab", { name: "Settings & limits" }).click();
+  await expect(page.getByRole("heading", { name: "Settings & limits" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Rules & limits" })).toBeVisible();
   await expect(page.getByText("NIQ hosted", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Edit deployment" }).click();
   await expect(page.getByRole("dialog")).toContainText("Apollo");
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("tab", { name: "Tokens" }).click();
   await expect(page.getByRole("region", { name: "Activation tokens" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create token" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Actions" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
