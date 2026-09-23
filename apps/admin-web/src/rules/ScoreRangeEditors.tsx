@@ -40,18 +40,59 @@ export function SimpleRiskEditor({ definition, disabled, onChange, drafts, setDr
     })}</div><RangeErrors messages={messages} /><p className="text-xs text-muted-foreground">From and To are included. Every whole-number score must belong to exactly one category.</p></fieldset>;
 }
 
+function vitalIqRangeText(range: FaceScanRangeConfig["ranges"][number]): string {
+  if (range.min === 0 && range.minInclusive && range.max === 100 && range.maxInclusive) return "All scores (0–100)";
+  if (range.min === 0 && range.minInclusive) return range.maxInclusive ? `Up to ${range.max}` : `Below ${range.max}`;
+  if (range.max === 100 && range.maxInclusive) return range.minInclusive ? `${range.min} and above` : `Above ${range.min}`;
+  return `${range.minInclusive ? "From" : "Above"} ${range.min} ${range.maxInclusive ? "through" : "to below"} ${range.max}`;
+}
+
 export function FaceScanEditor({ definition, disabled, onChange, drafts, setDrafts }: EditorProps) {
   const config = normalizeFaceScanScoringConfig(definition.faceScanScoring ?? DEFAULT_FACE_SCAN_SCORING_CONFIG);
   const validation = faceScanRangeConfigSchema.safeParse(config);
-  const messages = validation.success ? [] : validation.error.issues.map(issue => `${issue.code !== "custom" && typeof issue.path[1] === "number" ? `Range ${issue.path[1] + 1}: ` : ""}${issue.message}`);
-  const patch = (id: string, change: Partial<FaceScanRangeConfig["ranges"][number]>) => onChange({ ...definition, faceScanScoring: { ranges: config.ranges.map(range => range.id === id ? { ...range, ...change } : range) } });
+  const messages = validation.success ? [] : validation.error.issues.map(issue =>
+    `${issue.code !== "custom" && typeof issue.path[1] === "number" ? `Range ${issue.path[1] + 1}: ` : ""}${issue.message}`);
+  const patch = (id: string, change: Partial<FaceScanRangeConfig["ranges"][number]>) =>
+    onChange({ ...definition, faceScanScoring: { ranges: config.ranges.map(range => range.id === id ? { ...range, ...change } : range) } });
+
   function addRange() {
-    // Split the last range so adding a row starts with complete coverage.
+    // Splitting the final band keeps coverage valid while the user edits it.
     const last = config.ranges.at(-1)!;
     const middle = last.min + (last.max - last.min) / 2;
     if (middle <= last.min || middle >= last.max) return;
-    onChange({ ...definition, faceScanScoring: { ranges: [...config.ranges.slice(0, -1), { ...last, max: middle, maxInclusive: true }, { ...last, id: newRuleId("face"), min: middle, minInclusive: false }] } });
+    onChange({ ...definition, faceScanScoring: { ranges: [
+      ...config.ranges.slice(0, -1),
+      { ...last, max: middle, maxInclusive: true },
+      { ...last, id: newRuleId("face"), label: "", min: middle, minInclusive: false },
+    ] } });
     setDrafts(current => Object.fromEntries(Object.entries(current).filter(([key]) => key !== `face-range:${last.id}:to`)));
   }
-  return <fieldset disabled={disabled} className="min-w-0 space-y-4 rounded-xl border bg-card p-4 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Face-scan scoring</h2><p className="mt-1 text-sm text-muted-foreground">Set points for each Overall Health Score range.</p></div><Button type="button" variant="outline" size="icon" aria-label="Add range" title="Add range" disabled={config.ranges.length >= 20} onClick={addRange}><Plus className="size-4" aria-hidden="true" /></Button></div><div className="divide-y rounded-lg border">{config.ranges.map((range, index) => <div key={range.id} className="space-y-2 p-3"><h3 className="text-xs font-medium text-muted-foreground">Row {index + 1}</h3><div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_2rem] items-start gap-2 sm:gap-3"><NumberCell label="From (%)" draftKey={`face-range:${range.id}:from`} value={range.min} percent drafts={drafts} setDrafts={setDrafts} onChange={min => patch(range.id, { min })} /><NumberCell label="To (%)" draftKey={`face-range:${range.id}:to`} value={range.max} percent drafts={drafts} setDrafts={setDrafts} onChange={max => patch(range.id, { max })} /><NumberCell label="Points" draftKey={`face-points:${range.id}`} value={range.points} drafts={drafts} setDrafts={setDrafts} onChange={points => patch(range.id, { points })} /><Button type="button" variant="ghost" size="icon" className="mt-5 size-8 text-destructive" aria-label={`Remove range ${index + 1}`} title="Remove range" disabled={config.ranges.length <= 1} onClick={() => { setDrafts(current => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`face-range:${range.id}:`) && key !== `face-points:${range.id}`))); onChange({ ...definition, faceScanScoring: { ranges: config.ranges.filter(item => item.id !== range.id) } }); }}><Trash2 className="size-4" aria-hidden="true" /></Button></div><p className="text-xs text-muted-foreground">{range.minInclusive ? "From" : "Above"} {range.min}% {range.maxInclusive ? "through" : "to below"} {range.max}%</p><details className="text-xs"><summary className="cursor-pointer text-muted-foreground">Range details</summary><div className="mt-2 flex flex-wrap gap-4"><label className="flex items-center gap-2"><input type="checkbox" checked={range.minInclusive} onChange={event => patch(range.id, { minInclusive: event.target.checked })} />Include {range.min}%</label><label className="flex items-center gap-2"><input type="checkbox" checked={range.maxInclusive} onChange={event => patch(range.id, { maxInclusive: event.target.checked })} />Include {range.max}%</label></div></details></div>)}</div><RangeErrors messages={messages} /><p className="text-xs text-muted-foreground">Cover 0–100% without gaps or overlaps. This score is separate from the assessment.</p></fieldset>;
+
+  return <fieldset disabled={disabled} className="min-w-0 space-y-4 rounded-xl border bg-card p-4 sm:p-5">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div><h2 className="font-semibold">Vital IQ scoring</h2><p className="mt-1 text-sm text-muted-foreground">Assign NIQ points using the Overall Health Score (0–100).</p></div>
+      <Button type="button" variant="outline" size="sm" disabled={config.ranges.length >= 20} onClick={addRange}><Plus className="size-4" aria-hidden="true" />Add range</Button>
+    </div>
+    <div className="divide-y rounded-lg border">{config.ranges.map((range, index) => <div key={range.id} className="space-y-3 p-3 sm:p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div><h3 className="font-medium">{vitalIqRangeText(range)}</h3><p className="text-xs text-muted-foreground">Overall Health Score · Range {index + 1}</p></div>
+        <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0 text-destructive" aria-label={`Remove range ${index + 1}`} title="Remove range" disabled={config.ranges.length <= 1} onClick={() => {
+          setDrafts(current => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`face-range:${range.id}:`) && key !== `face-points:${range.id}`)));
+          onChange({ ...definition, faceScanScoring: { ranges: config.ranges.filter(item => item.id !== range.id) } });
+        }}><Trash2 className="size-4" aria-hidden="true" /></Button>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-end">
+        <label className="block min-w-0 space-y-1 text-sm"><span className="text-xs text-muted-foreground">Label (optional)</span><Input className="h-9 shadow-none" maxLength={80} placeholder="What is this range for?" value={range.label ?? ""} onChange={event => patch(range.id, { label: event.target.value })} /></label>
+        <NumberCell label="NIQ points" draftKey={`face-points:${range.id}`} value={range.points} drafts={drafts} setDrafts={setDrafts} onChange={points => patch(range.id, { points })} />
+      </div>
+      <details className="text-sm"><summary className="cursor-pointer text-primary">Edit score boundaries</summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2"><NumberCell label="From score" draftKey={`face-range:${range.id}:from`} value={range.min} percent drafts={drafts} setDrafts={setDrafts} onChange={min => patch(range.id, { min })} /><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={range.minInclusive} onChange={event => patch(range.id, { minInclusive: event.target.checked })} />Include {range.min}</label></div>
+          <div className="space-y-2"><NumberCell label="To score" draftKey={`face-range:${range.id}:to`} value={range.max} percent drafts={drafts} setDrafts={setDrafts} onChange={max => patch(range.id, { max })} /><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={range.maxInclusive} onChange={event => patch(range.id, { maxInclusive: event.target.checked })} />Include {range.max}</label></div>
+        </div>
+      </details>
+    </div>)}</div>
+    <RangeErrors messages={messages} />
+    <p className="text-xs text-muted-foreground">Ranges must cover 0–100 without gaps or overlaps. Vital IQ points are separate from questionnaire points.</p>
+  </fieldset>;
 }

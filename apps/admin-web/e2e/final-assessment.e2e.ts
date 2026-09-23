@@ -43,7 +43,7 @@ for (const width of [390, 768, 845, 1065, 1440]) {
     for (const input of await weightPoints.all()) {
       if (await input.isVisible()) expect((await input.boundingBox())!.width).toBeLessThanOrEqual(90);
     }
-    for (const tab of ["Risk categories", "Face scan", "Scoring"]) {
+    for (const tab of ["Risk categories", "Vital IQ", "Scoring"]) {
       await page.getByRole("tab", { name: tab, exact: true }).click();
       expect(await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>("main *")).filter(el => el.clientWidth > 1 && !el.classList.contains("sr-only") && el.scrollWidth > el.clientWidth + 2 && getComputedStyle(el).overflowX !== "visible").map(el => el.tagName + "." + el.className))).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
@@ -199,31 +199,35 @@ test("activation can explicitly make a version the default", async ({ page }) =>
 test("face scan ranges persist and gaps cannot be saved", async ({ page }) => {
   const state = await mockFinalConsole(page);
   await startFinalDraft(page);
-  await page.getByRole("tab", { name: "Face scan", exact: true }).click();
+  await page.getByRole("tab", { name: "Vital IQ", exact: true }).click();
   await expect(page.getByText(/cutoff/i)).toHaveCount(0);
-  await page.getByLabel("To (%)", { exact: true }).nth(0).fill("65.5");
-  await page.getByLabel("From (%)", { exact: true }).nth(1).fill("65.5");
-  await page.getByLabel("Points", { exact: true }).nth(0).fill("4");
+  for (const details of await page.getByText("Edit score boundaries", { exact: true }).all()) await details.click();
+  await page.getByLabel("Label (optional)").nth(1).fill("Needs attention");
+  await page.getByLabel("To score", { exact: true }).nth(0).fill("65.5");
+  await page.getByLabel("From score", { exact: true }).nth(1).fill("65.5");
+  await page.getByLabel("NIQ points", { exact: true }).nth(0).fill("4");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
   await page.reload();
-  await page.getByRole("tab", { name: "Face scan", exact: true }).click();
-  await expect(page.getByLabel("To (%)", { exact: true }).nth(0)).toHaveValue("65.5");
-  await expect(page.getByLabel("Points", { exact: true }).nth(0)).toHaveValue("4");
+  await page.getByRole("tab", { name: "Vital IQ", exact: true }).click();
+  for (const details of await page.getByText("Edit score boundaries", { exact: true }).all()) await details.click();
+  await expect(page.getByLabel("Label (optional)").nth(1)).toHaveValue("Needs attention");
+  await expect(page.getByLabel("To score", { exact: true }).nth(0)).toHaveValue("65.5");
+  await expect(page.getByLabel("NIQ points", { exact: true }).nth(0)).toHaveValue("4");
   await page.getByRole("button", { name: "Add range", exact: true }).click();
-  await expect(page.getByLabel("Points", { exact: true })).toHaveCount(4);
+  await expect(page.getByLabel("NIQ points", { exact: true })).toHaveCount(4);
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
   const saved = structuredClone(state.getRecord()!.definition.faceScanScoring);
-  await page.getByLabel("From (%)", { exact: true }).nth(1).fill("66");
+  await page.getByLabel("From score", { exact: true }).nth(1).fill("66");
   await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("gap");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByLabel("Configuration issues")).toHaveCount(0);
   await expect(page.getByRole("alert", { name: "Range errors" })).toBeVisible();
   expect(state.getRecord()!.definition.faceScanScoring).toEqual(saved);
-  await page.getByLabel("From (%)", { exact: true }).nth(1).fill("");
+  await page.getByLabel("From score", { exact: true }).nth(1).fill("");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByLabel("From (%)", { exact: true }).nth(1)).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByLabel("From score", { exact: true }).nth(1)).toHaveAttribute("aria-invalid", "true");
 });
 
 test("simple risk ranges preserve exclusive historical endpoints and save inclusive edits", async ({ page }) => {
@@ -278,18 +282,19 @@ test("grouped treatment table preserves all seven editable scores", async ({ pag
 test("overlap feedback identifies rows without duplicate save errors", async ({ page }) => {
   const state = await mockFinalConsole(page);
   await startFinalDraft(page);
-  await page.getByRole("tab", { name: "Face scan", exact: true }).click();
+  await page.getByRole("tab", { name: "Vital IQ", exact: true }).click();
   const saved = structuredClone(state.getRecord()!.definition.faceScanScoring);
-  await page.getByLabel("From (%)", { exact: true }).nth(2).fill("60");
+  for (const details of await page.getByText("Edit score boundaries", { exact: true }).all()) await details.click();
+  await page.getByLabel("From score", { exact: true }).nth(2).fill("60");
   const errors = page.getByRole("alert", { name: "Range errors" });
-  await expect(errors).toContainText("Rows 1 and 3 overlap between 60% and 70%");
-  await expect(errors).toContainText("Rows 2 and 3 overlap between 70% and 80%");
-  await expect(errors).not.toContainText("include 100%");
+  await expect(errors).toContainText("Rows 1 and 3 overlap between scores 60 and 70");
+  await expect(errors).toContainText("Rows 2 and 3 overlap between scores 70 and 80");
+  await expect(errors).not.toContainText("include 100");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByLabel("Configuration issues")).toHaveCount(0);
   await expect(errors).toBeFocused();
   expect(state.getRecord()!.definition.faceScanScoring).toEqual(saved);
-  await page.getByLabel("From (%)", { exact: true }).nth(2).fill("80");
+  await page.getByLabel("From score", { exact: true }).nth(2).fill("80");
   await expect(errors).toHaveCount(0);
 });
 
