@@ -35,6 +35,7 @@ export function Users({ currentUser }: { currentUser: User }) {
   const [invitationPage, setInvitationPage] = useState(1);
   const [activeTab, setActiveTab] = useState("users");
   const [busy, setBusy] = useState(false);
+  const [accessTarget, setAccessTarget] = useState<User | null>(null);
   const form = useForm<z.infer<typeof invitationSchema>>({
     resolver: zodResolver(invitationSchema),
     defaultValues: { displayName: "", email: "" },
@@ -218,15 +219,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                           aria-label={`${u.enabled ? "Disable" : "Enable"} ${u.displayName}`}
                           title={`${u.enabled ? "Disable" : "Enable"} ${u.displayName}`}
                           disabled={busy || u.id === currentUser.id}
-                          onClick={() =>
-                            action(async () => {
-                              await request(
-                                `/admin/users/${u.id}/enabled`,
-                                { enabled: !u.enabled },
-                                "PATCH",
-                              );
-                            })
-                          }
+                          onClick={() => setAccessTarget(u)}
                         >
                           {u.enabled ? <UserRoundX aria-hidden="true" /> : <UserRoundCheck aria-hidden="true" />}
                         </Button>
@@ -312,6 +305,29 @@ export function Users({ currentUser }: { currentUser: User }) {
           </Pagination>
         )}
       </Tabs>
+      <AlertDialog open={accessTarget !== null} onOpenChange={open => { if (!open) setAccessTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{accessTarget?.enabled ? "Disable" : "Enable"} {accessTarget?.displayName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {accessTarget?.enabled
+                ? "This will remove their access to the scoring workspace until you enable them again."
+                : "This will restore their access to the scoring workspace."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant={accessTarget?.enabled ? "destructive" : "default"} onClick={() => {
+              const target = accessTarget;
+              if (!target) return;
+              setAccessTarget(null);
+              void action(async () => {
+                await request(`/admin/users/${target.id}/enabled`, { enabled: !target.enabled }, "PATCH");
+              });
+            }}>{accessTarget?.enabled ? "Disable access" : "Enable access"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
