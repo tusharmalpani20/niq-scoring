@@ -41,7 +41,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
       const errors = deploymentErrors(values, current);
       if (Object.keys(errors).length) {
         for (const [name, message] of Object.entries(errors)) form.setError(name as keyof Values, { message });
-        setStep(current);
+        if (!savedId) setStep(current);
         return;
       }
     }
@@ -110,35 +110,36 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
   </div>;
   return <Dialog open onOpenChange={next => { if (!next) close(); }}><DialogContent aria-describedby={undefined} className="flex max-h-[90svh] flex-col overflow-hidden sm:max-w-2xl">
     <DialogHeader><DialogTitle>{savedId ? "Edit deployment" : "Create deployment"}</DialogTitle></DialogHeader>
-    <ol aria-label={savedId ? "Editing progress" : "Creation progress"} className="grid grid-cols-3 gap-2 border-b pb-4">
-      {deploymentSteps.map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined} className={`flex items-center gap-2 text-xs sm:text-sm ${step === index ? "font-medium text-primary" : "text-muted-foreground"}`}><span className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${index <= step ? "border-primary bg-primary text-primary-foreground" : ""}`}>{index + 1}</span>{savedId && index === 2 ? "Review & save" : label}</li>)}
-    </ol>
-    <form className="flex min-h-0 flex-col gap-4" noValidate onSubmit={event => { if (step < 2) { event.preventDefault(); continueStep(); } else void form.handleSubmit(submit)(event); }}>
+    {!savedId && <ol aria-label="Creation progress" className="grid grid-cols-3 gap-2 border-b pb-4">
+      {deploymentSteps.map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined} className={`flex items-center gap-2 text-xs sm:text-sm ${step === index ? "font-medium text-primary" : "text-muted-foreground"}`}><span className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${index <= step ? "border-primary bg-primary text-primary-foreground" : ""}`}>{index + 1}</span>{label}</li>)}
+    </ol>}
+    <form className="flex min-h-0 flex-col gap-4" noValidate onSubmit={event => { if (!savedId && step < 2) { event.preventDefault(); continueStep(); } else void form.handleSubmit(submit)(event); }}>
       <div className="min-h-0 overflow-y-auto px-1 -mx-1 space-y-6">
-      {step === 0 && <div className="space-y-6">
-      {savedId ? <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 text-sm sm:grid-cols-3">{reviewRows.slice(0, 3).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium break-words">{value}</dd></div>)}</dl> : <>
-      <fieldset disabled={busy} className="grid min-w-0 gap-4 sm:grid-cols-2">
-        {select("clientId", "Client", data.clients.map(client => ({ value: client.id, label: client.name })), Boolean(savedId))}
-        {select("environment", "Environment", ["development", "test", "staging", "production"].map(value => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })), Boolean(savedId))}
-      </fieldset>
-      {data.clients.length === 0 && <p className="text-sm text-muted-foreground">Create a client before adding a deployment.</p>}</>}
-      {(!savedId || !deployment?.hostingType) && <>
-      {select("hostingType", "Hosting", [{ value: "NIQ_HOSTED", label: "NIQ hosted" }, { value: "CLIENT_CLOUD", label: "Client cloud" }, ...(deployment?.hostingType === "ON_PREMISES" ? [{ value: "ON_PREMISES", label: "On-premises (legacy)" }] : [])], Boolean(savedId && deployment?.hostingType))}
-      {savedId && <p className="text-sm text-muted-foreground">Choose hosting for this existing deployment before saving.</p>}</>}
-      {savedId && <p className="text-sm text-muted-foreground">Client and environment cannot change. Hosting is fixed once set.</p>}
+      {savedId && <div className="space-y-6">
+        <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 text-sm sm:grid-cols-3">{reviewRows.slice(0, 3).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium break-words">{value}</dd></div>)}</dl>
+        {!deployment?.hostingType && <div className="space-y-2">{select("hostingType", "Hosting", [{ value: "NIQ_HOSTED", label: "NIQ hosted" }, { value: "CLIENT_CLOUD", label: "Client cloud" }])}<p className="text-sm text-muted-foreground">Choose hosting for this existing deployment before saving.</p></div>}
+        {limits}{rules}
       </div>}
-      {step === 1 && <div className="space-y-6">{limits}{rules}</div>}
-      {step === 2 && <div className="space-y-5">
+      {!savedId && step === 0 && <div className="space-y-6">
+      <fieldset disabled={busy} className="grid min-w-0 gap-4 sm:grid-cols-2">
+        {select("clientId", "Client", data.clients.map(client => ({ value: client.id, label: client.name })))}
+        {select("environment", "Environment", ["development", "test", "staging", "production"].map(value => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })))}
+      </fieldset>
+      {data.clients.length === 0 && <p className="text-sm text-muted-foreground">Create a client before adding a deployment.</p>}
+      {select("hostingType", "Hosting", [{ value: "NIQ_HOSTED", label: "NIQ hosted" }, { value: "CLIENT_CLOUD", label: "Client cloud" }])}
+      </div>}
+      {!savedId && step === 1 && <div className="space-y-6">{limits}{rules}</div>}
+      {!savedId && step === 2 && <div className="space-y-5">
         <dl className="divide-y rounded-xl border">{reviewRows.map(([label, value]) => <div key={label} className="grid grid-cols-2 gap-3 px-4 py-3 text-sm"><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-medium break-words">{value}</dd></div>)}</dl>
-        {!savedId && <><p className="text-sm text-muted-foreground">Client, environment, and hosting cannot change after creation.</p>
-        <TokenExpirySelect value={form.watch("expiryPreset")} date={form.watch("expiryDate")} onValueChange={value => form.setValue("expiryPreset", value, { shouldDirty: true })} onDateChange={value => form.setValue("expiryDate", value, { shouldDirty: true })} disabled={busy} /></>}</div>}
+        <p className="text-sm text-muted-foreground">Client, environment, and hosting cannot change after creation.</p>
+        <TokenExpirySelect value={form.watch("expiryPreset")} date={form.watch("expiryDate")} onValueChange={value => form.setValue("expiryPreset", value, { shouldDirty: true })} onDateChange={value => form.setValue("expiryDate", value, { shouldDirty: true })} disabled={busy} /></div>}
       <ErrorNotice error={error} />
       </div>
       <DialogFooter className="flex shrink-0 flex-row justify-between gap-2 border-t pt-4">
         <Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button>
         <div className="flex gap-2">
-          {step > 0 && <Button type="button" variant="outline" disabled={busy} onClick={() => { setError(""); setStep(step - 1); }}>Back</Button>}
-          <Button type="submit" disabled={busy || (!savedId && data.clients.length === 0)}>{busy ? "Saving…" : step < 2 ? "Continue" : savedId ? "Save changes" : "Create"}</Button>
+          {!savedId && step > 0 && <Button type="button" variant="outline" disabled={busy} onClick={() => { setError(""); setStep(step - 1); }}>Back</Button>}
+          <Button type="submit" disabled={busy || (!savedId && data.clients.length === 0)}>{busy ? "Saving…" : savedId ? "Save changes" : step < 2 ? "Continue" : "Create"}</Button>
         </div>
       </DialogFooter>
     </form>
