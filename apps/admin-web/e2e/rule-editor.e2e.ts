@@ -7,7 +7,7 @@ test("creation retry preserves setup and request identity", async ({ page }) => 
   state.createError = "RULE_NAME_EXISTS";
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
-  await expect(page.getByText("A rule version with this name already exists.")).toBeVisible();
+  await expect(page.getByText("A rule with this name already exists.")).toBeVisible();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Synthetic browser draft");
   state.createError = "";
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
@@ -28,14 +28,14 @@ test("save conflict retains edits and discard requires a deliberate choice", asy
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText(/This version changed in another session/)).toBeVisible();
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Unsaved synthetic description");
-  await page.getByRole("button", { name: "Back to versions", exact: true }).click();
+  await page.getByRole("button", { name: "Back to rules", exact: true }).click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await page.getByRole("button", { name: "Keep editing", exact: true }).click();
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Unsaved synthetic description");
   state.saveError = "";
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText(/^Draft saved\./)).toBeVisible();
-  await page.getByRole("button", { name: "Back to versions", exact: true }).click();
+  await page.getByRole("button", { name: "Back to rules", exact: true }).click();
   await page.getByRole("button", { name: "Synthetic browser draft", exact: true }).click();
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Unsaved synthetic description");
@@ -59,7 +59,7 @@ test("one scoring page replaces questionnaire, preview and validation authoring"
   await expect(page.getByRole("columnheader", { name: "Score", exact: true })).toBeVisible();
   await expect(page.getByRole("table").filter({ has: page.getByRole("columnheader", { name: "Field name", exact: true }) }).getByRole("columnheader", { name: "Cap", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Interventions", exact: true }).click();
-  await expect(page.getByText(/N\/A.*not finalized/i)).toBeVisible();
+  await expect(page.getByText("Not yet available")).toBeVisible();
   expect(state.getRecord()!.definition.sections).toEqual(createSpreadsheetTemplate("Reference").sections);
   await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeDisabled();
 });
@@ -85,11 +85,14 @@ test("version link and edit action open a refreshable page", async ({ page }) =>
 test("creation protects name changes and back navigation", async ({ page }) => {
   await mockConsole(page);
   await navigateToVersions(page);
-  await page.getByRole("button", { name: "Create rule version", exact: true }).click();
+  await page.getByRole("button", { name: "Create rule", exact: true }).click();
   await expect(page.getByLabel("Starting point", { exact: true })).toHaveCount(0);
+  await expect(page.locator('label[for="rule-create-name"]')).toContainText("*");
+  await page.getByRole("button", { name: "Create draft", exact: true }).click();
+  await expect(page.getByText("Enter a rule name between 1 and 80 characters.")).toBeVisible();
   await page.getByLabel("Name", { exact: true }).fill("Unsaved setup");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.getByRole("alertdialog")).toContainText("Discard this draft setup?");
+  await expect(page.getByRole("alertdialog")).toContainText("Discard entered details?");
   await page.getByRole("button", { name: "Keep editing", exact: true }).click();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Unsaved setup");
   await page.getByLabel("Name", { exact: true }).fill("Unsaved setup");
@@ -107,10 +110,10 @@ test("creation protects name changes and back navigation", async ({ page }) => {
 
 async function navigateToVersions(page: Page) {
   await page.goto("/overview");
-  if (!await page.getByRole("link", { name: "Rule versions", exact: true }).isVisible()) {
+  if (!await page.getByRole("link", { name: "Rules", exact: true }).isVisible()) {
     await page.getByRole("button", { name: "Toggle Sidebar", exact: true }).click();
   }
-  await page.getByRole("link", { name: "Rule versions", exact: true }).click();
+  await page.getByRole("link", { name: "Rules", exact: true }).click();
   const sidebar = page.getByRole("dialog", { name: "Sidebar", exact: true });
   if (await sidebar.isVisible()) await page.keyboard.press("Escape");
 }
@@ -118,7 +121,7 @@ async function navigateToVersions(page: Page) {
 test("editing keeps unsaved changes on back navigation until discard", async ({ page }) => {
   await mockConsole(page);
   await navigateToVersions(page);
-  await page.getByRole("button", { name: "Create rule version", exact: true }).click();
+  await page.getByRole("button", { name: "Create rule", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Navigation fixture");
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await page.getByRole("tab", { name: "Details", exact: true }).click();

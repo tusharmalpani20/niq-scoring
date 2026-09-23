@@ -37,22 +37,22 @@ export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
   const versions = paginate(records.filter(version => version.version.toLowerCase().includes(query) && (!status || version.lifecycle === status)), page);
   return <><ErrorNotice error={error} />{error && <Button variant="outline" onClick={() => void load()}>Retry</Button>}<Tabs defaultValue="versions" className="gap-5">
     <div className="flex items-center justify-between gap-3">
-      <TabsList variant="line" aria-label="Rule version management" className="shrink-0 p-0">
-        <TabsTrigger value="versions" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Rule versions <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{records.length}</Badge></TabsTrigger>
+      <TabsList variant="line" aria-label="Rule management" className="shrink-0 p-0">
+        <TabsTrigger value="versions" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Rules <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{records.length}</Badge></TabsTrigger>
       </TabsList>
       <div className="flex min-w-0 items-center justify-end gap-2">
       <div className="relative min-w-0 w-full max-w-xs">
-        <Input aria-label="Search rule versions" placeholder="Search versions…" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="pr-9" />
+        <Input aria-label="Search rules" placeholder="Search rules…" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="pr-9" />
         {search && <Button type="button" variant="ghost" size="icon" aria-label="Clear search" className="absolute right-0 top-0 size-9 text-muted-foreground hover:text-foreground" onClick={() => { setSearch(""); setPage(1); }}><X className="size-4" aria-hidden="true" /></Button>}
       </div>
-      <Button size="icon" aria-label="Create rule version" title="Create rule version" onClick={() => { setSource(undefined); setCreating(true); }}><Plus aria-hidden="true" /></Button>
+      <Button size="icon" aria-label="Create rule" title="Create rule" onClick={() => { setSource(undefined); setCreating(true); }}><Plus aria-hidden="true" /></Button>
       </div>
     </div>
     <TabsContent value="versions" className="space-y-5">
       <div className="max-w-xs"><NativeSelect aria-label="Filter by lifecycle" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">All statuses</option>{["DRAFT", "VALIDATED", "APPROVED", "ACTIVE", "RETIRED"].map(value => <option key={value} value={value}>{value === "VALIDATED" ? "Checked" : value.charAt(0) + value.slice(1).toLowerCase()}</option>)}</NativeSelect></div>
-      {loading && <p role="status" className="text-sm text-muted-foreground">Loading versions…</p>}
+      {loading && <p role="status" className="text-sm text-muted-foreground">Loading rules…</p>}
       <Card><CardContent className="pt-6"><Table>
-        <TableHeader><TableRow><TableHead>Version</TableHead><TableHead>Status</TableHead><TableHead>Clinical use</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead>Rule</TableHead><TableHead>Status</TableHead><TableHead>Clinical use</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
           {versions.rows.map(version => <TableRow key={version.id}>
             <TableCell className="font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-left text-foreground" disabled={busy} onClick={() => void open(version.version)}>{version.version}</Button>{version.isDefault && <Badge className="ml-2">Default</Badge>}</TableCell>
@@ -60,10 +60,10 @@ export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
             <TableCell><span className={version.clinicalUsePermitted ? "text-primary" : "text-destructive"}>{version.clinicalUsePermitted ? "Permitted" : "Prohibited"}</span></TableCell>
             <TableCell><div className="flex justify-end gap-1">{version.editable && <Button variant="ghost" size="icon" title={`Edit ${version.version}`} aria-label={`Edit ${version.version}`} onClick={() => open(version.version)}><Pencil className="size-4" /></Button>}<Button variant="ghost" size="icon" title={`Duplicate ${version.version}`} aria-label={`Duplicate ${version.version}`} disabled={busy || version.duplicable === false} onClick={() => { setSource(version); setCreating(true); }}><Copy className="size-4" /></Button>{(version.deletable ?? version.editable) && version.lifecycle === "DRAFT" && <Button variant="ghost" size="icon" className="text-destructive" title={`Delete ${version.version}`} aria-label={`Delete ${version.version}`} onClick={() => { setError(""); setDeleting(version); }}><Trash2 className="size-4" /></Button>}</div></TableCell>
           </TableRow>)}
-          {versions.total === 0 && <TableRow><TableCell colSpan={4} className="h-32 text-center text-muted-foreground">{records.length ? "No rule versions match your search." : "No rule versions configured."}</TableCell></TableRow>}
+          {versions.total === 0 && <TableRow><TableCell colSpan={4} className="h-32 text-center text-muted-foreground">{records.length ? "No rules match your search." : "No rules configured."}</TableCell></TableRow>}
         </TableBody>
       </Table></CardContent></Card>
-      <Pagination aria-label="Rule versions pagination"><PaginationContent>
+      <Pagination aria-label="Rules pagination"><PaginationContent>
         <PaginationItem><Button variant="outline" size="sm" disabled={versions.page === 1} onClick={() => setPage(versions.page - 1)}>Previous</Button></PaginationItem>
         <PaginationItem><span className="flex flex-col items-center gap-1 px-2 text-xs text-muted-foreground sm:block sm:px-3 sm:text-sm" role="status"><span className="whitespace-nowrap">Page {versions.page} of {versions.pageCount}</span><span className="whitespace-nowrap"><span className="hidden sm:inline"> · </span>{versions.total} total</span></span></PaginationItem>
         <PaginationItem><Button variant="outline" size="sm" disabled={versions.page === versions.pageCount} onClick={() => setPage(versions.page + 1)}>Next</Button></PaginationItem>

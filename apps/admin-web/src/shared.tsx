@@ -57,6 +57,7 @@ export function FormInput<T extends FieldValues>({
   name,
   label,
   description,
+  showRequired = false,
   ...props
 }: Omit<
   React.ComponentProps<typeof Input>,
@@ -66,6 +67,7 @@ export function FormInput<T extends FieldValues>({
   name: Path<T>;
   label: string;
   description?: string | undefined;
+  showRequired?: boolean;
 }) {
   const id = useId();
   const InputControl = props.type === "password" ? PasswordInput : Input;
@@ -75,10 +77,11 @@ export function FormInput<T extends FieldValues>({
       name={name}
       render={({ field, fieldState }) => (
         <ShadcnField data-invalid={fieldState.invalid}>
-          <FieldLabel htmlFor={id}>{label}</FieldLabel>
+          <FieldLabel htmlFor={id}>{label}{showRequired && <span aria-hidden="true" className="ml-1 text-destructive">*</span>}</FieldLabel>
           <InputControl
             {...props}
             {...field}
+            {...(showRequired ? { "aria-label": label } : {})}
             {...(props.type === "password"
               ? { visibilityLabel: label.toLowerCase() }
               : {})}
@@ -162,7 +165,7 @@ export function DataForm({
   onSubmit: (body: Record<string, string>) => Promise<void>;
 }) {
   const formId = useId();
-  const fieldLabel = (name: string) => ({ clientId: "Client", deploymentId: "Deployment", ruleVersion: "Rule version", enabled: "Status" }[name] ?? name.replace(/([A-Z])/g, " $1").replace(/^./, value => value.toUpperCase()));
+  const fieldLabel = (name: string) => ({ clientId: "Client", deploymentId: "Deployment", ruleVersion: "Rule", enabled: "Status" }[name] ?? name.replace(/([A-Z])/g, " $1").replace(/^./, value => value.toUpperCase()));
   const form = useForm<Record<string, string>>({
     resolver: zodResolver(dataFormSchema(fields, title)),
     defaultValues: Object.fromEntries(

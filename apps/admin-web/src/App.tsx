@@ -50,7 +50,7 @@ const pages = [
   },
   {
     path: "versions",
-    label: "Rule versions",
+    label: "Rules",
     icon: Layers3,
     description: "Review scoring rule packages and their status.",
   },

@@ -48,7 +48,7 @@ export function Operations({
           {[
             ["Clients", data.clients.length, "clients"],
             ["Deployments", data.deployments.length, "deployments"],
-            ["Rule versions", data.versions.length, "versions"],
+            ["Rules", data.versions.length, "versions"],
           ].map(([label, count, path]) => (
             <Card key={label}>
             <CardContent className="pt-6">

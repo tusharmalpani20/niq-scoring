@@ -11,7 +11,7 @@ async function signIn(page: Page) {
 }
 
 async function createFinalDraft(page: Page, name: string) {
-  await page.getByRole("button", { name: "Create rule version", exact: true }).click();
+  await page.getByRole("button", { name: "Create rule", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill(name);
   const creation = page.waitForResponse(response => response.url().endsWith("/api/admin/rules") && response.request().method() === "POST");
   await page.getByRole("button", { name: "Create draft", exact: true }).click();

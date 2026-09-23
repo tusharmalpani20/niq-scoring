@@ -13,6 +13,6 @@ export function deploymentVersion(data: Overview, deploymentId: string) {
   return {
     id: version?.id ?? null,
     followsDefault,
-    label: followsDefault ? defaultVersionLabel(data) : version?.version ?? "Version unavailable",
+    label: followsDefault ? defaultVersionLabel(data) : version?.version ?? "Rule unavailable",
   };
 }
