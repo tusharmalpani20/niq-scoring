@@ -261,10 +261,11 @@ test("face scan ranges persist and gaps cannot be saved", async ({ page }) => {
   await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
   const saved = structuredClone(state.getRecord()!.definition.faceScanScoring);
   await page.getByLabel("From score", { exact: true }).nth(1).fill("66");
-  await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("gap");
+  await expect(page.getByRole("alert", { name: "Vital IQ range issue" })).toContainText("not covered");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByLabel("Configuration issues")).toHaveCount(0);
-  await expect(page.getByRole("alert", { name: "Range errors" })).toBeVisible();
+  await expect(page.getByRole("alert", { name: "Vital IQ range issue" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Vital IQ range 2" })).toBeFocused();
   expect(state.getRecord()!.definition.faceScanScoring).toEqual(saved);
   await page.getByLabel("From score", { exact: true }).nth(1).fill("");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
@@ -365,16 +366,42 @@ test("overlap feedback identifies rows without duplicate save errors", async ({ 
   const saved = structuredClone(state.getRecord()!.definition.faceScanScoring);
   for (const details of await page.getByText("Edit score boundaries", { exact: true }).all()) await details.click();
   await page.getByLabel("From score", { exact: true }).nth(2).fill("60");
-  const errors = page.getByRole("alert", { name: "Range errors" });
-  await expect(errors).toContainText("Rows 1 and 3 overlap between scores 60 and 70");
-  await expect(errors).toContainText("Rows 2 and 3 overlap between scores 70 and 80");
+  const errors = page.getByRole("alert", { name: "Vital IQ range issue" });
+  await expect(errors).toContainText("Scores 60–70 are also in range 1. Adjust this range’s From score");
+  await expect(errors).toContainText("Scores 70–80 are also in range 2. Adjust this range’s From score");
   await expect(errors).not.toContainText("include 100");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByLabel("Configuration issues")).toHaveCount(0);
-  await expect(errors).toBeFocused();
+  await expect(page.getByRole("group", { name: "Vital IQ range 3" })).toBeFocused();
   expect(state.getRecord()!.definition.faceScanScoring).toEqual(saved);
   await page.getByLabel("From score", { exact: true }).nth(2).fill("80");
   await expect(errors).toHaveCount(0);
+});
+
+test("Vital IQ overlap points to the edited first range", async ({ page }) => {
+  await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Vital IQ", exact: true }).click();
+  await page.getByText("Edit score boundaries", { exact: true }).first().click();
+  await page.getByLabel("To score", { exact: true }).first().fill("80");
+  const first = page.getByRole("group", { name: "Vital IQ range 1" });
+  await expect(first).toHaveAttribute("aria-invalid", "true");
+  await expect(first.getByRole("alert", { name: "Vital IQ range issue" })).toContainText("Scores 70–80 are also in range 2. Adjust this range’s To score");
+  await expect(page.getByRole("group", { name: "Vital IQ range 2" })).toHaveAttribute("aria-invalid", "false");
+  await expect(page.getByRole("alert", { name: "Vital IQ range issue" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(first).toBeFocused();
+});
+
+test("Vital IQ overlap explains the boundary to change on the second range", async ({ page }) => {
+  await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Vital IQ", exact: true }).click();
+  await page.getByText("Edit score boundaries", { exact: true }).nth(1).click();
+  await page.getByLabel("From score", { exact: true }).nth(1).fill("60");
+  const second = page.getByRole("group", { name: "Vital IQ range 2" });
+  await expect(second.getByRole("alert", { name: "Vital IQ range issue" })).toContainText("Scores 60–70 are also in range 1. Adjust this range’s From score");
+  await expect(page.getByRole("alert", { name: "Vital IQ range issue" })).toHaveCount(1);
 });
 
 

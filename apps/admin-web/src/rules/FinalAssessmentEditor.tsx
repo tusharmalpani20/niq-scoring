@@ -154,6 +154,14 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
           return;
         }
       }
+      if (path.startsWith("face")) {
+        const row = document.querySelector<HTMLElement>('[role="group"][aria-invalid="true"][aria-label^="Vital IQ range"]');
+        if (row) {
+          row.focus();
+          row.scrollIntoView({ block: "center" });
+          return;
+        }
+      }
       const rangeErrors = document.querySelector<HTMLElement>('[data-state="active"] [aria-label="Range errors"]');
       if (rangeErrors) { rangeErrors.tabIndex = -1; rangeErrors.focus(); }
       else document.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
