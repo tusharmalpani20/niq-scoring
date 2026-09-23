@@ -83,4 +83,5 @@ test("deployments show and filter resolved versions and explain the default", as
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeInViewport({ ratio: 1 });
   await expect(dialog).toContainText("Default (Rules 2)");
+  await expect(dialog.getByRole("combobox", { name: "Token expiry" })).toHaveText("No expiry");
 });

@@ -25,7 +25,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
     scoringEnabled: scoring?.enabled ?? !deployment, faceEnabled: face?.enabled ?? !deployment,
     scoringUnlimited: !deployment || scoring?.monthlyLimit === null, faceUnlimited: !deployment || face?.monthlyLimit === null,
     scoringLimit: String(scoring?.monthlyLimit ?? 0), faceLimit: String(face?.monthlyLimit ?? 0),
-    expiryPreset: "7", expiryDate: "",
+    expiryPreset: "never", expiryDate: "",
     ruleVersion: assignment?.mode === "PINNED" ? assignment.scoringRuleVersionId ?? "" : "LATEST_APPROVED",
   } });
   const [step, setStep] = useState(0);
