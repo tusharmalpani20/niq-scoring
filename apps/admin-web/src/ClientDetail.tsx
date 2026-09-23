@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import type { Overview } from "./Operations";
 import { DeploymentDialog } from "./DeploymentDialog";
 import { useClientUsage } from "./client-usage";
-import { UsageChart } from "./UsageChart";
 import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
+
+const UsageChart = lazy(() => import("./UsageChart").then(module => ({ default: module.UsageChart })));
 
 export function ClientDetail({ data, clientId, refresh }: { data: Overview; clientId: string; refresh: () => Promise<void> }) {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ export function ClientDetail({ data, clientId, refresh }: { data: Overview; clie
         <div className="grid gap-4 sm:grid-cols-3">
           {[["Assessments scored", total("assessments"), "Successful events · all time"], ["Vital IQ scans completed", total("vitalIq"), "Successful scans · all time"], ["Deployments", deployments.length, "Across this client"]].map(([label, value, note]) => <Card key={label}><CardContent className="space-y-2 pt-6"><p className="text-sm text-muted-foreground">{label}</p><p className="text-3xl font-semibold tabular-nums">{value === undefined ? "—" : Number(value).toLocaleString()}</p><p className="text-xs text-muted-foreground">{note}</p></CardContent></Card>)}
         </div>
-        {!error && <UsageChart monthly={monthly} />}
+        {!error && <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Loading chart…</p>}><UsageChart monthly={monthly} /></Suspense>}
       </TabsContent>
       <TabsContent value="deployments" className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">Deployments</h2><Button onClick={() => setCreating(true)}><Plus className="size-4" aria-hidden="true" />Create deployment</Button></div><Card><CardContent className="pt-6"><div className="max-w-full overflow-x-auto"><Table className="min-w-[540px]"><TableHeader><TableRow><TableHead>Environment</TableHead><TableHead>Hosting</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Assessments</TableHead><TableHead className="text-right">Vital IQ</TableHead></TableRow></TableHeader><TableBody>{deployments.map(item => { const counts = usage?.find(entry => entry.deploymentId === item.id); return <TableRow key={item.id}><TableCell><Link to={`/deployments/${item.id}`} className="font-medium text-primary hover:underline">{item.environment.charAt(0).toUpperCase() + item.environment.slice(1)}</Link></TableCell><TableCell>{item.hostingType === "NIQ_HOSTED" ? "NIQ hosted" : item.hostingType === "CLIENT_CLOUD" ? "Client cloud" : "Not specified"}</TableCell><TableCell>{item.enabled ? "Enabled" : "Disabled"}</TableCell><TableCell className="text-right tabular-nums">{counts?.assessments.toLocaleString() ?? "—"}</TableCell><TableCell className="text-right tabular-nums">{counts?.vitalIq.toLocaleString() ?? "—"}</TableCell></TableRow>; })}{deployments.length === 0 && <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No deployments yet.</TableCell></TableRow>}</TableBody></Table></div></CardContent></Card></TabsContent>
     </Tabs>

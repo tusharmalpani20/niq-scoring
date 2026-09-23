@@ -1,17 +1,18 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Pencil } from "lucide-react";
 import type { Overview } from "./Operations";
 import { deploymentVersion } from "./deployment-version";
 import { hostingLabels } from "./Deployments";
 import { useClientUsage } from "./client-usage";
-import { UsageChart } from "./UsageChart";
 import { ActivationTokenPanel } from "./ActivationTokenPanel";
 import { DeploymentDialog } from "./DeploymentDialog";
 import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
+
+const UsageChart = lazy(() => import("./UsageChart").then(module => ({ default: module.UsageChart })));
 
 export function DeploymentDetail({ data, deploymentId, refresh }: { data: Overview; deploymentId: string; refresh: () => Promise<void> }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -37,7 +38,7 @@ export function DeploymentDetail({ data, deploymentId, refresh }: { data: Overvi
         <div className="grid gap-4 sm:grid-cols-3">
           {[["Assessments scored", metrics?.assessments, "Successful events · all time"], ["Vital IQ scans completed", metrics?.vitalIq, "Successful scans · all time"], ["This month", latest ? `${latest.assessments.toLocaleString()} / ${latest.vitalIq.toLocaleString()}` : undefined, "Assessments / Vital IQ · UTC"]].map(([label, value, note]) => <Card key={label}><CardContent className="space-y-2 pt-6"><p className="text-sm text-muted-foreground">{label}</p><p className="text-3xl font-semibold tabular-nums">{value === undefined ? "—" : typeof value === "number" ? value.toLocaleString() : value}</p><p className="text-xs text-muted-foreground">{note}</p></CardContent></Card>)}
         </div>
-        {!error && <UsageChart monthly={metrics?.monthly ?? (usage ? [] : null)} title="Deployment usage" />}
+        {!error && <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Loading chart…</p>}><UsageChart monthly={metrics?.monthly ?? (usage ? [] : null)} title="Deployment usage" /></Suspense>}
       </TabsContent>
       <TabsContent value="settings" className="space-y-4"><div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Settings &amp; limits</h2><Button variant="outline" onClick={() => setEditing(true)}><Pencil className="size-4" aria-hidden="true" />Edit deployment</Button></div><div className="grid gap-4 lg:grid-cols-2"><Card><CardContent className="space-y-4 pt-6"><h3 className="font-semibold">Configuration</h3><dl className="divide-y text-sm">{[["Client", client.name], ["Environment", environment], ["Hosting", deployment.hostingType ? hostingLabels[deployment.hostingType] : "Not specified"], ["Status", deployment.enabled ? "Enabled" : "Disabled"], ["Rule", deploymentVersion(data, deployment.id).label]].map(([label, value]) => <div key={label} className="flex justify-between gap-3 py-3"><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-medium">{value}</dd></div>)}</dl></CardContent></Card><Card><CardContent className="space-y-4 pt-6"><h3 className="font-semibold">Monthly limits</h3><dl className="divide-y text-sm">{[["Assessments", entitlement("SCORING")], ["Vital IQ", entitlement("FACE_SCAN")]].map(([label, value]) => <div key={label} className="flex justify-between gap-3 py-3"><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-medium">{value}</dd></div>)}</dl></CardContent></Card></div></TabsContent>
       <TabsContent value="tokens" className="max-w-full overflow-x-auto"><ActivationTokenPanel deploymentId={deployment.id} disabled={false} /></TabsContent>
