@@ -110,7 +110,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{accessClient?.enabled ? "Disable" : "Enable"} {accessClient?.name}?</AlertDialogTitle>
-          <AlertDialogDescription>{accessClient?.enabled ? "This will block new scoring and face-scan requests across this client’s deployments. You can enable the client again later." : "This will allow requests again, subject to each deployment’s status and limits."}</AlertDialogDescription>
+          <AlertDialogDescription>{accessClient?.enabled ? "This will block new assessment scoring and Vital IQ scan requests across this client’s deployments. You can enable the client again later." : "This will allow requests again, subject to each deployment’s status and limits."}</AlertDialogDescription>
         </AlertDialogHeader>
         <ErrorNotice error={accessError} />
         <AlertDialogFooter>

@@ -16,12 +16,12 @@ export function TokenExpirySelect({ value, date, onValueChange, onDateChange, di
   const today = new Date();
   const minimum = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   return <div className="grid gap-3 sm:grid-cols-2">
-    <Field><FieldLabel htmlFor={id}>Token expiry</FieldLabel>
+    <Field><FieldLabel htmlFor={id}>Token expiry<span aria-hidden="true" className="ml-1 text-destructive">*</span></FieldLabel>
       <Select value={value} onValueChange={onValueChange} disabled={disabled}><SelectTrigger id={id}><SelectValue /></SelectTrigger><SelectContent>
         {[7, 30, 90, 180, 360].map(days => <SelectItem key={days} value={String(days)}>{days} days</SelectItem>)}
         <SelectItem value="custom">Custom date</SelectItem><SelectItem value="never">No expiry</SelectItem>
       </SelectContent></Select>
     </Field>
-    {value === "custom" && <Field><FieldLabel htmlFor={`${id}-date`}>Expiry date</FieldLabel><Input id={`${id}-date`} type="date" min={minimum} value={date} onChange={event => onDateChange(event.target.value)} disabled={disabled} /></Field>}
+    {value === "custom" && <Field><FieldLabel htmlFor={`${id}-date`}>Expiry date<span aria-hidden="true" className="ml-1 text-destructive">*</span></FieldLabel><Input id={`${id}-date`} type="date" min={minimum} value={date} onChange={event => onDateChange(event.target.value)} required disabled={disabled} /></Field>}
   </div>;
 }

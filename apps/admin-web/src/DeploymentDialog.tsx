@@ -42,6 +42,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
       if (Object.keys(errors).length) {
         for (const [name, message] of Object.entries(errors)) form.setError(name as keyof Values, { message });
         if (!savedId) setStep(current);
+        requestAnimationFrame(() => document.getElementById(`deployment-${Object.keys(errors)[0]}`)?.focus());
         return;
       }
     }
@@ -64,6 +65,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
     const errors = deploymentErrors(form.getValues(), step);
     for (const [name, message] of Object.entries(errors)) form.setError(name as keyof Values, { message });
     if (!Object.keys(errors).length) { setError(""); setStep(step + 1); }
+    else requestAnimationFrame(() => document.getElementById(`deployment-${Object.keys(errors)[0]}`)?.focus());
   }
   const values = form.watch();
   const reviewRows = [
@@ -71,11 +73,11 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
     ["Environment", values.environment.charAt(0).toUpperCase() + values.environment.slice(1)],
     ["Hosting", values.hostingType === "NIQ_HOSTED" ? "NIQ hosted" : values.hostingType === "ON_PREMISES" ? "On-premises (legacy)" : values.hostingType === "CLIENT_CLOUD" ? "Client cloud" : "Not set"],
     ["Status", values.enabled ? "Enabled" : "Disabled"],
-    ["Scoring", !values.enabled || !values.scoringEnabled ? "Disabled" : values.scoringUnlimited ? "Unlimited" : `${values.scoringLimit} / month`],
-    ["Face scan", !values.enabled || !values.faceEnabled ? "Disabled" : values.faceUnlimited ? "Unlimited" : `${values.faceLimit} / month`],
-    ["Rule version", values.ruleVersion === "LATEST_APPROVED" ? defaultVersionLabel(data) : data.versions.find(version => version.id === values.ruleVersion)?.version ?? ""],
+    ["Assessments", !values.enabled || !values.scoringEnabled ? "Disabled" : values.scoringUnlimited ? "Unlimited" : `${values.scoringLimit} / month`],
+    ["Vital IQ", !values.enabled || !values.faceEnabled ? "Disabled" : values.faceUnlimited ? "Unlimited" : `${values.faceLimit} / month`],
+    ["Rule", values.ruleVersion === "LATEST_APPROVED" ? defaultVersionLabel(data) : data.versions.find(version => version.id === values.ruleVersion)?.version ?? ""],
   ];
-  const select = (name: "clientId" | "hostingType" | "ruleVersion" | "environment", label: string, options: Array<{ value: string; label: string }>, disabled = false) => <Controller control={form.control} name={name} render={({ field, fieldState }) => <Field><FieldLabel htmlFor={`deployment-${name}`}>{label}</FieldLabel><Select value={field.value} onValueChange={value => { field.onChange(value); form.clearErrors(name); }} disabled={disabled || busy}><SelectTrigger ref={field.ref} onBlur={field.onBlur} id={`deployment-${name}`} aria-invalid={fieldState.invalid}><SelectValue placeholder={`Select ${label.toLowerCase()}`} /></SelectTrigger><SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>{fieldState.error && <FieldError errors={[fieldState.error]} />}</Field>} />;
+  const select = (name: "clientId" | "hostingType" | "ruleVersion" | "environment", label: string, options: Array<{ value: string; label: string }>, disabled = false) => <Controller control={form.control} name={name} render={({ field, fieldState }) => <Field data-invalid={fieldState.invalid} className="gap-2"><FieldLabel htmlFor={`deployment-${name}`}>{label}<span aria-hidden="true" className="ml-1 text-destructive">*</span></FieldLabel><Select value={field.value} onValueChange={value => { field.onChange(value); form.clearErrors(name); }} disabled={disabled || busy}><SelectTrigger ref={field.ref} onBlur={field.onBlur} id={`deployment-${name}`} aria-label={label} aria-required="true" aria-invalid={fieldState.invalid} className={fieldState.invalid ? "!border-destructive focus-visible:!border-destructive focus-visible:!ring-destructive/20" : undefined}><SelectValue placeholder={`Select ${label.toLowerCase()}`} /></SelectTrigger><SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>{fieldState.error && <FieldError errors={[fieldState.error]} />}</Field>} />;
   const toggle = (name: "enabled" | "scoringEnabled" | "faceEnabled" | "scoringUnlimited" | "faceUnlimited", label: string, disabled = false) => <Controller control={form.control} name={name} render={({ field }) => <div className="flex items-center justify-between gap-3"><FieldLabel htmlFor={`deployment-${name}`}>{label}</FieldLabel><Switch id={`deployment-${name}`} checked={field.value} onCheckedChange={field.onChange} disabled={busy || disabled} /></div>} />;
   const active = form.watch("enabled");
   const capabilityCard = (name: "scoring" | "face", label: string, unit: string) => {
@@ -91,22 +93,22 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
       <CardContent className={active && !enabled ? "space-y-4 p-4 opacity-50" : "space-y-4 p-4"}>
         {toggle(unlimitedName, `Unlimited ${unit}`, disabled)}
         <p className="text-sm text-muted-foreground">{unlimited ? `No monthly limit on ${unit}.` : `Set the maximum number of ${unit} per month.`}</p>
-        {!unlimited && <FormInput control={form.control} name={limitName} label={`Monthly ${unit}`} type="number" min={0} max={2147483647} step={1} disabled={busy || disabled} />}
+        {!unlimited && <FormInput control={form.control} name={limitName} label={`Monthly ${unit}`} type="number" min={0} max={2147483647} step={1} showRequired required disabled={busy || disabled} />}
       </CardContent>
     </Card>;
   };
   const limits = <div className="space-y-4">
-      <div className="space-y-2">{toggle("enabled", "Deployment active")}<p className="text-sm text-muted-foreground">Turn off to pause scoring and face scans for this deployment.</p></div>
+      <div className="space-y-2">{toggle("enabled", "Deployment active")}<p className="text-sm text-muted-foreground">Turn off to pause assessments and Vital IQ scans for this deployment.</p></div>
       <Separator />
       <div className="grid gap-4 sm:grid-cols-2">
-        {capabilityCard("scoring", "Scoring", "scores")}
-        {capabilityCard("face", "Face scan", "face scans")}
+        {capabilityCard("scoring", "Assessments", "assessments")}
+        {capabilityCard("face", "Vital IQ", "Vital IQ scans")}
       </div>
   </div>;
   const rules = <div className="space-y-4">
-      {select("ruleVersion", "Rule version", [{ value: "LATEST_APPROVED", label: defaultVersionLabel(data) }, ...data.versions.filter(version => version.id === values.ruleVersion || version.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(version.lifecycle)).map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
+      {select("ruleVersion", "Rule", [{ value: "LATEST_APPROVED", label: defaultVersionLabel(data) }, ...data.versions.filter(version => version.id === values.ruleVersion || version.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(version.lifecycle)).map(version => ({ value: version.id, label: `${version.version} (${version.lifecycle.toLowerCase()})` }))], !active)}
       <p className="text-sm text-muted-foreground">{values.ruleVersion === "LATEST_APPROVED" ? "New assessments use the default version. If the default changes, assessments already started keep their original rules." : "This deployment stays on the selected version until you change it."}</p>
-      {values.ruleVersion === "LATEST_APPROVED" && !data.versions.some(version => version.isDefault) && <p className="text-sm text-destructive">No default is set. Choose a version or set a default in Rule versions before starting assessments.</p>}
+      {values.ruleVersion === "LATEST_APPROVED" && !data.versions.some(version => version.isDefault) && <p className="text-sm text-destructive">No default is set. Choose a rule or set a default in Rules before starting assessments.</p>}
   </div>;
   return <Dialog open onOpenChange={next => { if (!next) close(); }}><DialogContent aria-describedby={undefined} className="flex max-h-[90svh] flex-col overflow-hidden sm:max-w-2xl">
     <DialogHeader><DialogTitle>{savedId ? "Edit deployment" : "Create deployment"}</DialogTitle></DialogHeader>

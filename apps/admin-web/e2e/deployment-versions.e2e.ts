@@ -31,7 +31,7 @@ test("deployments show and filter resolved versions and explain the default", as
   const table = page.getByRole("table");
   await expect(table.getByText("Default (Rules 2)", { exact: true })).toBeVisible();
   await expect(table.getByText("Rules 1", { exact: true })).toBeVisible();
-  await page.getByRole("combobox", { name: "Rule versions", exact: true }).click();
+  await page.getByRole("combobox", { name: "Rules", exact: true }).click();
   await page.getByRole("option", { name: "Rules 2", exact: true }).click();
   await expect(table.getByRole("button", { name: "Apollo", exact: true })).toBeVisible();
   await expect(table.getByRole("button", { name: "Beta", exact: true })).toHaveCount(0);
@@ -43,17 +43,18 @@ test("deployments show and filter resolved versions and explain the default", as
   await expect(dialog).toContainText("Apollo");
   await expect(dialog).toContainText("Production");
   await expect(dialog.getByRole("combobox", { name: "Client", exact: true })).toHaveCount(0);
-  await expect(dialog.getByRole("combobox", { name: "Rule version", exact: true })).toContainText("Default (Rules 2)");
+  await expect(dialog.getByRole("combobox", { name: "Rule", exact: true })).toContainText("Default (Rules 2)");
   await expect(dialog).toContainText("assessments already started keep their original rules");
-  await dialog.getByRole("combobox", { name: "Rule version", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Rule", exact: true }).click();
   await page.getByRole("option", { name: "Rules 1 (active)", exact: true }).click();
-  await dialog.getByRole("switch", { name: "Scoring", exact: true }).click();
-  await dialog.getByRole("spinbutton", { name: "Monthly scores", exact: true }).fill("");
+  await dialog.getByRole("switch", { name: "Assessments", exact: true }).click();
+  await expect(dialog.locator("label").filter({ hasText: "Monthly assessments" })).toContainText("*");
+  await dialog.getByRole("spinbutton", { name: "Monthly assessments", exact: true }).fill("");
   await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(dialog).toContainText("Enter a whole number from 0 to 2,147,483,647.");
-  await dialog.getByRole("spinbutton", { name: "Monthly scores", exact: true }).fill("125");
-  await expect(dialog.getByRole("combobox", { name: "Rule version", exact: true })).toContainText("Rules 1");
-  await expect(dialog.getByRole("spinbutton", { name: "Monthly scores", exact: true })).toHaveValue("125");
+  await dialog.getByRole("spinbutton", { name: "Monthly assessments", exact: true }).fill("125");
+  await expect(dialog.getByRole("combobox", { name: "Rule", exact: true })).toContainText("Rules 1");
+  await expect(dialog.getByRole("spinbutton", { name: "Monthly assessments", exact: true })).toHaveValue("125");
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("alertdialog")).toContainText("Your unsaved changes will be lost.");
   await page.getByRole("alertdialog").getByRole("button", { name: "Keep editing", exact: true }).click();
@@ -67,11 +68,18 @@ test("deployments show and filter resolved versions and explain the default", as
   await expect(dialog).toHaveCount(0);
   expect(saved).toMatchObject({ scoring: { enabled: true, monthlyLimit: 125 }, versionAssignment: { mode: "PINNED", scoringRuleVersionId: "v1" } });
   await page.getByRole("button", { name: "Create deployment", exact: true }).click();
+  for (const field of ["clientId", "environment", "hostingType"]) {
+    await expect(dialog.locator(`label[for="deployment-${field}"]`)).toContainText("*");
+  }
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(dialog.getByRole("combobox", { name: "Client", exact: true })).toHaveAttribute("aria-invalid", "true");
+  await expect(dialog.getByText("This field is required.")).toBeVisible();
   await dialog.getByRole("combobox", { name: "Client", exact: true }).click();
   await page.getByRole("option", { name: "Apollo", exact: true }).click();
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(dialog.getByRole("switch", { name: "Scoring", exact: true })).toBeVisible();
-  await expect(dialog.getByRole("combobox", { name: "Rule version", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("switch", { name: "Assessments", exact: true })).toBeVisible();
+  await expect(dialog.locator('label[for="deployment-ruleVersion"]')).toContainText("*");
+  await expect(dialog.getByRole("combobox", { name: "Rule", exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeInViewport({ ratio: 1 });
   await expect(dialog).toContainText("Default (Rules 2)");

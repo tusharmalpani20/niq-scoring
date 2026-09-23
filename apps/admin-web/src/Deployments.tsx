@@ -49,11 +49,11 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
       {filter("Hosting", hosting, setHosting, [...Object.entries(hostingLabels).filter(([key]) => key !== "ON_PREMISES" || data.deployments.some(d => d.hostingType === key)) as Array<[string, string]>, ...(data.deployments.some(d => !d.hostingType) ? [["unspecified", "Not specified"] as [string, string]] : [])])}
       {filter("Statuses", status, setStatus, [["enabled", "Enabled"], ["disabled", "Disabled"]])}
       {filter("Environments", environment, setEnvironment, ["development", "test", "staging", "production"].map(value => [value, value.charAt(0).toUpperCase() + value.slice(1)]))}
-      {filter("Rule versions", ruleVersion, setRuleVersion, [["default", "Following default"], ...data.versions.map(version => [version.id, version.version] as [string, string]), ["unassigned", "No available version"]])}
+      {filter("Rules", ruleVersion, setRuleVersion, [["default", "Following default"], ...data.versions.map(version => [version.id, version.version] as [string, string]), ["unassigned", "No available rule"]])}
       {filtersActive && <Button variant="ghost" size="sm" onClick={() => { setHosting("all"); setStatus("all"); setEnvironment("all"); setRuleVersion("all"); setPage(1); }}>Clear filters</Button>}
     </div>
     <TabsContent value="deployments" className="space-y-5"><Card><CardContent className="pt-6"><Table>
-      <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Hosting</TableHead><TableHead>Environment</TableHead><TableHead>Status</TableHead><TableHead>Rule version</TableHead><TableHead>Scoring</TableHead><TableHead>Face scan</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+      <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Hosting</TableHead><TableHead>Environment</TableHead><TableHead>Status</TableHead><TableHead>Rule</TableHead><TableHead>Assessments</TableHead><TableHead>Vital IQ</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
       <TableBody>{deployments.rows.map(deployment => <TableRow key={deployment.id}>
         <TableCell><Button variant="link" className="h-auto p-0 text-left font-medium text-foreground" onClick={() => setView({ id: deployment.id, tab: "details" })}>{clientName(deployment.clientId)}</Button></TableCell>
         <TableCell>{deployment.hostingType ? hostingLabels[deployment.hostingType] : "Not specified"}</TableCell><TableCell className="capitalize">{deployment.environment}</TableCell><TableCell><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
