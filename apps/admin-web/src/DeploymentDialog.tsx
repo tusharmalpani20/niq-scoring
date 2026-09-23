@@ -15,12 +15,12 @@ import { Separator } from "./components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
 import { deploymentErrors, deploymentSteps, type DeploymentValues as Values } from "./deployment-validation";
-export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated }: { data: Overview; deployment: Overview["deployments"][number] | null; refresh: () => Promise<void>; onClose: () => void; onCreated: (id: string) => void }) {
+export function DeploymentDialog({ data, deployment, initialClientId, refresh, onClose, onCreated }: { data: Overview; deployment: Overview["deployments"][number] | null; initialClientId?: string; refresh: () => Promise<void>; onClose: () => void; onCreated: (id: string) => void }) {
   const scoring = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "SCORING");
   const face = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "FACE_SCAN");
   const assignment = data.assignments.find(item => item.deploymentId === deployment?.id);
   const form = useForm<Values>({ defaultValues: {
-    clientId: deployment?.clientId ?? "", environment: deployment?.environment ?? "production",
+    clientId: deployment?.clientId ?? initialClientId ?? "", environment: deployment?.environment ?? "production",
     hostingType: deployment ? (deployment.hostingType ?? "") : "NIQ_HOSTED", enabled: deployment?.enabled ?? true,
     scoringEnabled: scoring?.enabled ?? !deployment, faceEnabled: face?.enabled ?? !deployment,
     scoringUnlimited: !deployment || scoring?.monthlyLimit === null, faceUnlimited: !deployment || face?.monthlyLimit === null,
@@ -124,7 +124,7 @@ export function DeploymentDialog({ data, deployment, refresh, onClose, onCreated
       </div>}
       {!savedId && step === 0 && <div className="space-y-6">
       <fieldset disabled={busy} className="grid min-w-0 gap-4 sm:grid-cols-2">
-        {select("clientId", "Client", data.clients.map(client => ({ value: client.id, label: client.name })))}
+        {select("clientId", "Client", data.clients.map(client => ({ value: client.id, label: client.name })), Boolean(initialClientId))}
         {select("environment", "Environment", ["development", "test", "staging", "production"].map(value => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })))}
       </fieldset>
       {data.clients.length === 0 && <p className="text-sm text-muted-foreground">Create a client before adding a deployment.</p>}

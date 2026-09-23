@@ -21,6 +21,7 @@ import { request, message, type User } from "./api";
 import { Auth } from "./Auth";
 import { Users } from "./Users";
 import { Operations, type Overview } from "./Operations";
+import { ClientDetail } from "./ClientDetail";
 import { Button } from "./components/ui/button";
 import { Sidebar, SidebarProvider, SidebarHeader, SidebarContent, SidebarFooter, SidebarGroup, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarTrigger } from "./components/ui/sidebar";
 import { ErrorNotice } from "./shared";
@@ -144,7 +145,8 @@ function Console() {
   if (["/customers", "/organizations"].includes(location.pathname))
     return <Navigate to="/clients" replace />;
   const ruleId = location.pathname.match(/^\/versions\/([^/]+)$/)?.[1];
-  const page = pages.find((p) => `/${p.path}` === location.pathname || (p.path === "versions" && ruleId));
+  const clientId = location.pathname.match(/^\/clients\/([^/]+)$/)?.[1];
+  const page = pages.find((p) => `/${p.path}` === location.pathname || (p.path === "versions" && ruleId) || (p.path === "clients" && clientId));
   if (!page) return <Navigate to="/overview" replace />;
   return (
     <SidebarProvider>
@@ -206,13 +208,13 @@ function Console() {
       <div className="workspace">
         <main className="page-content">
           <SidebarTrigger title="Toggle sidebar" />
-          {!ruleId && <header className="page-header">
+          {!ruleId && !clientId && <header className="page-header">
             <h1>{page.label}</h1>
           </header>}
           <ErrorNotice error={error} />
           {ruleId ? <RulePage key={ruleId} id={ruleId}/> : page.path === "users" ? (
             <Users currentUser={user} />
-          ) : data ? (
+          ) : data && clientId ? <ClientDetail key={clientId} data={data} clientId={clientId} refresh={refresh} /> : data ? (
             <Operations
               key={page.path}
               page={page.path}
