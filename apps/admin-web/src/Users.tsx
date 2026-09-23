@@ -1,7 +1,7 @@
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
 import { paginate } from "./pagination";
-import { Plus } from "lucide-react";
+import { Plus, UserRoundCheck, UserRoundX } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "./components/ui/dialog";
 import { Card, CardContent } from "./components/ui/card";
@@ -213,8 +213,10 @@ export function Users({ currentUser }: { currentUser: User }) {
                       </TableCell>
                       <TableCell>
                         <Button
-                          variant="outline"
-                          size="sm"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`${u.enabled ? "Disable" : "Enable"} ${u.displayName}`}
+                          title={`${u.enabled ? "Disable" : "Enable"} ${u.displayName}`}
                           disabled={busy || u.id === currentUser.id}
                           onClick={() =>
                             action(async () => {
@@ -226,7 +228,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                             })
                           }
                         >
-                          {u.enabled ? "Disable" : "Enable"}
+                          {u.enabled ? <UserRoundX aria-hidden="true" /> : <UserRoundCheck aria-hidden="true" />}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -255,7 +257,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                 {invitations.total === 0 && (
                   <TableRow>
                     <TableCell colSpan={3} className="h-32 text-center">
-                      <Button variant="outline" onClick={() => setInviteOpen(true)}>
+                      <Button onClick={() => setInviteOpen(true)}>
                         <Plus aria-hidden="true" /> Invite teammates
                       </Button>
                     </TableCell>
