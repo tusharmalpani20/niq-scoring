@@ -91,6 +91,25 @@ test("final assessment save conflicts preserve edits", async ({ page }) => {
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Unsaved final profile change");
 });
 
+test("saving an empty rule name opens and focuses its inline error", async ({ page }) => {
+  const state = await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("");
+  await page.getByRole("tab", { name: "Scoring", exact: true }).click();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("data-state", "active");
+  const name = page.getByLabel("Name", { exact: true });
+  await expect(name).toBeFocused();
+  await expect(name).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByRole("alert")).toHaveText("Enter a rule name.");
+  await expect(page.getByText(/Too small: expected string/)).toHaveCount(0);
+  expect(state.getRecord()!.revision).toBe(1);
+  await name.fill("Final assessment browser draft");
+  await expect(name).toHaveAttribute("aria-invalid", "false");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
 test("risk names reject duplicates and blank numeric ranges stay invalid", async ({ page }) => {
   await mockFinalConsole(page);
   await startFinalDraft(page);
@@ -261,10 +280,28 @@ test("risk overlap is visible before saving and cannot persist", async ({ page }
   await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
   await page.getByText("Edit score range", { exact: true }).nth(2).click();
   await page.getByLabel("From score", { exact: true }).nth(2).fill("20");
-  await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("overlaps");
+  await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("overlap");
+  await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("Moderate Risk and High Risk overlap at 20–25 points");
+  await expect(page.getByRole("group", { name: "Risk category Moderate Risk" })).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByRole("group", { name: "Risk category High Risk" })).toContainText("Overlaps Moderate Risk at 20–25 points");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("overlaps");
+  await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("overlap");
+  await expect(page.getByRole("group", { name: "Risk category Moderate Risk" })).toBeFocused();
   expect(state.getRecord()!.revision).toBe(1);
+});
+
+test("risk gaps identify the missing scores and affected category", async ({ page }) => {
+  await mockFinalConsole(page);
+  await startFinalDraft(page);
+  await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
+  await page.getByText("Edit score range", { exact: true }).nth(2).click();
+  await page.getByLabel("From score", { exact: true }).nth(2).fill("30");
+  await expect(page.getByRole("alert", { name: "Range errors" })).toContainText("Scores 26–29 between Moderate Risk and High Risk are not covered.");
+  const highRisk = page.getByRole("group", { name: "Risk category High Risk" });
+  await expect(highRisk).toHaveAttribute("aria-invalid", "true");
+  await expect(highRisk).toContainText("Gap before this category: scores 26–29 are not covered.");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(highRisk).toBeFocused();
 });
 
 test("grouped treatment table preserves all seven editable scores", async ({ page }) => {

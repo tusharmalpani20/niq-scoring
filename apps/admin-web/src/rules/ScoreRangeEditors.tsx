@@ -26,9 +26,54 @@ function RangeErrors({ messages }: { messages: string[] }) {
   return <ul role="alert" aria-label="Range errors" className="space-y-1 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{[...new Set(messages)].map(message => <li key={message}>{message}</li>)}</ul>;
 }
 
+function riskCoverageIssues(categories: FinalAssessmentDefinition["riskCategories"]) {
+  const byRow = new Map<string, string[]>();
+  const summary: string[] = [];
+  const add = (id: string, message: string) => byRow.set(id, [...(byRow.get(id) ?? []), message]);
+  const rows = categories.map(category => ({
+    id: category.id,
+    label: category.label.trim() || "Unnamed category",
+    from: category.min === null ? 0 : Math.max(0, category.minInclusive ? Math.ceil(category.min) : Math.floor(category.min) + 1),
+    to: category.max === null ? Infinity : category.maxInclusive ? Math.floor(category.max) : Math.ceil(category.max) - 1,
+  })).sort((a, b) => a.from - b.from);
+  for (const row of rows) {
+    if (row.to >= row.from) continue;
+    add(row.id, "The end score must be at least the start score.");
+    summary.push(`${row.label} has an invalid score range.`);
+  }
+  const valid = rows.filter(row => row.to >= row.from);
+  let coveredThrough = -1;
+  let previousCoverageLabel = "";
+  for (let index = 0; index < valid.length; index++) {
+    const row = valid[index]!;
+    if (row.from > coveredThrough + 1) {
+      const gap = `scores ${coveredThrough + 1}–${row.from - 1}`;
+      add(row.id, coveredThrough < 0 ? `Scores 0–${row.from - 1} are not covered. Start a range at 0.` : `Gap before this category: ${gap} are not covered.`);
+      summary.push(coveredThrough < 0 ? `Scores 0–${row.from - 1} are not covered.` : `Scores ${coveredThrough + 1}–${row.from - 1} between ${previousCoverageLabel} and ${row.label} are not covered.`);
+    }
+    for (const other of valid.slice(0, index)) {
+      const start = Math.max(row.from, other.from);
+      const end = Math.min(row.to, other.to);
+      if (start > end) continue;
+      const where = end === Infinity ? `from ${start} points onward` : start === end ? `at ${start} points` : `at ${start}–${end} points`;
+      add(row.id, `Overlaps ${other.label} ${where}.`);
+      add(other.id, `Overlaps ${row.label} ${where}.`);
+      summary.push(`${other.label} and ${row.label} overlap ${where}.`);
+    }
+    if (row.to > coveredThrough) { coveredThrough = row.to; previousCoverageLabel = row.label; }
+  }
+  const highest = valid.reduce<(typeof valid)[number] | null>((best, row) => !best || row.to > best.to ? row : best, null);
+  if (highest && highest.to !== Infinity) {
+    add(highest.id, `Scores above ${highest.to} are not covered. Add a category or choose No upper limit.`);
+    summary.push(`Scores above ${highest.to} are not covered.`);
+  }
+  return { byRow, summary };
+}
+
 export function SimpleRiskEditor({ definition, disabled, onChange, drafts, setDrafts }: EditorProps) {
   const patch = (id: string, change: Partial<FinalAssessmentDefinition["riskCategories"][number]>) => onChange({ ...definition, riskCategories: definition.riskCategories.map(category => category.id === id ? { ...category, ...change } : category) });
-  const messages = validateFinalAssessmentDefinition(definition).filter(issue => issue.path.startsWith("riskCategories")).map(issue => issue.message);
+  const coverage = riskCoverageIssues(definition.riskCategories);
+  const messages = [...coverage.summary, ...validateFinalAssessmentDefinition(definition).filter(issue => issue.path.startsWith("riskCategories") && issue.code !== "RISK_RANGE_COVERAGE").map(issue => issue.message)];
   if (definition.riskCategories.some(category => !category.label.trim())) messages.push("Enter a name for every category.");
   const clearDraft = (prefix: string) => setDrafts(current => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(prefix))));
   return <fieldset disabled={disabled} className="min-w-0 space-y-4 rounded-xl border bg-card p-4 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Risk categories</h2><p className="mt-1 text-sm text-muted-foreground">Give each total score a risk category.</p></div><Button type="button" variant="outline" size="sm" disabled={definition.riskCategories.length >= 20} onClick={() => onChange({ ...definition, riskCategories: [...definition.riskCategories, { id: newRuleId("category"), label: "New category", interpretation: "", min: 0, max: null, minInclusive: true, maxInclusive: true, sources: [] }] })}><Plus className="size-4" aria-hidden="true" />Add category</Button></div>
@@ -36,11 +81,13 @@ export function SimpleRiskEditor({ definition, disabled, onChange, drafts, setDr
       // Present equivalent inclusive integer endpoints without rewriting historical definitions on render.
       const from = category.min === null ? 0 : Math.max(0, category.minInclusive ? Math.ceil(category.min) : Math.floor(category.min) + 1);
       const to = category.max === null ? null : category.maxInclusive ? Math.floor(category.max) : Math.ceil(category.max) - 1;
-      return <div key={category.id} className="space-y-3 p-3 sm:p-4">
+      const rowIssues = coverage.byRow.get(category.id) ?? [];
+      return <div key={category.id} role="group" aria-label={`Risk category ${category.label}`} aria-invalid={rowIssues.length > 0} tabIndex={rowIssues.length ? -1 : undefined} className={`space-y-3 p-3 sm:p-4 ${rowIssues.length ? "bg-destructive/5 ring-2 ring-inset ring-destructive/50" : ""}`}>
         <div className="flex items-start justify-between gap-3">
           <div><h3 className="font-medium">{to === null ? `${from} points and above` : `${from}–${to} points`}</h3><p className="text-xs text-muted-foreground">Total assessment score</p></div>
           <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0 text-destructive" aria-label={`Remove ${category.label}`} title={`Remove ${category.label}`} disabled={definition.riskCategories.length <= 1} onClick={() => { clearDraft(`risk:${category.id}:`); onChange({ ...definition, riskCategories: definition.riskCategories.filter(item => item.id !== category.id) }); }}><Trash2 className="size-4" aria-hidden="true" /></Button>
         </div>
+        {rowIssues.map(issue => <p key={issue} className="text-sm text-destructive">{issue}</p>)}
         <label className="block min-w-0 space-y-1 text-sm"><span className="text-xs text-muted-foreground">Category name</span><Input className="h-9 shadow-none" value={category.label} onChange={event => patch(category.id, { label: event.target.value })} /></label>
         <details className="text-sm"><summary className="cursor-pointer text-primary">Edit score range</summary>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
