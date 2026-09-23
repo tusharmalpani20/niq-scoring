@@ -78,6 +78,12 @@ export function createApp(options: AppOptions) {
   app.get("/health", (context) => context.json({ status: "ok", service: "niq-scoring-api", region: options.region }));
   app.get("/ready", async (context) => { const ready = await (options.readinessCheck ?? (async () => true))(); return context.json({ status: ready ? "ready" : "not_ready" }, ready ? 200 : 503); });
   app.get("/admin/overview", async (context) => context.json(await options.store.overview()));
+  app.get("/admin/clients/:id/usage", async context => {
+    const id = ulidSchema.safeParse(context.req.param("id"));
+    if (!id.success) return context.json({ error: "INVALID_REQUEST" }, 400);
+    if (!(await options.store.overview()).clients.some(client => client.id === id.data)) return context.json({ error: "CLIENT_NOT_FOUND" }, 404);
+    return context.json({ deployments: await options.store.usageByDeployment(id.data, now()) });
+  });
 
   app.post("/admin/clients", async (context) => {
     const parsed = createClientSchema.safeParse(await parseJson(context));

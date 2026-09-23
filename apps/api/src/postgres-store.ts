@@ -12,6 +12,7 @@ import type { DeploymentConfiguration, CreateDeployment, CreateClient, Entitleme
 import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
 import { decideEntitlement, type Capability } from "@niq-scoring/entitlements";
 import { createEntityId } from "./lib/id";
+import { buildUsageSummary, type DeploymentUsage, type UsageCount } from "./usage-summary";
 import type { Deployment, DeploymentIdentity, Client, ScoringStore, UsageReservation } from "./store";
 
 type Database = ReturnType<typeof postgres>;
@@ -33,6 +34,16 @@ export class PostgresScoringStore implements ScoringStore {
       this.database<Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault: boolean }>>`select id, version, lifecycle, clinical_use_permitted as "clinicalUsePermitted", exists(select 1 from scoring_rule_default where rule_id=scoring_rule_versions.id) as "isDefault" from scoring_rule_versions order by created_at desc`,
     ]);
     return { clients: [...clients], deployments: [...deployments], entitlements: [...entitlements], assignments: assignments.map((row) => row.mode === "PINNED" ? { deploymentId: row.deploymentId, mode: "PINNED" as const, scoringRuleVersionId: row.scoringRuleVersionId! } : { deploymentId: row.deploymentId, mode: "LATEST_APPROVED" as const }), versions: [...versions] };
+  }
+
+  async usageByDeployment(clientId: string, now: Date): Promise<DeploymentUsage[]> {
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
+    const [deployments, totals, monthly] = await Promise.all([
+      this.database<Array<{ id: string }>>`select id from deployments where client_id=${clientId} order by created_at`,
+      this.database<UsageCount[]>`select deployment_id as "deploymentId", capability, count(*)::int as count from usage_events where client_id=${clientId} and outcome='SUCCEEDED' and occurred_at<=${now} group by deployment_id, capability`,
+      this.database<UsageCount[]>`select deployment_id as "deploymentId", capability, to_char(occurred_at at time zone 'UTC','YYYY-MM') as month, count(*)::int as count from usage_events where client_id=${clientId} and outcome='SUCCEEDED' and occurred_at>=${start} and occurred_at<=${now} group by deployment_id, capability, month`,
+    ]);
+    return buildUsageSummary(deployments.map(item => item.id), totals, monthly, now);
   }
 
   async createClient(input: CreateClient) {

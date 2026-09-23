@@ -53,6 +53,34 @@ describe("scoring API", () => {
     expect(overview.deployments).toEqual([expect.objectContaining({ id: deployment.id, clientId: client.id })]);
   });
 
+  test("client usage reports successful deployment events and six UTC months", async () => {
+    const { app, store } = setup();
+    const client = await store.createClient({ name: "Apollo" });
+    const first = await store.createDeployment({ clientId: client.id, name: "Production", environment: "production" });
+    const second = await store.createDeployment({ clientId: client.id, name: "Test", environment: "test" });
+    const other = await store.createClient({ name: "Other" });
+    const otherDeployment = await store.createDeployment({ clientId: other.id, name: "Other production", environment: "production" });
+    const add = (deploymentId: string, capability: "SCORING" | "FACE_SCAN", outcome: "SUCCEEDED" | "FAILED", date: string) => store.usages.push({ id: crypto.randomUUID(), clientId: deploymentId === otherDeployment.id ? other.id : client.id, deploymentId, capability, outcome, idempotencyKey: crypto.randomUUID(), occurredAt: new Date(date) });
+    add(first.id, "SCORING", "SUCCEEDED", "2026-04-01T00:00:00Z");
+    add(first.id, "SCORING", "SUCCEEDED", "2026-09-12T23:00:00Z");
+    add(first.id, "FACE_SCAN", "SUCCEEDED", "2026-09-01T00:00:00Z");
+    add(first.id, "SCORING", "FAILED", "2026-09-02T00:00:00Z");
+    add(second.id, "SCORING", "SUCCEEDED", "2026-02-02T00:00:00Z");
+    add(otherDeployment.id, "SCORING", "SUCCEEDED", "2026-09-01T00:00:00Z");
+    const response = await app.request(`/admin/clients/${client.id}/usage`, { headers: adminHeaders });
+    expect(response.status).toBe(200);
+    const usage = await response.json() as { deployments: Array<{ deploymentId: string; assessments: number; vitalIq: number; monthly: Array<{ month: string; assessments: number; vitalIq: number }> }> };
+    expect(usage.deployments).toHaveLength(2);
+    expect(usage.deployments[0]).toMatchObject({ deploymentId: first.id, assessments: 2, vitalIq: 1 });
+    expect(usage.deployments[0]!.monthly).toHaveLength(6);
+    expect(usage.deployments[0]!.monthly[0]).toEqual({ month: "2026-04", assessments: 1, vitalIq: 0 });
+    expect(usage.deployments[0]!.monthly[5]).toEqual({ month: "2026-09", assessments: 1, vitalIq: 1 });
+    expect(usage.deployments[1]).toMatchObject({ deploymentId: second.id, assessments: 1, vitalIq: 0 });
+    expect(usage.deployments[1]!.monthly.every(month => month.assessments === 0)).toBe(true);
+    expect((await app.request("/admin/clients/invalid/usage", { headers: adminHeaders })).status).toBe(400);
+    expect((await app.request(`/admin/clients/${otherDeployment.id}/usage`, { headers: adminHeaders })).status).toBe(404);
+  });
+
   test("rejects another client's request even when its idempotency key matches a completed request", async () => {
     const { app, store, client, deployment, credential } = await onboard();
     expect((await app.request("/v1/provisional/calculate", jsonRequest(scoringInput(client.id), `Bearer ${credential}`))).status).toBe(200);
