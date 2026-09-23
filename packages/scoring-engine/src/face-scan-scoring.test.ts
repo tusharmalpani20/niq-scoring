@@ -74,3 +74,9 @@ test("legacy cutoffs normalize without mutation including endpoint thresholds", 
   expect(calculateFaceScanScore({ wellnessScore: 100 }, legacy).points).toBe(2);
   expect(legacy).toEqual(original);
 });
+
+test('labels explain ranges without changing their scores or original mapping identity', () => {
+  const configuration = { ranges: DEFAULT_FACE_SCAN_SCORING_CONFIG.ranges.map((range, index) => ({ ...range, label: index === 0 ? 'Needs attention' : '' })) };
+  expect(calculateFaceScanScore({ wellnessScore: 64 }, configuration)).toMatchObject({ points: 3, scoringVersion: 'NIQ_FACE_SCAN_2026_09', configuration });
+  expect(calculateFaceScanScore({ wellnessScore: 84 }, configuration)).toMatchObject({ points: 1, scoringVersion: 'NIQ_FACE_SCAN_2026_09' });
+});

@@ -17,6 +17,7 @@ const legacyFaceScanScoringConfigSchema = z.object({
 export const faceScanRangeConfigSchema = z.object({
   ranges: z.array(z.object({
     id: z.string().trim().min(1).max(100),
+    label: z.string().trim().max(80).optional(),
     min: percent,
     max: percent,
     minInclusive: z.boolean(),
@@ -40,9 +41,9 @@ export const faceScanRangeConfigSchema = z.object({
   if (valid.length !== sorted.length) return;
   const first = valid[0];
   if (!first) return;
-  if (!valid.some(range => range.min === 0 && range.minInclusive)) fail(first.index, "min", "Include 0% in a range so every health score can be scored.");
+  if (!valid.some(range => range.min === 0 && range.minInclusive)) fail(first.index, "min", "Include 0 in a range so every health score can be scored.");
   const furthest = valid.reduce((a, b) => b.max > a.max || b.max === a.max && b.maxInclusive ? b : a);
-  if (!valid.some(range => range.max === 100 && range.maxInclusive)) fail(furthest.index, "max", "Extend a range to include 100% so every health score can be scored.");
+  if (!valid.some(range => range.max === 100 && range.maxInclusive)) fail(furthest.index, "max", "Extend a range to include 100 so every health score can be scored.");
   for (let i = 0; i < valid.length; i++) {
     const a = valid[i]!;
     for (const b of valid.slice(i + 1)) {
@@ -52,15 +53,15 @@ export const faceScanRangeConfigSchema = z.object({
       if (from < to || from === to && contains(a, from) && contains(b, from)) {
         const rows = [a.index + 1, b.index + 1].sort((x, y) => x - y);
         fail(b.index, "min", from === to
-          ? `Rows ${rows[0]} and ${rows[1]} both include ${from}%. In Range details, include this value in only one row.`
-          : `Rows ${rows[0]} and ${rows[1]} overlap between ${from}% and ${to}%. Adjust their From or To values so each score belongs to only one row.`);
+          ? `Rows ${rows[0]} and ${rows[1]} both include score ${from}. In Edit score boundaries, include this value in only one row.`
+          : `Rows ${rows[0]} and ${rows[1]} overlap between scores ${from} and ${to}. Adjust their From or To values so each score belongs to only one row.`);
       }
     }
   }
   let covered = first;
   for (const current of valid.slice(1)) {
-    if (current.min > covered.max) fail(current.index, "min", `There is a gap between ${covered.max}% and ${current.min}%. Make row ${covered.index + 1}'s To value meet row ${current.index + 1}'s From value.`);
-    else if (current.min === covered.max && !covered.maxInclusive && !current.minInclusive) fail(current.index, "minInclusive", `${current.min}% is not included in any row. In Range details, include it in row ${covered.index + 1} or row ${current.index + 1}.`);
+    if (current.min > covered.max) fail(current.index, "min", `There is a gap between scores ${covered.max} and ${current.min}. Make row ${covered.index + 1}'s To value meet row ${current.index + 1}'s From value.`);
+    else if (current.min === covered.max && !covered.maxInclusive && !current.minInclusive) fail(current.index, "minInclusive", `Score ${current.min} is not included in any row. In Edit score boundaries, include it in row ${covered.index + 1} or row ${current.index + 1}.`);
     if (current.max > covered.max || current.max === covered.max && current.maxInclusive) covered = current;
   }
 });

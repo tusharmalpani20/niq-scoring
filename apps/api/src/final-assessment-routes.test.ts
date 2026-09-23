@@ -206,7 +206,7 @@ test("face-scan editable rows persist and invalid range edits leave stored versi
   const draft = await create("Face scan rows");
   const definition = structuredClone(draft.definition as FinalAssessmentDefinition);
   definition.faceScanScoring = { ranges: [
-    { id: "first", min: 0, max: 50, minInclusive: true, maxInclusive: true, points: 8 },
+    { id: "first", label: "Needs attention", min: 0, max: 50, minInclusive: true, maxInclusive: true, points: 8 },
     { id: "second", min: 50, max: 100, minInclusive: false, maxInclusive: true, points: 0 },
   ] };
   expect((await request(`/${draft.id}`, "PUT", { revision: 1, definition })).status).toBe(200);
