@@ -63,7 +63,11 @@ export function createApp(options: AppOptions) {
   app.use("/v1/*", cors({ origin: options.allowedOrigins }));
   app.use("/admin/*", cors({ origin: options.allowedOrigins, credentials: true }));
   app.use("/auth/*", cors({ origin: options.allowedOrigins, credentials: true }));
-  app.use("*", async (context, next) => { context.header("x-request-id", context.req.header("x-request-id") ?? crypto.randomUUID()); await next(); });
+  app.use("*", async (context, next) => {
+    const incoming = context.req.header("x-request-id");
+    context.header("x-request-id", incoming && /^[\x21-\x7e]{1,128}$/.test(incoming) ? incoming : crypto.randomUUID());
+    await next();
+  });
 
   installAdminAuth(app, { ...options, authStore: options.authStore });
   installRecordDeletion(app, options.store);
