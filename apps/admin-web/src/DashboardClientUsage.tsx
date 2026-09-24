@@ -25,7 +25,7 @@ export function DashboardClientUsage({ clients, overview }: { clients: Dashboard
       const record = overview.clients.find(item => item.id === client.id);
       return <li key={client.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-4 first:pt-0 last:pb-0">
         <div className="min-w-0 flex-1"><p className="font-semibold">{record ? <Link to={clientUrl(record)} className="text-primary hover:underline">{client.name}</Link> : client.name}</p><p className="text-xs text-muted-foreground">{client.deployments.length} {client.deployments.length === 1 ? "deployment" : "deployments"}</p></div>
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><span><strong className="tabular-nums">{client.assessments.toLocaleString()}</strong> <span className="text-muted-foreground">assessments scored</span></span><span><strong className="tabular-nums">{client.faceScans.toLocaleString()}</strong> <span className="text-muted-foreground">face scans completed</span></span></div>
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><span><strong className="tabular-nums">{client.assessments.toLocaleString()}</strong> <span className="text-muted-foreground">assessments scored</span></span><span><strong className="tabular-nums">{client.faceScans.toLocaleString()}</strong> <span className="text-muted-foreground">Vital IQ scans completed</span></span></div>
         {record && <Link to={clientUrl(record)} className="text-sm text-primary hover:underline" aria-label={`View ${client.name} details`}>View <ArrowRight className="inline size-3" aria-hidden="true" /></Link>}
       </li>;
     })}</ul>}

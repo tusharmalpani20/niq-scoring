@@ -55,14 +55,14 @@ export function AdminDashboard({ overview }: { overview: Overview }) {
       if (!deployment) return [];
       const isFaceScan = item.capability === "FACE_SCAN";
       const identity = deploymentIdentity(overview, deployment);
-      const subject = `${identity.client}’s ${identity.label} ${isFaceScan ? "face scans" : "assessments"}`;
+      const subject = `${identity.client}’s ${identity.label} ${isFaceScan ? "Vital IQ scans" : "assessments"}`;
       return [{ key: `${item.deploymentId}-${item.capability}`, count: item.used, badge: `${Math.round(item.used / item.limit * 100)}%`, title: `${subject} ${item.used >= item.limit ? "have reached" : "are nearing"} the monthly limit`,
         detail: `${item.used.toLocaleString()} of ${item.limit.toLocaleString()} used this month`, to: deploymentUrl(overview, deployment, "settings"), urgent: false }];
     }),
   ].filter(alert => alert.count > 0);
   const metrics: Array<{ label: string; key: keyof Counts }> = [
     { label: "Assessments scored", key: "assessments" },
-    { label: "Face scans completed", key: "faceScans" },
+    { label: "Vital IQ scans completed", key: "faceScans" },
     { label: "Recorded failures", key: "failedRequests" },
   ];
   return <div className="space-y-6">
