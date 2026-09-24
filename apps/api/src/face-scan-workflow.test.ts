@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import postgres from "postgres";
-import { FaceScanWorkflow } from "./face-scan-workflow";
+import { FaceScanWorkflow, publicFaceScanScore } from "./face-scan-workflow";
 import { decryptActivationToken } from "./lib/activation-secret";
 import { createEntityId } from "./lib/id";
 import { faceScanCreateSchema, faceScanSignalSchema } from "@niq-scoring/contracts/face-scan-session";
@@ -9,6 +9,12 @@ import { CarePlixResponseError, normalizeCarePlixResult } from "./careplix-provi
 import type { CarePlixProvider } from "./careplix-provider";
 
 const signal = faceScanSignalSchema.parse({ raw_intensity: [{ r: 1, g: 2, b: 3 }, { r: 2, g: 3, b: 4 }], ppg_time: [0, 1], average_fps: 30 });
+test("face scan responses omit stored scoring bands", () => {
+  const score = { status: "SCORED" as const, points: 1, ruleVersionId: "rule-1", wellnessScore: 85,
+    scoringVersion: null, configuration: { ranges: [{ id: "above", min: 80, max: 100, minInclusive: false, maxInclusive: true, points: 1 }] } };
+  expect(publicFaceScanScore(score)).toEqual({ status: "SCORED", points: 1, ruleVersionId: "rule-1", wellnessScore: 85, scoringVersion: null });
+  expect(publicFaceScanScore(null)).toBeNull();
+});
 test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans isolate scope, reserve atomically, survive restart and never retry ambiguous dispatch", async () => {
   const db = postgres(process.env.DATABASE_URL!, { max: 4 });
   const clientId = createEntityId(), deploymentId = createEntityId(), credentialId = createEntityId(), ruleId = createEntityId();
@@ -121,14 +127,16 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
     await db`update deployment_version_assignments set effective_until=clock_timestamp() where deployment_id=${deploymentId}`;
     await workflow.upload(identity, pinned.session.id, "organization-a", signal);
     await workflow.tick();
-    expect((await workflow.get(identity, pinned.session.id, "organization-a")).session.score).toMatchObject({ points: 7, ruleVersionId: ruleId, configuration });
+    expect((await workflow.get(identity, pinned.session.id, "organization-a")).session.score).toMatchObject({ points: 7, ruleVersionId: ruleId });
+    const [storedScore] = await db`select score from face_scan_workflows where session_id=${pinned.session.id}`;
+    expect(storedScore?.score.configuration).toEqual(configuration);
     const [mapping] = await db`select mapping from face_scan_workflows where session_id=${pinned.session.id}`;
     expect(mapping?.mapping.checksum).toBe("c".repeat(64));
     const beforeRepairCalls = tokenCalls + submitCalls;
     await db`update face_scan_workflows set score=null,failure_code='SCORE_MAPPING_UNAVAILABLE' where session_id=${pinned.session.id}`;
     enabled = false;
     const repaired = await workflow.retryScore(identity, pinned.session.id, "organization-a");
-    expect(repaired.session.score).toMatchObject({ points: 7, ruleVersionId: ruleId, configuration });
+    expect(repaired.session.score).toMatchObject({ points: 7, ruleVersionId: ruleId });
     expect(repaired.session.failureCode).toBeNull();
     expect(tokenCalls + submitCalls).toBe(beforeRepairCalls);
     await expect(workflow.retryScore(identity, pinned.session.id, "wrong-org")).rejects.toThrow("NOT_FOUND");

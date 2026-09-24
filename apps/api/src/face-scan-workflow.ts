@@ -24,6 +24,12 @@ type Row = {
 export class FaceScanError extends Error { constructor(public code: string, public status: 400 | 403 | 404 | 408 | 409 | 413 | 503 = 409) { super(code); } }
 export const faceScanHash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const semanticHash = (result: FaceScanResult) => { const { providerCompletedAt: _timestamp, ...fields } = result; return ruleChecksum(fields); };
+// Keep the pinned scoring bands in the durable record, but expose only the outcome to consumers.
+export function publicFaceScanScore(score: Row["score"]) {
+ if (!score) return null;
+ return { status: score.status, points: score.points, ruleVersionId: score.ruleVersionId,
+   wellnessScore: score.wellnessScore, scoringVersion: score.scoringVersion };
+}
 export class FaceScanWorkflow {
  constructor(private sql: Database, private options: { enabled: () => boolean; encryptionKey: string; providerAccount: string; retentionHours: number; minDispatchIntervalMs?: number; provider: CarePlixProvider }) {}
  private encrypt(value: unknown) { return encryptActivationToken(JSON.stringify(value), this.options.encryptionKey); }
@@ -31,7 +37,7 @@ export class FaceScanWorkflow {
  private envelope(row: Row) {
    return { session: { id: row.session_id, state: row.state, assessmentReference: row.assessment_reference, organizationReference: row.organization_reference,
      context: this.decrypt<FaceScanContext>(row.context_ciphertext), createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
-     completedAt: row.completed_at?.toISOString() ?? null, failureCode: row.failure_code, result: row.result, score: row.score,
+     completedAt: row.completed_at?.toISOString() ?? null, failureCode: row.failure_code, result: row.result, score: publicFaceScanScore(row.score),
    }, providerConfigured: true };
  }
  private async scoped(identity: DeploymentIdentity, id: string, organization: string): Promise<Row> {
