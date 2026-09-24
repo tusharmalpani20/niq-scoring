@@ -1,5 +1,5 @@
 import { RulePage } from "./rules/RulePage";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createBrowserRouter,
   RouterProvider,
@@ -67,8 +67,11 @@ function Console() {
   const [setup, setSetup] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [overviewError, setOverviewError] = useState("");
+  const [overviewLoading, setOverviewLoading] = useState(false);
   const [connectionError, setConnectionError] = useState("");
   const [data, setData] = useState<Overview | null>(null);
+  const requestSequence = useRef(0);
   const [loggingOut, setLoggingOut] = useState(false);
   const [invitationToken, setInvitationToken] = useState(() =>
     location.pathname === "/accept-invitation"
@@ -98,17 +101,35 @@ function Console() {
   useEffect(() => {
     void initialize();
     const expired = () => {
+      requestSequence.current += 1;
       setUser(null);
       setData(null);
+      setOverviewError("");
     };
     window.addEventListener("session-expired", expired);
-    return () => window.removeEventListener("session-expired", expired);
+    return () => {
+      requestSequence.current += 1;
+      window.removeEventListener("session-expired", expired);
+    };
   }, []);
   async function refresh() {
-    setData(await request<Overview>("/admin/overview"));
+    const sequence = ++requestSequence.current;
+    setOverviewLoading(true);
+    setOverviewError("");
+    try {
+      const next = await request<Overview>("/admin/overview");
+      if (sequence === requestSequence.current) setData(next);
+    } catch (c) {
+      if (sequence === requestSequence.current) {
+        setOverviewError(message(c));
+        throw c;
+      }
+    } finally {
+      if (sequence === requestSequence.current) setOverviewLoading(false);
+    }
   }
   useEffect(() => {
-    if (user) refresh().catch((c) => setError(message(c)));
+    if (user) void refresh().catch(() => {});
   }, [user]);
   if (loading)
     return (
@@ -132,14 +153,19 @@ function Console() {
         }
         onSetup={() => setSetup(false)}
         onInvitationAccepted={() => {
+          requestSequence.current += 1;
           setInvitationToken("");
           setUser(null);
           setData(null);
+          setOverviewError("");
           navigate("/login", { replace: true });
         }}
         onLogin={(u) => {
+          requestSequence.current += 1;
           setUser(u);
+          setData(null);
           setError("");
+          setOverviewError("");
           navigate("/overview", { replace: true });
         }}
       />
@@ -208,9 +234,11 @@ function Console() {
               setLoggingOut(true);
               try {
                 await request("/auth/logout", {});
+                requestSequence.current += 1;
                 setUser(null);
                 setData(null);
                 setError("");
+                setOverviewError("");
               } catch (c) {
                 setError(message(c));
               } finally {
@@ -229,6 +257,12 @@ function Console() {
             <h1>{page.label}</h1>
           </header>}
           <ErrorNotice error={error} />
+          {page.path !== "users" && !ruleId && data && overviewError && (
+            <div className="space-y-3">
+              <ErrorNotice error={overviewError} />
+              <Button variant="outline" disabled={overviewLoading} onClick={() => void refresh().catch(() => {})}>Try again</Button>
+            </div>
+          )}
           {ruleId ? <RulePage key={ruleId} id={ruleId}/> : page.path === "users" ? (
             <Users currentUser={user} />
           ) : data && clientId ? <ClientDetail key={clientId} data={data} clientId={clientId} refresh={refresh} /> : data && deploymentId ? <DeploymentDetail key={deploymentId} data={data} deploymentId={deploymentId} refresh={refresh} /> : data ? (
@@ -239,7 +273,14 @@ function Console() {
               refresh={refresh}
             />
           ) : (
-            <p role="status">Loading scoring operations…</p>
+            overviewError ? (
+              <div className="space-y-3">
+                <ErrorNotice error={overviewError} />
+                <Button variant="outline" disabled={overviewLoading} onClick={() => void refresh().catch(() => {})}>Try again</Button>
+              </div>
+            ) : (
+              <p role="status">Loading scoring operations…</p>
+            )
           )}
         </main>
       </div>

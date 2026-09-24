@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { invitationSchema } from "./form-validation";
 import type { z } from "zod";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { request, message, type User } from "./api";
 import { Button } from "./components/ui/button";
 import { ErrorNotice, FormInput } from "./shared";
@@ -28,6 +28,9 @@ export function Users({ currentUser }: { currentUser: User }) {
     invitations: Invitation[];
   } | null>(null);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [loadingData, setLoadingData] = useState(false);
+  const requestSequence = useRef(0);
   const [confirmClose, setConfirmClose] = useState(false);
   const [copied, setCopied] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -46,17 +49,34 @@ export function Users({ currentUser }: { currentUser: User }) {
     expiresAt: string;
   } | null>(null);
   async function refresh() {
-    setData(await request("/admin/users"));
+    const sequence = ++requestSequence.current;
+    setLoadingData(true);
+    setLoadError("");
+    try {
+      const next = await request<{ users: User[]; invitations: Invitation[] }>("/admin/users");
+      if (sequence === requestSequence.current) {
+        setData(next);
+        setLoadError("");
+      }
+    } catch (c) {
+      if (sequence === requestSequence.current) {
+        setLoadError(message(c));
+        throw c;
+      }
+    } finally {
+      if (sequence === requestSequence.current) setLoadingData(false);
+    }
   }
   useEffect(() => {
-    refresh().catch((c) => setError(message(c)));
+    void refresh().catch(() => {});
+    return () => { requestSequence.current += 1; };
   }, []);
   async function action(fn: () => Promise<void>) {
     setBusy(true);
     setError("");
     try {
       await fn();
-      await refresh();
+      try { await refresh(); } catch { /* The change succeeded; the refresh error is shown separately. */ }
     } catch (c) {
       setError(message(c));
     } finally {
@@ -89,6 +109,8 @@ export function Users({ currentUser }: { currentUser: User }) {
   return (
     <>
       {!inviteOpen && <ErrorNotice error={error} />}
+      {!inviteOpen && <ErrorNotice error={loadError} />}
+      {!inviteOpen && data && loadError && <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button>}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-5">
         <div className="flex items-center justify-between gap-3 border-b pb-2">
           <TabsList variant="line" aria-label="User management" className="gap-2 p-0 sm:gap-5">
@@ -186,7 +208,7 @@ export function Users({ currentUser }: { currentUser: User }) {
         <TabsContent value="users">
           <Card><CardContent className="pt-6">
           {!data ? (
-            <p>Loading users…</p>
+            loadError ? <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button> : <p role="status">Loading users…</p>
           ) : (
             <div>
               <Table>
@@ -235,7 +257,7 @@ export function Users({ currentUser }: { currentUser: User }) {
         <TabsContent value="invitations">
           <Card><CardContent className="pt-6">
         {!data ? (
-          <p>Loading invitations…</p>
+          loadError ? <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button> : <p role="status">Loading invitations…</p>
         ) : (
           <div>
             <Table>
