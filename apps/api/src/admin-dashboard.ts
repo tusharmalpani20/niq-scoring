@@ -10,7 +10,7 @@ export type DashboardUsageEvent = {
   count?: number;
 };
 export type DashboardEntitlement = { deploymentId: string; capability: Capability; enabled: boolean; monthlyLimit: number | null };
-export type DashboardActivation = { expiresAt: Date | null; usedAt: Date | null; revokedAt: Date | null };
+export type DashboardActivation = { deploymentId: string; expiresAt: Date | null; usedAt: Date | null; revokedAt: Date | null };
 export type DashboardAudit = {
   id: string;
   action: string;
@@ -68,6 +68,12 @@ export function buildAdminDashboard(input: {
     if (event.capability === "SCORING" && event.outcome === "FAILED" && event.occurredAt >= lastDay) failedScoring24h += count;
   }
   const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const expiringTokenCounts = new Map<string, { count: number; firstExpiry: Date }>();
+  for (const token of activations) {
+    if (token.usedAt || token.revokedAt || !token.expiresAt || token.expiresAt <= now || token.expiresAt > sevenDays) continue;
+    const group = expiringTokenCounts.get(token.deploymentId);
+    expiringTokenCounts.set(token.deploymentId, { count: (group?.count ?? 0) + 1, firstExpiry: group && group.firstExpiry < token.expiresAt ? group.firstExpiry : token.expiresAt });
+  }
   const limitUsage = input.limitUsage ?? (() => {
     const counts = new Map<string, { deploymentId: string; capability: Capability; used: number }>();
     for (const event of usage) {
@@ -117,7 +123,7 @@ export function buildAdminDashboard(input: {
     attention: {
       failedScoring24h: input.recentFailedScoringCount ?? failedScoring24h,
       disabledDeployments: deployments.filter(item => !item.enabled).length,
-      expiringActivationTokens: activations.filter(item => !item.usedAt && !item.revokedAt && item.expiresAt && item.expiresAt > now && item.expiresAt <= sevenDays).length,
+      expiringTokenDeployments: [...expiringTokenCounts].sort((a, b) => a[1].firstExpiry.getTime() - b[1].firstExpiry.getTime()).map(([deploymentId, group]) => ({ deploymentId, count: group.count })),
       nearLimitDeployments,
     },
   };

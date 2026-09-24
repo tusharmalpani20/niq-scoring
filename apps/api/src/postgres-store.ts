@@ -52,7 +52,7 @@ export class PostgresScoringStore implements ScoringStore {
       this.database<Array<{ deploymentId: string; capability: "SCORING" | "FACE_SCAN"; used: number }>>`select deployment_id as "deploymentId", capability, count(*)::int as used
         from usage_events where occurred_at >= ${new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))}
         and occurred_at <= ${now} and (billable=true or outcome='PENDING') group by deployment_id, capability`,
-      this.database<DashboardActivation[]>`select expires_at as "expiresAt", used_at as "usedAt", revoked_at as "revokedAt"
+      this.database<DashboardActivation[]>`select deployment_id as "deploymentId", expires_at as "expiresAt", used_at as "usedAt", revoked_at as "revokedAt"
         from activation_tokens where used_at is null and revoked_at is null and expires_at > ${now}
         and expires_at <= ${new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)}`,
     ]);

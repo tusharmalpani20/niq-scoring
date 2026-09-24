@@ -24,8 +24,11 @@ test("dashboard counts succeeded usage by UTC month and keeps limits distinct fr
       { clientId: "client", deploymentId: "one", capability: "SCORING", outcome: "SUCCEEDED", occurredAt: new Date("2026-09-01T01:00:00Z") },
     ],
     activations: [
-      { expiresAt: new Date("2026-09-05T00:00:00Z"), usedAt: null, revokedAt: null },
-      { expiresAt: new Date("2026-09-05T00:00:00Z"), usedAt: now, revokedAt: null },
+      { deploymentId: "two", expiresAt: new Date("2026-09-07T00:00:00Z"), usedAt: null, revokedAt: null },
+      { deploymentId: "one", expiresAt: new Date("2026-09-05T00:00:00Z"), usedAt: null, revokedAt: null },
+      { deploymentId: "one", expiresAt: new Date("2026-09-06T00:00:00Z"), usedAt: null, revokedAt: null },
+      { deploymentId: "one", expiresAt: new Date("2026-09-05T00:00:00Z"), usedAt: now, revokedAt: null },
+      { deploymentId: "two", expiresAt: new Date("2026-09-10T00:00:00Z"), usedAt: null, revokedAt: null },
     ],
   });
   expect(result.period).toMatchObject({ current: "2026-09", previous: "2026-08" });
@@ -35,7 +38,7 @@ test("dashboard counts succeeded usage by UTC month and keeps limits distinct fr
     { id: "one", assessments: { completed: 1, allowanceUsed: 2, limit: 10 }, faceScans: { completed: 1, allowanceUsed: 1, limit: null } },
     { id: "two", assessments: { completed: 0, allowanceUsed: 0, limit: 20 } },
   ] });
-  expect(result.attention).toEqual({ failedScoring24h: 1, disabledDeployments: 0, expiringActivationTokens: 1, nearLimitDeployments: [] });
+  expect(result.attention).toEqual({ failedScoring24h: 1, disabledDeployments: 0, expiringTokenDeployments: [{ deploymentId: "one", count: 2 }, { deploymentId: "two", count: 1 }], nearLimitDeployments: [] });
 });
 
 test("dashboard flags the deployment whose own entitlement is nearly exhausted", () => {
