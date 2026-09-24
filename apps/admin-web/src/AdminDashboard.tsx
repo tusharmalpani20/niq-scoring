@@ -18,7 +18,7 @@ type Dashboard = {
   activity: { current: Counts; previous: Counts };
   monthlyUsage: Array<{ month: string } & Counts>;
   clients: DashboardClient[];
-  attention: { failedScoring24h: number; disabledDeployments: number; expiringActivationTokens: number; nearLimitDeployments: Array<{ deploymentId: string; capability: "SCORING" | "FACE_SCAN"; used: number; limit: number }> };
+  attention: { failedScoring24h: number; disabledDeployments: number; expiringTokenDeployments: Array<{ deploymentId: string; count: number }>; nearLimitDeployments: Array<{ deploymentId: string; capability: "SCORING" | "FACE_SCAN"; used: number; limit: number }> };
 };
 
 const monthName = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
@@ -38,7 +38,14 @@ export function AdminDashboard({ overview }: { overview: Overview }) {
   const alerts = [
     { key: "failed-scoring", count: data.attention.failedScoring24h, badge: String(data.attention.failedScoring24h), title: "Scoring requests failed", detail: "In the last 24 hours", to: null, urgent: true },
     { key: "disabled-deployments", count: data.attention.disabledDeployments, badge: String(data.attention.disabledDeployments), title: "Deployments disabled", detail: "Scoring and scans are blocked", to: "/deployments", urgent: false },
-    { key: "expiring-tokens", count: data.attention.expiringActivationTokens, badge: String(data.attention.expiringActivationTokens), title: "Activation tokens expiring", detail: "Unused tokens within 7 days", to: "/deployments", urgent: false },
+    ...data.attention.expiringTokenDeployments.flatMap(item => {
+      const deployment = overview.deployments.find(record => record.id === item.deploymentId);
+      if (!deployment) return [];
+      const client = overview.clients.find(record => record.id === deployment.clientId);
+      const context = `${client?.name ?? deployment.name} · ${deployment.environment.charAt(0).toUpperCase()}${deployment.environment.slice(1)}`;
+      return [{ key: `expiring-tokens-${item.deploymentId}`, count: item.count, badge: String(item.count), title: "Activation tokens expiring",
+        detail: `${context} · ${item.count} unused ${item.count === 1 ? "token" : "tokens"} within 7 days`, to: deploymentUrl(overview, deployment, "tokens"), urgent: false }];
+    }),
     ...data.attention.nearLimitDeployments.map(item => {
       const deployment = overview.deployments.find(record => record.id === item.deploymentId);
       return { key: `${item.deploymentId}-${item.capability}`, count: item.used, badge: `${Math.round(item.used / item.limit * 100)}%`, title: `${deployment?.name ?? "Deployment"} nearing ${item.capability === "SCORING" ? "assessment" : "face scan"} limit`,
