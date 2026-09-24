@@ -23,12 +23,12 @@ export function DashboardMetricCard({ label, metric, current, previous, monthly,
   label: string;
   metric: Metric;
   current: number;
-  previous: number;
+  previous: number | null;
   monthly: MetricCounts[];
   previousMonth: string;
 }) {
-  const difference = current - previous;
-  const percentage = previous > 0 ? Math.round(Math.abs(difference) / previous * 100) : null;
+  const difference = current - (previous ?? 0);
+  const percentage = previous !== null && previous > 0 ? Math.round(Math.abs(difference) / previous * 100) : null;
   const isFailure = metric === "failedRequests";
   const color = difference === 0 ? "text-muted-foreground" : (isFailure ? difference > 0 : difference < 0) ? "text-destructive" : "text-primary";
   const Direction = difference > 0 ? ArrowUpRight : difference < 0 ? ArrowDownRight : Minus;
@@ -36,6 +36,7 @@ export function DashboardMetricCard({ label, metric, current, previous, monthly,
   return <Card><CardContent className="pt-5">
     <p className="text-sm text-muted-foreground">{label}</p>
     <div className="mt-2 flex items-center justify-between gap-2"><strong className="text-3xl font-semibold tabular-nums">{current.toLocaleString()}</strong><Sparkline values={monthly.map(item => item[metric])} label={label} isFailure={isFailure} /></div>
-    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"><span className={`inline-flex items-center gap-0.5 font-medium tabular-nums ${color}`}><Direction className="size-3.5" aria-hidden="true" />{comparison}</span><span className="text-muted-foreground">vs {previousMonth} total{previous === 0 ? " (0)" : ""}</span></div>
+    {previous === null ? <p className="mt-2 text-xs text-muted-foreground">No equal-length period in {previousMonth}</p>
+      : <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"><span className={`inline-flex items-center gap-0.5 font-medium tabular-nums ${color}`}><Direction className="size-3.5" aria-hidden="true" />{comparison}</span><span className="text-muted-foreground">vs the same period in {previousMonth}{previous === 0 ? " (0)" : ""}</span></div>}
   </CardContent></Card>;
 }
