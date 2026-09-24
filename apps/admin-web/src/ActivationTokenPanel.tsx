@@ -70,6 +70,7 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
       </TableRow>)}
       {!tokens.length && <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">{busy ? "Loading tokens…" : "No tokens yet."}</TableCell></TableRow>}
       </TableBody></Table>
+    {rows.rows.length > 0 && !rows.rows.some(token => token.status === "Unused") && <p className="text-sm text-muted-foreground">These tokens have no available actions. Unused tokens can be copied or revoked.</p>}
     {tokens.length > 10 && <div className="flex items-center justify-center gap-3"><Button type="button" variant="outline" size="sm" disabled={rows.page === 1} onClick={() => setPage(rows.page - 1)}>Previous</Button><span className="text-sm">Page {rows.page} of {rows.pageCount}</span><Button type="button" variant="outline" size="sm" disabled={rows.page === rows.pageCount} onClick={() => setPage(rows.page + 1)}>Next</Button></div>}
     {disabled && <p className="text-sm text-muted-foreground">Save your changes before managing tokens.</p>}
     <ErrorNotice error={error} />
