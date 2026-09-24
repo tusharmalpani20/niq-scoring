@@ -20,6 +20,15 @@ import type { Deployment, DeploymentCreateRequest, PriorDeploymentCreate, Deploy
 type Database = ReturnType<typeof postgres>;
 
 export class PostgresScoringStore implements ScoringStore {
+  async faceScanPoints(input: { identity: DeploymentIdentity; assessmentReference: string; sessionId: string; ruleVersionId: string }): Promise<number | null> {
+    const [row] = await this.database<Array<{ score: { status?: string; points?: unknown; ruleVersionId?: string } | null }>>`
+      select w.score from face_scan_workflows w join face_scan_sessions s on s.id=w.session_id
+      where w.session_id=${input.sessionId} and s.deployment_id=${input.identity.deploymentId}
+        and s.client_id=${input.identity.clientId} and w.assessment_reference=${input.assessmentReference}
+        and w.state='COMPLETED'`;
+    const score = row?.score;
+    return score?.status === "SCORED" && score.ruleVersionId === input.ruleVersionId && typeof score.points === "number" && Number.isSafeInteger(score.points) && score.points >= 0 ? score.points : null;
+  }
   async organizationInfo(identity: DeploymentIdentity, now: Date) { return postgresOrganizationInfo(this.database, identity, now); }
   async bindAssessment(input: BindingInput) { return postgresBindAssessment(this.database, input); }
   async deletionStatus(kind: RecordKind, id: string) { return postgresDeletion(this.database, kind, id); }

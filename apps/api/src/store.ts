@@ -40,6 +40,7 @@ export type UsageReservation =
 export type ReserveInput = { identity: DeploymentIdentity; clientId: string; capability: Capability; idempotencyKey: string; assessmentReference: string; platformEnabled: boolean; fingerprint?: string; binding?: AssessmentBinding };
 
 export interface ScoringStore {
+  faceScanPoints(input: { identity: DeploymentIdentity; assessmentReference: string; sessionId: string; ruleVersionId: string }): Promise<number | null>;
   organizationInfo(identity: DeploymentIdentity, now: Date): Promise<OrganizationInfo>;
   bindAssessment(input: BindingInput): Promise<BoundAssessment>;
   rules: RuleStore;
@@ -77,6 +78,10 @@ type Usage = { occurredAt: Date; fingerprint?: string; ruleVersionId?: string; i
 
 /** Deterministic in-process implementation used by unit tests; production uses PostgreSQL. */
 export class MemoryScoringStore implements ScoringStore {
+  faceScanScores: Array<{ sessionId: string; deploymentId: string; clientId: string; assessmentReference: string; ruleVersionId: string; points: number }> = [];
+  async faceScanPoints(input: { identity: DeploymentIdentity; assessmentReference: string; sessionId: string; ruleVersionId: string }) {
+    return this.faceScanScores.find(scan => scan.sessionId === input.sessionId && scan.deploymentId === input.identity.deploymentId && scan.clientId === input.identity.clientId && scan.assessmentReference === input.assessmentReference && scan.ruleVersionId === input.ruleVersionId)?.points ?? null;
+  }
   bindings: AssessmentBinding[] = [];
   rules = new MemoryRuleStore(id => this.bindings.some(b => b.ruleVersionId === id) || this.assignments.some(a => a.mode === "PINNED" && a.scoringRuleVersionId === id));
   async deletionStatus(kind: RecordKind, id: string) { return memoryDeletion(this, kind, id); }

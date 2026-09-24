@@ -187,6 +187,41 @@ test("approved final assessment supports credential-bound public scoring and exa
   expect(store.usages).toHaveLength(3);
 });
 
+test("final scoring includes only the selected trusted Vital IQ scan", async () => {
+  const { store, create, request } = adminSetup();
+  let rule = await create("Combined assessment");
+  for (const action of ["validate", "approve", "activate"]) {
+    const response = await request(`/${rule.id}/${action}`, "POST", { revision: rule.revision });
+    expect(response.status).toBe(200);
+    rule = await response.json() as RuleRecord;
+  }
+  const client = await store.createClient({ name: "Combined client" });
+  const deployment = await store.createDeployment({ clientId: client.id, name: "Combined deployment", environment: "test" });
+  await store.setEntitlement(deployment.id, { capability: "SCORING", enabled: true, monthlyLimit: 5 });
+  await store.assignVersion(deployment.id, { mode: "PINNED", scoringRuleVersionId: rule.id });
+  const credential = `niq_dep_combinedtest.${"s".repeat(40)}`;
+  store.credentials.push({ credentialId: createEntityId(), clientId: client.id, deploymentId: deployment.id, keyPrefix: "combinedtest", secretHash: new Bun.CryptoHasher("sha256").update(credential).digest("hex") });
+  const app = createApp({ store, authStore: new MemoryAdminAuthStore(), region: "test", allowedOrigins: [], runtimeEnvironment: "test", provisionalScoringRequested: false });
+  const call = (body: unknown) => app.request("/v1/assessments/calculate", { method: "POST", headers: { authorization: `Bearer ${credential}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+  const reference = "combined-assessment";
+  const start = await app.request("/v1/assessments/start", { method: "POST", headers: { authorization: `Bearer ${credential}`, "content-type": "application/json" }, body: JSON.stringify({ assessmentReference: reference }) });
+  expect(start.status).toBe(200);
+  const sessionId = createEntityId();
+  const input = { assessmentReference: reference, faceScanSessionId: sessionId, answers: {}, idempotencyKey: "combined-blank-scan" };
+  expect((await call(input)).status).toBe(422);
+  expect(store.usages).toHaveLength(0);
+  store.faceScanScores.push({ sessionId, deploymentId: deployment.id, clientId: client.id, assessmentReference: reference, ruleVersionId: rule.id, points: 1 });
+  const blank = await call(input);
+  expect(blank.status).toBe(200);
+  const payload = await blank.json();
+  expect(payload.result).toMatchObject({ questionnaireScore: null, faceScan: { sessionId, points: 1 }, score: 1, classification: { label: "Low Risk" } });
+  expect(await (await call(input)).json()).toEqual(payload);
+  const answered = await call({ ...input, idempotencyKey: "combined-questionnaire", answers: { stage: "stage_localized" } });
+  expect(answered.status).toBe(200);
+  expect((await answered.json()).result).toMatchObject({ questionnaireScore: 1, score: 2, faceScan: { points: 1 } });
+  expect(store.usages).toHaveLength(2);
+});
+
 
 test("face-scan settings persist with the version and invalid mappings are rejected", async () => {
   const { request, create } = adminSetup();

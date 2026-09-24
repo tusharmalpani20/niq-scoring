@@ -13,7 +13,7 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
     c.header("Cache-Control", "no-store");
     const identity = await authenticate(c);
     if (!identity) return c.json({ error: "UNAUTHORIZED" }, 401);
-    const schema = action === "start" ? z.object({ assessmentReference: reference }).strict() : z.object({ assessmentReference: reference, idempotencyKey: z.string().min(8).max(128), answers: answersSchema }).strict();
+    const schema = action === "start" ? z.object({ assessmentReference: reference }).strict() : z.object({ assessmentReference: reference, idempotencyKey: z.string().min(8).max(128), answers: answersSchema, faceScanSessionId: z.string().min(1).max(128).optional() }).strict();
     const parsed = schema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
     try {
@@ -21,11 +21,20 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
       const definition = versionedRuleDefinitionSchema.parse(rule.definition);
       const evidence = { assessmentReference: binding.assessmentReference, bindingId: binding.id, ruleVersionId: rule.id, checksum: binding.checksum, version: rule.version };
       if (action === "start") return c.json({ ...evidence, questionnaire: publicQuestionnaire(definition) });
-      const input = parsed.data as { assessmentReference: string; idempotencyKey: string; answers: z.infer<typeof answersSchema> };
-      const result = { ...evaluateVersionedRule(definition, input.answers), ...evidence, calculatedAt: now().toISOString() };
-      if (isFinalAssessmentDefinition(definition) && result.issues.length) return c.json({ error: "INVALID_ASSESSMENT_ANSWERS", result }, 400);
-      if (!result.complete) return c.json({ error: "ASSESSMENT_INCOMPLETE", result }, 422);
-      const reservation = await store.reserveUsage({ identity, clientId: identity.clientId, capability: "SCORING", assessmentReference: binding.assessmentReference, idempotencyKey: input.idempotencyKey, platformEnabled, binding, fingerprint: ruleChecksum({ endpoint: "assessment", bindingId: binding.id, checksum: binding.checksum, answers: input.answers }) });
+      const input = parsed.data as { assessmentReference: string; idempotencyKey: string; answers: z.infer<typeof answersSchema>; faceScanSessionId?: string };
+      if (input.faceScanSessionId && !isFinalAssessmentDefinition(definition)) return c.json({ error: "INVALID_REQUEST" }, 400);
+      const evaluated = evaluateVersionedRule(definition, input.answers);
+      const resultBase = { ...evaluated, ...evidence, calculatedAt: now().toISOString() };
+      if (isFinalAssessmentDefinition(definition) && evaluated.issues.length) return c.json({ error: "INVALID_ASSESSMENT_ANSWERS", result: resultBase }, 400);
+      if (!evaluated.complete) return c.json({ error: "ASSESSMENT_INCOMPLETE", result: resultBase }, 422);
+      const scanPoints = input.faceScanSessionId ? await store.faceScanPoints({ identity, assessmentReference: binding.assessmentReference, sessionId: input.faceScanSessionId, ruleVersionId: rule.id }) : null;
+      if (input.faceScanSessionId && scanPoints === null) return c.json({ error: "FACE_SCAN_UNAVAILABLE" }, 422);
+      const score = evaluated.score === null ? scanPoints : scanPoints === null ? evaluated.score : evaluated.score + scanPoints;
+      if (score !== null && (!Number.isFinite(score) || score < 0 || score > Number.MAX_SAFE_INTEGER)) return c.json({ error: "INVALID_SCORE" }, 422);
+      const classification = score === null ? null : classifyScore(definition, score);
+      if (score !== null && !classification) return c.json({ error: "UNMATCHED_CLASSIFICATION" }, 422);
+      const result = isFinalAssessmentDefinition(definition) ? { ...resultBase, score, classification, questionnaireScore: evaluated.score, faceScan: input.faceScanSessionId ? { sessionId: input.faceScanSessionId, points: scanPoints! } : null } : resultBase;
+      const reservation = await store.reserveUsage({ identity, clientId: identity.clientId, capability: "SCORING", assessmentReference: binding.assessmentReference, idempotencyKey: input.idempotencyKey, platformEnabled, binding, fingerprint: ruleChecksum({ endpoint: "assessment", bindingId: binding.id, checksum: binding.checksum, answers: input.answers, faceScanSessionId: input.faceScanSessionId ?? null }) });
       if (reservation.status === "REJECTED") return c.json({ error: "SCORING_UNAVAILABLE", reason: reservation.reason }, 409);
       if (reservation.status === "DUPLICATE") return c.json(reservation.response as never);
       try {

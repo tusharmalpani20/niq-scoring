@@ -64,8 +64,12 @@ export class FaceScanWorkflow {
      if (entitlement.monthly_limit !== null && (usage?.count ?? 0) >= entitlement.monthly_limit) throw new FaceScanError("MONTHLY_LIMIT_REACHED");
      // Only an explicit approved mapping qualifies. Missing mappings never inherit a provisional default.
      const [rule] = await tx<{ id: string; package_checksum: string; assignment_id: string; configuration: unknown }[]>`select r.id,r.package_checksum,a.id as assignment_id,r.definition->'faceScanScoring' as configuration
-       from deployment_version_assignments a join scoring_rule_versions r on r.id=case when a.mode='PINNED' then a.scoring_rule_version_id else (select rule_id from scoring_rule_default where singleton=true) end
-       where a.deployment_id=${identity.deploymentId} and a.effective_from<=now() and a.effective_until is null and r.lifecycle in ('APPROVED','ACTIVE') and r.clinical_use_permitted=true limit 1`;
+       from deployment_version_assignments a
+       left join assessment_bindings b on b.deployment_id=a.deployment_id and b.assessment_reference=${input.assessmentReference}
+       join scoring_rule_versions r on r.id=coalesce(b.scoring_rule_version_id,case when a.mode='PINNED' then a.scoring_rule_version_id else (select rule_id from scoring_rule_default where singleton=true) end)
+       where a.deployment_id=${identity.deploymentId} and a.effective_from<=now() and a.effective_until is null
+         and (b.id is not null and r.lifecycle in ('APPROVED','ACTIVE','RETIRED') or b.id is null and r.lifecycle in ('APPROVED','ACTIVE'))
+         and r.clinical_use_permitted=true limit 1`;
      const config = faceScanScoringConfigSchema.safeParse(rule?.configuration);
      const mapping: Mapping | null = rule && config.success ? { ruleVersionId: rule.id, checksum: rule.package_checksum, assignmentId: rule.assignment_id, configuration: config.data } : null;
      const sessionId = createEntityId(), usageId = createEntityId();
