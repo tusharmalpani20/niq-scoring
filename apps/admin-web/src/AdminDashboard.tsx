@@ -9,6 +9,7 @@ import type { Overview } from "./Operations";
 import { RuleUsagePanel } from "./RuleUsagePanel";
 import { DashboardClientUsage, type DashboardClient } from "./DashboardClientUsage";
 import { DashboardMetricCard } from "./DashboardMetricCard";
+import { metricComparison } from "./dashboard-comparison";
 import { deploymentDisplayLabel } from "./deployment-label";
 
 const UsageChart = lazy(() => import("./UsageChart").then(module => ({ default: module.UsageChart })));
@@ -71,8 +72,6 @@ export function AdminDashboard({ overview }: { overview: Overview }) {
     { label: "Vital IQ scans completed", key: "faceScans" },
     { label: "Recorded failures", key: "failedRequests" },
   ];
-  // Older API processes do not provide comparisonEnd; their previous counts cover a full month.
-  const previous = data.period.comparisonEnd ? data.activity.previous : null;
   return <div className="space-y-6">
     <section aria-labelledby="attention-title" className="space-y-3"><div className="flex items-baseline justify-between gap-3"><h2 id="attention-title" className="text-lg font-semibold">Needs attention</h2><span className="text-xs text-muted-foreground">Current checks</span></div>
       <Card><CardContent className="pt-6">{alerts.length === 0 ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle2 className="size-4 text-primary" aria-hidden="true" />No items need attention in these checks.</p>
@@ -80,7 +79,10 @@ export function AdminDashboard({ overview }: { overview: Overview }) {
       </CardContent></Card>
     </section>
     <section aria-labelledby="month-title" className="space-y-3"><div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><h2 id="month-title" className="shrink-0 text-lg font-semibold">This month</h2><span className="text-xs text-muted-foreground">{monthName(data.period.current)} to date</span></div>
-      <div className="grid gap-3 sm:grid-cols-3">{metrics.map(metric => <DashboardMetricCard key={metric.key} label={metric.label} metric={metric.key} current={data.activity.current[metric.key]} previous={previous?.[metric.key] ?? null} monthly={data.monthlyUsage} comparisonPeriod={data.period.comparisonEnd ? comparisonPeriod(data.period.previous, data.period.current, data.period.comparisonEnd) : ""} />)}</div>
+      <div className="grid gap-3 sm:grid-cols-3">{metrics.map(metric => {
+        const comparison = metricComparison(data.period, data.activity.previous, metric.key);
+        return <DashboardMetricCard key={metric.key} label={metric.label} metric={metric.key} current={data.activity.current[metric.key]} previous={comparison?.count ?? null} monthly={data.monthlyUsage} comparisonPeriod={comparison ? comparisonPeriod(data.period.previous, data.period.current, comparison.end) : ""} />;
+      })}</div>
     </section>
     <div className="space-y-4"><Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Loading usage chart…</p>}><UsageChart monthly={data.monthlyUsage.map(item => ({ month: item.month, assessments: item.assessments, vitalIq: item.faceScans }))} /></Suspense>
       <DashboardClientUsage clients={data.clients} overview={overview} />

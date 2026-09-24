@@ -14,7 +14,7 @@ function Sparkline({ values, label, isFailure }: { values: number[]; label: stri
     const y = maximum === 0 ? height / 2 : height - padding - value / maximum * (height - 2 * padding);
     return `${x},${y}`;
   }).join(" ");
-  return <svg aria-label={`${label} over the last six months: ${values.map(value => value.toLocaleString()).join(", ")}`} role="img" viewBox={`0 0 ${width} ${height}`} className={`h-12 w-28 shrink-0 ${isFailure ? "text-destructive" : "text-primary"}`}>
+  return <svg aria-label={`${label}: monthly totals for the last six months, with the current month to date: ${values.map(value => value.toLocaleString()).join(", ")}`} role="img" viewBox={`0 0 ${width} ${height}`} className={`h-12 w-28 shrink-0 ${isFailure ? "text-destructive" : "text-primary"}`}>
     <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
   </svg>;
 }

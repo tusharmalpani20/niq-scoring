@@ -9,6 +9,7 @@ test("metric omits a trend when no matching previous period is available", () =>
   expect(html).toContain("Assessments scored");
   expect(html).not.toContain("vs ");
   expect(html).not.toContain("equal-length");
+  expect(html).toContain("monthly totals for the last six months, with the current month to date");
 });
 
 test("metric keeps a compact label for a matching previous period", () => {
