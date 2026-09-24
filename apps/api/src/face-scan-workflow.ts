@@ -230,7 +230,9 @@ export class FaceScanWorkflow {
      if (!row) throw new FaceScanError("UNKNOWN_PROVIDER_SCAN", 404);
      const canAccept = row.dispatch_phase === "SUBMIT" && ["PROCESSING", "RECONCILIATION_REQUIRED"].includes(row.state);
      const disposition = !result ? "UNPROCESSABLE" : row.result ? semanticHash(row.result) === hash ? "DUPLICATE" : "CONFLICT" : canAccept ? "ACCEPTED" : "CONFLICT";
-     await tx`insert into face_scan_receipts(id,session_id,channel,payload_hash,normalized_result,disposition,receipt_ciphertext) values(${createEntityId()},${id},${channel},${hash},${tx.json(result)},${disposition},${receipt ? this.encrypt(receipt) : null}) on conflict(session_id,channel,payload_hash) do nothing`;
+     await tx`insert into face_scan_receipts(id,session_id,channel,payload_hash,normalized_result,disposition,receipt_ciphertext) values(${createEntityId()},${id},${channel},${hash},${tx.json(result)},${disposition},${receipt ? this.encrypt(receipt) : null})
+       on conflict(session_id,channel,payload_hash) do update set disposition='ACCEPTED'
+       where face_scan_receipts.disposition='CONFLICT' and excluded.disposition='ACCEPTED'`;
      if (disposition === "DUPLICATE") {
        // Replayed trusted evidence can repair only local scoring, using the original mapping.
        if (!row.score && row.mapping && row.result) {
