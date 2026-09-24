@@ -24,6 +24,8 @@ import type { AdminMutationAudit } from "./admin-mutation-audit";
 export type StoredActivationToken = { id: string; tokenHash: string; tokenCiphertext: string; expiresAt: Date | null };
 export type TokenRecord = { id: string; expiresAt: Date | null; createdAt: Date; usedAt: Date | null; revokedAt: Date | null; canCopy: boolean; credentialStatus: "Active" | "Revoked" | "Expired" | null };
 export type CredentialRevocation = "REVOKED" | "ALREADY_REVOKED" | "UNAVAILABLE";
+export type DeploymentCreateRequest = { key: string; fingerprint: string };
+export type PriorDeploymentCreate = { deployment: Deployment | null; fingerprint: string; activationTokenId: string | null };
 export type Client = CreateClient & { id: string; enabled: boolean };
 export type Deployment = CreateDeployment & { id: string; enabled: boolean; hostingType: DeploymentConfiguration["hostingType"] | null };
 export type VersionAssignment = VersionAssignmentInput & { deploymentId: string };
@@ -49,7 +51,8 @@ export interface ScoringStore {
   usageByRule(clientId?: string): Promise<RuleUsage[]>;
   createClient(input: CreateClient, audit?: AdminMutationAudit): Promise<Client>;
   setClientEnabled(id: string, enabled: boolean, audit?: AdminMutationAudit): Promise<boolean>;
-  saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken, audit?: AdminMutationAudit): Promise<Deployment | null>;
+  saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken, audit?: AdminMutationAudit, createRequest?: DeploymentCreateRequest): Promise<Deployment | null>;
+  findDeploymentCreate(key: string): Promise<PriorDeploymentCreate | null>;
   createDeployment(input: CreateDeployment, audit?: AdminMutationAudit): Promise<Deployment>;
   setDeploymentEnabled(id: string, enabled: boolean, audit?: AdminMutationAudit): Promise<boolean>;
   setEntitlement(deploymentId: string, input: EntitlementInput, audit?: AdminMutationAudit): Promise<void>;
@@ -137,7 +140,12 @@ export class MemoryScoringStore implements ScoringStore {
   async createClient(input: CreateClient, audit?: AdminMutationAudit) { if (this.clients.some(client => client.name.trim().toLowerCase() === input.name.trim().toLowerCase())) throw new DuplicateClientNameError(); const value = { id: createEntityId(), ...input, enabled: true }; this.clients.push(value); this.logAdmin(audit, "CLIENT_CREATED", "CLIENT", value.id, { name: input.name }); return value; }
   async setClientEnabled(id: string, enabled: boolean, audit?: AdminMutationAudit) { const row = this.clients.find((item) => item.id === id); if (!row) return false; const before = row.enabled; row.enabled = enabled; if (before !== enabled) this.logAdmin(audit, "CLIENT_STATUS_CHANGED", "CLIENT", id, { before, after: enabled }); return true; }
   async createDeployment(input: CreateDeployment, audit?: AdminMutationAudit) { const value = { id: createEntityId(), ...input, enabled: true, hostingType: null }; this.deployments.push(value); this.logAdmin(audit, "DEPLOYMENT_CREATED", "DEPLOYMENT", value.id, { clientId: input.clientId, name: input.name, environment: input.environment }); return value; }
-  async saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken, audit?: AdminMutationAudit) {
+  async findDeploymentCreate(key: string): Promise<PriorDeploymentCreate | null> {
+    const event = this.adminMutationEvents.find(event => event.action === "DEPLOYMENT_CREATED" && event.metadata.createKey === key);
+    if (!event) return null;
+    return { deployment: this.deployments.find(item => item.id === event.resourceId) ?? null, fingerprint: String(event.metadata.fingerprint), activationTokenId: typeof event.metadata.activationTokenId === "string" ? event.metadata.activationTokenId : null };
+  }
+  async saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken, audit?: AdminMutationAudit, createRequest?: DeploymentCreateRequest) {
     this.checkAssignment(id, input.versionAssignment);
     const existing = id ? this.deployments.find(d => d.id === id && d.clientId === input.clientId) : null;
     if (id && !existing) return null;
@@ -152,6 +160,7 @@ export class MemoryScoringStore implements ScoringStore {
       clientId: input.clientId, before,
       after: { name: input.name, environment: input.environment, hostingType: input.hostingType, enabled: input.enabled, scoring: input.scoring, faceScan: input.faceScan, versionAssignment: input.versionAssignment },
       ...(activation ? { activationTokenId: activation.id, activationExpiresAt: activation.expiresAt } : {}),
+      ...(createRequest ? { createKey: createRequest.key, fingerprint: createRequest.fingerprint } : {}),
     });
     return deployment;
   }

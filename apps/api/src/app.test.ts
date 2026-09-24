@@ -75,6 +75,25 @@ describe("scoring API", () => {
     expect(store.adminMutationEvents.map(event => event.action)).toEqual(["CLIENT_CREATED", "DEPLOYMENT_CREATED", "DEPLOYMENT_DELETED", "CLIENT_DELETED"]);
   });
 
+  test("deployment create retries return the original deployment and activation token", async () => {
+    const { app, store } = setup();
+    const client = await store.createClient({ name: "Retry client" });
+    const body = { clientId: client.id, environment: "production", hostingType: "NIQ_HOSTED", enabled: true,
+      scoring: { enabled: true, monthlyLimit: 7 }, faceScan: { enabled: true, monthlyLimit: 5 },
+      versionAssignment: { mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id } };
+    const headers = { ...adminHeaders, "idempotency-key": crypto.randomUUID() };
+    const create = (input: unknown) => app.request("/admin/deployments/configuration", { method: "POST", headers, body: JSON.stringify(input) });
+    const first = await create(body);
+    expect(first.status).toBe(201);
+    const created = await first.json() as { id: string; activation: { activationToken: string } };
+    const replay = await create(body);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ id: created.id, activation: created.activation });
+    expect(store.deployments).toHaveLength(1);
+    expect(store.adminMutationEvents.filter(event => event.action === "DEPLOYMENT_CREATED")).toHaveLength(1);
+    expect((await create({ ...body, scoring: { enabled: true, monthlyLimit: 8 } })).status).toBe(409);
+  });
+
   test("client usage reports successful deployment events and six UTC months", async () => {
     const { app, store } = setup();
     const client = await store.createClient({ name: "Apollo" });

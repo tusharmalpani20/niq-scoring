@@ -15,7 +15,7 @@ import { createEntityId } from "./lib/id";
 import { buildUsageSummary, type DeploymentUsage, type UsageCount } from "./usage-summary";
 import { buildAdminDashboard, type DashboardUsageEvent, type DashboardActivation } from "./admin-dashboard";
 import { recordAdminMutation, type AdminMutationAudit } from "./admin-mutation-audit";
-import type { Deployment, DeploymentIdentity, Client, ScoringStore, UsageReservation, RuleUsage } from "./store";
+import type { Deployment, DeploymentCreateRequest, PriorDeploymentCreate, DeploymentIdentity, Client, ScoringStore, UsageReservation, RuleUsage } from "./store";
 
 type Database = ReturnType<typeof postgres>;
 
@@ -115,7 +115,17 @@ export class PostgresScoringStore implements ScoringStore {
       return row!;
     });
   }
-  async saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken, audit?: AdminMutationAudit) {
+  async findDeploymentCreate(key: string): Promise<PriorDeploymentCreate | null> {
+    const [row] = await this.database<Array<{ fingerprint: string; activationTokenId: string | null; id: string | null; clientId: string | null; name: string | null; environment: string | null; hostingType: Deployment["hostingType"]; enabled: boolean | null }>>`
+      select e.metadata->>'fingerprint' as fingerprint,e.metadata->>'activationTokenId' as "activationTokenId",
+        d.id,d.client_id as "clientId",d.name,d.environment,d.hosting_type as "hostingType",d.enabled
+      from audit_events e left join deployments d on d.id=e.resource_reference
+      where e.action='DEPLOYMENT_CREATED' and e.metadata->>'createKey'=${key} limit 1`;
+    if (!row) return null;
+    return { fingerprint: row.fingerprint, activationTokenId: row.activationTokenId,
+      deployment: row.id ? { id: row.id, clientId: row.clientId!, name: row.name!, environment: row.environment!, hostingType: row.hostingType, enabled: row.enabled! } : null };
+  }
+  async saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken, audit?: AdminMutationAudit, createRequest?: DeploymentCreateRequest) {
     return this.database.begin(async tx => {
       const deploymentId = id ?? createEntityId();
       const [before] = id ? await tx<Deployment[]>`select id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled from deployments where id=${id} and client_id=${input.clientId} for update` : [];
@@ -145,6 +155,7 @@ export class PostgresScoringStore implements ScoringStore {
         before: before ? { name: before.name, environment: before.environment, hostingType: before.hostingType, enabled: before.enabled, entitlements: beforeEntitlements, versionAssignment: beforeAssignment ?? null } : null,
         after: { name: input.name, environment: input.environment, hostingType: input.hostingType, enabled: input.enabled, scoring: input.scoring, faceScan: input.faceScan, versionAssignment: policy },
         ...(activation ? { activationTokenId: activation.id, activationExpiresAt: activation.expiresAt } : {}),
+        ...(createRequest ? { createKey: createRequest.key, fingerprint: createRequest.fingerprint } : {}),
       });
       return deployment;
     });

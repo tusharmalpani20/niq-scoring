@@ -106,10 +106,27 @@ export function createApp(options: AppOptions) {
     }
   });
   app.patch("/admin/clients/:id/enabled", async (context) => updateEnabled(context, options.store.setClientEnabled.bind(options.store)));
+  async function replayDeploymentCreate(context: Context, key: string, fingerprint: string) {
+    const prior = await options.store.findDeploymentCreate(key);
+    if (!prior) return null;
+    if (prior.fingerprint !== fingerprint) return context.json({ error: "CREATE_REQUEST_CONFLICT" }, 409);
+    if (!prior.deployment) return context.json({ error: "CREATE_REQUEST_DELETED" }, 409);
+    const token = prior.activationTokenId && options.activationTokenEncryptionKey
+      ? await options.store.getActivationToken(prior.deployment.id, now(), prior.activationTokenId) : null;
+    context.header("cache-control", "no-store");
+    return context.json({ ...prior.deployment, ...(token ? { activation: { activationToken: decryptActivationToken(token.tokenCiphertext, options.activationTokenEncryptionKey!), expiresAt: token.expiresAt?.toISOString() ?? null } } : {}) });
+  }
   async function saveDeploymentConfiguration(context: Context, id: string | null) {
     if (id !== null && !ulidSchema.safeParse(id).success) return context.json({ error: "INVALID_REQUEST" }, 400);
     const parsed = deploymentConfigurationRequestSchema.safeParse(await parseJson(context));
     if (!parsed.success) return context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+    const createKey = id === null ? context.req.header("idempotency-key") : undefined;
+    if (createKey && !/^[A-Za-z0-9_-]{16,128}$/.test(createKey)) return context.json({ error: "INVALID_REQUEST" }, 400);
+    const fingerprint = createKey ? await sha256(JSON.stringify(parsed.data)) : null;
+    if (createKey && fingerprint) {
+      const replay = await replayDeploymentCreate(context, createKey, fingerprint);
+      if (replay) return replay;
+    }
     const current = await options.store.overview();
     const client = current.clients.find(c => c.id === parsed.data.clientId);
     if (!client) return context.json({ error: "CLIENT_NOT_FOUND" }, 404);
@@ -132,14 +149,22 @@ export function createApp(options: AppOptions) {
       const deployments = attempt ? (await options.store.overview()).deployments : current.deployments;
       const name = parsed.data.name ?? existing?.name ?? suggestDeploymentLabel(deployments, client.id, parsed.data.environment);
       if (deployments.some(item => item.clientId === client.id && item.id !== id && item.name.trim().toLowerCase() === name.toLowerCase())) {
+        if (createKey && fingerprint) {
+          const replay = await replayDeploymentCreate(context, createKey, fingerprint);
+          if (replay) return replay;
+        }
         return context.json({ error: "DEPLOYMENT_NAME_EXISTS" }, 409);
       }
       try {
-        const saved = await options.store.saveDeploymentConfiguration(id, { ...parsed.data, name }, activation?.stored, adminMutationAudit(context));
+        const saved = await options.store.saveDeploymentConfiguration(id, { ...parsed.data, name }, activation?.stored, adminMutationAudit(context), createKey && fingerprint ? { key: createKey, fingerprint } : undefined);
         context.header("cache-control", "no-store");
         return saved ? context.json({ ...saved, ...(activation ? { activation: activation.public } : {}) }, id ? 200 : 201) : context.json({ error: "DEPLOYMENT_NOT_FOUND" }, 404);
       } catch (error) {
         if (typeof error !== "object" || error === null || !("code" in error) || error.code !== "23505") throw error;
+        if (createKey && fingerprint) {
+          const replay = await replayDeploymentCreate(context, createKey, fingerprint);
+          if (replay) return replay;
+        }
         if (id || parsed.data.name || attempt === 2) return context.json({ error: "DEPLOYMENT_NAME_EXISTS" }, 409);
       }
     }
