@@ -20,7 +20,8 @@ import { createEntityId } from "./lib/id";
 import { buildUsageSummary, type DeploymentUsage, type UsageCount } from "./usage-summary";
 
 export type StoredActivationToken = { id: string; tokenHash: string; tokenCiphertext: string; expiresAt: Date | null };
-export type TokenRecord = { id: string; expiresAt: Date | null; createdAt: Date; usedAt: Date | null; revokedAt: Date | null; canCopy: boolean };
+export type TokenRecord = { id: string; expiresAt: Date | null; createdAt: Date; usedAt: Date | null; revokedAt: Date | null; canCopy: boolean; credentialStatus: "Active" | "Revoked" | null };
+export type CredentialRevocation = "REVOKED" | "ALREADY_REVOKED" | "UNAVAILABLE";
 export type Client = CreateClient & { id: string; enabled: boolean };
 export type Deployment = CreateDeployment & { id: string; enabled: boolean; hostingType: DeploymentConfiguration["hostingType"] | null };
 export type VersionAssignment = VersionAssignmentInput & { deploymentId: string };
@@ -52,6 +53,7 @@ export interface ScoringStore {
   getActivationToken(deploymentId: string, now: Date, tokenId?: string): Promise<{ tokenCiphertext: string; expiresAt: Date | null } | null>;
   listActivationTokens(deploymentId: string): Promise<TokenRecord[]>;
   revokeActivationToken(deploymentId: string, tokenId: string, now: Date): Promise<boolean>;
+  revokeTokenCredential(deploymentId: string, tokenId: string, now: Date): Promise<CredentialRevocation>;
   exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }): Promise<{ deploymentId: string; clientId: string } | null>;
   authenticateDeployment(keyPrefix: string, secretHash: string): Promise<DeploymentIdentity | null>;
   reserveUsage(input: ReserveInput): Promise<UsageReservation>;
@@ -62,7 +64,7 @@ export interface ScoringStore {
 }
 
 type Credential = DeploymentIdentity & { keyPrefix: string; secretHash: string; revokedAt?: Date | null; expiresAt?: Date | null };
-type Activation = Omit<StoredActivationToken, "tokenCiphertext"> & { tokenCiphertext: string | null; deploymentId: string; usedAt: Date | null; revokedAt: Date | null; createdAt: Date };
+type Activation = Omit<StoredActivationToken, "tokenCiphertext"> & { tokenCiphertext: string | null; deploymentId: string; credentialId: string | null; usedAt: Date | null; revokedAt: Date | null; createdAt: Date };
 type Usage = { occurredAt: Date; fingerprint?: string; ruleVersionId?: string; id: string; clientId: string; deploymentId: string; capability: Capability; idempotencyKey: string; response?: unknown; outcome: "PENDING" | "SUCCEEDED" | "FAILED" };
 
 /** Deterministic in-process implementation used by unit tests; production uses PostgreSQL. */
@@ -124,19 +126,30 @@ export class MemoryScoringStore implements ScoringStore {
   async assignVersion(deploymentId: string, input: VersionAssignmentInput) { this.checkAssignment(deploymentId, input); this.assignments = this.assignments.filter((item) => item.deploymentId !== deploymentId); this.assignments.push({ deploymentId, ...input }); }
   async storeActivationToken(input: StoredActivationToken & { deploymentId: string }) {
     for (const token of this.activations) if (token.deploymentId === input.deploymentId && !token.usedAt && !token.revokedAt) { token.revokedAt = new Date(); token.tokenCiphertext = null; }
-    this.activations.push({ ...input, usedAt: null, revokedAt: null, createdAt: new Date() });
+    this.activations.push({ ...input, credentialId: null, usedAt: null, revokedAt: null, createdAt: new Date() });
   }
   async getActivationToken(deploymentId: string, now: Date, tokenId?: string) {
     const token = this.activations.find(token => token.deploymentId === deploymentId && !token.usedAt && !token.revokedAt && (!tokenId || token.id === tokenId) && (!token.expiresAt || token.expiresAt > now) && token.tokenCiphertext);
     return token?.tokenCiphertext ? { tokenCiphertext: token.tokenCiphertext, expiresAt: token.expiresAt } : null;
   }
   async listActivationTokens(deploymentId: string): Promise<TokenRecord[]> {
-    return this.activations.filter(t => t.deploymentId === deploymentId).map(t => ({ id: t.id, expiresAt: t.expiresAt, createdAt: t.createdAt, usedAt: t.usedAt, revokedAt: t.revokedAt, canCopy: Boolean(t.tokenCiphertext) })).reverse();
+    return this.activations.filter(t => t.deploymentId === deploymentId).map(t => {
+      const credential = this.credentials.find(c => c.credentialId === t.credentialId && c.deploymentId === deploymentId);
+      return { id: t.id, expiresAt: t.expiresAt, createdAt: t.createdAt, usedAt: t.usedAt, revokedAt: t.revokedAt, canCopy: Boolean(t.tokenCiphertext), credentialStatus: credential ? credential.revokedAt ? "Revoked" as const : "Active" as const : null };
+    }).reverse();
   }
   async revokeActivationToken(deploymentId: string, tokenId: string, now: Date) {
     const token = this.activations.find(t => t.deploymentId === deploymentId && t.id === tokenId && !t.usedAt && !t.revokedAt);
     if (!token) return false;
     token.revokedAt = now; token.tokenCiphertext = null; return true;
+  }
+  async revokeTokenCredential(deploymentId: string, tokenId: string, now: Date): Promise<CredentialRevocation> {
+    const token = this.activations.find(t => t.id === tokenId && t.deploymentId === deploymentId && t.usedAt && t.credentialId);
+    const credential = this.credentials.find(c => c.credentialId === token?.credentialId && c.deploymentId === deploymentId);
+    if (!credential) return "UNAVAILABLE";
+    if (credential.revokedAt) return "ALREADY_REVOKED";
+    credential.revokedAt = now;
+    return "REVOKED";
   }
   async exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
     const token = this.activations.find((item) => item.tokenHash === input.tokenHash && !item.usedAt && !item.revokedAt && (!item.expiresAt || item.expiresAt > input.now));
@@ -145,11 +158,12 @@ export class MemoryScoringStore implements ScoringStore {
     const client = this.clients.find((item) => deployment.clientId === item.id);
     if (!client) return null;
     token.usedAt = input.now;
+    token.credentialId = input.credentialId;
     token.tokenCiphertext = null;
     this.credentials.push({ credentialId: input.credentialId, deploymentId: token.deploymentId, clientId: deployment.clientId, keyPrefix: input.keyPrefix, secretHash: input.secretHash });
     return { deploymentId: token.deploymentId, clientId: client.id };
   }
-  async authenticateDeployment(keyPrefix: string, secretHash: string) { const row = this.credentials.find((item) => item.keyPrefix === keyPrefix && item.secretHash === secretHash); return row ? { credentialId: row.credentialId, deploymentId: row.deploymentId, clientId: row.clientId } : null; }
+  async authenticateDeployment(keyPrefix: string, secretHash: string) { const row = this.credentials.find((item) => item.keyPrefix === keyPrefix && item.secretHash === secretHash && !item.revokedAt && (!item.expiresAt || item.expiresAt > new Date())); return row ? { credentialId: row.credentialId, deploymentId: row.deploymentId, clientId: row.clientId } : null; }
   integrationAuditEvents: Array<{ action: string; actorReference: string; resourceReference: string; occurredAt: Date }> = [];
   async organizationInfo(identity: DeploymentIdentity, now: Date): Promise<OrganizationInfo> {
     const credential = this.credentials.find(c => c.credentialId === identity.credentialId && c.deploymentId === identity.deploymentId && c.clientId === identity.clientId);

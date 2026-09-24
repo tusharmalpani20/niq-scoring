@@ -98,6 +98,36 @@ describe("scoring API", () => {
     expect((await app.request("/v1/metadata", { headers: { authorization: `Bearer ${credential}` } })).status).toBe(200);
   });
 
+  test("revokes only the credential issued by a used token", async () => {
+    const { app, store, client, deployment, credential } = await onboard();
+    const base = `/admin/deployments/${deployment.id}/activation-tokens`;
+    const listed = async () => (await (await app.request(base, { headers: adminHeaders })).json() as { tokens: Array<{ id: string; status: string; credentialStatus: "Active" | "Revoked" | null }> }).tokens;
+    const first = (await listed()).find(token => token.status === "Used")!;
+    expect(first.credentialStatus).toBe("Active");
+
+    const next = await (await app.request(`/admin/deployments/${deployment.id}/activation-token`, jsonRequest({ expiresAt: null }))).json() as { activationToken: string };
+    const secondCredential = (await (await app.request("/v1/activate", jsonRequest(next, ""))).json() as { credential: string }).credential;
+    const second = (await listed()).find(token => token.id !== first.id)!;
+    expect(second.credentialStatus).toBe("Active");
+
+    const other = await store.createDeployment({ clientId: client.id, name: "Other", environment: "test" });
+    const revoke = `${base}/${first.id}/credential`;
+    expect((await app.request(revoke, { method: "DELETE", headers: { origin: adminHeaders.origin } })).status).toBe(401);
+    expect((await app.request(`/admin/deployments/${other.id}/activation-tokens/${first.id}/credential`, { method: "DELETE", headers: adminHeaders })).status).toBe(404);
+    expect((await app.request(revoke, { method: "DELETE", headers: adminHeaders })).status).toBe(200);
+    expect((await app.request("/v1/metadata", { headers: { authorization: `Bearer ${credential}` } })).status).toBe(401);
+    expect((await app.request("/v1/metadata", { headers: { authorization: `Bearer ${secondCredential}` } })).status).toBe(200);
+    expect((await listed()).find(token => token.id === first.id)?.credentialStatus).toBe("Revoked");
+    expect((await listed()).find(token => token.id === second.id)?.credentialStatus).toBe("Active");
+    expect((await app.request(revoke, { method: "DELETE", headers: adminHeaders })).status).toBe(409);
+
+    // Older used tokens cannot be reliably attributed to a credential.
+    store.activations.find(token => token.id === second.id)!.credentialId = null;
+    expect((await listed()).find(token => token.id === second.id)?.credentialStatus).toBeNull();
+    expect((await app.request(`${base}/${second.id}/credential`, { method: "DELETE", headers: adminHeaders })).status).toBe(404);
+    expect((await app.request("/v1/metadata", { headers: { authorization: `Bearer ${secondCredential}` } })).status).toBe(200);
+  });
+
   test("deployment limits are independent and issuing another credential does not reset usage", async () => {
     const { app, store, client, deployment, credential } = await onboard();
     await store.setEntitlement(deployment.id, { capability: "SCORING", enabled: true, monthlyLimit: 1 });

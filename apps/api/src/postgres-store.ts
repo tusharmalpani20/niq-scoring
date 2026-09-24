@@ -6,7 +6,7 @@ import type { ReserveInput } from "./store";
 import { PostgresRuleStore } from "./postgres-rule-store";
 import { DuplicateClientNameError } from "./lib/client-name";
 import { postgresDeletion, type RecordKind } from "./record-deletion";
-import type { StoredActivationToken, TokenRecord } from "./store";
+import type { StoredActivationToken, TokenRecord, CredentialRevocation } from "./store";
 import postgres from "postgres";
 import type { DeploymentConfiguration, CreateDeployment, CreateClient, EntitlementInput, VersionAssignmentInput } from "@niq-scoring/contracts";
 import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
@@ -112,20 +112,29 @@ export class PostgresScoringStore implements ScoringStore {
     return token ?? null;
   }
   async listActivationTokens(deploymentId: string) {
-    return this.database<TokenRecord[]>`select id, expires_at as "expiresAt", created_at as "createdAt", used_at as "usedAt", revoked_at as "revokedAt", (token_ciphertext is not null) as "canCopy" from activation_tokens where deployment_id=${deploymentId} order by created_at desc, id desc`;
+    return this.database<TokenRecord[]>`select token.id, token.expires_at as "expiresAt", token.created_at as "createdAt", token.used_at as "usedAt", token.revoked_at as "revokedAt", (token.token_ciphertext is not null) as "canCopy", case when credential.id is null then null when credential.revoked_at is null then 'Active' else 'Revoked' end as "credentialStatus" from activation_tokens token left join deployment_credentials credential on credential.id=token.credential_id and credential.deployment_id=token.deployment_id where token.deployment_id=${deploymentId} order by token.created_at desc, token.id desc`;
   }
   async revokeActivationToken(deploymentId: string, tokenId: string, now: Date) {
     const rows = await this.database`update activation_tokens set revoked_at=${now}, token_ciphertext=null where deployment_id=${deploymentId} and id=${tokenId} and used_at is null and revoked_at is null returning id`;
     return rows.length > 0;
   }
+  async revokeTokenCredential(deploymentId: string, tokenId: string, now: Date): Promise<CredentialRevocation> {
+    return this.database.begin(async tx => {
+      const [credential] = await tx<Array<{ id: string; revokedAt: Date | null }>>`select credential.id, credential.revoked_at as "revokedAt" from activation_tokens token join deployment_credentials credential on credential.id=token.credential_id and credential.deployment_id=token.deployment_id where token.deployment_id=${deploymentId} and token.id=${tokenId} and token.used_at is not null for update of credential`;
+      if (!credential) return "UNAVAILABLE";
+      if (credential.revokedAt) return "ALREADY_REVOKED";
+      await tx`update deployment_credentials set revoked_at=${now} where id=${credential.id} and deployment_id=${deploymentId}`;
+      return "REVOKED";
+    });
+  }
   async exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
     return this.database.begin(async (tx) => {
-      const [token] = await tx<Array<{ deploymentId: string }>>`select deployment_id as "deploymentId" from activation_tokens where token_hash=${input.tokenHash} and used_at is null and revoked_at is null and (expires_at is null or expires_at>${input.now}) for update`;
+      const [token] = await tx<Array<{ id: string; deploymentId: string }>>`select id, deployment_id as "deploymentId" from activation_tokens where token_hash=${input.tokenHash} and used_at is null and revoked_at is null and (expires_at is null or expires_at>${input.now}) for update`;
       if (!token) return null;
       const [client] = await tx<Array<{ clientId: string }>>`select client.id as "clientId" from deployments link join clients client on client.id=link.client_id where link.id=${token.deploymentId}`;
       if (!client) return null;
-      await tx`update activation_tokens set used_at=${input.now}, token_ciphertext=null where token_hash=${input.tokenHash}`;
       await tx`insert into deployment_credentials (id, deployment_id, key_prefix, secret_hash, hash_algorithm) values (${input.credentialId}, ${token.deploymentId}, ${input.keyPrefix}, ${input.secretHash}, 'sha256')`;
+      await tx`update activation_tokens set used_at=${input.now}, token_ciphertext=null, credential_id=${input.credentialId} where id=${token.id} and deployment_id=${token.deploymentId}`;
       return { deploymentId: token.deploymentId, clientId: client.clientId };
     });
   }

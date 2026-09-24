@@ -213,6 +213,15 @@ export function createApp(options: AppOptions) {
     if (!id.success || !tokenId.success) return context.json({ error: "INVALID_REQUEST" }, 400);
     return await options.store.revokeActivationToken(id.data, tokenId.data, now()) ? context.json({ revoked: true }) : context.json({ error: "TOKEN_UNAVAILABLE" }, 409);
   });
+  app.delete("/admin/deployments/:id/activation-tokens/:tokenId/credential", async context => {
+    context.header("cache-control", "no-store");
+    const id = ulidSchema.safeParse(context.req.param("id")); const tokenId = ulidSchema.safeParse(context.req.param("tokenId"));
+    if (!id.success || !tokenId.success) return context.json({ error: "INVALID_REQUEST" }, 400);
+    const result = await options.store.revokeTokenCredential(id.data, tokenId.data, now());
+    return result === "REVOKED" ? context.json({ revoked: true })
+      : result === "ALREADY_REVOKED" ? context.json({ error: "CREDENTIAL_ALREADY_REVOKED" }, 409)
+      : context.json({ error: "CREDENTIAL_UNAVAILABLE" }, 404);
+  });
 
   app.post("/v1/activate", async (context) => {
     const parsed = activationExchangeSchema.safeParse(await parseJson(context)); if (!parsed.success) return context.json({ error: "INVALID_REQUEST" }, 400);
