@@ -26,6 +26,7 @@ import { DeploymentDetail } from "./DeploymentDetail";
 import { Button } from "./components/ui/button";
 import { Sidebar, SidebarProvider, SidebarHeader, SidebarContent, SidebarFooter, SidebarGroup, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarTrigger } from "./components/ui/sidebar";
 import { ErrorNotice } from "./shared";
+import { clientUrl, deploymentUrl, resolveClient, resolveDeployment } from "./record-urls";
 const pages = [
   {
     path: "overview",
@@ -146,10 +147,24 @@ function Console() {
   if (["/customers", "/organizations"].includes(location.pathname))
     return <Navigate to="/clients" replace />;
   const ruleId = location.pathname.match(/^\/versions\/([^/]+)$/)?.[1];
-  const clientId = location.pathname.match(/^\/clients\/([^/]+)$/)?.[1];
-  const deploymentId = location.pathname.match(/^\/deployments\/([^/]+)$/)?.[1];
-  const page = pages.find((p) => `/${p.path}` === location.pathname || (p.path === "versions" && ruleId) || (p.path === "clients" && clientId) || (p.path === "deployments" && deploymentId));
+  const clientSegment = location.pathname.match(/^\/clients\/([^/]+)$/)?.[1];
+  const deploymentMatch = location.pathname.match(/^\/deployments\/([^/]+)\/([^/]+)(?:\/(settings|tokens))?$/);
+  const legacyDeploymentMatch = location.pathname.match(/^\/deployments\/([^/]+)(?:\/(settings|tokens))?$/);
+  const deploymentSegment = deploymentMatch && deploymentMatch[2] !== "settings" && deploymentMatch[2] !== "tokens" ? deploymentMatch[2] : legacyDeploymentMatch?.[1];
+  const client = data && clientSegment ? resolveClient(data, clientSegment) : undefined;
+  const deployment = data && deploymentSegment ? resolveDeployment(data, deploymentSegment) : undefined;
+  const clientId = client?.id ?? clientSegment;
+  const deploymentId = deployment?.id ?? deploymentSegment;
+  const page = pages.find((p) => `/${p.path}` === location.pathname || (p.path === "versions" && ruleId) || (p.path === "clients" && clientSegment) || (p.path === "deployments" && deploymentSegment));
   if (!page) return <Navigate to="/overview" replace />;
+  if (client && location.pathname !== clientUrl(client)) return <Navigate to={clientUrl(client)} replace />;
+  if (data && deployment) {
+    const queryTab = new URLSearchParams(location.search).get("tab");
+    const pathTab = deploymentMatch?.[3] ?? legacyDeploymentMatch?.[2];
+    const tab = pathTab === "settings" || pathTab === "tokens" ? pathTab : queryTab === "settings" || queryTab === "tokens" ? queryTab : "overview";
+    const canonical = deploymentUrl(data, deployment, tab);
+    if (`${location.pathname}${location.search}` !== canonical) return <Navigate to={canonical} replace />;
+  }
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon">
@@ -210,7 +225,7 @@ function Console() {
       <div className="workspace">
         <main className="page-content">
           <SidebarTrigger title="Toggle sidebar" />
-          {!ruleId && !clientId && !deploymentId && <header className="page-header">
+          {!ruleId && !clientSegment && !deploymentSegment && <header className="page-header">
             <h1>{page.label}</h1>
           </header>}
           <ErrorNotice error={error} />

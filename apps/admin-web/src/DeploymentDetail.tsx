@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Pencil, Plus } from "lucide-react";
 import type { Overview } from "./Operations";
 import { deploymentVersion } from "./deployment-version";
@@ -11,11 +11,13 @@ import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
+import { clientUrl, deploymentUrl } from "./record-urls";
 
 const UsageChart = lazy(() => import("./UsageChart").then(module => ({ default: module.UsageChart })));
 
 export function DeploymentDetail({ data, deploymentId, refresh }: { data: Overview; deploymentId: string; refresh: () => Promise<void> }) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [tokenCreating, setTokenCreating] = useState(false);
   const deployment = data.deployments.find(item => item.id === deploymentId);
@@ -28,14 +30,14 @@ export function DeploymentDetail({ data, deploymentId, refresh }: { data: Overvi
     const item = data.entitlements.find(entry => entry.deploymentId === deployment.id && entry.capability === capability);
     return !item?.enabled ? "Disabled" : item.monthlyLimit === null ? "Unlimited" : `${item.monthlyLimit.toLocaleString()} per month`;
   };
-  const tab = ["overview", "settings", "tokens"].includes(searchParams.get("tab") ?? "") ? searchParams.get("tab")! : "overview";
+  const tab = location.pathname.endsWith("/settings") ? "settings" : location.pathname.endsWith("/tokens") ? "tokens" : "overview";
   const changeTab = (value: string) => {
     if (value !== "tokens") setTokenCreating(false);
-    setSearchParams(value === "overview" ? {} : { tab: value }, { replace: true });
+    if (value === "overview" || value === "settings" || value === "tokens") navigate(deploymentUrl(data, deployment, value), { replace: true });
   };
   const environment = deployment.environment.charAt(0).toUpperCase() + deployment.environment.slice(1);
   return <section className="min-w-0 space-y-4">
-    <header className="space-y-2"><nav aria-label="Breadcrumb" className="text-sm"><Link to="/clients" className="text-primary hover:underline">Clients</Link><span className="mx-2 text-muted-foreground">/</span><Link to={`/clients/${client.id}`} className="text-primary hover:underline">{client.name}</Link><span className="mx-2 text-muted-foreground">/</span><span className="text-muted-foreground">{environment}</span></nav><div className="flex items-center justify-between gap-4"><div className="flex min-w-0 flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold tracking-tight">{environment}</h1><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></div>{tab === "settings" && <Button size="icon" aria-label="Edit deployment" title="Edit deployment" className="shrink-0" onClick={() => setEditing(true)}><Pencil className="size-4" aria-hidden="true" /></Button>}{tab === "tokens" && <Button size="icon" aria-label="Create token" title="Create token" className="shrink-0" onClick={() => setTokenCreating(value => !value)}><Plus className="size-4" aria-hidden="true" /></Button>}</div><p className="text-sm text-muted-foreground">{client.name} · {deployment.hostingType ? hostingLabels[deployment.hostingType] : "Hosting not specified"} · {deploymentVersion(data, deployment.id).label}</p></header>
+    <header className="space-y-2"><nav aria-label="Breadcrumb" className="text-sm"><Link to="/clients" className="text-primary hover:underline">Clients</Link><span className="mx-2 text-muted-foreground">/</span><Link to={clientUrl(client)} className="text-primary hover:underline">{client.name}</Link><span className="mx-2 text-muted-foreground">/</span><span className="text-muted-foreground">{environment}</span></nav><div className="flex items-center justify-between gap-4"><div className="flex min-w-0 flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold tracking-tight">{environment}</h1><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></div>{tab === "settings" && <Button size="icon" aria-label="Edit deployment" title="Edit deployment" className="shrink-0" onClick={() => setEditing(true)}><Pencil className="size-4" aria-hidden="true" /></Button>}{tab === "tokens" && <Button size="icon" aria-label="Create token" title="Create token" className="shrink-0" onClick={() => setTokenCreating(value => !value)}><Plus className="size-4" aria-hidden="true" /></Button>}</div><p className="text-sm text-muted-foreground">{client.name} · {deployment.hostingType ? hostingLabels[deployment.hostingType] : "Hosting not specified"} · {deploymentVersion(data, deployment.id).label}</p></header>
     <Tabs value={tab} onValueChange={changeTab} className="gap-4"><TabsList variant="line" aria-label="Deployment details" className="h-auto min-h-11 w-full justify-start gap-6 rounded-none border-b p-0"><TabsTrigger value="overview" className="h-11 flex-none rounded-none border-0 bg-transparent px-1 shadow-none data-[state=active]:bg-transparent data-[state=active]:text-primary after:bottom-0 after:bg-primary">Overview</TabsTrigger><TabsTrigger value="settings" className="h-11 flex-none rounded-none border-0 bg-transparent px-1 shadow-none data-[state=active]:bg-transparent data-[state=active]:text-primary after:bottom-0 after:bg-primary">Settings &amp; limits</TabsTrigger><TabsTrigger value="tokens" className="h-11 flex-none rounded-none border-0 bg-transparent px-1 shadow-none data-[state=active]:bg-transparent data-[state=active]:text-primary after:bottom-0 after:bg-primary">Tokens</TabsTrigger></TabsList>
       <TabsContent value="overview" className="space-y-5">
         {error && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">Could not load usage. {error}<Button variant="outline" size="sm" onClick={retry}>Retry</Button></div>}

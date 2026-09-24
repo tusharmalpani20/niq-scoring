@@ -14,6 +14,7 @@ import { Card, CardContent } from "./components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
+import { deploymentUrl } from "./record-urls";
 export const hostingLabels = { NIQ_HOSTED: "NIQ hosted", CLIENT_CLOUD: "Client cloud", ON_PREMISES: "On-premises" };
 export function Deployments({ data, refresh }: { data: Overview; refresh: () => Promise<void> }) {
   const navigate = useNavigate();
@@ -54,7 +55,7 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
     <TabsContent value="deployments" className="space-y-5"><Card><CardContent className="pt-6"><Table>
       <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Hosting</TableHead><TableHead>Environment</TableHead><TableHead>Status</TableHead><TableHead>Rule</TableHead><TableHead>Assessments</TableHead><TableHead>Vital IQ</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
       <TableBody>{deployments.rows.map(deployment => <TableRow key={deployment.id}>
-        <TableCell><Link to={`/deployments/${deployment.id}`} className="font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{clientName(deployment.clientId)}</Link></TableCell>
+        <TableCell><Link to={deploymentUrl(data, deployment)} className="font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{clientName(deployment.clientId)}</Link></TableCell>
         <TableCell>{deployment.hostingType ? hostingLabels[deployment.hostingType] : "Not specified"}</TableCell><TableCell className="capitalize">{deployment.environment}</TableCell><TableCell><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
         <TableCell>{deploymentVersion(data, deployment.id).label}</TableCell>
         {["SCORING", "FACE_SCAN"].map(capability => { const limit = data.entitlements.find(item => item.deploymentId === deployment.id && item.capability === capability); return <TableCell key={capability}>{!limit?.enabled ? "Disabled" : limit.monthlyLimit === null ? "Unlimited" : `${limit.monthlyLimit.toLocaleString()}/month`}</TableCell>; })}

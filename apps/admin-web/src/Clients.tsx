@@ -19,6 +19,7 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
 import { Link } from "react-router-dom";
+import { clientUrl } from "./record-urls";
 
 export function Clients({ data, refresh }: { data: Overview; refresh: () => Promise<void> }) {
   const [accessClient, setAccessClient] = useState<Overview["clients"][number] | null>(null);
@@ -86,7 +87,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
         <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Deployments</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
           {clients.rows.map(client => <TableRow key={client.id}>
-            <TableCell className="font-medium"><Link to={`/clients/${client.id}`} className="text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{client.name}</Link></TableCell>
+            <TableCell className="font-medium"><Link to={clientUrl(client)} className="text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{client.name}</Link></TableCell>
             <TableCell><Badge variant={client.enabled ? "default" : "secondary"}>{client.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
             <TableCell className="text-right tabular-nums">{data.deployments.filter(deployment => deployment.clientId === client.id).length}</TableCell>
             <TableCell className="text-right"><div className="flex items-center justify-end gap-1">

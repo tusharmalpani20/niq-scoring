@@ -61,7 +61,9 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.locator(".recharts-surface")).toBeVisible();
   await page.getByRole("link", { name: /View clients/ }).click();
   await page.getByRole("link", { name: "Apollo", exact: true }).click();
-  await expect(page).toHaveURL(/\/clients\/c1$/);
+  await expect(page).toHaveURL(/\/clients\/apollo$/);
+  await page.goto("/clients/c1");
+  await expect(page).toHaveURL(/\/clients\/apollo$/);
   await expect(page.getByRole("heading", { name: "Apollo" })).toBeVisible();
   await expect(page.getByText("Assessments scored")).toBeVisible();
   await expect(page.getByText("18", { exact: true })).toBeVisible();
@@ -79,10 +81,13 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("dialog").getByRole("combobox", { name: "Client" })).toHaveText("Apollo");
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("link", { name: "Production" }).click();
-  await expect(page).toHaveURL(/\/deployments\/d1$/);
+  await expect(page).toHaveURL(/\/deployments\/apollo\/d1$/);
   await expect(page.getByRole("heading", { name: "Production" })).toBeVisible();
   await expect(page.locator(".recharts-surface")).toBeVisible();
   await page.getByRole("tab", { name: "Settings & limits" }).click();
+  await expect(page).toHaveURL(/\/deployments\/apollo\/d1\/settings$/);
+  await page.goto("/deployments/d1?tab=settings");
+  await expect(page).toHaveURL(/\/deployments\/apollo\/d1\/settings$/);
   await expect(page.getByRole("heading", { name: "Settings & limits" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Rules & limits" })).toBeVisible();
   await expect(page.getByText("NIQ hosted", { exact: true })).toBeVisible();
@@ -90,6 +95,7 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("dialog")).toContainText("Apollo");
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("tab", { name: "Tokens" }).click();
+  await expect(page).toHaveURL(/\/deployments\/apollo\/d1\/tokens$/);
   await expect(page.getByRole("region", { name: "Activation tokens" })).toBeVisible();
   await expect(page.getByText("Could not load tokens.")).toBeVisible();
   await expect(page.getByText("No tokens yet.")).toHaveCount(0);

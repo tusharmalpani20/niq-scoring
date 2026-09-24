@@ -39,7 +39,7 @@ test("deployments show and filter resolved versions and explain the default", as
   await page.getByRole("button", { name: "Clear filters", exact: true }).click();
   await expect(table.getByRole("link", { name: "Beta", exact: true })).toBeVisible();
   await table.getByRole("link", { name: "Apollo", exact: true }).click();
-  await expect(page).toHaveURL(/\/deployments\/d1$/);
+  await expect(page).toHaveURL(/\/deployments\/apollo\/d1$/);
   await expect(page.getByRole("heading", { name: "Production" })).toBeVisible();
   await page.goto("/deployments");
   await page.getByRole("button", { name: "Edit Apollo production deployment", exact: true }).click();
