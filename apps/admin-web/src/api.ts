@@ -82,6 +82,7 @@ const errors: Record<string, string> = {
   LAST_ADMIN: "At least one administrator must remain enabled.",
   NOT_FOUND: "This record is no longer available. Refresh and try again.",
   CLIENT_NAME_EXISTS: "A client with this name already exists.",
+  DEPLOYMENT_NAME_EXISTS: "This client already has a deployment with that label. Choose another label.",
   INTERNAL_ERROR:
     "The service could not complete the request. Please try again.",
 };

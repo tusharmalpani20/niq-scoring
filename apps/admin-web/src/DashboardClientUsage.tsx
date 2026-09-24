@@ -6,6 +6,7 @@ import { Pagination, PaginationContent, PaginationItem } from "./components/ui/p
 import type { Overview } from "./Operations";
 import { paginate } from "./pagination";
 import { clientUrl } from "./record-urls";
+import { deploymentDisplayLabel } from "./deployment-label";
 
 type Usage = { completed: number; allowanceUsed: number; limit: number | null; available: boolean };
 export type DashboardClient = {
@@ -41,18 +42,18 @@ function DeploymentAllowances({ deployment, label }: { deployment: DashboardClie
 export function DashboardClientUsage({ clients, overview }: { clients: DashboardClient[]; overview: Overview }) {
   const [page, setPage] = useState(1);
   const clientPage = paginate(clients, page);
+  const deploymentLabel = (deployment: DashboardClient["deployments"][number]) => {
+    const record = overview.deployments.find(item => item.id === deployment.id);
+    return record ? deploymentDisplayLabel(record) : deployment.name;
+  };
   return <div className="min-w-0 space-y-4"><Card><CardHeader className="flex-row items-center justify-between gap-2"><CardTitle>Clients by usage</CardTitle><span className="text-xs text-muted-foreground">This month</span></CardHeader><CardContent>
     {clients.length === 0 ? <p className="text-sm text-muted-foreground">No clients yet.</p> : <ul className="divide-y">{clientPage.rows.map(client => {
       const record = overview.clients.find(item => item.id === client.id);
       return <li key={client.id} className="space-y-3 py-5 first:pt-0 last:pb-0">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><strong className="font-semibold">{record ? <Link to={clientUrl(record)} className="hover:text-primary hover:underline">{client.name}</Link> : client.name}</strong><div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground"><span><strong className="font-semibold tabular-nums text-foreground">{client.assessments.toLocaleString()}</strong> assessments scored</span><span><strong className="font-semibold tabular-nums text-foreground">{client.faceScans.toLocaleString()}</strong> face scans completed</span></div></div>
         {client.deployments.length === 0 ? <p className="text-sm text-muted-foreground">No deployment allowance</p>
-          : client.deployments.length === 1 ? <DeploymentAllowances deployment={client.deployments[0]!} />
-          : <div className="grid gap-3 lg:grid-cols-2">{client.deployments.map(deployment => {
-            const record = overview.deployments.find(item => item.id === deployment.id);
-            const label = record ? record.environment.charAt(0).toUpperCase() + record.environment.slice(1) : deployment.name;
-            return <DeploymentAllowances key={deployment.id} deployment={deployment} label={label} />;
-          })}</div>}
+          : client.deployments.length === 1 ? <DeploymentAllowances deployment={client.deployments[0]!} label={deploymentLabel(client.deployments[0]!)} />
+          : <div className="grid gap-3 lg:grid-cols-2">{client.deployments.map(deployment => <DeploymentAllowances key={deployment.id} deployment={deployment} label={deploymentLabel(deployment)} />)}</div>}
       </li>;
     })}</ul>}
   </CardContent></Card>

@@ -15,12 +15,13 @@ import { Separator } from "./components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
 import { deploymentErrors, deploymentSteps, type DeploymentValues as Values } from "./deployment-validation";
+import { suggestDeploymentLabel } from "@niq-scoring/contracts";
 export function DeploymentDialog({ data, deployment, initialClientId, refresh, onClose, onCreated }: { data: Overview; deployment: Overview["deployments"][number] | null; initialClientId?: string; refresh: () => Promise<void>; onClose: () => void; onCreated: (id: string) => void }) {
   const scoring = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "SCORING");
   const face = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "FACE_SCAN");
   const assignment = data.assignments.find(item => item.deploymentId === deployment?.id);
   const form = useForm<Values>({ defaultValues: {
-    clientId: deployment?.clientId ?? initialClientId ?? "", environment: deployment?.environment ?? "production",
+    clientId: deployment?.clientId ?? initialClientId ?? "", environment: deployment?.environment ?? "production", label: deployment?.name ?? "",
     hostingType: deployment ? (deployment.hostingType ?? "") : "NIQ_HOSTED", enabled: deployment?.enabled ?? true,
     scoringEnabled: scoring?.enabled ?? !deployment, faceEnabled: face?.enabled ?? !deployment,
     scoringUnlimited: !deployment || scoring?.monthlyLimit === null, faceUnlimited: !deployment || face?.monthlyLimit === null,
@@ -50,6 +51,7 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
     try {
       const saved = await request<{ id: string; activation?: ActivationToken }>(savedId ? `/admin/deployments/${savedId}/configuration` : "/admin/deployments/configuration", {
         clientId: values.clientId, environment: values.environment.trim(), hostingType: values.hostingType, enabled: values.enabled,
+        ...(values.label.trim() ? { name: values.label.trim() } : {}),
         ...(!savedId ? { tokenExpiry: tokenExpiry(values.expiryPreset, values.expiryDate) } : {}),
         scoring: { enabled: values.scoringEnabled, monthlyLimit: values.scoringUnlimited ? null : (/^\d+$/.test(values.scoringLimit) && Number(values.scoringLimit) <= 2147483647 ? Number(values.scoringLimit) : null) },
         faceScan: { enabled: values.faceEnabled, monthlyLimit: values.faceUnlimited ? null : (/^\d+$/.test(values.faceLimit) && Number(values.faceLimit) <= 2147483647 ? Number(values.faceLimit) : null) },
@@ -68,8 +70,10 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
     else requestAnimationFrame(() => document.getElementById(`deployment-${Object.keys(errors)[0]}`)?.focus());
   }
   const values = form.watch();
+  const suggestedLabel = suggestDeploymentLabel(data.deployments, values.clientId, values.environment);
   const reviewRows = [
     ["Client", data.clients.find(client => client.id === values.clientId)?.name ?? ""],
+    ["Deployment label", values.label.trim() || suggestedLabel],
     ["Environment", values.environment.charAt(0).toUpperCase() + values.environment.slice(1)],
     ["Hosting", values.hostingType === "NIQ_HOSTED" ? "NIQ hosted" : values.hostingType === "ON_PREMISES" ? "On-premises (legacy)" : values.hostingType === "CLIENT_CLOUD" ? "Client cloud" : "Not set"],
     ["Status", values.enabled ? "Enabled" : "Disabled"],
@@ -118,7 +122,8 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
     <form className="flex min-h-0 flex-col gap-4" noValidate onSubmit={event => { if (!savedId && step < 2) { event.preventDefault(); continueStep(); } else void form.handleSubmit(submit)(event); }}>
       <div className="min-h-0 overflow-y-auto px-1 -mx-1 space-y-6">
       {savedId && <div className="space-y-6">
-        <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 text-sm sm:grid-cols-3">{reviewRows.slice(0, 3).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium break-words">{value}</dd></div>)}</dl>
+        <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 text-sm sm:grid-cols-4">{reviewRows.slice(0, 4).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium break-words">{value}</dd></div>)}</dl>
+        <FormInput control={form.control} name="label" label="Deployment label" maxLength={120} disabled={busy} description="Use a name that distinguishes this deployment for the client." />
         {!deployment?.hostingType && <div className="space-y-2">{select("hostingType", "Hosting", [{ value: "NIQ_HOSTED", label: "NIQ hosted" }, { value: "CLIENT_CLOUD", label: "Client cloud" }])}<p className="text-sm text-muted-foreground">Choose hosting for this existing deployment before saving.</p></div>}
         {limits}{rules}
       </div>}
@@ -127,6 +132,7 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
         {select("clientId", "Client", data.clients.map(client => ({ value: client.id, label: client.name })), Boolean(initialClientId))}
         {select("environment", "Environment", ["development", "test", "staging", "production"].map(value => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })))}
       </fieldset>
+      <FormInput control={form.control} name="label" label="Deployment label" placeholder={suggestedLabel} maxLength={120} disabled={busy} description={`Optional. Leave blank to use ${suggestedLabel} when saved.`} />
       {data.clients.length === 0 && <p className="text-sm text-muted-foreground">Create a client before adding a deployment.</p>}
       {select("hostingType", "Hosting", [{ value: "NIQ_HOSTED", label: "NIQ hosted" }, { value: "CLIENT_CLOUD", label: "Client cloud" }])}
       </div>}

@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
 import { deploymentErrors, type DeploymentValues } from "../src/deployment-validation";
-const values: DeploymentValues = { clientId: "client", environment: "production", hostingType: "NIQ_HOSTED", enabled: true, scoringEnabled: true, faceEnabled: true, scoringUnlimited: true, faceUnlimited: true, scoringLimit: "0", faceLimit: "0", ruleVersion: "LATEST_APPROVED", expiryPreset: "7", expiryDate: "" };
+const values: DeploymentValues = { clientId: "client", environment: "production", label: "", hostingType: "NIQ_HOSTED", enabled: true, scoringEnabled: true, faceEnabled: true, scoringUnlimited: true, faceUnlimited: true, scoringLimit: "0", faceLimit: "0", ruleVersion: "LATEST_APPROVED", expiryPreset: "7", expiryDate: "" };
 test("identity step requires all identity fields without validating later settings", () => {
   expect(deploymentErrors({ ...values, clientId: "", environment: "", hostingType: "" }, 0)).toEqual({ clientId: "This field is required.", environment: "This field is required.", hostingType: "This field is required." });
   expect(deploymentErrors({ ...values, scoringLimit: "invalid", scoringUnlimited: false }, 0)).toEqual({});
+  expect(deploymentErrors({ ...values, label: "X" }, 0).label).toBeDefined();
+  expect(deploymentErrors({ ...values, label: "Main production" }, 0)).toEqual({});
 });
 test("settings validate bounded whole-number limits only when applicable", () => {
   for (const limit of ["", "-1", "1.5", "2147483648"]) expect(deploymentErrors({ ...values, scoringUnlimited: false, scoringLimit: limit }, 1).scoringLimit).toBeDefined();
