@@ -114,6 +114,8 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
         expect(retry.session.id).not.toBe(pending.session.id);
         expect(tokenCalls + submitCalls).toBe(calls);
         await workflow.cancel(identity, retry.session.id, "organization-a");
+        await workflow.receive(retry.session.id, "WEBHOOK", null);
+        expect((await workflow.get(identity, retry.session.id, "organization-a")).session.state).toBe("CANCELLED");
       } else {
         await expect(workflow.create(identity, {...input(failureMode), idempotencyKey:"unsafe-retry"})).rejects.toThrow("ACTIVE_FACE_SCAN_EXISTS");
       }
