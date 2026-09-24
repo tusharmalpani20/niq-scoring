@@ -10,7 +10,7 @@ const config = {
 
 export function UsageChart({ monthly, title = "Usage over time" }: { monthly: UsageMonth[] | null; title?: string }) {
   const rows = monthly?.map(item => ({ ...item, label: new Date(`${item.month}-01T00:00:00Z`).toLocaleDateString(undefined, { month: "short", year: "numeric", timeZone: "UTC" }) })) ?? [];
-  return <Card><CardHeader className="flex flex-row items-center justify-between gap-3"><CardTitle>{title}</CardTitle><span className="text-xs text-muted-foreground">Last 6 months · UTC</span></CardHeader><CardContent>
+  return <Card><CardHeader className="flex flex-row items-center justify-between gap-3"><CardTitle>{title}</CardTitle><span className="text-xs text-muted-foreground">Last 6 months</span></CardHeader><CardContent>
     {monthly === null ? <p role="status" className="py-16 text-center text-sm text-muted-foreground">Loading usage…</p> : rows.length === 0 ? <p className="py-16 text-center text-sm text-muted-foreground">No usage data is available.</p> : <>
       <ChartContainer config={config}>
         <BarChart accessibilityLayer data={rows} margin={{ left: 0, right: 0 }}>
