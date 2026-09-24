@@ -12,11 +12,12 @@ export async function request<T = unknown>(
   path: string,
   body?: unknown,
   method = "POST",
+  extraHeaders: Record<string, string> = {},
 ): Promise<T> {
   const response = await fetch(`/api${path}`, {
     method: body === undefined && method === "POST" ? "GET" : method,
     credentials: "same-origin",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...extraHeaders },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const result = await response.json().catch(() => ({}));
@@ -83,6 +84,8 @@ const errors: Record<string, string> = {
   NOT_FOUND: "This record is no longer available. Refresh and try again.",
   CLIENT_NAME_EXISTS: "A client with this name already exists.",
   DEPLOYMENT_NAME_EXISTS: "This client already has a deployment with that label. Choose another label.",
+  CREATE_REQUEST_CONFLICT: "This create request was already used for different settings. Close the form and start a new deployment.",
+  CREATE_REQUEST_DELETED: "This deployment was created and later deleted. Close the form and start a new deployment.",
   INTERNAL_ERROR:
     "The service could not complete the request. Please try again.",
 };

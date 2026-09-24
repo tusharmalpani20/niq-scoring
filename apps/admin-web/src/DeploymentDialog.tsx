@@ -1,7 +1,7 @@
 import { defaultVersionLabel } from "./deployment-version";
 import { TokenExpirySelect, tokenExpiry } from "./TokenExpirySelect";
 import { type ActivationToken } from "./ActivationTokenPanel";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import type { Overview } from "./Operations";
 import { request, message } from "./api";
@@ -33,6 +33,7 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
   } });
   const [step, setStep] = useState(0);
   const [savedId, setSavedId] = useState<string | null>(deployment?.id ?? null);
+  const createKey = useRef(crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [savedResult, setSavedResult] = useState<{ id: string; created: boolean; activation?: ActivationToken } | null>(null);
@@ -75,7 +76,7 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
         scoring: { enabled: values.scoringEnabled, monthlyLimit: values.scoringUnlimited ? null : (/^\d+$/.test(values.scoringLimit) && Number(values.scoringLimit) <= 2147483647 ? Number(values.scoringLimit) : null) },
         faceScan: { enabled: values.faceEnabled, monthlyLimit: values.faceUnlimited ? null : (/^\d+$/.test(values.faceLimit) && Number(values.faceLimit) <= 2147483647 ? Number(values.faceLimit) : null) },
         versionAssignment: values.ruleVersion === "LATEST_APPROVED" ? { mode: "LATEST_APPROVED" } : { mode: "PINNED", scoringRuleVersionId: values.ruleVersion },
-      }, savedId ? "PUT" : "POST");
+      }, savedId ? "PUT" : "POST", savedId ? {} : { "Idempotency-Key": createKey.current });
     } catch (cause) {
       setError(message(cause));
       setBusy(false);
