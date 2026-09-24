@@ -25,7 +25,7 @@ type Dashboard = {
 const monthName = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
 const deploymentIdentity = (overview: Overview, deployment: Overview["deployments"][number]) => {
   const client = overview.clients.find(record => record.id === deployment.clientId);
-  return { client: client?.name ?? "Client", label: deploymentDisplayLabel(deployment) };
+  return { client: client?.name ?? "Client", label: deploymentDisplayLabel(deployment, overview.deployments) };
 };
 
 export function AdminDashboard({ overview }: { overview: Overview }) {

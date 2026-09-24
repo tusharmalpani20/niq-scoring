@@ -44,7 +44,7 @@ export function DashboardClientUsage({ clients, overview }: { clients: Dashboard
   const clientPage = paginate(clients, page);
   const deploymentLabel = (deployment: DashboardClient["deployments"][number]) => {
     const record = overview.deployments.find(item => item.id === deployment.id);
-    return record ? deploymentDisplayLabel(record) : deployment.name;
+    return record ? deploymentDisplayLabel(record, overview.deployments) : deployment.name;
   };
   return <div className="min-w-0 space-y-4"><Card><CardHeader className="flex-row items-center justify-between gap-2"><CardTitle>Clients by usage</CardTitle><span className="text-xs text-muted-foreground">This month</span></CardHeader><CardContent>
     {clients.length === 0 ? <p className="text-sm text-muted-foreground">No clients yet.</p> : <ul className="divide-y">{clientPage.rows.map(client => {

@@ -16,12 +16,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
 import { deploymentErrors, deploymentSteps, type DeploymentValues as Values } from "./deployment-validation";
 import { suggestDeploymentLabel } from "@niq-scoring/contracts";
+import { deploymentDisplayLabel } from "./deployment-label";
 export function DeploymentDialog({ data, deployment, initialClientId, refresh, onClose, onCreated }: { data: Overview; deployment: Overview["deployments"][number] | null; initialClientId?: string; refresh: () => Promise<void>; onClose: () => void; onCreated: (id: string) => void }) {
   const scoring = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "SCORING");
   const face = data.entitlements.find(item => item.deploymentId === deployment?.id && item.capability === "FACE_SCAN");
   const assignment = data.assignments.find(item => item.deploymentId === deployment?.id);
   const form = useForm<Values>({ defaultValues: {
-    clientId: deployment?.clientId ?? initialClientId ?? "", environment: deployment?.environment ?? "production", label: deployment?.name ?? "",
+    clientId: deployment?.clientId ?? initialClientId ?? "", environment: deployment?.environment ?? "production", label: deployment ? deploymentDisplayLabel(deployment, data.deployments) : "",
     hostingType: deployment ? (deployment.hostingType ?? "") : "NIQ_HOSTED", enabled: deployment?.enabled ?? true,
     scoringEnabled: scoring?.enabled ?? !deployment, faceEnabled: face?.enabled ?? !deployment,
     scoringUnlimited: !deployment || scoring?.monthlyLimit === null, faceUnlimited: !deployment || face?.monthlyLimit === null,

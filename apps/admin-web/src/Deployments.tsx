@@ -14,7 +14,7 @@ import { Card, CardContent } from "./components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
-import { deploymentUrl } from "./record-urls";
+import { clientUrl, deploymentUrl } from "./record-urls";
 import { deploymentDisplayLabel } from "./deployment-label";
 export const hostingLabels = { NIQ_HOSTED: "NIQ hosted", CLIENT_CLOUD: "Client cloud", ON_PREMISES: "On-premises" };
 export function Deployments({ data, refresh }: { data: Overview; refresh: () => Promise<void> }) {
@@ -29,7 +29,7 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
   const clientName = (id: string) => data.clients.find(client => client.id === id)?.name ?? id;
   const query = search.trim().toLocaleLowerCase();
   const deployments = paginate(data.deployments.filter(deployment =>
-    (clientName(deployment.clientId).toLocaleLowerCase().includes(query) || deploymentDisplayLabel(deployment).toLocaleLowerCase().includes(query)) &&
+    (clientName(deployment.clientId).toLocaleLowerCase().includes(query) || deploymentDisplayLabel(deployment, data.deployments).toLocaleLowerCase().includes(query)) &&
     (hosting === "all" || (deployment.hostingType ?? "unspecified") === hosting) &&
     (status === "all" || deployment.enabled === (status === "enabled")) &&
     (environment === "all" || deployment.environment === environment) &&
@@ -54,14 +54,15 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
       {filtersActive && <Button variant="ghost" size="sm" onClick={() => { setHosting("all"); setStatus("all"); setEnvironment("all"); setRuleVersion("all"); setPage(1); }}>Clear filters</Button>}
     </div>
     <TabsContent value="deployments" className="space-y-5"><Card><CardContent className="pt-6"><Table>
-      <TableHeader><TableRow><TableHead>Client / deployment</TableHead><TableHead>Hosting</TableHead><TableHead>Environment</TableHead><TableHead>Status</TableHead><TableHead>Rule</TableHead><TableHead>Assessments</TableHead><TableHead>Vital IQ</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-      <TableBody>{deployments.rows.map(deployment => <TableRow key={deployment.id}>
-        <TableCell><Link to={deploymentUrl(data, deployment)} className="font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{clientName(deployment.clientId)}</Link><span className="block text-xs text-muted-foreground">{deploymentDisplayLabel(deployment)}</span></TableCell>
-        <TableCell>{deployment.hostingType ? hostingLabels[deployment.hostingType] : "Not specified"}</TableCell><TableCell className="capitalize">{deployment.environment}</TableCell><TableCell><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
+      <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Deployment</TableHead><TableHead>Hosting</TableHead><TableHead>Status</TableHead><TableHead>Rule</TableHead><TableHead>Assessments</TableHead><TableHead>Vital IQ</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+      <TableBody>{deployments.rows.map(deployment => { const client = data.clients.find(item => item.id === deployment.clientId); return <TableRow key={deployment.id}>
+        <TableCell>{client ? <Link to={clientUrl(client)} className="font-medium text-foreground hover:underline">{client.name}</Link> : clientName(deployment.clientId)}</TableCell>
+        <TableCell><Link to={deploymentUrl(data, deployment)} className="font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{deploymentDisplayLabel(deployment, data.deployments)}</Link><span className="block text-xs capitalize text-muted-foreground">{deployment.environment} environment</span></TableCell>
+        <TableCell>{deployment.hostingType ? hostingLabels[deployment.hostingType] : "Not specified"}</TableCell><TableCell><Badge variant={deployment.enabled ? "default" : "secondary"}>{deployment.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
         <TableCell>{deploymentVersion(data, deployment.id).label}</TableCell>
         {["SCORING", "FACE_SCAN"].map(capability => { const limit = data.entitlements.find(item => item.deploymentId === deployment.id && item.capability === capability); return <TableCell key={capability}>{!limit?.enabled ? "Disabled" : limit.monthlyLimit === null ? "Unlimited" : `${limit.monthlyLimit.toLocaleString()}/month`}</TableCell>; })}
-        <TableCell className="text-right"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" aria-label={`Edit ${clientName(deployment.clientId)} ${deploymentDisplayLabel(deployment)} deployment`} title="Edit deployment" onClick={() => setSelected(deployment)}><Pencil className="size-4" /></Button><DeleteRecord iconOnly kind="deployments" id={deployment.id} name={`${clientName(deployment.clientId)} ${deploymentDisplayLabel(deployment)} deployment`} refresh={refresh} revision={data} /></div></TableCell>
-      </TableRow>)}
+        <TableCell className="text-right"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" aria-label={`Edit ${clientName(deployment.clientId)} ${deploymentDisplayLabel(deployment, data.deployments)} deployment`} title="Edit deployment" onClick={() => setSelected(deployment)}><Pencil className="size-4" /></Button><DeleteRecord iconOnly kind="deployments" id={deployment.id} name={`${clientName(deployment.clientId)} ${deploymentDisplayLabel(deployment, data.deployments)} deployment`} refresh={refresh} revision={data} /></div></TableCell>
+      </TableRow>; })}
       {data.deployments.length === 0 && <TableRow><TableCell colSpan={8} className="h-32 text-center"><Button variant="ghost" onClick={() => setSelected(null)}><Plus />Create your first deployment</Button></TableCell></TableRow>}
       {data.deployments.length > 0 && deployments.total === 0 && <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">No deployments match your search or filters.</TableCell></TableRow>}
       </TableBody></Table></CardContent></Card>
