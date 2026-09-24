@@ -6,7 +6,7 @@ export type User = {
   createdAt: string;
 };
 export class ApiError extends Error {
-  constructor(message: string, public code: string, public issues: unknown[] = []) { super(message); }
+  constructor(message: string, public code: string, public issues: unknown[] = [], public status = 0) { super(message); }
 }
 export async function request<T = unknown>(
   path: string,
@@ -24,7 +24,7 @@ export async function request<T = unknown>(
   if (!response.ok) {
     if (response.status === 401 && path.startsWith("/admin/"))
       window.dispatchEvent(new Event("session-expired"));
-    throw new ApiError(friendlyError(result.error, response.status), result.error, result.issues ?? []);
+    throw new ApiError(friendlyError(result.error, response.status), result.error, result.issues ?? [], response.status);
   }
   return result as T;
 }

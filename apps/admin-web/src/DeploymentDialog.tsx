@@ -4,7 +4,7 @@ import { type ActivationToken } from "./ActivationTokenPanel";
 import { useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import type { Overview } from "./Operations";
-import { request, message } from "./api";
+import { ApiError, request, message } from "./api";
 import { FormInput, ErrorNotice } from "./shared";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
@@ -37,6 +37,7 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [savedResult, setSavedResult] = useState<{ id: string; created: boolean; activation?: ActivationToken } | null>(null);
+  const [pendingCreate, setPendingCreate] = useState<{ values: Values; body: Record<string, unknown> } | null>(null);
   const [refreshError, setRefreshError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
   const dirty = form.formState.isDirty;
@@ -67,22 +68,29 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
       }
     }
     setBusy(true); setError("");
+    const body = {
+      clientId: values.clientId, environment: values.environment.trim(), hostingType: values.hostingType, enabled: values.enabled,
+      ...(values.label.trim() ? { name: values.label.trim() } : {}),
+      ...(!savedId ? { tokenExpiry: tokenExpiry(values.expiryPreset, values.expiryDate) } : {}),
+      scoring: { enabled: values.scoringEnabled, monthlyLimit: values.scoringUnlimited ? null : (/^\d+$/.test(values.scoringLimit) && Number(values.scoringLimit) <= 2147483647 ? Number(values.scoringLimit) : null) },
+      faceScan: { enabled: values.faceEnabled, monthlyLimit: values.faceUnlimited ? null : (/^\d+$/.test(values.faceLimit) && Number(values.faceLimit) <= 2147483647 ? Number(values.faceLimit) : null) },
+      versionAssignment: values.ruleVersion === "LATEST_APPROVED" ? { mode: "LATEST_APPROVED" } : { mode: "PINNED", scoringRuleVersionId: values.ruleVersion },
+    };
+    const attempt = !savedId ? pendingCreate ?? { values, body } : null;
+    if (attempt && !pendingCreate) setPendingCreate(attempt);
     let saved: { id: string; activation?: ActivationToken };
     try {
-      saved = await request<{ id: string; activation?: ActivationToken }>(savedId ? `/admin/deployments/${savedId}/configuration` : "/admin/deployments/configuration", {
-        clientId: values.clientId, environment: values.environment.trim(), hostingType: values.hostingType, enabled: values.enabled,
-        ...(values.label.trim() ? { name: values.label.trim() } : {}),
-        ...(!savedId ? { tokenExpiry: tokenExpiry(values.expiryPreset, values.expiryDate) } : {}),
-        scoring: { enabled: values.scoringEnabled, monthlyLimit: values.scoringUnlimited ? null : (/^\d+$/.test(values.scoringLimit) && Number(values.scoringLimit) <= 2147483647 ? Number(values.scoringLimit) : null) },
-        faceScan: { enabled: values.faceEnabled, monthlyLimit: values.faceUnlimited ? null : (/^\d+$/.test(values.faceLimit) && Number(values.faceLimit) <= 2147483647 ? Number(values.faceLimit) : null) },
-        versionAssignment: values.ruleVersion === "LATEST_APPROVED" ? { mode: "LATEST_APPROVED" } : { mode: "PINNED", scoringRuleVersionId: values.ruleVersion },
-      }, savedId ? "PUT" : "POST", savedId ? {} : { "Idempotency-Key": createKey.current });
+      saved = await request<{ id: string; activation?: ActivationToken }>(savedId ? `/admin/deployments/${savedId}/configuration` : "/admin/deployments/configuration", attempt?.body ?? body, savedId ? "PUT" : "POST", savedId ? {} : { "Idempotency-Key": createKey.current });
     } catch (cause) {
+      // A definite validation rejection did not create anything; the form may be corrected.
+      if (cause instanceof ApiError && cause.status >= 400 && cause.status < 500 &&
+          !["CREATE_REQUEST_CONFLICT", "CREATE_REQUEST_DELETED"].includes(cause.code)) setPendingCreate(null);
       setError(message(cause));
       setBusy(false);
       return;
     }
     const result = { id: saved.id, created: !deployment, activation: saved.activation };
+    setPendingCreate(null);
     setSavedId(saved.id);
     setSavedResult(result);
     form.reset(values);
@@ -145,9 +153,9 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
     {!savedResult && !savedId && <ol aria-label="Creation progress" className="grid grid-cols-3 gap-2 border-b pb-4">
       {deploymentSteps.map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined} className={`flex items-center gap-2 text-xs sm:text-sm ${step === index ? "font-medium text-primary" : "text-muted-foreground"}`}><span className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${index <= step ? "border-primary bg-primary text-primary-foreground" : ""}`}>{index + 1}</span>{label}</li>)}
     </ol>}
-    <form className="flex min-h-0 flex-col gap-4" noValidate onSubmit={event => { if (savedResult) { event.preventDefault(); return; } if (!savedId && step < 2) { event.preventDefault(); continueStep(); } else void form.handleSubmit(submit)(event); }}>
+    <form className="flex min-h-0 flex-col gap-4" noValidate onSubmit={event => { if (savedResult || pendingCreate) { event.preventDefault(); return; } if (!savedId && step < 2) { event.preventDefault(); continueStep(); } else void form.handleSubmit(submit)(event); }}>
       <div className="min-h-0 overflow-y-auto px-1 -mx-1 space-y-6">
-      {savedResult ? <div role="status" className="space-y-3 py-2 text-sm"><p>Your deployment was saved.</p>{refreshError && <p className="text-destructive">The page could not refresh. {refreshError}</p>}{savedResult.activation && <div className="space-y-2"><label htmlFor="saved-activation-token" className="font-medium">Activation token</label><Input id="saved-activation-token" readOnly value={savedResult.activation.activationToken} onFocus={event => event.currentTarget.select()} /><p className="text-xs text-muted-foreground">Copy this token now, or retry the refresh to open the deployment’s Tokens page.</p></div>}</div> : <>
+      {savedResult ? <div role="status" className="space-y-3 py-2 text-sm"><p>Your deployment was saved.</p>{refreshError && <p className="text-destructive">The page could not refresh. {refreshError}</p>}{savedResult.activation && <div className="space-y-2"><label htmlFor="saved-activation-token" className="font-medium">Activation token</label><Input id="saved-activation-token" readOnly value={savedResult.activation.activationToken} onFocus={event => event.currentTarget.select()} /><p className="text-xs text-muted-foreground">Copy this token now, or retry the refresh to open the deployment’s Tokens page.</p></div>}</div> : pendingCreate ? <div role="status" className="space-y-3 py-2 text-sm"><p>The deployment request may have been saved. Retry the same request to confirm its result before creating another deployment.</p><ErrorNotice error={error} /></div> : <>
       {savedId && <div className="space-y-6">
         <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 text-sm sm:grid-cols-4">{reviewRows.slice(0, 4).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium break-words">{value}</dd></div>)}</dl>
         <FormInput control={form.control} name="label" label="Deployment label" maxLength={120} disabled={busy} description="Use a name that distinguishes this deployment for the client." />
@@ -172,7 +180,7 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
       </>}
       </div>
       <DialogFooter className="flex shrink-0 flex-row justify-between gap-2 border-t pt-4">
-        {savedResult ? <><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Close</Button><Button type="button" disabled={busy} onClick={() => void refreshAfterSave(savedResult)}>{busy ? "Refreshing…" : "Retry refresh"}</Button></> : <><Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button>
+        {savedResult ? <><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Close</Button><Button type="button" disabled={busy} onClick={() => void refreshAfterSave(savedResult)}>{busy ? "Refreshing…" : "Retry refresh"}</Button></> : pendingCreate ? <><Button type="button" variant="outline" disabled={busy} onClick={close}>Close</Button><Button type="button" disabled={busy} onClick={() => void submit(pendingCreate.values)}>{busy ? "Checking…" : "Retry request"}</Button></> : <><Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button>
         <div className="flex gap-2">
           {!savedId && step > 0 && <Button type="button" variant="outline" disabled={busy} onClick={() => { setError(""); setStep(step - 1); }}>Back</Button>}
           <Button type="submit" disabled={busy || (!savedId && data.clients.length === 0)}>{busy ? "Saving…" : savedId ? "Save changes" : step < 2 ? "Continue" : "Create"}</Button>
