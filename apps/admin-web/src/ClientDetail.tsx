@@ -9,6 +9,7 @@ import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
+import { RuleUsagePanel } from "./RuleUsagePanel";
 
 const UsageChart = lazy(() => import("./UsageChart").then(module => ({ default: module.UsageChart })));
 
@@ -31,6 +32,7 @@ export function ClientDetail({ data, clientId, refresh }: { data: Overview; clie
           {[["Assessments scored", total("assessments"), "Successful events · all time"], ["Vital IQ scans completed", total("vitalIq"), "Successful scans · all time"], ["Deployments", deployments.length, "Across this client"]].map(([label, value, note]) => <Card key={label}><CardContent className="space-y-2 pt-6"><p className="text-sm text-muted-foreground">{label}</p><p className="text-3xl font-semibold tabular-nums">{value === undefined ? "—" : Number(value).toLocaleString()}</p><p className="text-xs text-muted-foreground">{note}</p></CardContent></Card>)}
         </div>
         {!error && <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Loading chart…</p>}><UsageChart monthly={monthly} /></Suspense>}
+        <RuleUsagePanel clientId={clientId} />
       </TabsContent>
       <TabsContent value="deployments"><Card><CardContent className="pt-6"><div className="max-w-full overflow-x-auto"><Table className="min-w-[540px]"><TableHeader><TableRow><TableHead>Environment</TableHead><TableHead>Hosting</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Assessments</TableHead><TableHead className="text-right">Vital IQ</TableHead></TableRow></TableHeader><TableBody>{deployments.map(item => { const counts = usage?.find(entry => entry.deploymentId === item.id); return <TableRow key={item.id}><TableCell><Link to={`/deployments/${item.id}`} className="font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.environment.charAt(0).toUpperCase() + item.environment.slice(1)}</Link></TableCell><TableCell>{item.hostingType === "NIQ_HOSTED" ? "NIQ hosted" : item.hostingType === "CLIENT_CLOUD" ? "Client cloud" : "Not specified"}</TableCell><TableCell>{item.enabled ? "Enabled" : "Disabled"}</TableCell><TableCell className="text-right tabular-nums">{counts?.assessments.toLocaleString() ?? "—"}</TableCell><TableCell className="text-right tabular-nums">{counts?.vitalIq.toLocaleString() ?? "—"}</TableCell></TableRow>; })}{deployments.length === 0 && <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No deployments yet.</TableCell></TableRow>}</TableBody></Table></div></CardContent></Card></TabsContent>
     </Tabs>

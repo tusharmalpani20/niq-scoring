@@ -3,6 +3,7 @@ import { Clients } from "./Clients";
 import { RuleVersions } from "./RuleVersions";
 import { Card, CardContent } from "./components/ui/card";
 import { Link } from "react-router-dom";
+import { RuleUsagePanel } from "./RuleUsagePanel";
 export type Overview = {
   clients: Array<{
     id: string;
@@ -43,7 +44,7 @@ export function Operations({
 }) {
   if (page === "overview")
     return (
-      <>
+      <div className="space-y-5">
         <div className="metrics">
           {[
             ["Clients", data.clients.length, "clients"],
@@ -61,7 +62,8 @@ export function Operations({
             </Card>
           ))}
         </div>
-      </>
+        <RuleUsagePanel />
+      </div>
     );
   if (page === "clients") return <Clients data={data} refresh={refresh} />;
   if (page === "deployments") return <Deployments data={data} refresh={refresh} />;

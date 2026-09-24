@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils";
 
 export type ChartConfig = Record<string, { label: string; color: string }>;
 
-export function ChartContainer({ config, children, className }: { config: ChartConfig; children: ReactElement; className?: string }) {
+export function ChartContainer({ config, children, className, style }: { config: ChartConfig; children: ReactElement; className?: string; style?: CSSProperties }) {
   const colors = Object.fromEntries(Object.entries(config).map(([key, value]) => [`--color-${key}`, value.color])) as CSSProperties;
-  return <div className={cn("h-56 w-full min-w-0", className)} style={colors}><ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer></div>;
+  return <div className={cn("h-56 w-full min-w-0", className)} style={{ ...colors, ...style }}><ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer></div>;
 }
 
 export const ChartTooltip = Tooltip;

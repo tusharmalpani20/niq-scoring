@@ -1,4 +1,4 @@
-import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import type { UsageMonth } from "./client-usage";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "./components/ui/chart";
@@ -16,6 +16,7 @@ export function UsageChart({ monthly, title = "Usage over time" }: { monthly: Us
         <BarChart accessibilityLayer data={rows} margin={{ left: 0, right: 0 }}>
           <CartesianGrid vertical={false} stroke="var(--border)" />
           <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={value => String(value).slice(0, 3)} />
+          <YAxis allowDecimals={false} width={32} tickLine={false} axisLine={false} />
           <ChartTooltip content={props => <ChartTooltipContent {...props} />} />
           <Bar name="Assessments" dataKey="assessments" fill="var(--color-assessments)" radius={4} />
           <Bar name="Vital IQ" dataKey="vitalIq" fill="var(--color-vitalIq)" radius={4} />
