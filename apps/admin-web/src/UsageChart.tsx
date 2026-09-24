@@ -18,8 +18,8 @@ export function UsageChart({ monthly, title = "Usage over time" }: { monthly: Us
           <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={value => String(value).slice(0, 3)} />
           <YAxis allowDecimals={false} width={32} tickLine={false} axisLine={false} />
           <ChartTooltip content={props => <ChartTooltipContent {...props} />} />
-          <Bar name="Assessments" dataKey="assessments" fill="var(--color-assessments)" maxBarSize={20} radius={4} />
-          <Bar name="Vital IQ" dataKey="vitalIq" fill="var(--color-vitalIq)" maxBarSize={20} radius={4} />
+          <Bar name="Assessments" dataKey="assessments" fill="var(--color-assessments)" maxBarSize={12} radius={3} />
+          <Bar name="Vital IQ" dataKey="vitalIq" fill="var(--color-vitalIq)" maxBarSize={12} radius={3} />
         </BarChart>
       </ChartContainer>
       <div className="mt-3 flex flex-wrap justify-center gap-5 text-xs text-muted-foreground"><span className="flex items-center gap-2"><span className="size-2 rounded-sm bg-primary" />Assessments</span><span className="flex items-center gap-2"><span className="size-2 rounded-sm" style={{ backgroundColor: config.vitalIq.color }} />Vital IQ</span></div>
