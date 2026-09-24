@@ -25,7 +25,7 @@ An administrator can deactivate another user's access and reactivate it later. D
 
 Passwords are stored using Argon2id. Sessions last eight hours and use random opaque tokens in HttpOnly, SameSite=Strict cookies, with Secure enabled in production. Only token hashes are persisted. Sign-out revokes the session on the server. Cookies and credentials are not placed in browser local storage.
 
-Authentication attempts are rate limited in PostgreSQL, so the limit is shared across API instances. Cookie-authenticated mutations validate browser origin against the configured exact origin allow-list. Account-management actions are attributed to named administrators in the audit stream.
+Login attempts are rate limited per normalized account in PostgreSQL, so an attack on one account does not lock out every administrator. The bundled Nginx gateway also limits login requests per source address. Docker Compose exposes the API port only on the host loopback interface; external traffic must use the gateway. Deployments with a different ingress must enforce an equivalent source-based login limit and prevent direct public access to the API port. Cookie-authenticated mutations validate browser origin against the configured exact origin allow-list. Account-management actions are attributed to named administrators in the audit stream.
 
 ## Scope of this first phase
 
