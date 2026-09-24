@@ -7,9 +7,12 @@ const definition = () => createFinalAssessmentTemplate("Assessment v2");
 describe("final assessment evaluator", () => {
   test("keeps unanswered distinct from explicit zero answers and supports partial scoring", () => {
     const unanswered = evaluateFinalAssessment(definition(), {});
-    expect(unanswered).toMatchObject({ complete: false, score: null, classification: null, answerCoverage: { allUnanswered: true, answeredEntries: 0 } });
+    expect(unanswered).toMatchObject({ complete: true, score: null, classification: null, issues: [], answerCoverage: { allUnanswered: true, answeredEntries: 0, unansweredEntries: 19, pendingEntries: 0 } });
+    expect(unanswered.components.every(component => component.points === null && component.status === "unanswered")).toBe(true);
+    expect(evaluateFinalAssessment(definition(), { stage: null })).toMatchObject({ complete: true, score: null, classification: null });
+    expect(evaluateFinalAssessment(definition(), { previous_weight_kg: 80 })).toMatchObject({ complete: false, score: null, classification: null });
     const zero = evaluateFinalAssessment(definition(), { relapse_status: "relapse_status_first_diagnosis" });
-    expect(zero).toMatchObject({ complete: true, score: 0, answerCoverage: { answeredEntries: 1, unansweredEntries: 16, pendingEntries: 2 } });
+    expect(zero).toMatchObject({ complete: true, score: 0, answerCoverage: { answeredEntries: 1, unansweredEntries: 18, pendingEntries: 0 } });
     const emptyMulti = evaluateFinalAssessment(definition(), { gastrointestinal_symptoms: [] });
     expect(emptyMulti).toMatchObject({ complete: true, score: 0, answerCoverage: { answeredEntries: 1 } });
   });
@@ -77,7 +80,7 @@ describe("final assessment evaluator", () => {
       expect(result.components.find(component => component.id === "protein_intake")?.points).toBe(points);
     }
     const missing = evaluateFinalAssessment(definition(), {});
-    expect(missing.components.find(component => component.id === "protein_intake")?.status).toBe("pending");
+    expect(missing.components.find(component => component.id === "protein_intake")?.status).toBe("unanswered");
     const override = evaluateFinalAssessment(definition(), { dietary_intake: "dietary_intake_normal", protein_intake: "adequate" });
     expect(override.issues.map(issue => issue.code)).toContain("DERIVED_ANSWER_NOT_ALLOWED");
   });

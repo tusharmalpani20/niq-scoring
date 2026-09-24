@@ -160,6 +160,7 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
     if (field.kind === "calculated") {
       const previous = raw(field.inputIds[0]);
       const current = raw(field.inputIds[1]);
+      if (!hasValue(previous) && !hasValue(current)) { push(sectionId, field, null, "unanswered"); continue; }
       if (!hasValue(previous) || !hasValue(current)) { push(sectionId, field, null, "pending", "Enter both weights to calculate weight loss."); continue; }
       if (invalidIds.has(field.inputIds[0]) || invalidIds.has(field.inputIds[1])) {
         if (typeof previous === "number" && previous <= 0 || typeof current === "number" && current <= 0) add("answers.weight", "INVALID_WEIGHT", "Weights must be finite and greater than zero.");
@@ -174,7 +175,7 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
     }
     if (field.kind === "derived") {
       const intake = raw(field.sourceInputId);
-      if (!hasValue(intake)) { push(sectionId, field, null, "pending", "Choose dietary intake to derive protein adequacy."); continue; }
+      if (!hasValue(intake)) { push(sectionId, field, null, "unanswered"); continue; }
       if (invalidIds.has(field.sourceInputId)) { push(sectionId, field, null, "unanswered", "Invalid dietary intake"); continue; }
       const mapping = field.scoring.mapping.find(item => item.inputOptionId === intake);
       const outcome = field.scoring.outcomes.find(item => item.id === mapping?.outcomeId);
@@ -190,7 +191,13 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
   const pendingEntries = components.filter(component => component.status === "pending").length;
   const unansweredEntries = components.filter(component => component.status === "unanswered").length;
   result.answerCoverage = { totalEntries: 19, answeredEntries, unansweredEntries, pendingEntries, allUnanswered: answeredEntries === 0 };
-  if (issues.length || answeredEntries === 0) return result;
+  if (issues.length) return result;
+  // An entirely blank final assessment is a valid review result with no score.
+  // A supplied but unfinished dependency (such as one weight) still needs completion.
+  if (answeredEntries === 0) {
+    result.complete = !Object.values(answers).some(hasValue);
+    return result;
+  }
   const score = components.filter(component => component.points !== null).reduce((sum, component) => sum + component.points!, 0);
   if (!Number.isFinite(score) || definition.provisional.status === "CLIENT_CONFIRMED" && !Number.isSafeInteger(score)) { add("score", "INVALID_ARITHMETIC", "The score is outside the supported numeric range."); return result; }
   result.score = score;

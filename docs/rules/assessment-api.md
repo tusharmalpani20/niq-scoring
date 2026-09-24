@@ -30,7 +30,7 @@ POST `/v1/assessments/calculate`
 }
 ```
 
-Start must have established the binding first; otherwise the API returns `ASSESSMENT_NOT_FOUND` (404). Invalid request shapes return 400. Format 2 invalid answers return `INVALID_ASSESSMENT_ANSWERS` (400) with field-level issues. Missing/all-unanswered assessment data returns `ASSESSMENT_INCOMPLETE` (422) with explanations and partial results, without billing. No raw answers are persisted in assessment bindings or usage rows.
+Start must have established the binding first; otherwise the API returns `ASSESSMENT_NOT_FOUND` (404). Invalid request shapes return 400. Format 2 invalid answers return `INVALID_ASSESSMENT_ANSWERS` (400) with field-level issues. A fully blank Format 2 answer set succeeds with `complete: true`, `score: null`, and `classification: null`, and records usage. A supplied but unfinished scoring dependency returns `ASSESSMENT_INCOMPLETE` (422) without billing. Format 1 incomplete behavior is unchanged. No raw answers are persisted in assessment bindings or usage rows.
 
 Successful responses contain `result` and `idempotencyKey`. Result evidence includes the concrete rule ID, checksum, binding/reference, calculation timestamp and usage-backed `resultReference`, as well as calculations, component/domain scores, total, classification and guidance.
 

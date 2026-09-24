@@ -113,7 +113,7 @@ export function upgradeFinalAssessmentDefinition(input: FinalAssessmentDefinitio
 
 export function confirmedAssessmentSamples(): FinalAssessmentDefinition["samples"] {
   return [
-    { id: "unanswered", name: "No answers", answers: {}, expected: { complete: false, score: null, classificationId: null } },
+    { id: "unanswered", name: "No answers", answers: {}, expected: { complete: true, score: null, classificationId: null } },
     { id: "no_surgeries", name: "No previous surgeries gives zero points", answers: { previous_surgeries: "previous_surgeries_no" }, expected: { complete: true, score: 0 } },
     { id: "no_selections", name: "Explicitly empty selections give zero points", answers: { current_medications: [], supplements_intake: [] }, expected: { complete: true, score: 0 } },
   ];
