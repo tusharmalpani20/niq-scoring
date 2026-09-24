@@ -29,7 +29,7 @@ export class PostgresScoringStore implements ScoringStore {
   async overview() {
     const [clients, deployments, entitlements, assignments, versions] = await Promise.all([
       this.database<Client[]>`select id, name, enabled from clients order by created_at`,
-      this.database<Deployment[]>`select id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled from deployments order by created_at`,
+      this.database<Deployment[]>`select id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled from deployments order by created_at, id`,
       this.database<Array<EntitlementInput & { deploymentId: string }>>`select deployment_id as "deploymentId", capability, enabled, monthly_limit as "monthlyLimit" from entitlements where effective_until is null`,
       this.database<Array<{ deploymentId: string; mode: "LATEST_APPROVED" | "PINNED"; scoringRuleVersionId: string | null }>>`select deployment_id as "deploymentId", mode, scoring_rule_version_id as "scoringRuleVersionId" from deployment_version_assignments where effective_until is null`,
       this.database<Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault: boolean }>>`select id, version, lifecycle, clinical_use_permitted as "clinicalUsePermitted", exists(select 1 from scoring_rule_default where rule_id=scoring_rule_versions.id) as "isDefault" from scoring_rule_versions order by created_at desc`,
