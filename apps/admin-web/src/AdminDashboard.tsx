@@ -8,6 +8,7 @@ import { clientUrl, deploymentUrl } from "./record-urls";
 import type { Overview } from "./Operations";
 import { RuleUsagePanel } from "./RuleUsagePanel";
 import { DashboardClientUsage, type DashboardClient } from "./DashboardClientUsage";
+import { DashboardMetricCard } from "./DashboardMetricCard";
 
 const UsageChart = lazy(() => import("./UsageChart").then(module => ({ default: module.UsageChart })));
 
@@ -22,7 +23,6 @@ type Dashboard = {
 };
 
 const monthName = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
-const change = (current: number, previous: number) => `${current >= previous ? "+" : "−"}${Math.abs(current - previous).toLocaleString()} vs last month total`;
 
 function RecentActivity({ data, overview }: { data: Dashboard["recentActivity"]; overview: Overview }) {
   const labels: Record<string, string> = {
@@ -84,7 +84,7 @@ export function AdminDashboard({ overview }: { overview: Overview }) {
       </CardContent></Card>
     </section>
     <section aria-labelledby="month-title" className="space-y-3"><div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><h2 id="month-title" className="shrink-0 text-lg font-semibold">This month</h2><span className="text-xs text-muted-foreground">{monthName(data.period.current)} to date · {monthName(data.period.previous)} total</span></div>
-      <div className="grid gap-3 sm:grid-cols-3">{metrics.map(metric => <Card key={metric.key}><CardContent className="pt-5"><p className="text-sm text-muted-foreground">{metric.label}</p><strong className="mt-2 block text-3xl font-semibold tabular-nums">{data.activity.current[metric.key].toLocaleString()}</strong><p className="mt-1 text-xs text-muted-foreground">{change(data.activity.current[metric.key], data.activity.previous[metric.key])}</p></CardContent></Card>)}</div>
+      <div className="grid gap-3 sm:grid-cols-3">{metrics.map(metric => <DashboardMetricCard key={metric.key} label={metric.label} metric={metric.key} current={data.activity.current[metric.key]} previous={data.activity.previous[metric.key]} monthly={data.monthlyUsage} previousMonth={monthName(data.period.previous)} />)}</div>
     </section>
     <div className="space-y-4"><Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Loading usage chart…</p>}><UsageChart monthly={data.monthlyUsage.map(item => ({ month: item.month, assessments: item.assessments, vitalIq: item.faceScans }))} /></Suspense>
       <DashboardClientUsage clients={data.clients} overview={overview} />
