@@ -15,7 +15,12 @@ test("client opens a detail page with usage and its deployments", async ({ page 
       { month: "2026-06", assessments: 4, vitalIq: 2 }, { month: "2026-07", assessments: 2, vitalIq: 1 },
       { month: "2026-08", assessments: 3, vitalIq: 1 }, { month: "2026-09", assessments: 4, vitalIq: 1 },
     ] }] } });
-    if (path === "/api/admin/deployments/d1/activation-tokens") return route.fulfill({ json: { tokens: [] } });
+    if (path === "/api/admin/deployments/d1/activation-tokens") return route.fulfill({ json: { tokens: [
+      { id: "unused1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Unused", canCopy: true },
+      { id: "used12", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Used", canCopy: false },
+      { id: "revoked1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Revoked", canCopy: false },
+      { id: "expired1", createdAt: "2026-09-14T00:00:00Z", expiresAt: "2026-09-15T00:00:00Z", status: "Expired", canCopy: false },
+    ] } });
     return route.fulfill({ status: 404, json: { error: "NOT_FOUND" } });
   });
   await page.goto("/clients");
@@ -45,5 +50,10 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("region", { name: "Activation tokens" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create token" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Actions" })).toBeVisible();
+  await expect(page.getByRole("row", { name: /Unused/ }).getByRole("button", { name: "Revoke token" })).toBeVisible();
+  await expect(page.getByRole("row", { name: /Revoked/ }).getByLabel("No actions available")).toBeVisible();
+  await page.getByRole("button", { name: "Create token" }).click();
+  await expect(page.getByText("A new token replaces any unused token.")).toBeVisible();
+  await page.getByRole("region", { name: "Activation tokens" }).getByRole("button", { name: "Cancel" }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });

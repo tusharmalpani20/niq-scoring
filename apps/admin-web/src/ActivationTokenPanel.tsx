@@ -10,6 +10,12 @@ import { paginate } from "./pagination";
 
 export type ActivationToken = { activationToken: string; expiresAt: string | null };
 type TokenRow = { id: string; createdAt: string; expiresAt: string | null; status: "Unused" | "Used" | "Expired" | "Revoked"; canCopy: boolean };
+const statusColors: Record<TokenRow["status"], string> = {
+  Unused: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
+  Used: "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200",
+  Expired: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200",
+  Revoked: "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200",
+};
 export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreatingChange }: { deploymentId: string; disabled: boolean; creating: boolean; onCreatingChange: (creating: boolean) => void }) {
   const [tokens, setTokens] = useState<TokenRow[]>([]);
   const [busy, setBusy] = useState(false);
@@ -46,13 +52,13 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
         })}>{busy ? "Creating…" : "Create"}</Button>
       </div>
     </div>}
-    <div className="max-w-full overflow-x-auto"><Table className="min-w-[620px]"><TableHeader><TableRow><TableHead>Token</TableHead><TableHead>Created</TableHead><TableHead>Expiry</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+    <Table className="min-w-[620px]"><TableHeader className="bg-muted/40 [&_th]:text-xs [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground"><TableRow><TableHead>Token</TableHead><TableHead>Created</TableHead><TableHead>Expiry</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
       <TableBody>{rows.rows.map(token => <TableRow key={token.id}>
-        <TableCell className="whitespace-nowrap">NIQ …{token.id.slice(-6)}</TableCell>
-        <TableCell className="whitespace-nowrap">{new Date(token.createdAt).toLocaleDateString()}</TableCell>
-        <TableCell className="whitespace-nowrap">{token.expiresAt ? new Date(token.expiresAt).toLocaleString() : "Never"}</TableCell>
-        <TableCell><Badge variant={token.status === "Unused" ? "default" : "secondary"}>{token.status}</Badge></TableCell>
-        <TableCell><div className="flex justify-end gap-2">
+        <TableCell className="py-3.5 font-medium">NIQ …{token.id.slice(-6)}</TableCell>
+        <TableCell className="py-3.5">{new Date(token.createdAt).toLocaleDateString()}</TableCell>
+        <TableCell className="py-3.5">{token.expiresAt ? new Date(token.expiresAt).toLocaleString() : "Never"}</TableCell>
+        <TableCell className="py-3.5"><Badge variant="outline" className={statusColors[token.status]}>{token.status}</Badge></TableCell>
+        <TableCell className="py-3.5"><div className="flex justify-end gap-2">
           {token.status === "Unused" && <><Button type="button" size="icon" variant="ghost" title={copied === token.id ? "Copied" : "Copy token"} aria-label={copied === token.id ? "Copied" : "Copy token"} disabled={disabled || busy || !token.canCopy} onClick={() => action(async () => {
             const result = await request<ActivationToken>(`/admin/deployments/${deploymentId}/activation-tokens/${token.id}`);
             await navigator.clipboard.writeText(result.activationToken); setCopied(token.id);
@@ -63,7 +69,7 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
         </div></TableCell>
       </TableRow>)}
       {!tokens.length && <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">{busy ? "Loading tokens…" : "No tokens yet."}</TableCell></TableRow>}
-      </TableBody></Table></div>
+      </TableBody></Table>
     {tokens.length > 10 && <div className="flex items-center justify-center gap-3"><Button type="button" variant="outline" size="sm" disabled={rows.page === 1} onClick={() => setPage(rows.page - 1)}>Previous</Button><span className="text-sm">Page {rows.page} of {rows.pageCount}</span><Button type="button" variant="outline" size="sm" disabled={rows.page === rows.pageCount} onClick={() => setPage(rows.page + 1)}>Next</Button></div>}
     {disabled && <p className="text-sm text-muted-foreground">Save your changes before managing tokens.</p>}
     <ErrorNotice error={error} />
