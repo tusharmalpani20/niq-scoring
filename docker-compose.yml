@@ -24,7 +24,7 @@ services:
     environment:
       DATABASE_URL: postgresql://niq_scoring:change-me@postgres:5432/niq_scoring
     ports:
-      - "4100:4100"
+      - "127.0.0.1:4100:4100"
     depends_on:
       postgres:
         condition: service_healthy
