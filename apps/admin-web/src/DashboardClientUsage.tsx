@@ -16,15 +16,23 @@ export type DashboardClient = {
   deployments: Array<{ id: string; name: string; enabled: boolean; assessments: Usage; faceScans: Usage }>;
 };
 
-function Allowance({ usage, label }: { usage: Usage; label?: string }) {
+function Allowance({ usage, label }: { usage: Usage; label: "Assessments" | "Face scans" }) {
   const limit = usage.limit;
   const percent = limit && limit > 0 ? Math.min(100, usage.allowanceUsed / limit * 100) : 0;
-  const description = !usage.available ? "Assessment allowance unavailable" : limit === null
+  const description = !usage.available ? "Not available" : limit === null
     ? "Unlimited monthly allowance"
     : `${usage.allowanceUsed.toLocaleString()} of ${limit.toLocaleString()} monthly allowance used`;
   return <div className="space-y-2">
-    <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-sm text-muted-foreground">{label && <span className="text-foreground">{label}</span>}<span>{description}</span></div>
-    {usage.available && limit !== null && <div className="h-1.5 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-label={`${label ?? "Assessments"} monthly allowance`} aria-valuenow={Math.min(usage.allowanceUsed, limit)} aria-valuemin={0} aria-valuemax={limit}><div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} /></div>}
+    <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-sm text-muted-foreground"><span className="text-foreground">{label}</span><span>{description}</span></div>
+    {usage.available && limit !== null && <div className="h-1.5 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-label={`${label} monthly allowance`} aria-valuenow={Math.min(usage.allowanceUsed, limit)} aria-valuemin={0} aria-valuemax={limit}><div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} /></div>}
+  </div>;
+}
+
+function DeploymentAllowances({ deployment, label }: { deployment: DashboardClient["deployments"][number]; label?: string }) {
+  return <div className="space-y-2.5">
+    {label && <p className="text-sm font-medium">{label}</p>}
+    <Allowance usage={deployment.assessments} label="Assessments" />
+    <Allowance usage={deployment.faceScans} label="Face scans" />
   </div>;
 }
 
@@ -35,13 +43,13 @@ export function DashboardClientUsage({ clients, overview }: { clients: Dashboard
     {clients.length === 0 ? <p className="text-sm text-muted-foreground">No clients yet.</p> : <ul className="divide-y">{clientPage.rows.map(client => {
       const record = overview.clients.find(item => item.id === client.id);
       return <li key={client.id} className="space-y-2.5 py-4 first:pt-0 last:pb-0">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><strong className="font-semibold">{record ? <Link to={clientUrl(record)} className="hover:text-primary hover:underline">{client.name}</Link> : client.name}</strong><strong className="font-semibold tabular-nums">{client.assessments.toLocaleString()} assessments</strong></div>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><strong className="font-semibold">{record ? <Link to={clientUrl(record)} className="hover:text-primary hover:underline">{client.name}</Link> : client.name}</strong><strong className="font-semibold tabular-nums">{client.assessments.toLocaleString()} assessments · {client.faceScans.toLocaleString()} face scans</strong></div>
         {client.deployments.length === 0 ? <p className="text-sm text-muted-foreground">No deployment allowance</p>
-          : client.deployments.length === 1 ? <Allowance usage={client.deployments[0]!.assessments} />
-          : <div className="space-y-3">{client.deployments.map(deployment => {
+          : client.deployments.length === 1 ? <DeploymentAllowances deployment={client.deployments[0]!} />
+          : <div className="space-y-4">{client.deployments.map(deployment => {
             const record = overview.deployments.find(item => item.id === deployment.id);
             const label = record ? record.environment.charAt(0).toUpperCase() + record.environment.slice(1) : deployment.name;
-            return <Allowance key={deployment.id} usage={deployment.assessments} label={label} />;
+            return <DeploymentAllowances key={deployment.id} deployment={deployment} label={label} />;
           })}</div>}
       </li>;
     })}</ul>}
