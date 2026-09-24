@@ -57,6 +57,8 @@ const errors: Record<string, string> = {
   TOKEN_STORAGE_UNAVAILABLE: "Activation token storage is not configured. Contact your deployment operator.",
   INVALID_TOKEN_EXPIRY: "Choose a future expiry date.",
   TOKEN_UNAVAILABLE: "This token is no longer available. Refresh the list and try again.",
+  CREDENTIAL_ALREADY_REVOKED: "This credential was already revoked. Refresh the token list to see its latest status.",
+  CREDENTIAL_UNAVAILABLE: "No credential is linked to this token. Refresh the token list and try again.",
   RECORD_IN_USE: "This record has been used or still has deployments. Disable it instead.",
   INVALID_REQUEST: "Please check the entered details and try again.",
   INVALID_ORIGIN:
