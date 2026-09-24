@@ -27,7 +27,6 @@ test("dashboard counts succeeded usage by UTC month and keeps limits distinct fr
       { expiresAt: new Date("2026-09-05T00:00:00Z"), usedAt: null, revokedAt: null },
       { expiresAt: new Date("2026-09-05T00:00:00Z"), usedAt: now, revokedAt: null },
     ],
-    audit: [],
   });
   expect(result.period).toMatchObject({ current: "2026-09", previous: "2026-08" });
   expect(result.activity).toEqual({ current: { assessments: 1, faceScans: 1, failedRequests: 1 }, previous: { assessments: 1, faceScans: 0, failedRequests: 0 } });
@@ -51,7 +50,7 @@ test("dashboard flags the deployment whose own entitlement is nearly exhausted",
       { deploymentId: "one", capability: "SCORING", enabled: true, monthlyLimit: 10 },
       { deploymentId: "two", capability: "SCORING", enabled: true, monthlyLimit: 100 },
     ],
-    usage: [], activations: [], audit: [],
+    usage: [], activations: [],
     limitUsage: [{ deploymentId: "one", capability: "SCORING", used: 8 }, { deploymentId: "two", capability: "SCORING", used: 1 }],
   });
   expect(result.attention.nearLimitDeployments).toEqual([{ deploymentId: "one", capability: "SCORING", used: 8, limit: 10 }]);

@@ -97,7 +97,6 @@ export class MemoryScoringStore implements ScoringStore {
       entitlements: this.entitlements,
       usage: this.usages,
       activations: this.activations,
-      audit: this.auditEvents.filter(item => item.action.startsWith("RULE_") || ["ADMIN_INVITED", "ADMIN_INVITATION_REVOKED", "ADMIN_ENABLED", "ADMIN_DISABLED"].includes(item.action)).sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime()).slice(0, 5),
     });
   }
   async usageByDeployment(clientId: string, now: Date): Promise<DeploymentUsage[]> {

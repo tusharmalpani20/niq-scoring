@@ -2,9 +2,9 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { message, request } from "./api";
-import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
+import { Card, CardContent } from "./components/ui/card";
 import { Button } from "./components/ui/button";
-import { clientUrl, deploymentUrl } from "./record-urls";
+import { deploymentUrl } from "./record-urls";
 import type { Overview } from "./Operations";
 import { RuleUsagePanel } from "./RuleUsagePanel";
 import { DashboardClientUsage, type DashboardClient } from "./DashboardClientUsage";
@@ -19,36 +19,9 @@ type Dashboard = {
   monthlyUsage: Array<{ month: string } & Counts>;
   clients: DashboardClient[];
   attention: { failedScoring24h: number; disabledDeployments: number; expiringActivationTokens: number; nearLimitDeployments: Array<{ deploymentId: string; capability: "SCORING" | "FACE_SCAN"; used: number; limit: number }> };
-  recentActivity: Array<{ id: string; action: string; resourceType: string; resourceReference: string | null; clientId: string | null; deploymentId: string | null; occurredAt: string }>;
 };
 
 const monthName = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
-
-function RecentActivity({ data, overview }: { data: Dashboard["recentActivity"]; overview: Overview }) {
-  const labels: Record<string, string> = {
-    RULE_CREATED: "Rule created", RULE_SAVED: "Rule updated", RULE_VALIDATED: "Rule validated",
-    RULE_APPROVED: "Rule approved", RULE_ACTIVE: "Rule activated", RULE_RETIRED: "Rule retired",
-    RULE_DELETED: "Draft rule deleted", ADMIN_INVITED: "Administrator invited",
-    ADMIN_INVITATION_REVOKED: "Invitation revoked", ADMIN_ENABLED: "Administrator enabled",
-    ADMIN_DISABLED: "Administrator disabled",
-  };
-  const label = (action: string) => labels[action] ?? action.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, letter => letter.toUpperCase());
-  return <Card><CardHeader><CardTitle>Recent rule and access changes</CardTitle></CardHeader><CardContent>
-    {data.length === 0 ? <p className="text-sm text-muted-foreground">No recent administration changes.</p> : <ul className="divide-y">
-      {data.map(event => {
-        const deployment = overview.deployments.find(item => item.id === event.deploymentId);
-        const client = overview.clients.find(item => item.id === event.clientId);
-        const rule = event.resourceType === "rule_version" ? overview.versions.find(item => item.id === event.resourceReference) : undefined;
-        const destination = deployment ? deploymentUrl(overview, deployment) : client ? clientUrl(client) : rule ? `/versions/${rule.id}` : event.resourceType === "ADMIN_USER" ? "/users" : null;
-        return <li key={event.id} className="flex items-start justify-between gap-3 py-2 first:pt-0 last:pb-0">
-          <div className="min-w-0 text-sm">{destination ? <Link className="font-medium text-primary hover:underline" to={destination}>{label(event.action)}</Link> : <span className="font-medium">{label(event.action)}</span>}
-            {(client || deployment || rule) && <p className="text-xs text-muted-foreground">{client?.name}{client && deployment ? " · " : ""}{deployment?.name ?? rule?.version}</p>}</div>
-          <time className="shrink-0 text-xs text-muted-foreground" dateTime={event.occurredAt}>{new Date(event.occurredAt).toLocaleDateString()}</time>
-        </li>;
-      })}
-    </ul>}
-  </CardContent></Card>;
-}
 
 export function AdminDashboard({ overview }: { overview: Overview }) {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -89,7 +62,6 @@ export function AdminDashboard({ overview }: { overview: Overview }) {
     <div className="space-y-4"><Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Loading usage chart…</p>}><UsageChart monthly={data.monthlyUsage.map(item => ({ month: item.month, assessments: item.assessments, vitalIq: item.faceScans }))} /></Suspense>
       <DashboardClientUsage clients={data.clients} overview={overview} />
     </div>
-    <div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle>Manage</CardTitle></CardHeader><CardContent><ul className="divide-y">{[["Clients", overview.clients.length, "/clients"], ["Deployments", overview.deployments.length, "/deployments"], ["Rules", overview.versions.length, "/versions"]].map(([label, count, to]) => <li key={label} className="py-2 first:pt-0 last:pb-0"><Link to={String(to)} className="flex justify-between text-sm hover:text-primary"><span>{label}</span><span className="text-primary tabular-nums">{count} →</span></Link></li>)}</ul></CardContent></Card><RecentActivity data={data.recentActivity} overview={overview} /></div>
     <RuleUsagePanel />
   </div>;
 }

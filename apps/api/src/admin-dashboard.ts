@@ -32,11 +32,10 @@ export function buildAdminDashboard(input: {
   entitlements: DashboardEntitlement[];
   usage: DashboardUsageEvent[];
   activations: DashboardActivation[];
-  audit: DashboardAudit[];
   recentFailedScoringCount?: number;
   limitUsage?: Array<{ deploymentId: string; capability: Capability; used: number }>;
 }) {
-  const { now, clients, deployments, entitlements, usage, activations, audit } = input;
+  const { now, clients, deployments, entitlements, usage, activations } = input;
   const months = Array.from({ length: 6 }, (_, index) => monthKey(startOfMonth(now, index - 5)));
   const monthlyUsage = months.map(month => ({ month, ...counts() }));
   const monthByKey = new Map(monthlyUsage.map(item => [item.month, item]));
@@ -121,6 +120,5 @@ export function buildAdminDashboard(input: {
       expiringActivationTokens: activations.filter(item => !item.usedAt && !item.revokedAt && item.expiresAt && item.expiresAt > now && item.expiresAt <= sevenDays).length,
       nearLimitDeployments,
     },
-    recentActivity: audit.slice(0, 5).map(item => ({ ...item, occurredAt: item.occurredAt.toISOString() })),
   };
 }
