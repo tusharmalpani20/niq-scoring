@@ -25,6 +25,13 @@ const monthKey = (date: Date) => date.toISOString().slice(0, 7);
 const startOfMonth = (date: Date, offset = 0) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + offset, 1));
 const counts = () => ({ assessments: 0, faceScans: 0, failedRequests: 0 });
 
+export function previousMonthComparisonEnd(now: Date): Date | null {
+  const previous = startOfMonth(now, -1);
+  const end = new Date(Date.UTC(previous.getUTCFullYear(), previous.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds(), now.getUTCMilliseconds()));
+  // A shorter previous month cannot provide an equally long comparison period.
+  return end.getUTCMonth() === previous.getUTCMonth() ? end : null;
+}
+
 export function buildAdminDashboard(input: {
   now: Date;
   clients: Client[];
@@ -34,11 +41,14 @@ export function buildAdminDashboard(input: {
   activations: DashboardActivation[];
   recentFailedScoringCount?: number;
   limitUsage?: Array<{ deploymentId: string; capability: Capability; used: number }>;
+  previousComparableCounts?: ReturnType<typeof counts>;
 }) {
   const { now, clients, deployments, entitlements, usage, activations } = input;
   const months = Array.from({ length: 6 }, (_, index) => monthKey(startOfMonth(now, index - 5)));
   const monthlyUsage = months.map(month => ({ month, ...counts() }));
   const monthByKey = new Map(monthlyUsage.map(item => [item.month, item]));
+  const comparisonEnd = previousMonthComparisonEnd(now);
+  const previousComparable = input.previousComparableCounts ?? counts();
   const clientCounts = new Map(clients.map(client => [client.id, { assessments: 0, faceScans: 0 }]));
   const deploymentCounts = new Map(deployments.map(deployment => [deployment.id, { assessments: 0, faceScans: 0 }]));
   let failedScoring24h = 0;
@@ -46,6 +56,12 @@ export function buildAdminDashboard(input: {
   for (const event of usage) {
     if (event.occurredAt > now) continue;
     const count = event.count ?? 1;
+    if (!input.previousComparableCounts && comparisonEnd && event.occurredAt >= startOfMonth(now, -1) && event.occurredAt <= comparisonEnd) {
+      if (event.outcome === "SUCCEEDED") {
+        if (event.capability === "SCORING") previousComparable.assessments += count;
+        else previousComparable.faceScans += count;
+      } else if (event.outcome === "FAILED") previousComparable.failedRequests += count;
+    }
     const bucket = monthByKey.get(monthKey(event.occurredAt));
     if (bucket) {
       if (event.outcome === "SUCCEEDED") {
@@ -101,10 +117,10 @@ export function buildAdminDashboard(input: {
     };
   };
   return {
-    period: { current: monthKey(now), previous: monthKey(startOfMonth(now, -1)), asOf: now.toISOString() },
+    period: { current: monthKey(now), previous: monthKey(startOfMonth(now, -1)), asOf: now.toISOString(), comparisonEnd: comparisonEnd?.toISOString() ?? null },
     activity: {
       current: { assessments: monthlyUsage[5]!.assessments, faceScans: monthlyUsage[5]!.faceScans, failedRequests: monthlyUsage[5]!.failedRequests },
-      previous: { assessments: monthlyUsage[4]!.assessments, faceScans: monthlyUsage[4]!.faceScans, failedRequests: monthlyUsage[4]!.failedRequests },
+      previous: comparisonEnd ? previousComparable : null,
     },
     monthlyUsage,
     clients: clients.map(client => ({

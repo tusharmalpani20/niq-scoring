@@ -32,13 +32,44 @@ test("dashboard counts succeeded usage by UTC month and keeps limits distinct fr
     ],
   });
   expect(result.period).toMatchObject({ current: "2026-09", previous: "2026-08" });
-  expect(result.activity).toEqual({ current: { assessments: 1, faceScans: 1, failedRequests: 1 }, previous: { assessments: 1, faceScans: 0, failedRequests: 0 } });
+  expect(result.activity).toEqual({ current: { assessments: 1, faceScans: 1, failedRequests: 1 }, previous: { assessments: 0, faceScans: 0, failedRequests: 0 } });
+  expect(result.monthlyUsage[4]?.assessments).toBe(1);
   expect(result.monthlyUsage).toHaveLength(6);
   expect(result.clients[0]).toMatchObject({ assessments: 1, faceScans: 1, deployments: [
     { id: "one", assessments: { completed: 1, allowanceUsed: 2, limit: 10 }, faceScans: { completed: 1, allowanceUsed: 1, limit: null } },
     { id: "two", assessments: { completed: 0, allowanceUsed: 0, limit: 20 } },
   ] });
   expect(result.attention).toEqual({ failedScoring24h: 1, disabledDeployments: 0, expiringTokenDeployments: [{ deploymentId: "one", count: 2 }, { deploymentId: "two", count: 1 }], nearLimitDeployments: [] });
+});
+
+test("dashboard compares the same elapsed UTC period, not the full previous month", () => {
+  const result = buildAdminDashboard({
+    now: new Date("2026-09-24T12:00:00Z"), clients: [], deployments: [], entitlements: [], activations: [],
+    usage: [
+      { clientId: "c", deploymentId: "d", capability: "SCORING", outcome: "SUCCEEDED", occurredAt: new Date("2026-08-24T11:59:00Z") },
+      { clientId: "c", deploymentId: "d", capability: "SCORING", outcome: "SUCCEEDED", occurredAt: new Date("2026-08-24T12:01:00Z") },
+      { clientId: "c", deploymentId: "d", capability: "FACE_SCAN", outcome: "FAILED", occurredAt: new Date("2026-08-30T10:00:00Z") },
+    ],
+  });
+  expect(result.period.comparisonEnd).toBe("2026-08-24T12:00:00.000Z");
+  expect(result.activity.previous).toEqual({ assessments: 1, faceScans: 0, failedRequests: 0 });
+  expect(result.monthlyUsage[4]).toMatchObject({ assessments: 2, failedRequests: 1 });
+});
+
+test("dashboard accepts database counts without using month-wide aggregate timestamps for comparison", () => {
+  const result = buildAdminDashboard({
+    now: new Date("2026-09-24T12:00:00Z"), clients: [], deployments: [], entitlements: [], activations: [],
+    usage: [{ clientId: "c", deploymentId: "d", capability: "SCORING", outcome: "SUCCEEDED", occurredAt: new Date("2026-08-01T00:00:00Z"), count: 8 }],
+    previousComparableCounts: { assessments: 3, faceScans: 1, failedRequests: 2 },
+  });
+  expect(result.activity.previous).toEqual({ assessments: 3, faceScans: 1, failedRequests: 2 });
+  expect(result.monthlyUsage[4]?.assessments).toBe(8);
+});
+
+test("dashboard omits a comparison when the previous month was shorter", () => {
+  const result = buildAdminDashboard({ now: new Date("2026-03-31T12:00:00Z"), clients: [], deployments: [], entitlements: [], usage: [], activations: [] });
+  expect(result.period.comparisonEnd).toBeNull();
+  expect(result.activity.previous).toBeNull();
 });
 
 test("dashboard flags the deployment whose own entitlement is nearly exhausted", () => {
