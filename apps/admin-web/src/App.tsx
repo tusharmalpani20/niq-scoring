@@ -122,8 +122,8 @@ function Console() {
     } catch (c) {
       if (sequence === requestSequence.current) {
         setOverviewError(message(c));
-        throw c;
       }
+      throw c;
     } finally {
       if (sequence === requestSequence.current) setOverviewLoading(false);
     }
