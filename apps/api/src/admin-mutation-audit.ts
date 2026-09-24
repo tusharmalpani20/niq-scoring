@@ -5,7 +5,7 @@ import { createEntityId } from "./lib/id";
 export type AdminMutationAudit = { actorId: string; requestId: string };
 
 export function adminMutationAudit(c: Context): AdminMutationAudit {
-  return { actorId: c.get("adminUserId"), requestId: c.res.headers.get("x-request-id")! };
+  return { actorId: c.get("adminUserId"), requestId: c.res.headers.get("x-request-id") ?? crypto.randomUUID() };
 }
 
 export async function recordAdminMutation(
