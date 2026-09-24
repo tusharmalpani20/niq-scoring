@@ -41,6 +41,7 @@ export function buildAdminDashboard(input: {
   const monthlyUsage = months.map(month => ({ month, ...counts() }));
   const monthByKey = new Map(monthlyUsage.map(item => [item.month, item]));
   const clientCounts = new Map(clients.map(client => [client.id, { assessments: 0, faceScans: 0 }]));
+  const deploymentCounts = new Map(deployments.map(deployment => [deployment.id, { assessments: 0, faceScans: 0 }]));
   let failedScoring24h = 0;
   const lastDay = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   for (const event of usage) {
@@ -57,17 +58,16 @@ export function buildAdminDashboard(input: {
             if (event.capability === "SCORING") client.assessments += count;
             else client.faceScans += count;
           }
+          const deployment = deploymentCounts.get(event.deploymentId);
+          if (deployment) {
+            if (event.capability === "SCORING") deployment.assessments += count;
+            else deployment.faceScans += count;
+          }
         }
       } else if (event.outcome === "FAILED") bucket.failedRequests += count;
     }
     if (event.capability === "SCORING" && event.outcome === "FAILED" && event.occurredAt >= lastDay) failedScoring24h += count;
   }
-  const limit = (clientId: string, capability: Capability) => {
-    const activeIds = new Set(deployments.filter(item => item.clientId === clientId && item.enabled).map(item => item.id));
-    const active = entitlements.filter(item => activeIds.has(item.deploymentId) && item.capability === capability && item.enabled);
-    if (active.some(item => item.monthlyLimit === null)) return null;
-    return active.reduce((sum, item) => sum + (item.monthlyLimit ?? 0), 0);
-  };
   const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const limitUsage = input.limitUsage ?? (() => {
     const counts = new Map<string, { deploymentId: string; capability: Capability; used: number }>();
@@ -86,6 +86,15 @@ export function buildAdminDashboard(input: {
     const used = limitUsage.find(count => count.deploymentId === item.deploymentId && count.capability === item.capability)?.used ?? 0;
     return used / item.monthlyLimit >= 0.8 ? [{ deploymentId: item.deploymentId, capability: item.capability, used, limit: item.monthlyLimit }] : [];
   }).sort((a, b) => b.used / b.limit - a.used / a.limit);
+  const deploymentMetric = (deploymentId: string, capability: Capability) => {
+    const entitlement = entitlements.find(item => item.deploymentId === deploymentId && item.capability === capability && item.enabled);
+    return {
+      completed: capability === "SCORING" ? deploymentCounts.get(deploymentId)?.assessments ?? 0 : deploymentCounts.get(deploymentId)?.faceScans ?? 0,
+      allowanceUsed: limitUsage.find(item => item.deploymentId === deploymentId && item.capability === capability)?.used ?? 0,
+      limit: entitlement ? entitlement.monthlyLimit : null,
+      available: Boolean(entitlement),
+    };
+  };
   return {
     period: { current: monthKey(now), previous: monthKey(startOfMonth(now, -1)), asOf: now.toISOString() },
     activity: {
@@ -96,9 +105,16 @@ export function buildAdminDashboard(input: {
     clients: clients.map(client => ({
       id: client.id,
       name: client.name,
-      assessments: { used: clientCounts.get(client.id)?.assessments ?? 0, limit: limit(client.id, "SCORING") },
-      faceScans: { used: clientCounts.get(client.id)?.faceScans ?? 0, limit: limit(client.id, "FACE_SCAN") },
-    })).sort((a, b) => (b.assessments.used + b.faceScans.used) - (a.assessments.used + a.faceScans.used) || a.name.localeCompare(b.name)),
+      assessments: clientCounts.get(client.id)?.assessments ?? 0,
+      faceScans: clientCounts.get(client.id)?.faceScans ?? 0,
+      deployments: deployments.filter(item => item.clientId === client.id).map(item => ({
+        id: item.id,
+        name: item.name,
+        enabled: item.enabled,
+        assessments: deploymentMetric(item.id, "SCORING"),
+        faceScans: deploymentMetric(item.id, "FACE_SCAN"),
+      })),
+    })).sort((a, b) => (b.assessments + b.faceScans) - (a.assessments + a.faceScans) || a.name.localeCompare(b.name)),
     attention: {
       failedScoring24h: input.recentFailedScoringCount ?? failedScoring24h,
       disabledDeployments: deployments.filter(item => !item.enabled).length,

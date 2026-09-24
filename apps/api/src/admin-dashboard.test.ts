@@ -32,7 +32,10 @@ test("dashboard counts succeeded usage by UTC month and keeps limits distinct fr
   expect(result.period).toMatchObject({ current: "2026-09", previous: "2026-08" });
   expect(result.activity).toEqual({ current: { assessments: 1, faceScans: 1, failedRequests: 1 }, previous: { assessments: 1, faceScans: 0, failedRequests: 0 } });
   expect(result.monthlyUsage).toHaveLength(6);
-  expect(result.clients[0]).toMatchObject({ assessments: { used: 1, limit: 30 }, faceScans: { used: 1, limit: null } });
+  expect(result.clients[0]).toMatchObject({ assessments: 1, faceScans: 1, deployments: [
+    { id: "one", assessments: { completed: 1, allowanceUsed: 2, limit: 10 }, faceScans: { completed: 1, allowanceUsed: 1, limit: null } },
+    { id: "two", assessments: { completed: 0, allowanceUsed: 0, limit: 20 } },
+  ] });
   expect(result.attention).toEqual({ failedScoring24h: 1, disabledDeployments: 0, expiringActivationTokens: 1, nearLimitDeployments: [] });
 });
 
