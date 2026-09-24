@@ -42,6 +42,7 @@ describe("scoring API", () => {
   test("legacy admin bearer token never authenticates in production", async () => {
     const { app, store } = setup();
     expect((await app.request("/admin/overview")).status).toBe(401);
+    expect((await app.request("/admin/dashboard")).status).toBe(401);
     const production = createApp({ authStore: new MemoryAdminAuthStore(), store, adminBootstrapToken: adminToken, allowedOrigins: [], region: "india", runtimeEnvironment: "production", provisionalScoringRequested: true });
     expect((await production.request("/admin/overview", { headers: adminHeaders })).status).toBe(401);
   });
@@ -51,6 +52,9 @@ describe("scoring API", () => {
     const overview = await (await app.request("/admin/overview", { headers: adminHeaders })).json() as { clients: unknown[]; deployments: unknown[] };
     expect(overview.clients).toHaveLength(1);
     expect(overview.deployments).toEqual([expect.objectContaining({ id: deployment.id, clientId: client.id })]);
+    const dashboard = await (await app.request("/admin/dashboard", { headers: adminHeaders })).json() as { period: { current: string }; clients: Array<{ id: string }> };
+    expect(dashboard.period.current).toBe("2026-09");
+    expect(dashboard.clients).toEqual([expect.objectContaining({ id: client.id })]);
   });
 
   test("client usage reports successful deployment events and six UTC months", async () => {

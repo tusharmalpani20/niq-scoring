@@ -18,6 +18,7 @@ import { decideEntitlement, type Capability } from "@niq-scoring/entitlements";
 import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
 import { createEntityId } from "./lib/id";
 import { buildUsageSummary, type DeploymentUsage, type UsageCount } from "./usage-summary";
+import { buildAdminDashboard, type DashboardAudit } from "./admin-dashboard";
 
 export type StoredActivationToken = { id: string; tokenHash: string; tokenCiphertext: string; expiresAt: Date | null };
 export type TokenRecord = { id: string; expiresAt: Date | null; createdAt: Date; usedAt: Date | null; revokedAt: Date | null; canCopy: boolean; credentialStatus: "Active" | "Revoked" | "Expired" | null };
@@ -42,6 +43,7 @@ export interface ScoringStore {
   deletionStatus(kind: RecordKind, id: string): Promise<DeletionStatus>;
   deleteUnused(kind: RecordKind, id: string): Promise<DeletionStatus>;
   overview(): Promise<{ clients: Client[]; deployments: Deployment[]; entitlements: Array<EntitlementInput & { deploymentId: string }>; assignments: VersionAssignment[]; versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault?: boolean }> }>;
+  dashboard(now: Date): Promise<ReturnType<typeof buildAdminDashboard>>;
   usageByDeployment(clientId: string, now: Date): Promise<DeploymentUsage[]>;
   usageByRule(clientId?: string): Promise<RuleUsage[]>;
   createClient(input: CreateClient): Promise<Client>;
@@ -83,9 +85,21 @@ export class MemoryScoringStore implements ScoringStore {
   credentials: Credential[] = [];
   usages: Usage[] = [];
   faceScans: Array<{ id: string; state: "REQUESTED"; clientId: string; deploymentId: string }> = [];
+  auditEvents: DashboardAudit[] = [];
 
   versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault: boolean }> = [{ id: "01K4ZJ9QJ7F3TWHDW1B1T6A4YV", version: PROVISIONAL_SCORING_VERSION, lifecycle: "DRAFT", clinicalUsePermitted: false, isDefault: false }];
   async overview() { return { clients: this.clients, deployments: this.deployments, entitlements: this.entitlements, assignments: this.assignments, versions: [...this.versions, ...await this.rules.list()] }; }
+  async dashboard(now: Date) {
+    return buildAdminDashboard({
+      now,
+      clients: this.clients,
+      deployments: this.deployments,
+      entitlements: this.entitlements,
+      usage: this.usages,
+      activations: this.activations,
+      audit: this.auditEvents.filter(item => item.action.startsWith("RULE_") || ["ADMIN_INVITED", "ADMIN_INVITATION_REVOKED", "ADMIN_ENABLED", "ADMIN_DISABLED"].includes(item.action)).sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime()).slice(0, 5),
+    });
+  }
   async usageByDeployment(clientId: string, now: Date): Promise<DeploymentUsage[]> {
     const deploymentIds = this.deployments.filter(item => item.clientId === clientId).map(item => item.id);
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));

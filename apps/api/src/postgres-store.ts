@@ -13,6 +13,7 @@ import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
 import { decideEntitlement, type Capability } from "@niq-scoring/entitlements";
 import { createEntityId } from "./lib/id";
 import { buildUsageSummary, type DeploymentUsage, type UsageCount } from "./usage-summary";
+import { buildAdminDashboard, type DashboardAudit, type DashboardUsageEvent, type DashboardActivation } from "./admin-dashboard";
 import type { Deployment, DeploymentIdentity, Client, ScoringStore, UsageReservation, RuleUsage } from "./store";
 
 type Database = ReturnType<typeof postgres>;
@@ -34,6 +35,37 @@ export class PostgresScoringStore implements ScoringStore {
       this.database<Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault: boolean }>>`select id, version, lifecycle, clinical_use_permitted as "clinicalUsePermitted", exists(select 1 from scoring_rule_default where rule_id=scoring_rule_versions.id) as "isDefault" from scoring_rule_versions order by created_at desc`,
     ]);
     return { clients: [...clients], deployments: [...deployments], entitlements: [...entitlements], assignments: assignments.map((row) => row.mode === "PINNED" ? { deploymentId: row.deploymentId, mode: "PINNED" as const, scoringRuleVersionId: row.scoringRuleVersionId! } : { deploymentId: row.deploymentId, mode: "LATEST_APPROVED" as const }), versions: [...versions] };
+  }
+
+  async dashboard(now: Date) {
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
+    const lastDay = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const [overview, usage, recentFailures, limitUsage, activations, audit] = await Promise.all([
+      this.overview(),
+      this.database<DashboardUsageEvent[]>`select client_id as "clientId", deployment_id as "deploymentId", capability, outcome,
+        date_trunc('month', occurred_at at time zone 'UTC') at time zone 'UTC' as "occurredAt",
+        count(*)::int as count
+        from usage_events where occurred_at >= ${start} and occurred_at <= ${now}
+        group by client_id, deployment_id, capability, outcome, "occurredAt"`,
+      this.database<Array<{ count: number }>>`select count(*)::int as count from usage_events
+        where capability='SCORING' and outcome='FAILED' and completed_at >= ${lastDay} and completed_at <= ${now}`,
+      this.database<Array<{ deploymentId: string; capability: "SCORING" | "FACE_SCAN"; used: number }>>`select deployment_id as "deploymentId", capability, count(*)::int as used
+        from usage_events where occurred_at >= ${new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))}
+        and occurred_at <= ${now} and (billable=true or outcome='PENDING') group by deployment_id, capability`,
+      this.database<DashboardActivation[]>`select expires_at as "expiresAt", used_at as "usedAt", revoked_at as "revokedAt"
+        from activation_tokens where used_at is null and revoked_at is null and expires_at > ${now}
+        and expires_at <= ${new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)}`,
+      this.database<DashboardAudit[]>`select id, action, resource_type as "resourceType",
+        resource_reference as "resourceReference", client_id as "clientId", deployment_id as "deploymentId",
+        occurred_at as "occurredAt" from audit_events where outcome='SUCCEEDED' and
+        (left(action, 5)='RULE_' or action in ('ADMIN_INVITED', 'ADMIN_INVITATION_REVOKED', 'ADMIN_ENABLED', 'ADMIN_DISABLED'))
+        order by occurred_at desc, id desc limit 5`,
+    ]);
+    return buildAdminDashboard({
+      now, clients: overview.clients, deployments: overview.deployments,
+      entitlements: overview.entitlements, usage, activations, audit,
+      recentFailedScoringCount: recentFailures[0]?.count ?? 0, limitUsage,
+    });
   }
 
   async usageByDeployment(clientId: string, now: Date): Promise<DeploymentUsage[]> {

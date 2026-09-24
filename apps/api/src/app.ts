@@ -78,6 +78,7 @@ export function createApp(options: AppOptions) {
   app.get("/health", (context) => context.json({ status: "ok", service: "niq-scoring-api", region: options.region }));
   app.get("/ready", async (context) => { const ready = await (options.readinessCheck ?? (async () => true))(); return context.json({ status: ready ? "ready" : "not_ready" }, ready ? 200 : 503); });
   app.get("/admin/overview", async (context) => context.json(await options.store.overview()));
+  app.get("/admin/dashboard", async (context) => context.json(await options.store.dashboard(now())));
   app.get("/admin/usage/rules", async context => {
     const rawClientId = context.req.query("clientId");
     if (rawClientId !== undefined) {
