@@ -78,7 +78,9 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("columnheader", { name: "Actions" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Unused/ }).getByRole("button", { name: "Revoke token" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Revoked/ }).getByLabel("No actions available")).toBeVisible();
-  await expect(page.getByRole("row", { name: /egacy1/ }).getByText("Credential link unavailable")).toBeVisible();
+  await expect(page.getByRole("row", { name: /egacy1/ }).getByText("Used before credential tracking")).toBeVisible();
+  await expect(page.getByRole("row", { name: /egacy1/ }).getByText("Unavailable")).toBeVisible();
+  await expect(page.getByText("We cannot safely revoke one credential from its token row.")).toBeVisible();
   await expect(page.getByRole("row", { name: /ldkey1/ }).getByText("Credential expired")).toBeVisible();
   await expect(page.getByRole("row", { name: /ldkey1/ }).getByLabel("No actions available")).toBeVisible();
   await page.getByRole("button", { name: "Revoke access for token NIQ …used12" }).click();

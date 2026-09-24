@@ -86,7 +86,7 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
         <TableCell className="py-3.5 font-medium">NIQ …{token.id.slice(-6)}</TableCell>
         <TableCell className="py-3.5">{new Date(token.createdAt).toLocaleDateString()}</TableCell>
         <TableCell className="py-3.5">{token.expiresAt ? new Date(token.expiresAt).toLocaleString() : "Never"}</TableCell>
-        <TableCell className="py-3.5"><div className="flex flex-col items-start gap-1"><Badge variant="outline" className={statusColors[token.status]}>{token.status}</Badge>{token.status === "Used" && <span className="text-xs text-muted-foreground">{token.credentialStatus === "Active" ? "Credential active" : token.credentialStatus === "Revoked" ? "Credential revoked" : token.credentialStatus === "Expired" ? "Credential expired" : "Credential link unavailable"}</span>}</div></TableCell>
+        <TableCell className="py-3.5"><div className="flex flex-col items-start gap-1"><Badge variant="outline" className={statusColors[token.status]}>{token.status}</Badge>{token.status === "Used" && <span className="text-xs text-muted-foreground">{token.credentialStatus === "Active" ? "Credential active" : token.credentialStatus === "Revoked" ? "Credential revoked" : token.credentialStatus === "Expired" ? "Credential expired" : "Used before credential tracking"}</span>}</div></TableCell>
         <TableCell className="py-3.5"><div className="flex justify-end gap-2">
           {token.status === "Unused" && <><Button type="button" size="icon" variant="ghost" title={copied === token.id ? "Copied" : "Copy token"} aria-label={copied === token.id ? "Copied" : "Copy token"} disabled={disabled || busy || !token.canCopy} onClick={() => action(async () => {
             const result = await request<ActivationToken>(`/admin/deployments/${deploymentId}/activation-tokens/${token.id}`);
@@ -95,12 +95,13 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
             await request(`/admin/deployments/${deploymentId}/activation-tokens/${token.id}`, {}, "DELETE");
           })}><Ban className="size-4" /></Button></>}
           {token.status === "Used" && token.credentialStatus === "Active" && <Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" title="Revoke installation access" aria-label={`Revoke access for token NIQ …${token.id.slice(-6)}`} disabled={disabled || busy} onClick={() => { setError(""); setRevokeTarget(token); }}><Ban className="size-4" /></Button>}
-          {token.status !== "Unused" && token.credentialStatus !== "Active" && <span className="px-3 text-muted-foreground" aria-label="No actions available">—</span>}
+          {token.status === "Used" && !token.credentialStatus && <span className="text-xs text-muted-foreground" aria-label="Revoke access unavailable for older token">Unavailable</span>}
+          {token.status !== "Unused" && token.credentialStatus !== "Active" && !(token.status === "Used" && !token.credentialStatus) && <span className="px-3 text-muted-foreground" aria-label="No actions available">—</span>}
         </div></TableCell>
       </TableRow>)}
       {!tokens.length && <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">{busy ? "Loading tokens…" : loadFailed ? <span className="inline-flex items-center gap-3">Could not load tokens. <Button type="button" variant="outline" size="sm" onClick={() => void retryLoad()}>Retry</Button></span> : "No tokens yet."}</TableCell></TableRow>}
       </TableBody></Table>
-    {rows.rows.some(token => token.status === "Used" && !token.credentialStatus) && <p className="text-sm text-muted-foreground">Older used tokens cannot be linked to a credential automatically. Revoke access from a linked active token row, or disable the deployment to block all installations.</p>}
+    {rows.rows.some(token => token.status === "Used" && !token.credentialStatus) && <p className="text-sm text-muted-foreground">These older tokens were used before we recorded which credential each one issued. We cannot safely revoke one credential from its token row. Disabling the deployment blocks all of its credentials.</p>}
     {tokens.length > 10 && <div className="flex items-center justify-center gap-3"><Button type="button" variant="outline" size="sm" disabled={rows.page === 1} onClick={() => setPage(rows.page - 1)}>Previous</Button><span className="text-sm">Page {rows.page} of {rows.pageCount}</span><Button type="button" variant="outline" size="sm" disabled={rows.page === rows.pageCount} onClick={() => setPage(rows.page + 1)}>Next</Button></div>}
     {disabled && <p className="text-sm text-muted-foreground">Save your changes before managing tokens.</p>}
     {!revokeTarget && <ErrorNotice error={error} />}
