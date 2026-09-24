@@ -1,0 +1,3 @@
+ALTER TABLE "activation_tokens" ADD COLUMN "credential_id" varchar(26);--> statement-breakpoint
+ALTER TABLE "activation_tokens" ADD CONSTRAINT "activation_token_credential_deployment_fk" FOREIGN KEY ("deployment_id","credential_id") REFERENCES "public"."deployment_credentials"("deployment_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "activation_tokens_credential_id_uq" ON "activation_tokens" USING btree ("credential_id");

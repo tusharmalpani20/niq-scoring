@@ -69,6 +69,7 @@ export const activationTokens = pgTable("activation_tokens", {
   deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),
   tokenHash: varchar("token_hash", { length: 64 }).notNull(),
   tokenCiphertext: text("token_ciphertext"),
+  credentialId: varchar("credential_id", { length: 26 }),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
   usedAt: timestamp("used_at", { withTimezone: true }),
@@ -76,6 +77,8 @@ export const activationTokens = pgTable("activation_tokens", {
 }, (table) => [
   uniqueIndex("activation_tokens_hash_uq").on(table.tokenHash),
   index("activation_tokens_deployment_idx").on(table.deploymentId, table.createdAt),
+  uniqueIndex("activation_tokens_credential_id_uq").on(table.credentialId),
+  foreignKey({ columns: [table.deploymentId, table.credentialId], foreignColumns: [deploymentCredentials.deploymentId, deploymentCredentials.id], name: "activation_token_credential_deployment_fk" }),
 ]);
 
 export const entitlements = pgTable("entitlements", {
