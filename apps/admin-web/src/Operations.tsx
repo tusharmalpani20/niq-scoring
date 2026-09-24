@@ -1,9 +1,7 @@
 import { Deployments } from "./Deployments";
 import { Clients } from "./Clients";
 import { RuleVersions } from "./RuleVersions";
-import { Card, CardContent } from "./components/ui/card";
-import { Link } from "react-router-dom";
-import { RuleUsagePanel } from "./RuleUsagePanel";
+import { AdminDashboard } from "./AdminDashboard";
 export type Overview = {
   clients: Array<{
     id: string;
@@ -43,28 +41,7 @@ export function Operations({
   refresh: () => Promise<void>;
 }) {
   if (page === "overview")
-    return (
-      <div className="space-y-5">
-        <div className="metrics">
-          {[
-            ["Clients", data.clients.length, "clients"],
-            ["Deployments", data.deployments.length, "deployments"],
-            ["Rules", data.versions.length, "versions"],
-          ].map(([label, count, path]) => (
-            <Card key={label}>
-            <CardContent className="pt-6">
-            <Link to={`/${path}`} className="flex flex-col gap-3">
-              <span className="text-sm text-muted-foreground">{label}</span>
-              <strong className="text-4xl">{count}</strong>
-              <small className="text-primary">View {String(label).toLowerCase()} →</small>
-            </Link>
-            </CardContent>
-            </Card>
-          ))}
-        </div>
-        <RuleUsagePanel />
-      </div>
-    );
+    return <AdminDashboard overview={data} />;
   if (page === "clients") return <Clients data={data} refresh={refresh} />;
   if (page === "deployments") return <Deployments data={data} refresh={refresh} />;
   return <RuleVersions refresh={refresh} />;
