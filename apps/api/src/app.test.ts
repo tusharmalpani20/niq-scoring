@@ -71,7 +71,7 @@ describe("scoring API", () => {
     const oversized = await app.request("/admin/clients", { method: "POST", headers: { ...adminHeaders, "x-request-id": "x".repeat(129) }, body: JSON.stringify({ name: "Bounded request ID" }) });
     expect(oversized.status).toBe(201);
     expect(oversized.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
-    expect(store.adminMutationEvents.at(-1)?.requestId).toBe(oversized.headers.get("x-request-id"));
+    expect(store.adminMutationEvents.at(-1)?.requestId).toBe(oversized.headers.get("x-request-id") ?? undefined);
     expect((await app.request(`/admin/deployments/${deployment.id}/enabled`, { method: "PATCH", headers, body: JSON.stringify({ enabled: "invalid" }) })).status).toBe(400);
     expect(store.adminMutationEvents).toHaveLength(3);
     expect((await app.request(`/admin/deployments/${deployment.id}`, { method: "DELETE", headers })).status).toBe(200);
