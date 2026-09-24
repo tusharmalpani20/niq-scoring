@@ -68,11 +68,15 @@ describe("scoring API", () => {
     const deployment = await deploymentResponse.json() as { id: string };
     expect(store.adminMutationEvents.map(event => event.action)).toEqual(["CLIENT_CREATED", "DEPLOYMENT_CREATED"]);
     expect(store.adminMutationEvents.every(event => event.actorId === "01J00000000000000000000001" && event.requestId === "admin-mutation-request")).toBe(true);
+    const oversized = await app.request("/admin/clients", { method: "POST", headers: { ...adminHeaders, "x-request-id": "x".repeat(129) }, body: JSON.stringify({ name: "Bounded request ID" }) });
+    expect(oversized.status).toBe(201);
+    expect(oversized.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
+    expect(store.adminMutationEvents.at(-1)?.requestId).toBe(oversized.headers.get("x-request-id"));
     expect((await app.request(`/admin/deployments/${deployment.id}/enabled`, { method: "PATCH", headers, body: JSON.stringify({ enabled: "invalid" }) })).status).toBe(400);
-    expect(store.adminMutationEvents).toHaveLength(2);
+    expect(store.adminMutationEvents).toHaveLength(3);
     expect((await app.request(`/admin/deployments/${deployment.id}`, { method: "DELETE", headers })).status).toBe(200);
     expect((await app.request(`/admin/clients/${client.id}`, { method: "DELETE", headers })).status).toBe(200);
-    expect(store.adminMutationEvents.map(event => event.action)).toEqual(["CLIENT_CREATED", "DEPLOYMENT_CREATED", "DEPLOYMENT_DELETED", "CLIENT_DELETED"]);
+    expect(store.adminMutationEvents.map(event => event.action)).toEqual(["CLIENT_CREATED", "DEPLOYMENT_CREATED", "CLIENT_CREATED", "DEPLOYMENT_DELETED", "CLIENT_DELETED"]);
   });
 
   test("deployment create retries return the original deployment and activation token", async () => {
