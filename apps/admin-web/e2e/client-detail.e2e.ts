@@ -26,7 +26,7 @@ test("client opens a detail page with usage and its deployments", async ({ page 
     if (path === "/api/admin/overview") return route.fulfill({ json: {
       clients: [{ id: "c1", name: "Apollo", enabled: true }],
       deployments: [{ id: "d1", clientId: "c1", name: "Apollo Production", environment: "production", hostingType: "NIQ_HOSTED", enabled: true }],
-      entitlements: [], assignments: [], versions: [],
+      entitlements: [], assignments: [{ deploymentId: "d1", mode: "LATEST_APPROVED" }], versions: [{ id: "v1", version: "TEST-5", lifecycle: "ACTIVE", clinicalUsePermitted: true, isDefault: true }],
     } });
     if (path === "/api/admin/usage/rules") return route.fulfill({ json: { rules: new URL(route.request().url()).searchParams.has("clientId")
       ? [{ ruleVersionId: "r1", name: "Default (TEST-5)", count: 18 }]
@@ -52,7 +52,8 @@ test("client opens a detail page with usage and its deployments", async ({ page 
       { id: "oldkey1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Used", canCopy: false, credentialStatus: "Expired" },
       { id: "revoked1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Revoked", canCopy: false, credentialStatus: null },
       { id: "expired1", createdAt: "2026-09-14T00:00:00Z", expiresAt: "2026-09-15T00:00:00Z", status: "Expired", canCopy: false, credentialStatus: null },
-    ] } });
+      ...Array.from({ length: 6 }, (_, index) => ({ id: `history${index}`, createdAt: "2026-09-13T00:00:00Z", expiresAt: null, status: "Revoked", canCopy: false, credentialStatus: null })),
+    ].slice(0, unusedTokenRevoked ? 6 : undefined) } });
     return route.fulfill({ status: 404, json: { error: "NOT_FOUND" } });
   });
   await page.goto("/overview");
@@ -68,6 +69,12 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.locator(".recharts-surface")).toHaveCount(2);
   await page.getByRole("tab", { name: /Deployments/ }).click();
   await expect(page.getByRole("link", { name: "Production" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Assessments · all time" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Vital IQ · all time" })).toBeVisible();
+  await expect(page.getByRole("row", { name: /Production/ }).getByText("Default (TEST-5)")).toBeVisible();
+  await expect(page.getByRole("row", { name: /Production/ }).getByText("Enabled")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Client deployments pagination" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Edit production deployment" })).toBeVisible();
   await page.getByRole("button", { name: "Create deployment" }).click();
   await expect(page.getByRole("dialog").getByRole("combobox", { name: "Client" })).toHaveText("Apollo");
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
@@ -90,8 +97,18 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("button", { name: "Create token" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Actions" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Access" })).toBeVisible();
+  const tokenPagination = page.getByRole("navigation", { name: "Activation tokens pagination" });
+  await expect(tokenPagination).toContainText("Page 1 of 2");
+  await expect(tokenPagination).toContainText("12 total");
+  await expect(tokenPagination.getByRole("button", { name: "Previous" })).toBeDisabled();
+  await tokenPagination.getByRole("button", { name: "Next" }).click();
+  await expect(tokenPagination).toContainText("Page 2 of 2");
+  await expect(page.getByRole("row", { name: /story5/ })).toBeVisible();
+  await expect(page.getByRole("row", { name: /nused1/ })).toHaveCount(0);
+  await tokenPagination.getByRole("button", { name: "Previous" }).click();
+  await expect(page.getByRole("row", { name: /nused1/ })).toBeVisible();
   await expect(page.getByRole("row", { name: /Unused/ }).getByRole("button", { name: "Revoke token" })).toBeVisible();
-  await expect(page.getByRole("row", { name: /Revoked/ }).getByLabel("No actions available")).toBeVisible();
+  await expect(page.getByRole("row", { name: /voked1/ }).getByLabel("No actions available")).toBeVisible();
   await expect(page.getByRole("row", { name: /egacy1/ }).getByText("Unknown")).toBeVisible();
   await expect(page.getByRole("row", { name: /egacy1/ }).getByText("Unavailable")).toBeVisible();
   await expect(page.getByText("We cannot safely revoke one credential from its token row.")).toBeVisible();
@@ -105,6 +122,7 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await page.getByRole("row", { name: /nused1/ }).getByRole("button", { name: "Revoke token" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Revoke token" }).click();
   await expect(page.getByRole("row", { name: /nused1/ }).getByText("Revoked")).toBeVisible();
+  await expect(tokenPagination).toHaveCount(0);
   expect(unusedTokenRevoked).toBe(true);
   await page.getByRole("button", { name: "Revoke access for token NIQ …used12" }).click();
   await expect(page.getByRole("alertdialog")).toContainText("Future requests using the credential issued by token");

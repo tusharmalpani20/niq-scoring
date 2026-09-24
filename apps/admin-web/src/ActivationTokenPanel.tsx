@@ -5,6 +5,7 @@ import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
+import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
 import { ErrorNotice } from "./shared";
 import { TokenExpirySelect, tokenExpiry } from "./TokenExpirySelect";
 import { paginate } from "./pagination";
@@ -121,7 +122,11 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
       {!tokens.length && <TableRow><TableCell colSpan={6} className="h-16 text-center text-muted-foreground">{busy ? "Loading tokens…" : loadFailed ? <span className="inline-flex items-center gap-3">Could not load tokens. <Button type="button" variant="outline" size="sm" onClick={() => void retryLoad()}>Retry</Button></span> : "No tokens yet."}</TableCell></TableRow>}
       </TableBody></Table>
     {rows.rows.some(token => token.status === "Used" && !token.credentialStatus) && <p className="text-sm text-muted-foreground">These older tokens were used before we recorded which credential each one issued. We cannot safely revoke one credential from its token row. Disabling the deployment blocks all of its credentials.</p>}
-    {tokens.length > 10 && <div className="flex items-center justify-center gap-3"><Button type="button" variant="outline" size="sm" disabled={rows.page === 1} onClick={() => setPage(rows.page - 1)}>Previous</Button><span className="text-sm">Page {rows.page} of {rows.pageCount}</span><Button type="button" variant="outline" size="sm" disabled={rows.page === rows.pageCount} onClick={() => setPage(rows.page + 1)}>Next</Button></div>}
+    {rows.pageCount > 1 && <Pagination aria-label="Activation tokens pagination"><PaginationContent>
+      <PaginationItem><Button type="button" variant="outline" size="sm" disabled={rows.page === 1} onClick={() => setPage(rows.page - 1)}>Previous</Button></PaginationItem>
+      <PaginationItem><span className="flex flex-col items-center gap-1 px-2 text-xs text-muted-foreground sm:block sm:px-3 sm:text-sm" role="status"><span className="whitespace-nowrap">Page {rows.page} of {rows.pageCount}</span><span className="whitespace-nowrap"><span className="hidden sm:inline"> · </span>{rows.total} total</span></span></PaginationItem>
+      <PaginationItem><Button type="button" variant="outline" size="sm" disabled={rows.page === rows.pageCount} onClick={() => setPage(rows.page + 1)}>Next</Button></PaginationItem>
+    </PaginationContent></Pagination>}
     {disabled && <p className="text-sm text-muted-foreground">Save your changes before managing tokens.</p>}
     {!revokeTarget && !unusedRevokeTarget && <ErrorNotice error={error} />}
     <AlertDialog open={unusedRevokeTarget !== null} onOpenChange={open => { if (!open && !busy) setUnusedRevokeTarget(null); }}><AlertDialogContent>
