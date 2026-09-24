@@ -92,6 +92,8 @@ describe("scoring API", () => {
     expect(store.deployments).toHaveLength(1);
     expect(store.adminMutationEvents.filter(event => event.action === "DEPLOYMENT_CREATED")).toHaveLength(1);
     expect((await create({ ...body, scoring: { enabled: true, monthlyLimit: 8 } })).status).toBe(409);
+    expect((await app.request(`/admin/deployments/${created.id}`, { method: "DELETE", headers })).status).toBe(200);
+    expect((await create(body)).status).toBe(409);
   });
 
   test("client usage reports successful deployment events and six UTC months", async () => {
