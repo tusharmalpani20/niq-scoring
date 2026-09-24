@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test("client opens a detail page with usage and its deployments", async ({ page }) => {
   let credentialRevoked = false;
+  let tokenListFailuresRemaining = 2;
   let failNextTokenRefresh = false;
   let failFirstRevoke = true;
   await page.route("**/api/**", route => {
@@ -29,6 +30,10 @@ test("client opens a detail page with usage and its deployments", async ({ page 
     ] }] } });
     if (path === "/api/admin/deployments/d1/activation-tokens" && failNextTokenRefresh) {
       failNextTokenRefresh = false;
+      return route.fulfill({ status: 503, json: { error: "INTERNAL_ERROR" } });
+    }
+    if (path === "/api/admin/deployments/d1/activation-tokens" && tokenListFailuresRemaining > 0) {
+      tokenListFailuresRemaining--;
       return route.fulfill({ status: 503, json: { error: "INTERNAL_ERROR" } });
     }
     if (path === "/api/admin/deployments/d1/activation-tokens") return route.fulfill({ json: { tokens: [
@@ -66,6 +71,9 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("tab", { name: "Tokens" }).click();
   await expect(page.getByRole("region", { name: "Activation tokens" })).toBeVisible();
+  await expect(page.getByText("Could not load tokens.")).toBeVisible();
+  await expect(page.getByText("No tokens yet.")).toHaveCount(0);
+  await page.getByRole("button", { name: "Retry" }).click();
   await expect(page.getByRole("button", { name: "Create token" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Actions" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Unused/ }).getByRole("button", { name: "Revoke token" })).toBeVisible();

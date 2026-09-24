@@ -26,16 +26,25 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
   const [date, setDate] = useState("");
   const [page, setPage] = useState(1);
   const [revokeTarget, setRevokeTarget] = useState<TokenRow | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   async function load() {
-    const result = await request<{ tokens: TokenRow[] }>(`/admin/deployments/${deploymentId}/activation-tokens`);
-    setTokens(result.tokens);
+    try {
+      const result = await request<{ tokens: TokenRow[] }>(`/admin/deployments/${deploymentId}/activation-tokens`);
+      setTokens(result.tokens);
+      setLoadFailed(false);
+    } catch (cause) {
+      setLoadFailed(true);
+      throw cause;
+    }
   }
   useEffect(() => {
     let cancelled = false;
+    setTokens([]);
+    setLoadFailed(false);
     setBusy(true);
     request<{ tokens: TokenRow[] }>(`/admin/deployments/${deploymentId}/activation-tokens`)
-      .then(result => { if (!cancelled) setTokens(result.tokens); })
-      .catch(cause => { if (!cancelled) setError(message(cause)); })
+      .then(result => { if (!cancelled) { setTokens(result.tokens); setLoadFailed(false); } })
+      .catch(cause => { if (!cancelled) { setLoadFailed(true); setError(message(cause)); } })
       .finally(() => { if (!cancelled) setBusy(false); });
     return () => { cancelled = true; };
   }, [deploymentId]);
@@ -56,6 +65,10 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
     } finally {
       setBusy(false);
     }
+  }
+  async function retryLoad() {
+    setBusy(true); setError("");
+    try { await load(); } catch (cause) { setError(message(cause)); } finally { setBusy(false); }
   }
   const rows = paginate(tokens, page);
   return <section className="min-w-0 space-y-4 rounded-xl border bg-card p-5 shadow-sm sm:p-6" aria-label="Activation tokens">
@@ -85,7 +98,7 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
           {token.status !== "Unused" && token.credentialStatus !== "Active" && <span className="px-3 text-muted-foreground" aria-label="No actions available">—</span>}
         </div></TableCell>
       </TableRow>)}
-      {!tokens.length && <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">{busy ? "Loading tokens…" : "No tokens yet."}</TableCell></TableRow>}
+      {!tokens.length && <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">{busy ? "Loading tokens…" : loadFailed ? <span className="inline-flex items-center gap-3">Could not load tokens. <Button type="button" variant="outline" size="sm" onClick={() => void retryLoad()}>Retry</Button></span> : "No tokens yet."}</TableCell></TableRow>}
       </TableBody></Table>
     {rows.rows.some(token => token.status === "Used" && !token.credentialStatus) && <p className="text-sm text-muted-foreground">Older used tokens cannot be linked to a credential automatically. Revoke access from a linked active token row, or disable the deployment to block all installations.</p>}
     {tokens.length > 10 && <div className="flex items-center justify-center gap-3"><Button type="button" variant="outline" size="sm" disabled={rows.page === 1} onClick={() => setPage(rows.page - 1)}>Previous</Button><span className="text-sm">Page {rows.page} of {rows.pageCount}</span><Button type="button" variant="outline" size="sm" disabled={rows.page === rows.pageCount} onClick={() => setPage(rows.page + 1)}>Next</Button></div>}
