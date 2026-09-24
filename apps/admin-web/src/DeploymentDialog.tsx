@@ -41,7 +41,7 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
   const [refreshError, setRefreshError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
   const dirty = form.formState.isDirty;
-  function close() { if (busy) return; if (!savedResult && dirty) setConfirmClose(true); else onClose(); }
+  function close() { if (busy) return; if (pendingCreate || (!savedResult && dirty)) setConfirmClose(true); else onClose(); }
   async function refreshAfterSave(saved: { id: string; created: boolean }) {
     setBusy(true);
     setRefreshError("");
@@ -188,6 +188,6 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
         </>}
       </DialogFooter>
     </form>
-    <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Discard deployment changes?</AlertDialogTitle><AlertDialogDescription>Your unsaved changes will be lost.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep editing</AlertDialogCancel><AlertDialogAction onClick={onClose}>Discard</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{pendingCreate ? "Leave this deployment request?" : "Discard deployment changes?"}</AlertDialogTitle><AlertDialogDescription>{pendingCreate ? "The request may have succeeded. If you create another deployment before checking the list, you could create a duplicate." : "Your unsaved changes will be lost."}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{pendingCreate ? "Keep checking" : "Keep editing"}</AlertDialogCancel><AlertDialogAction onClick={onClose}>{pendingCreate ? "Leave request" : "Discard"}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </DialogContent></Dialog>;
 }
