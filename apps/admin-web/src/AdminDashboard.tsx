@@ -22,6 +22,11 @@ type Dashboard = {
 };
 
 const monthName = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
+const deploymentLabel = (overview: Overview, deployment: Overview["deployments"][number]) => {
+  const client = overview.clients.find(record => record.id === deployment.clientId);
+  const environment = deployment.environment.charAt(0).toUpperCase() + deployment.environment.slice(1);
+  return `${client?.name ?? "Client"} · ${environment}`;
+};
 
 export function AdminDashboard({ overview }: { overview: Overview }) {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -41,15 +46,15 @@ export function AdminDashboard({ overview }: { overview: Overview }) {
     ...data.attention.expiringTokenDeployments.flatMap(item => {
       const deployment = overview.deployments.find(record => record.id === item.deploymentId);
       if (!deployment) return [];
-      const client = overview.clients.find(record => record.id === deployment.clientId);
-      const context = `${client?.name ?? deployment.name} · ${deployment.environment.charAt(0).toUpperCase()}${deployment.environment.slice(1)}`;
-      return [{ key: `expiring-tokens-${item.deploymentId}`, count: item.count, badge: String(item.count), title: "Activation tokens expiring",
-        detail: `${context} · ${item.count} unused ${item.count === 1 ? "token" : "tokens"} within 7 days`, to: deploymentUrl(overview, deployment, "tokens"), urgent: false }];
+      return [{ key: `expiring-tokens-${item.deploymentId}`, count: item.count, badge: String(item.count), title: item.count === 1 ? "Unused activation token expires soon" : "Unused activation tokens expire soon",
+        detail: `${deploymentLabel(overview, deployment)} · ${item.count} ${item.count === 1 ? "token expires" : "tokens expire"} within 7 days`, to: deploymentUrl(overview, deployment, "tokens"), urgent: false }];
     }),
     ...data.attention.nearLimitDeployments.map(item => {
       const deployment = overview.deployments.find(record => record.id === item.deploymentId);
-      return { key: `${item.deploymentId}-${item.capability}`, count: item.used, badge: `${Math.round(item.used / item.limit * 100)}%`, title: `${deployment?.name ?? "Deployment"} nearing ${item.capability === "SCORING" ? "assessment" : "face scan"} limit`,
-        detail: `${item.used.toLocaleString()} of ${item.limit.toLocaleString()} used this month`, to: deployment ? deploymentUrl(overview, deployment, "settings") : "/deployments", urgent: false };
+      const isFaceScan = item.capability === "FACE_SCAN";
+      const limitName = isFaceScan ? "Face scan" : "Assessment";
+      return { key: `${item.deploymentId}-${item.capability}`, count: item.used, badge: `${Math.round(item.used / item.limit * 100)}%`, title: `${limitName} limit ${item.used >= item.limit ? "reached" : "nearly reached"}`,
+        detail: `${deployment ? deploymentLabel(overview, deployment) : "Deployment"} · ${item.used.toLocaleString()} of ${item.limit.toLocaleString()} ${isFaceScan ? "face scans" : "assessments"} used this month`, to: deployment ? deploymentUrl(overview, deployment, "settings") : "/deployments", urgent: false };
     }),
   ].filter(alert => alert.count > 0);
   const metrics: Array<{ label: string; key: keyof Counts }> = [
