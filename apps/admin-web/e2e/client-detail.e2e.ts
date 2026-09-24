@@ -90,7 +90,7 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("row", { name: /ldkey1/ }).getByText("Expired")).toBeVisible();
   await expect(page.getByRole("row", { name: /ldkey1/ }).getByLabel("No actions available")).toBeVisible();
   await page.getByRole("row", { name: /nused1/ }).getByRole("button", { name: "Revoke token" }).click();
-  await expect(page.getByRole("alertdialog")).toContainText("Credentials issued from other tokens remain valid.");
+  await expect(page.getByRole("alertdialog")).toContainText("can no longer be used to activate a deployment.");
   await expect(page.getByRole("alertdialog").getByRole("button", { name: "Revoke token" })).toHaveAttribute("data-variant", "destructive");
   await page.getByRole("alertdialog").getByRole("button", { name: "Cancel" }).click();
   expect(unusedTokenRevoked).toBe(false);
@@ -99,7 +99,7 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("row", { name: /nused1/ }).getByText("Revoked")).toBeVisible();
   expect(unusedTokenRevoked).toBe(true);
   await page.getByRole("button", { name: "Revoke access for token NIQ …used12" }).click();
-  await expect(page.getByRole("alertdialog")).toContainText("Other credentials remain active");
+  await expect(page.getByRole("alertdialog")).toContainText("Future requests using the credential issued by token");
   await expect(page.getByRole("alertdialog").getByRole("button", { name: "Revoke access" })).toHaveAttribute("data-variant", "destructive");
   await page.getByRole("alertdialog").getByRole("button", { name: "Cancel" }).click();
   expect(credentialRevoked).toBe(false);

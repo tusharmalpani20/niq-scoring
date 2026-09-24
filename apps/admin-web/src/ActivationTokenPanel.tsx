@@ -125,12 +125,12 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
     {disabled && <p className="text-sm text-muted-foreground">Save your changes before managing tokens.</p>}
     {!revokeTarget && !unusedRevokeTarget && <ErrorNotice error={error} />}
     <AlertDialog open={unusedRevokeTarget !== null} onOpenChange={open => { if (!open && !busy) setUnusedRevokeTarget(null); }}><AlertDialogContent>
-      <AlertDialogHeader><AlertDialogTitle>Revoke this activation token?</AlertDialogTitle><AlertDialogDescription>Token NIQ …{unusedRevokeTarget?.id.slice(-6)} can no longer be exchanged for a credential. Credentials issued from other tokens remain valid.</AlertDialogDescription></AlertDialogHeader>
+      <AlertDialogHeader><AlertDialogTitle>Revoke this activation token?</AlertDialogTitle><AlertDialogDescription>Token NIQ …{unusedRevokeTarget?.id.slice(-6)} can no longer be used to activate a deployment.</AlertDialogDescription></AlertDialogHeader>
       <ErrorNotice error={error} />
       <AlertDialogFooter><AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" disabled={busy} onClick={event => { event.preventDefault(); if (unusedRevokeTarget) void revokeUnusedToken(unusedRevokeTarget); }}>{busy ? "Revoking…" : "Revoke token"}</AlertDialogAction></AlertDialogFooter>
     </AlertDialogContent></AlertDialog>
     <AlertDialog open={revokeTarget !== null} onOpenChange={open => { if (!open && !busy) setRevokeTarget(null); }}><AlertDialogContent>
-      <AlertDialogHeader><AlertDialogTitle>Revoke this installation’s access?</AlertDialogTitle><AlertDialogDescription>Future requests using the credential issued by token NIQ …{revokeTarget?.id.slice(-6)} will be rejected. Other credentials remain active. This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+      <AlertDialogHeader><AlertDialogTitle>Revoke this installation’s access?</AlertDialogTitle><AlertDialogDescription>Future requests using the credential issued by token NIQ …{revokeTarget?.id.slice(-6)} will be rejected. This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
       <ErrorNotice error={error} />
       <AlertDialogFooter><AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" disabled={busy} onClick={event => { event.preventDefault(); if (revokeTarget) void revokeAccess(revokeTarget); }}>{busy ? "Revoking…" : "Revoke access"}</AlertDialogAction></AlertDialogFooter>
     </AlertDialogContent></AlertDialog>
