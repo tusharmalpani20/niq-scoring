@@ -160,8 +160,8 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
     if (field.kind === "calculated") {
       const previous = raw(field.inputIds[0]);
       const current = raw(field.inputIds[1]);
-      if (!hasValue(previous) && !hasValue(current)) { push(sectionId, field, null, "unanswered"); continue; }
-      if (!hasValue(previous) || !hasValue(current)) { push(sectionId, field, null, "pending", "Enter both weights to calculate weight loss."); continue; }
+      if (!hasValue(previous)) { push(sectionId, field, null, "unanswered"); continue; }
+      if (!hasValue(current)) { push(sectionId, field, null, "pending", "Enter both weights to calculate weight loss."); continue; }
       if (invalidIds.has(field.inputIds[0]) || invalidIds.has(field.inputIds[1])) {
         if (typeof previous === "number" && previous <= 0 || typeof current === "number" && current <= 0) add("answers.weight", "INVALID_WEIGHT", "Weights must be finite and greater than zero.");
         push(sectionId, field, null, "unanswered", "Invalid weight input"); continue;
@@ -193,9 +193,9 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
   result.answerCoverage = { totalEntries: 19, answeredEntries, unansweredEntries, pendingEntries, allUnanswered: answeredEntries === 0 };
   if (issues.length) return result;
   // An entirely blank final assessment is a valid review result with no score.
-  // A supplied but unfinished dependency (such as one weight) still needs completion.
+  // Current weight alone is patient context; previous weight starts optional weight-loss scoring.
   if (answeredEntries === 0) {
-    result.complete = !Object.values(answers).some(hasValue);
+    result.complete = !Object.entries(answers).some(([id, value]) => id !== "current_weight_kg" && hasValue(value));
     return result;
   }
   const score = components.filter(component => component.points !== null).reduce((sum, component) => sum + component.points!, 0);

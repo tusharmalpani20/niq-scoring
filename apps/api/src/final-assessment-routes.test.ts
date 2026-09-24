@@ -149,7 +149,7 @@ test("approved final assessment supports credential-bound public scoring and exa
   expect(JSON.stringify(binding.questionnaire)).not.toContain('"points"');
   expect(store.usages).toHaveLength(0);
   const base = { assessmentReference: "confirmed-public", idempotencyKey: "confirmed-score-zero" };
-  const blankInput = { ...base, idempotencyKey: "confirmed-score-blank", answers: {} };
+  const blankInput = { ...base, idempotencyKey: "confirmed-score-blank", answers: { current_weight_kg: 70 } };
   const blank = await call("calculate", blankInput);
   expect(blank.status).toBe(200);
   const blankResult = await blank.json();

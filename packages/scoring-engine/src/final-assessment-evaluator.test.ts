@@ -10,6 +10,7 @@ describe("final assessment evaluator", () => {
     expect(unanswered).toMatchObject({ complete: true, score: null, classification: null, issues: [], answerCoverage: { allUnanswered: true, answeredEntries: 0, unansweredEntries: 19, pendingEntries: 0 } });
     expect(unanswered.components.every(component => component.points === null && component.status === "unanswered")).toBe(true);
     expect(evaluateFinalAssessment(definition(), { stage: null })).toMatchObject({ complete: true, score: null, classification: null });
+    expect(evaluateFinalAssessment(definition(), { current_weight_kg: 70 })).toMatchObject({ complete: true, score: null, classification: null, answerCoverage: { allUnanswered: true, pendingEntries: 0 } });
     expect(evaluateFinalAssessment(definition(), { previous_weight_kg: 80 })).toMatchObject({ complete: false, score: null, classification: null });
     const zero = evaluateFinalAssessment(definition(), { relapse_status: "relapse_status_first_diagnosis" });
     expect(zero).toMatchObject({ complete: true, score: 0, answerCoverage: { answeredEntries: 1, unansweredEntries: 18, pendingEntries: 0 } });
