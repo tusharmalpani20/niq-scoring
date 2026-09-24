@@ -52,7 +52,7 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
         })}>{busy ? "Creating…" : "Create"}</Button>
       </div>
     </div>}
-    <Table className="min-w-[620px]"><TableHeader className="bg-muted/40 [&_th]:text-xs [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground"><TableRow><TableHead>Token</TableHead><TableHead>Created</TableHead><TableHead>Expiry</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+    <Table className="min-w-[620px]"><TableHeader><TableRow><TableHead>Token</TableHead><TableHead>Created</TableHead><TableHead>Expiry</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
       <TableBody>{rows.rows.map(token => <TableRow key={token.id}>
         <TableCell className="py-3.5 font-medium">NIQ …{token.id.slice(-6)}</TableCell>
         <TableCell className="py-3.5">{new Date(token.createdAt).toLocaleDateString()}</TableCell>

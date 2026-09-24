@@ -27,7 +27,7 @@ export function ScoringEditor({ definition: d, onChange, disabled = false }: Pro
     { id: 'calculations', title: 'Calculated values', fields: d.calculations.map(calculation => ({ id: calculation.id, label: calculation.label, unit: calculation.unit, question: undefined })) },
   ];
   return <div className="min-w-0 space-y-5">
-    <div className="overflow-x-auto rounded-2xl border border-border/50 bg-card shadow-sm"><table className="w-full text-left text-sm"><thead className="border-b bg-muted/30"><tr><th className="p-3 font-medium">Field name</th><th className="p-3 font-medium">Type</th><th className="p-3 font-medium">Score</th><th className="w-32 p-3 font-medium">Cap</th></tr></thead><tbody>
+    <div className="overflow-x-auto rounded-2xl border border-border/50 bg-card shadow-sm"><table className="w-full text-left text-sm"><thead className="border-b bg-muted/40 [&_th]:text-xs [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground"><tr><th className="p-3 font-medium">Field name</th><th className="p-3 font-medium">Type</th><th className="p-3 font-medium">Score</th><th className="w-32 p-3 font-medium">Cap</th></tr></thead><tbody>
       {groups.filter(group => group.fields.length).map(group => <Fragment key={group.id}>
         <tr className="border-b bg-muted/20"><th colSpan={4} className="px-3 py-2 text-xs font-medium text-muted-foreground">{group.title}</th></tr>
         {group.fields.map(field => {

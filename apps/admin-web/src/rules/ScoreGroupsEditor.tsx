@@ -14,7 +14,7 @@ export function ScoreGroupsEditor({ definition: d, onChange, disabled = false }:
     <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-medium">Score groups</h3><Button type="button" variant="outline" disabled={disabled || d.domains.length >= 50} onClick={() => onChange({ ...d, domains: [...d.domains, { id: newRuleId('group'), label: 'New group', cap: null, sources: [] }] })}>Add group</Button></div>
     <p className="text-sm text-muted-foreground">Group scored fields and limit their combined points. Each field belongs to one group. A blank cap means no limit.</p>
     <fieldset disabled={disabled} className="min-w-0">
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="p-3 font-medium">Group name</th><th className="p-3 font-medium">Included fields</th><th className="p-3 font-medium">Cap</th><th className="p-3 font-medium">Actions</th></tr></thead><tbody>
+      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-muted/40 [&_th]:text-xs [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground"><tr className="border-b"><th className="p-3 font-medium">Group name</th><th className="p-3 font-medium">Included fields</th><th className="p-3 font-medium">Cap</th><th className="p-3 font-medium">Actions</th></tr></thead><tbody>
         {groups.map(group => {
           const selected = d.scoring.filter(rule => rule.domainId === group.id);
           const references = scoringReferences(d, 'domain', group.id);
