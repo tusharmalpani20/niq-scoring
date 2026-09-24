@@ -28,10 +28,10 @@ test("client opens a detail page with usage and its deployments", async ({ page 
       deployments: [{ id: "d1", clientId: "c1", name: "Apollo Production", environment: "production", hostingType: "NIQ_HOSTED", enabled: true }],
       entitlements: [], assignments: [], versions: [],
     } });
-    if (path === "/api/admin/usage/rules") return route.fulfill({ json: { rules: [
-      { ruleVersionId: "r1", name: "Default (TEST-5)", count: 12 },
-      { ruleVersionId: "r2", name: "Previous rule", count: 6 },
-    ] } });
+    if (path === "/api/admin/usage/rules") return route.fulfill({ json: { rules: new URL(route.request().url()).searchParams.has("clientId")
+      ? [{ ruleVersionId: "r1", name: "Default (TEST-5)", count: 18 }]
+      : [{ ruleVersionId: "r1", name: "Default (TEST-5)", count: 12 }, { ruleVersionId: "r2", name: "Previous rule", count: 6 }],
+    } });
     if (path === "/api/admin/clients/c1/usage") return route.fulfill({ json: { deployments: [{ deploymentId: "d1", assessments: 18, vitalIq: 7, monthly: [
       { month: "2026-04", assessments: 2, vitalIq: 1 }, { month: "2026-05", assessments: 3, vitalIq: 1 },
       { month: "2026-06", assessments: 4, vitalIq: 2 }, { month: "2026-07", assessments: 2, vitalIq: 1 },
@@ -65,7 +65,7 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByText("Assessments scored")).toBeVisible();
   await expect(page.getByText("18", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Assessments by rule" })).toBeVisible();
-  await expect(page.locator(".recharts-surface").first()).toBeVisible();
+  await expect(page.locator(".recharts-surface")).toHaveCount(2);
   await page.getByRole("tab", { name: /Deployments/ }).click();
   await expect(page.getByRole("link", { name: "Production" })).toBeVisible();
   await page.getByRole("button", { name: "Create deployment" }).click();
