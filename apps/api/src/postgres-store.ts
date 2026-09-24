@@ -116,7 +116,7 @@ export class PostgresScoringStore implements ScoringStore {
     });
   }
   async findDeploymentCreate(key: string): Promise<PriorDeploymentCreate | null> {
-    const [row] = await this.database<Array<{ fingerprint: string; activationTokenId: string | null; id: string | null; clientId: string | null; name: string | null; environment: string | null; hostingType: Deployment["hostingType"]; enabled: boolean | null }>>`
+    const [row] = await this.database<Array<{ fingerprint: string; activationTokenId: string | null; id: string | null; clientId: string | null; name: string | null; environment: Deployment["environment"] | null; hostingType: Deployment["hostingType"]; enabled: boolean | null }>>`
       select e.metadata->>'fingerprint' as fingerprint,e.metadata->>'activationTokenId' as "activationTokenId",
         d.id,d.client_id as "clientId",d.name,d.environment,d.hosting_type as "hostingType",d.enabled
       from audit_events e left join deployments d on d.id=e.resource_reference
