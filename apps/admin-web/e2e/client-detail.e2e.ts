@@ -2,11 +2,16 @@ import { test, expect } from "@playwright/test";
 
 test("client opens a detail page with usage and its deployments", async ({ page }) => {
   let credentialRevoked = false;
+  let unusedTokenRevoked = false;
   let tokenListFailuresRemaining = 2;
   let failNextTokenRefresh = false;
   let failFirstRevoke = true;
   await page.route("**/api/**", route => {
     const path = new URL(route.request().url()).pathname;
+    if (path === "/api/admin/deployments/d1/activation-tokens/unused1" && route.request().method() === "DELETE") {
+      unusedTokenRevoked = true;
+      return route.fulfill({ json: { revoked: true } });
+    }
     if (path === "/api/admin/deployments/d1/activation-tokens/used12/credential" && route.request().method() === "DELETE") {
       if (failFirstRevoke) {
         failFirstRevoke = false;
@@ -37,7 +42,7 @@ test("client opens a detail page with usage and its deployments", async ({ page 
       return route.fulfill({ status: 503, json: { error: "INTERNAL_ERROR" } });
     }
     if (path === "/api/admin/deployments/d1/activation-tokens") return route.fulfill({ json: { tokens: [
-      { id: "unused1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Unused", canCopy: true, credentialStatus: null },
+      { id: "unused1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: unusedTokenRevoked ? "Revoked" : "Unused", canCopy: !unusedTokenRevoked, credentialStatus: null },
       { id: "used12", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Used", canCopy: false, credentialStatus: credentialRevoked ? "Revoked" : "Active" },
       { id: "legacy1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Used", canCopy: false, credentialStatus: null },
       { id: "oldkey1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Used", canCopy: false, credentialStatus: "Expired" },
@@ -76,15 +81,26 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await page.getByRole("button", { name: "Retry" }).click();
   await expect(page.getByRole("button", { name: "Create token" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Actions" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Access" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Unused/ }).getByRole("button", { name: "Revoke token" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Revoked/ }).getByLabel("No actions available")).toBeVisible();
-  await expect(page.getByRole("row", { name: /egacy1/ }).getByText("Used before credential tracking")).toBeVisible();
+  await expect(page.getByRole("row", { name: /egacy1/ }).getByText("Unknown")).toBeVisible();
   await expect(page.getByRole("row", { name: /egacy1/ }).getByText("Unavailable")).toBeVisible();
   await expect(page.getByText("We cannot safely revoke one credential from its token row.")).toBeVisible();
-  await expect(page.getByRole("row", { name: /ldkey1/ }).getByText("Credential expired")).toBeVisible();
+  await expect(page.getByRole("row", { name: /ldkey1/ }).getByText("Expired")).toBeVisible();
   await expect(page.getByRole("row", { name: /ldkey1/ }).getByLabel("No actions available")).toBeVisible();
+  await page.getByRole("row", { name: /nused1/ }).getByRole("button", { name: "Revoke token" }).click();
+  await expect(page.getByRole("alertdialog")).toContainText("Already connected installations will keep working.");
+  await expect(page.getByRole("alertdialog").getByRole("button", { name: "Revoke token" })).toHaveAttribute("data-variant", "destructive");
+  await page.getByRole("alertdialog").getByRole("button", { name: "Cancel" }).click();
+  expect(unusedTokenRevoked).toBe(false);
+  await page.getByRole("row", { name: /nused1/ }).getByRole("button", { name: "Revoke token" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Revoke token" }).click();
+  await expect(page.getByRole("row", { name: /nused1/ }).getByText("Revoked")).toBeVisible();
+  expect(unusedTokenRevoked).toBe(true);
   await page.getByRole("button", { name: "Revoke access for token NIQ …used12" }).click();
   await expect(page.getByRole("alertdialog")).toContainText("Other credentials remain active");
+  await expect(page.getByRole("alertdialog").getByRole("button", { name: "Revoke access" })).toHaveAttribute("data-variant", "destructive");
   await page.getByRole("alertdialog").getByRole("button", { name: "Cancel" }).click();
   expect(credentialRevoked).toBe(false);
   await page.getByRole("button", { name: "Revoke access for token NIQ …used12" }).click();
@@ -92,7 +108,7 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("alertdialog")).toContainText("The service could not complete the request.");
   expect(credentialRevoked).toBe(false);
   await page.getByRole("alertdialog").getByRole("button", { name: "Revoke access" }).click();
-  await expect(page.getByRole("row", { name: /used12/ }).getByText("Credential revoked")).toBeVisible();
+  await expect(page.getByRole("row", { name: /used12/ }).getByRole("cell").nth(4).getByText("Revoked")).toBeVisible();
   await expect(page.getByRole("button", { name: "Revoke access for token NIQ …used12" })).toHaveCount(0);
   await expect(page.getByText("Access was revoked, but the token list could not be refreshed.")).toBeVisible();
   expect(credentialRevoked).toBe(true);

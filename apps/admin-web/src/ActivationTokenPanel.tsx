@@ -17,6 +17,11 @@ const statusColors: Record<TokenRow["status"], string> = {
   Expired: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200",
   Revoked: "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200",
 };
+const accessColors: Record<NonNullable<TokenRow["credentialStatus"]>, string> = {
+  Active: statusColors.Unused,
+  Revoked: statusColors.Revoked,
+  Expired: statusColors.Expired,
+};
 export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreatingChange }: { deploymentId: string; disabled: boolean; creating: boolean; onCreatingChange: (creating: boolean) => void }) {
   const [tokens, setTokens] = useState<TokenRow[]>([]);
   const [busy, setBusy] = useState(false);
@@ -26,6 +31,7 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
   const [date, setDate] = useState("");
   const [page, setPage] = useState(1);
   const [revokeTarget, setRevokeTarget] = useState<TokenRow | null>(null);
+  const [unusedRevokeTarget, setUnusedRevokeTarget] = useState<TokenRow | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   async function load() {
     try {
@@ -66,6 +72,20 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
       setBusy(false);
     }
   }
+  async function revokeUnusedToken(token: TokenRow) {
+    setBusy(true); setError("");
+    try {
+      await request(`/admin/deployments/${deploymentId}/activation-tokens/${token.id}`, undefined, "DELETE");
+      setTokens(current => current.map(row => row.id === token.id ? { ...row, status: "Revoked", canCopy: false } : row));
+      setUnusedRevokeTarget(null);
+      try { await load(); }
+      catch { setError("Token was revoked, but the list could not be refreshed. Reload the page to see the latest status."); }
+    } catch (cause) {
+      setError(message(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function retryLoad() {
     setBusy(true); setError("");
     try { await load(); } catch (cause) { setError(message(cause)); } finally { setBusy(false); }
@@ -81,34 +101,38 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
         })}>{busy ? "Creating…" : "Create"}</Button>
       </div>
     </div>}
-    <Table className="min-w-[620px]"><TableHeader><TableRow><TableHead>Token</TableHead><TableHead>Created</TableHead><TableHead>Expiry</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+    <Table className="min-w-[700px]"><TableHeader><TableRow><TableHead>Token</TableHead><TableHead>Created</TableHead><TableHead>Expiry</TableHead><TableHead>Status</TableHead><TableHead>Access</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
       <TableBody>{rows.rows.map(token => <TableRow key={token.id}>
         <TableCell className="py-3.5 font-medium">NIQ …{token.id.slice(-6)}</TableCell>
         <TableCell className="py-3.5">{new Date(token.createdAt).toLocaleDateString()}</TableCell>
         <TableCell className="py-3.5">{token.expiresAt ? new Date(token.expiresAt).toLocaleString() : "Never"}</TableCell>
-        <TableCell className="py-3.5"><div className="flex flex-col items-start gap-1"><Badge variant="outline" className={statusColors[token.status]}>{token.status}</Badge>{token.status === "Used" && <span className="text-xs text-muted-foreground">{token.credentialStatus === "Active" ? "Credential active" : token.credentialStatus === "Revoked" ? "Credential revoked" : token.credentialStatus === "Expired" ? "Credential expired" : "Used before credential tracking"}</span>}</div></TableCell>
+        <TableCell className="py-3.5"><Badge variant="outline" className={statusColors[token.status]}>{token.status}</Badge></TableCell>
+        <TableCell className="py-3.5">{token.status === "Used" ? token.credentialStatus ? <Badge variant="outline" className={accessColors[token.credentialStatus]} aria-label={`Issued credential ${token.credentialStatus.toLowerCase()}`}>{token.credentialStatus}</Badge> : <span className="text-xs text-muted-foreground">Unknown</span> : <span className="text-muted-foreground">—</span>}</TableCell>
         <TableCell className="py-3.5"><div className="flex justify-end gap-2">
           {token.status === "Unused" && <><Button type="button" size="icon" variant="ghost" title={copied === token.id ? "Copied" : "Copy token"} aria-label={copied === token.id ? "Copied" : "Copy token"} disabled={disabled || busy || !token.canCopy} onClick={() => action(async () => {
             const result = await request<ActivationToken>(`/admin/deployments/${deploymentId}/activation-tokens/${token.id}`);
             await navigator.clipboard.writeText(result.activationToken); setCopied(token.id);
-          })}>{copied === token.id ? <Check className="size-4 text-primary" /> : <Copy className="size-4" />}</Button><Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" title="Revoke token" aria-label="Revoke token" disabled={disabled || busy} onClick={() => action(async () => {
-            await request(`/admin/deployments/${deploymentId}/activation-tokens/${token.id}`, {}, "DELETE");
-          })}><Ban className="size-4" /></Button></>}
+          })}>{copied === token.id ? <Check className="size-4 text-primary" /> : <Copy className="size-4" />}</Button><Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" title="Revoke token" aria-label="Revoke token" disabled={disabled || busy} onClick={() => { setError(""); setUnusedRevokeTarget(token); }}><Ban className="size-4" /></Button></>}
           {token.status === "Used" && token.credentialStatus === "Active" && <Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" title="Revoke installation access" aria-label={`Revoke access for token NIQ …${token.id.slice(-6)}`} disabled={disabled || busy} onClick={() => { setError(""); setRevokeTarget(token); }}><Ban className="size-4" /></Button>}
           {token.status === "Used" && !token.credentialStatus && <span className="text-xs text-muted-foreground" aria-label="Revoke access unavailable for older token">Unavailable</span>}
           {token.status !== "Unused" && token.credentialStatus !== "Active" && !(token.status === "Used" && !token.credentialStatus) && <span className="px-3 text-muted-foreground" aria-label="No actions available">—</span>}
         </div></TableCell>
       </TableRow>)}
-      {!tokens.length && <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">{busy ? "Loading tokens…" : loadFailed ? <span className="inline-flex items-center gap-3">Could not load tokens. <Button type="button" variant="outline" size="sm" onClick={() => void retryLoad()}>Retry</Button></span> : "No tokens yet."}</TableCell></TableRow>}
+      {!tokens.length && <TableRow><TableCell colSpan={6} className="h-16 text-center text-muted-foreground">{busy ? "Loading tokens…" : loadFailed ? <span className="inline-flex items-center gap-3">Could not load tokens. <Button type="button" variant="outline" size="sm" onClick={() => void retryLoad()}>Retry</Button></span> : "No tokens yet."}</TableCell></TableRow>}
       </TableBody></Table>
     {rows.rows.some(token => token.status === "Used" && !token.credentialStatus) && <p className="text-sm text-muted-foreground">These older tokens were used before we recorded which credential each one issued. We cannot safely revoke one credential from its token row. Disabling the deployment blocks all of its credentials.</p>}
     {tokens.length > 10 && <div className="flex items-center justify-center gap-3"><Button type="button" variant="outline" size="sm" disabled={rows.page === 1} onClick={() => setPage(rows.page - 1)}>Previous</Button><span className="text-sm">Page {rows.page} of {rows.pageCount}</span><Button type="button" variant="outline" size="sm" disabled={rows.page === rows.pageCount} onClick={() => setPage(rows.page + 1)}>Next</Button></div>}
     {disabled && <p className="text-sm text-muted-foreground">Save your changes before managing tokens.</p>}
-    {!revokeTarget && <ErrorNotice error={error} />}
+    {!revokeTarget && !unusedRevokeTarget && <ErrorNotice error={error} />}
+    <AlertDialog open={unusedRevokeTarget !== null} onOpenChange={open => { if (!open && !busy) setUnusedRevokeTarget(null); }}><AlertDialogContent>
+      <AlertDialogHeader><AlertDialogTitle>Revoke this activation token?</AlertDialogTitle><AlertDialogDescription>Token NIQ …{unusedRevokeTarget?.id.slice(-6)} will no longer be usable for activation. Already connected installations will keep working.</AlertDialogDescription></AlertDialogHeader>
+      <ErrorNotice error={error} />
+      <AlertDialogFooter><AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" disabled={busy} onClick={event => { event.preventDefault(); if (unusedRevokeTarget) void revokeUnusedToken(unusedRevokeTarget); }}>{busy ? "Revoking…" : "Revoke token"}</AlertDialogAction></AlertDialogFooter>
+    </AlertDialogContent></AlertDialog>
     <AlertDialog open={revokeTarget !== null} onOpenChange={open => { if (!open && !busy) setRevokeTarget(null); }}><AlertDialogContent>
       <AlertDialogHeader><AlertDialogTitle>Revoke this installation’s access?</AlertDialogTitle><AlertDialogDescription>Future requests using the credential issued by token NIQ …{revokeTarget?.id.slice(-6)} will be rejected. Other credentials remain active. This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
       <ErrorNotice error={error} />
-      <AlertDialogFooter><AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel><AlertDialogAction disabled={busy} className="bg-destructive text-white hover:bg-destructive/90" onClick={event => { event.preventDefault(); if (revokeTarget) void revokeAccess(revokeTarget); }}>{busy ? "Revoking…" : "Revoke access"}</AlertDialogAction></AlertDialogFooter>
+      <AlertDialogFooter><AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" disabled={busy} onClick={event => { event.preventDefault(); if (revokeTarget) void revokeAccess(revokeTarget); }}>{busy ? "Revoking…" : "Revoke access"}</AlertDialogAction></AlertDialogFooter>
     </AlertDialogContent></AlertDialog>
   </section>;
 }
