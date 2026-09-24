@@ -82,13 +82,14 @@ describe("final assessment evaluator", () => {
     expect(override.issues.map(issue => issue.code)).toContain("DERIVED_ANSWER_NOT_ALLOWED");
   });
 
-  test("rejects duplicate selections, identity fields and contradictory dietary symptoms", () => {
+  test("rejects duplicate selections and identity fields while allowing combined dietary symptoms", () => {
     const duplicate = evaluateFinalAssessment(definition(), { gastrointestinal_symptoms: ["gastrointestinal_symptoms_nausea", "gastrointestinal_symptoms_nausea"] });
     expect(duplicate.issues.map(issue => issue.code)).toContain("INVALID_ANSWER");
     const identity = evaluateFinalAssessment(definition(), { patient_name: "synthetic" });
     expect(identity.issues.map(issue => issue.code)).toContain("IDENTITY_FIELD_NOT_ALLOWED");
-    const contradiction = evaluateFinalAssessment(definition(), { dietary_symptoms: ["dietary_symptoms_no_problem", "dietary_symptoms_nausea"] });
-    expect(contradiction.issues.map(issue => issue.code)).toContain("CONTRADICTORY_ANSWER");
+    const combined = evaluateFinalAssessment(definition(), { dietary_symptoms: ["dietary_symptoms_no_problem", "dietary_symptoms_nausea"] });
+    expect(combined.issues).toEqual([]);
+    expect(combined.components.find(component => component.id === "dietary_symptoms")).toMatchObject({ status: "answered", points: 1 });
   });
 });
 

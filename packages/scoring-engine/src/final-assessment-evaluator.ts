@@ -55,9 +55,8 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
   if (issues.length) return result;
 
   const fields = definition.sections.flatMap(section => section.fields.map(field => ({ sectionId: section.id, field })));
-  const fieldMap = new Map(fields.map(item => [item.field.id, item.field]));
   const invalidIds = new Set<string>();
-  const known = new Set([...fieldMap.keys(), ...definition.supportingInputs.map(input => input.id)]);
+  const known = new Set([...fields.map(item => item.field.id), ...definition.supportingInputs.map(input => input.id)]);
   const add = (path: string, code: string, message: string) => {
     const issue = { path, code, message } satisfies EvaluationIssue;
     if (!issues.some(existing => issueKey(existing) === issueKey(issue))) issues.push(issue);
@@ -101,12 +100,6 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
       }
     }
     else validateChoice(input.id, input.options);
-  }
-  const dietarySymptoms = fieldMap.get("dietary_symptoms");
-  const symptomAnswer = dietarySymptoms?.kind === "multi_select" ? asStringArray(raw("dietary_symptoms")) : null;
-  if (symptomAnswer?.includes("dietary_symptoms_no_problem") && symptomAnswer.length > 1) {
-    invalidIds.add("dietary_symptoms");
-    add("answers.dietary_symptoms", "CONTRADICTORY_ANSWER", "No problem while eating cannot be selected with other symptoms.");
   }
   const treatment = raw("treatment_status");
   const palliativeStatus = raw("palliative_status");
