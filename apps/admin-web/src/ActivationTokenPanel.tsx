@@ -92,7 +92,7 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
     try { await load(); } catch (cause) { setError(message(cause)); } finally { setBusy(false); }
   }
   const rows = paginate(tokens, page);
-  return <section className="min-w-0 space-y-4 rounded-xl border bg-card p-5 shadow-sm sm:p-6" aria-label="Activation tokens">
+  return <div className="min-w-0 space-y-5"><section className="min-w-0 space-y-4 rounded-xl border bg-card p-5 shadow-sm sm:p-6" aria-label="Activation tokens">
     {creating && <div className="space-y-4 rounded-lg border p-4">
       <TokenExpirySelect value={expiry} date={date} onValueChange={setExpiry} onDateChange={setDate} disabled={disabled || busy} />
       <p className="text-sm text-muted-foreground">A new token replaces any unused token. Connected installations keep working.</p>
@@ -122,11 +122,6 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
       {!tokens.length && <TableRow><TableCell colSpan={6} className="h-16 text-center text-muted-foreground">{busy ? "Loading tokens…" : loadFailed ? <span className="inline-flex items-center gap-3">Could not load tokens. <Button type="button" variant="outline" size="sm" onClick={() => void retryLoad()}>Retry</Button></span> : "No tokens yet."}</TableCell></TableRow>}
       </TableBody></Table>
     {rows.rows.some(token => token.status === "Used" && !token.credentialStatus) && <p className="text-sm text-muted-foreground">These older tokens were used before we recorded which credential each one issued. We cannot safely revoke one credential from its token row. Disabling the deployment blocks all of its credentials.</p>}
-    {rows.pageCount > 1 && <Pagination aria-label="Activation tokens pagination"><PaginationContent>
-      <PaginationItem><Button type="button" variant="outline" size="sm" disabled={rows.page === 1} onClick={() => setPage(rows.page - 1)}>Previous</Button></PaginationItem>
-      <PaginationItem><span className="flex flex-col items-center gap-1 px-2 text-xs text-muted-foreground sm:block sm:px-3 sm:text-sm" role="status"><span className="whitespace-nowrap">Page {rows.page} of {rows.pageCount}</span><span className="whitespace-nowrap"><span className="hidden sm:inline"> · </span>{rows.total} total</span></span></PaginationItem>
-      <PaginationItem><Button type="button" variant="outline" size="sm" disabled={rows.page === rows.pageCount} onClick={() => setPage(rows.page + 1)}>Next</Button></PaginationItem>
-    </PaginationContent></Pagination>}
     {disabled && <p className="text-sm text-muted-foreground">Save your changes before managing tokens.</p>}
     {!revokeTarget && !unusedRevokeTarget && <ErrorNotice error={error} />}
     <AlertDialog open={unusedRevokeTarget !== null} onOpenChange={open => { if (!open && !busy) setUnusedRevokeTarget(null); }}><AlertDialogContent>
@@ -139,5 +134,11 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
       <ErrorNotice error={error} />
       <AlertDialogFooter><AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" disabled={busy} onClick={event => { event.preventDefault(); if (revokeTarget) void revokeAccess(revokeTarget); }}>{busy ? "Revoking…" : "Revoke access"}</AlertDialogAction></AlertDialogFooter>
     </AlertDialogContent></AlertDialog>
-  </section>;
+  </section>
+    <Pagination aria-label="Activation tokens pagination"><PaginationContent>
+      <PaginationItem><Button type="button" variant="outline" size="sm" disabled={rows.page === 1} onClick={() => setPage(rows.page - 1)}>Previous</Button></PaginationItem>
+      <PaginationItem><span className="flex flex-col items-center gap-1 px-2 text-xs text-muted-foreground sm:block sm:px-3 sm:text-sm" role="status"><span className="whitespace-nowrap">Page {rows.page} of {rows.pageCount}</span><span className="whitespace-nowrap"><span className="hidden sm:inline"> · </span>{rows.total} total</span></span></PaginationItem>
+      <PaginationItem><Button type="button" variant="outline" size="sm" disabled={rows.page === rows.pageCount} onClick={() => setPage(rows.page + 1)}>Next</Button></PaginationItem>
+    </PaginationContent></Pagination>
+  </div>;
 }

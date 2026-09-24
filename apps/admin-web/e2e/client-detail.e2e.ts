@@ -75,7 +75,11 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("columnheader", { name: "Vital IQ · all time" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Production/ }).getByText("Default (TEST-5)")).toBeVisible();
   await expect(page.getByRole("row", { name: /Production/ }).getByText("Enabled")).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Client deployments pagination" })).toHaveCount(0);
+  const deploymentPagination = page.getByRole("navigation", { name: "Client deployments pagination" });
+  await expect(deploymentPagination).toContainText("Page 1 of 1");
+  await expect(deploymentPagination).toContainText("1 total");
+  await expect(deploymentPagination.getByRole("button", { name: "Previous" })).toBeDisabled();
+  await expect(deploymentPagination.getByRole("button", { name: "Next" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Edit production deployment" })).toBeVisible();
   await page.getByRole("button", { name: "Create deployment" }).click();
   await expect(page.getByRole("dialog").getByRole("combobox", { name: "Client" })).toHaveText("Apollo");
@@ -128,7 +132,8 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await page.getByRole("row", { name: /nused1/ }).getByRole("button", { name: "Revoke token" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Revoke token" }).click();
   await expect(page.getByRole("row", { name: /nused1/ }).getByText("Revoked")).toBeVisible();
-  await expect(tokenPagination).toHaveCount(0);
+  await expect(tokenPagination).toContainText("Page 1 of 1");
+  await expect(tokenPagination).toContainText("6 total");
   expect(unusedTokenRevoked).toBe(true);
   await page.getByRole("button", { name: "Revoke access for token NIQ …used12" }).click();
   await expect(page.getByRole("alertdialog")).toContainText("Future requests using the credential issued by token");
