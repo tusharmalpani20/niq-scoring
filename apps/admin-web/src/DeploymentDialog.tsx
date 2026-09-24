@@ -7,6 +7,7 @@ import type { Overview } from "./Operations";
 import { request, message } from "./api";
 import { FormInput, ErrorNotice } from "./shared";
 import { Button } from "./components/ui/button";
+import { Input } from "./components/ui/input";
 import { Card, CardHeader, CardContent } from "./components/ui/card";
 import { Switch } from "./components/ui/switch";
 import { Field, FieldLabel, FieldError } from "./components/ui/field";
@@ -34,9 +35,25 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
   const [savedId, setSavedId] = useState<string | null>(deployment?.id ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [savedResult, setSavedResult] = useState<{ id: string; created: boolean; activation?: ActivationToken } | null>(null);
+  const [refreshError, setRefreshError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
   const dirty = form.formState.isDirty;
-  function close() { if (busy) return; if (dirty) setConfirmClose(true); else onClose(); }
+  function close() { if (busy) return; if (!savedResult && dirty) setConfirmClose(true); else onClose(); }
+  async function refreshAfterSave(saved: { id: string; created: boolean }) {
+    setBusy(true);
+    setRefreshError("");
+    try {
+      await refresh();
+    } catch (cause) {
+      setRefreshError(message(cause));
+      return;
+    } finally {
+      setBusy(false);
+    }
+    if (saved.created) onCreated(saved.id);
+    else onClose();
+  }
   async function submit(values: Values) {
     form.clearErrors();
     for (const current of [0, 1]) {
@@ -49,8 +66,9 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
       }
     }
     setBusy(true); setError("");
+    let saved: { id: string; activation?: ActivationToken };
     try {
-      const saved = await request<{ id: string; activation?: ActivationToken }>(savedId ? `/admin/deployments/${savedId}/configuration` : "/admin/deployments/configuration", {
+      saved = await request<{ id: string; activation?: ActivationToken }>(savedId ? `/admin/deployments/${savedId}/configuration` : "/admin/deployments/configuration", {
         clientId: values.clientId, environment: values.environment.trim(), hostingType: values.hostingType, enabled: values.enabled,
         ...(values.label.trim() ? { name: values.label.trim() } : {}),
         ...(!savedId ? { tokenExpiry: tokenExpiry(values.expiryPreset, values.expiryDate) } : {}),
@@ -58,10 +76,16 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
         faceScan: { enabled: values.faceEnabled, monthlyLimit: values.faceUnlimited ? null : (/^\d+$/.test(values.faceLimit) && Number(values.faceLimit) <= 2147483647 ? Number(values.faceLimit) : null) },
         versionAssignment: values.ruleVersion === "LATEST_APPROVED" ? { mode: "LATEST_APPROVED" } : { mode: "PINNED", scoringRuleVersionId: values.ruleVersion },
       }, savedId ? "PUT" : "POST");
-      setSavedId(saved.id);
-      form.reset(values); await refresh();
-      if (saved.activation) onCreated(saved.id); else onClose();
-    } catch (cause) { setError(message(cause)); } finally { setBusy(false); }
+    } catch (cause) {
+      setError(message(cause));
+      setBusy(false);
+      return;
+    }
+    const result = { id: saved.id, created: !deployment, activation: saved.activation };
+    setSavedId(saved.id);
+    setSavedResult(result);
+    form.reset(values);
+    await refreshAfterSave(result);
   }
   function continueStep() {
     form.clearErrors();
@@ -116,12 +140,13 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
       {values.ruleVersion === "LATEST_APPROVED" && !data.versions.some(version => version.isDefault) && <p className="text-sm text-destructive">No default is set. Choose a rule or set a default in Rules before starting assessments.</p>}
   </div>;
   return <Dialog open onOpenChange={next => { if (!next) close(); }}><DialogContent aria-describedby={undefined} className="flex max-h-[90svh] flex-col overflow-hidden sm:max-w-2xl">
-    <DialogHeader><DialogTitle>{savedId ? "Edit deployment" : "Create deployment"}</DialogTitle></DialogHeader>
-    {!savedId && <ol aria-label="Creation progress" className="grid grid-cols-3 gap-2 border-b pb-4">
+    <DialogHeader><DialogTitle>{savedResult ? "Deployment saved" : savedId ? "Edit deployment" : "Create deployment"}</DialogTitle></DialogHeader>
+    {!savedResult && !savedId && <ol aria-label="Creation progress" className="grid grid-cols-3 gap-2 border-b pb-4">
       {deploymentSteps.map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined} className={`flex items-center gap-2 text-xs sm:text-sm ${step === index ? "font-medium text-primary" : "text-muted-foreground"}`}><span className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${index <= step ? "border-primary bg-primary text-primary-foreground" : ""}`}>{index + 1}</span>{label}</li>)}
     </ol>}
-    <form className="flex min-h-0 flex-col gap-4" noValidate onSubmit={event => { if (!savedId && step < 2) { event.preventDefault(); continueStep(); } else void form.handleSubmit(submit)(event); }}>
+    <form className="flex min-h-0 flex-col gap-4" noValidate onSubmit={event => { if (savedResult) { event.preventDefault(); return; } if (!savedId && step < 2) { event.preventDefault(); continueStep(); } else void form.handleSubmit(submit)(event); }}>
       <div className="min-h-0 overflow-y-auto px-1 -mx-1 space-y-6">
+      {savedResult ? <div role="status" className="space-y-3 py-2 text-sm"><p>Your deployment was saved.</p>{refreshError && <p className="text-destructive">The page could not refresh. {refreshError}</p>}{savedResult.activation && <div className="space-y-2"><label htmlFor="saved-activation-token" className="font-medium">Activation token</label><Input id="saved-activation-token" readOnly value={savedResult.activation.activationToken} onFocus={event => event.currentTarget.select()} /><p className="text-xs text-muted-foreground">Copy this token now, or retry the refresh to open the deployment’s Tokens page.</p></div>}</div> : <>
       {savedId && <div className="space-y-6">
         <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 text-sm sm:grid-cols-4">{reviewRows.slice(0, 4).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium break-words">{value}</dd></div>)}</dl>
         <FormInput control={form.control} name="label" label="Deployment label" maxLength={120} disabled={busy} description="Use a name that distinguishes this deployment for the client." />
@@ -143,13 +168,15 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
         <p className="text-sm text-muted-foreground">Client, environment, and hosting cannot change after creation.</p>
         <TokenExpirySelect value={form.watch("expiryPreset")} date={form.watch("expiryDate")} onValueChange={value => form.setValue("expiryPreset", value, { shouldDirty: true })} onDateChange={value => form.setValue("expiryDate", value, { shouldDirty: true })} disabled={busy} /></div>}
       <ErrorNotice error={error} />
+      </>}
       </div>
       <DialogFooter className="flex shrink-0 flex-row justify-between gap-2 border-t pt-4">
-        <Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button>
+        {savedResult ? <><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Close</Button><Button type="button" disabled={busy} onClick={() => void refreshAfterSave(savedResult)}>{busy ? "Refreshing…" : "Retry refresh"}</Button></> : <><Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button>
         <div className="flex gap-2">
           {!savedId && step > 0 && <Button type="button" variant="outline" disabled={busy} onClick={() => { setError(""); setStep(step - 1); }}>Back</Button>}
           <Button type="submit" disabled={busy || (!savedId && data.clients.length === 0)}>{busy ? "Saving…" : savedId ? "Save changes" : step < 2 ? "Continue" : "Create"}</Button>
         </div>
+        </>}
       </DialogFooter>
     </form>
     <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Discard deployment changes?</AlertDialogTitle><AlertDialogDescription>Your unsaved changes will be lost.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep editing</AlertDialogCancel><AlertDialogAction onClick={onClose}>Discard</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
