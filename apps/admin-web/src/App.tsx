@@ -118,7 +118,8 @@ function Console() {
     setOverviewError("");
     try {
       const next = await request<Overview>("/admin/overview");
-      if (sequence === requestSequence.current) setData(next);
+      if (sequence !== requestSequence.current) throw new Error("Page refresh was interrupted. Please try again.");
+      setData(next);
     } catch (c) {
       if (sequence === requestSequence.current) {
         setOverviewError(message(c));
