@@ -1,4 +1,4 @@
-import { Plus, Copy, Check, Ban } from "lucide-react";
+import { Copy, Check, Ban } from "lucide-react";
 import { useEffect, useState } from "react";
 import { request, message } from "./api";
 import { Button } from "./components/ui/button";
@@ -10,14 +10,13 @@ import { paginate } from "./pagination";
 
 export type ActivationToken = { activationToken: string; expiresAt: string | null };
 type TokenRow = { id: string; createdAt: string; expiresAt: string | null; status: "Unused" | "Used" | "Expired" | "Revoked"; canCopy: boolean };
-export function ActivationTokenPanel({ deploymentId, disabled }: { deploymentId: string; disabled: boolean }) {
+export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreatingChange }: { deploymentId: string; disabled: boolean; creating: boolean; onCreatingChange: (creating: boolean) => void }) {
   const [tokens, setTokens] = useState<TokenRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState("");
   const [error, setError] = useState("");
   const [expiry, setExpiry] = useState("7");
   const [date, setDate] = useState("");
-  const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(1);
   async function load() {
     const result = await request<{ tokens: TokenRow[] }>(`/admin/deployments/${deploymentId}/activation-tokens`);
@@ -38,15 +37,12 @@ export function ActivationTokenPanel({ deploymentId, disabled }: { deploymentId:
   }
   const rows = paginate(tokens, page);
   return <section className="min-w-0 space-y-4 rounded-xl border bg-card p-5 shadow-sm sm:p-6" aria-label="Activation tokens">
-    <div className="flex items-center justify-end">
-      <Button type="button" disabled={busy || disabled} onClick={() => { setCreating(value => !value); setError(""); }}><Plus className="size-4" aria-hidden="true" />Create token</Button>
-    </div>
     {creating && <div className="space-y-4 rounded-lg border p-4">
       <TokenExpirySelect value={expiry} date={date} onValueChange={setExpiry} onDateChange={setDate} disabled={disabled || busy} />
       <p className="text-sm text-muted-foreground">A new token replaces any unused token. Connected installations keep working.</p>
-      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setCreating(false)}>Cancel</Button>
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => onCreatingChange(false)}>Cancel</Button>
         <Button type="button" disabled={busy || disabled} onClick={() => action(async () => {
-          await request<ActivationToken>(`/admin/deployments/${deploymentId}/activation-token`, tokenExpiry(expiry, date)); setPage(1); setCreating(false);
+          await request<ActivationToken>(`/admin/deployments/${deploymentId}/activation-token`, tokenExpiry(expiry, date)); setPage(1); onCreatingChange(false);
         })}>{busy ? "Creating…" : "Create"}</Button>
       </div>
     </div>}
