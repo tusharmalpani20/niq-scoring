@@ -240,6 +240,9 @@ export class FaceScanWorkflow {
        return;
      }
      if (disposition !== "ACCEPTED") {
+       // A bad later receipt is diagnostic evidence, not a new outcome for a
+       // completed or otherwise terminal scan.
+       if (row.result || ["COMPLETED", "CANCELLED", "EXPIRED", "FAILED"].includes(row.state)) return;
        await tx`update face_scan_workflows set state=case when result is null then 'RECONCILIATION_REQUIRED' else state end,failure_code=${disposition === "CONFLICT" ? "RESULT_CONFLICT" : "INVALID_PROVIDER_RESULT"},updated_at=now() where session_id=${id}`;
        return;
      }
