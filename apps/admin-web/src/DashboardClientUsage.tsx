@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
 import type { Overview } from "./Operations";
 import { paginate } from "./pagination";
 import { clientUrl } from "./record-urls";
-import { deploymentDisplayLabel } from "./deployment-label";
 
 type Usage = { completed: number; allowanceUsed: number; limit: number | null; available: boolean };
 export type DashboardClient = {
@@ -17,46 +17,19 @@ export type DashboardClient = {
   deployments: Array<{ id: string; name: string; enabled: boolean; assessments: Usage; faceScans: Usage }>;
 };
 
-function Allowance({ usage, label }: { usage: Usage; label: "Assessments" | "Face scans" }) {
-  const limit = usage.limit;
-  const percent = limit && limit > 0 ? Math.min(100, usage.allowanceUsed / limit * 100) : 0;
-  const description = !usage.available ? "Unavailable" : limit === null
-    ? `${usage.allowanceUsed.toLocaleString()} used · Unlimited`
-    : `${usage.allowanceUsed.toLocaleString()} / ${limit.toLocaleString()} used`;
-  return <div className="min-w-0 space-y-2">
-    <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-sm"><span className="text-muted-foreground">{label}</span><span className="font-medium tabular-nums">{description}</span></div>
-    {usage.available && limit !== null && <div className="h-1.5 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-label={`${label} monthly allowance`} aria-valuenow={Math.min(usage.allowanceUsed, limit)} aria-valuemin={0} aria-valuemax={limit}><div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} /></div>}
-  </div>;
-}
-
-function DeploymentAllowances({ deployment, label }: { deployment: DashboardClient["deployments"][number]; label?: string }) {
-  return <div className="space-y-3 rounded-lg bg-muted/30 p-4">
-    {label && <p className="text-sm font-semibold">{label}</p>}
-    <div className="grid gap-4 sm:grid-cols-2">
-      <Allowance usage={deployment.assessments} label="Assessments" />
-      <Allowance usage={deployment.faceScans} label="Face scans" />
-    </div>
-  </div>;
-}
-
 export function DashboardClientUsage({ clients, overview }: { clients: DashboardClient[]; overview: Overview }) {
   const [page, setPage] = useState(1);
-  const clientPage = paginate(clients, page);
-  const deploymentLabel = (deployment: DashboardClient["deployments"][number]) => {
-    const record = overview.deployments.find(item => item.id === deployment.id);
-    return record ? deploymentDisplayLabel(record, overview.deployments) : deployment.name;
-  };
-  return <div className="min-w-0 space-y-4"><Card><CardHeader className="flex-row items-center justify-between gap-2"><CardTitle>Clients by usage</CardTitle><span className="text-xs text-muted-foreground">This month</span></CardHeader><CardContent>
+  const clientPage = paginate(clients, page, 5);
+  return <div className="min-w-0 space-y-3"><Card><CardHeader className="flex-row items-center justify-between gap-2"><CardTitle>Clients by usage</CardTitle><span className="text-xs text-muted-foreground">This month</span></CardHeader><CardContent>
     {clients.length === 0 ? <p className="text-sm text-muted-foreground">No clients yet.</p> : <ul className="divide-y">{clientPage.rows.map(client => {
       const record = overview.clients.find(item => item.id === client.id);
-      return <li key={client.id} className="space-y-3 py-5 first:pt-0 last:pb-0">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><strong className="font-semibold">{record ? <Link to={clientUrl(record)} className="hover:text-primary hover:underline">{client.name}</Link> : client.name}</strong><div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground"><span><strong className="font-semibold tabular-nums text-foreground">{client.assessments.toLocaleString()}</strong> assessments scored</span><span><strong className="font-semibold tabular-nums text-foreground">{client.faceScans.toLocaleString()}</strong> face scans completed</span></div></div>
-        {client.deployments.length === 0 ? <p className="text-sm text-muted-foreground">No deployment allowance</p>
-          : client.deployments.length === 1 ? <DeploymentAllowances deployment={client.deployments[0]!} label={deploymentLabel(client.deployments[0]!)} />
-          : <div className="grid gap-3 lg:grid-cols-2">{client.deployments.map(deployment => <DeploymentAllowances key={deployment.id} deployment={deployment} label={deploymentLabel(deployment)} />)}</div>}
+      return <li key={client.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-4 first:pt-0 last:pb-0">
+        <div className="min-w-0 flex-1"><p className="font-semibold">{record ? <Link to={clientUrl(record)} className="text-primary hover:underline">{client.name}</Link> : client.name}</p><p className="text-xs text-muted-foreground">{client.deployments.length} {client.deployments.length === 1 ? "deployment" : "deployments"}</p></div>
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><span><strong className="tabular-nums">{client.assessments.toLocaleString()}</strong> <span className="text-muted-foreground">assessments scored</span></span><span><strong className="tabular-nums">{client.faceScans.toLocaleString()}</strong> <span className="text-muted-foreground">face scans completed</span></span></div>
+        {record && <Link to={clientUrl(record)} className="text-sm text-primary hover:underline" aria-label={`View ${client.name} details`}>View <ArrowRight className="inline size-3" aria-hidden="true" /></Link>}
       </li>;
     })}</ul>}
   </CardContent></Card>
-    {clientPage.pageCount > 1 && <Pagination aria-label="Dashboard clients pagination"><PaginationContent><PaginationItem><Button variant="outline" size="sm" disabled={clientPage.page === 1} onClick={() => setPage(clientPage.page - 1)}>Previous</Button></PaginationItem><PaginationItem><span className="px-2 text-xs text-muted-foreground" role="status">Page {clientPage.page} of {clientPage.pageCount} · {clientPage.total} total</span></PaginationItem><PaginationItem><Button variant="outline" size="sm" disabled={clientPage.page === clientPage.pageCount} onClick={() => setPage(clientPage.page + 1)}>Next</Button></PaginationItem></PaginationContent></Pagination>}
+    {clientPage.pageCount > 1 && <Pagination aria-label="Dashboard clients pagination"><PaginationContent><PaginationItem><Button variant="outline" size="sm" disabled={clientPage.page === 1} onClick={() => setPage(clientPage.page - 1)}>Previous</Button></PaginationItem><PaginationItem><span className="px-2 text-xs text-muted-foreground" role="status">Page {clientPage.page} of {clientPage.pageCount} · {clientPage.total} clients</span></PaginationItem><PaginationItem><Button variant="outline" size="sm" disabled={clientPage.page === clientPage.pageCount} onClick={() => setPage(clientPage.page + 1)}>Next</Button></PaginationItem></PaginationContent></Pagination>}
   </div>;
 }
