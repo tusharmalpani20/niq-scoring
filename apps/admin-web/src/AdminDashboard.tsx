@@ -15,14 +15,20 @@ const UsageChart = lazy(() => import("./UsageChart").then(module => ({ default: 
 
 type Counts = { assessments: number; faceScans: number; failedRequests: number };
 type Dashboard = {
-  period: { current: string; previous: string; asOf: string; comparisonEnd: string | null };
-  activity: { current: Counts; previous: Counts | null };
+  period: { current: string; previous: string; asOf: string; comparisonEnd?: string | null };
+  activity: { current: Counts; previous?: Counts | null };
   monthlyUsage: Array<{ month: string } & Counts>;
   clients: DashboardClient[];
   attention: { failedScoring24h: number; disabledDeployments: number; expiringTokenDeployments: Array<{ deploymentId: string; count: number }>; nearLimitDeployments: Array<{ deploymentId: string; capability: "SCORING" | "FACE_SCAN"; used: number; limit: number }> };
 };
 
 const monthName = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
+const comparisonPeriod = (previous: string, current: string, comparisonEnd: string) => {
+  const month = new Date(`${previous}-01T00:00:00Z`).toLocaleDateString(undefined, { month: "short", timeZone: "UTC" });
+  const day = new Date(comparisonEnd).getUTCDate();
+  const year = previous.slice(0, 4) !== current.slice(0, 4) ? `, ${previous.slice(0, 4)}` : "";
+  return `${month} 1–${day}${year}`;
+};
 const deploymentIdentity = (overview: Overview, deployment: Overview["deployments"][number]) => {
   const client = overview.clients.find(record => record.id === deployment.clientId);
   return { client: client?.name ?? "Client", label: deploymentDisplayLabel(deployment, overview.deployments) };
@@ -65,14 +71,16 @@ export function AdminDashboard({ overview }: { overview: Overview }) {
     { label: "Vital IQ scans completed", key: "faceScans" },
     { label: "Recorded failures", key: "failedRequests" },
   ];
+  // Older API processes do not provide comparisonEnd; their previous counts cover a full month.
+  const previous = data.period.comparisonEnd ? data.activity.previous : null;
   return <div className="space-y-6">
     <section aria-labelledby="attention-title" className="space-y-3"><div className="flex items-baseline justify-between gap-3"><h2 id="attention-title" className="text-lg font-semibold">Needs attention</h2><span className="text-xs text-muted-foreground">Current checks</span></div>
       <Card><CardContent className="pt-6">{alerts.length === 0 ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle2 className="size-4 text-primary" aria-hidden="true" />No items need attention in these checks.</p>
         : <ul className="divide-y">{alerts.map(alert => <li key={alert.key} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"><span className={`flex min-h-8 min-w-8 shrink-0 items-center justify-center rounded-md px-1.5 font-semibold tabular-nums ${alert.urgent ? "bg-destructive/10 text-destructive" : "bg-secondary text-secondary-foreground"}`}>{alert.badge}</span><div className="min-w-0 flex-1"><p className="text-sm font-medium">{alert.title}</p><p className="text-xs text-muted-foreground">{alert.detail}</p></div>{alert.to && <Link to={alert.to} className="text-sm text-primary hover:underline">View <ArrowRight className="inline size-3" aria-hidden="true" /></Link>}</li>)}</ul>}
       </CardContent></Card>
     </section>
-    <section aria-labelledby="month-title" className="space-y-3"><div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><h2 id="month-title" className="shrink-0 text-lg font-semibold">This month</h2><span className="text-xs text-muted-foreground">{monthName(data.period.current)} to date · {data.period.comparisonEnd ? `same elapsed UTC period in ${monthName(data.period.previous)}` : `no equal-length period in ${monthName(data.period.previous)}`}</span></div>
-      <div className="grid gap-3 sm:grid-cols-3">{metrics.map(metric => <DashboardMetricCard key={metric.key} label={metric.label} metric={metric.key} current={data.activity.current[metric.key]} previous={data.activity.previous?.[metric.key] ?? null} monthly={data.monthlyUsage} previousMonth={monthName(data.period.previous)} />)}</div>
+    <section aria-labelledby="month-title" className="space-y-3"><div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><h2 id="month-title" className="shrink-0 text-lg font-semibold">This month</h2><span className="text-xs text-muted-foreground">{monthName(data.period.current)} to date</span></div>
+      <div className="grid gap-3 sm:grid-cols-3">{metrics.map(metric => <DashboardMetricCard key={metric.key} label={metric.label} metric={metric.key} current={data.activity.current[metric.key]} previous={previous?.[metric.key] ?? null} monthly={data.monthlyUsage} comparisonPeriod={data.period.comparisonEnd ? comparisonPeriod(data.period.previous, data.period.current, data.period.comparisonEnd) : ""} />)}</div>
     </section>
     <div className="space-y-4"><Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Loading usage chart…</p>}><UsageChart monthly={data.monthlyUsage.map(item => ({ month: item.month, assessments: item.assessments, vitalIq: item.faceScans }))} /></Suspense>
       <DashboardClientUsage clients={data.clients} overview={overview} />
