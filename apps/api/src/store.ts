@@ -26,6 +26,7 @@ export type Client = CreateClient & { id: string; enabled: boolean };
 export type Deployment = CreateDeployment & { id: string; enabled: boolean; hostingType: DeploymentConfiguration["hostingType"] | null };
 export type VersionAssignment = VersionAssignmentInput & { deploymentId: string };
 export type DeploymentIdentity = { credentialId: string; deploymentId: string; clientId: string };
+export type RuleUsage = { ruleVersionId: string | null; name: string; count: number };
 
 export type UsageReservation =
   | { status: "NEW"; usageId: string; version: string }
@@ -42,6 +43,7 @@ export interface ScoringStore {
   deleteUnused(kind: RecordKind, id: string): Promise<DeletionStatus>;
   overview(): Promise<{ clients: Client[]; deployments: Deployment[]; entitlements: Array<EntitlementInput & { deploymentId: string }>; assignments: VersionAssignment[]; versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault?: boolean }> }>;
   usageByDeployment(clientId: string, now: Date): Promise<DeploymentUsage[]>;
+  usageByRule(clientId?: string): Promise<RuleUsage[]>;
   createClient(input: CreateClient): Promise<Client>;
   setClientEnabled(id: string, enabled: boolean): Promise<boolean>;
   saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken): Promise<Deployment | null>;
@@ -82,7 +84,7 @@ export class MemoryScoringStore implements ScoringStore {
   usages: Usage[] = [];
   faceScans: Array<{ id: string; state: "REQUESTED"; clientId: string; deploymentId: string }> = [];
 
-  versions = [{ id: "01K4ZJ9QJ7F3TWHDW1B1T6A4YV", version: PROVISIONAL_SCORING_VERSION, lifecycle: "DRAFT", clinicalUsePermitted: false, isDefault: false }];
+  versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault: boolean }> = [{ id: "01K4ZJ9QJ7F3TWHDW1B1T6A4YV", version: PROVISIONAL_SCORING_VERSION, lifecycle: "DRAFT", clinicalUsePermitted: false, isDefault: false }];
   async overview() { return { clients: this.clients, deployments: this.deployments, entitlements: this.entitlements, assignments: this.assignments, versions: [...this.versions, ...await this.rules.list()] }; }
   async usageByDeployment(clientId: string, now: Date): Promise<DeploymentUsage[]> {
     const deploymentIds = this.deployments.filter(item => item.clientId === clientId).map(item => item.id);
@@ -99,6 +101,20 @@ export class MemoryScoringStore implements ScoringStore {
       if (bucket) bucket.count++; else monthly.push({ deploymentId: event.deploymentId, capability: event.capability, month, count: 1 });
     }
     return buildUsageSummary(deploymentIds, totals, monthly, now);
+  }
+  async usageByRule(clientId?: string): Promise<RuleUsage[]> {
+    const versions = [...this.versions, ...await this.rules.list()];
+    const counts = new Map<string | null, number>();
+    for (const event of this.usages) {
+      if (event.capability !== "SCORING" || event.outcome !== "SUCCEEDED" || clientId && event.clientId !== clientId) continue;
+      const id = event.ruleVersionId ?? null;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return [...counts].map(([ruleVersionId, count]) => ({
+      ruleVersionId,
+      name: versions.find(version => version.id === ruleVersionId)?.version ?? "Rule not recorded",
+      count,
+    })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }
   async createClient(input: CreateClient) { if (this.clients.some(client => client.name.trim().toLowerCase() === input.name.trim().toLowerCase())) throw new DuplicateClientNameError(); const value = { id: createEntityId(), ...input, enabled: true }; this.clients.push(value); return value; }
   async setClientEnabled(id: string, enabled: boolean) { const row = this.clients.find((item) => item.id === id); if (!row) return false; row.enabled = enabled; return true; }

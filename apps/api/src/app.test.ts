@@ -81,6 +81,38 @@ describe("scoring API", () => {
     expect((await app.request(`/admin/clients/${otherDeployment.id}/usage`, { headers: adminHeaders })).status).toBe(404);
   });
 
+  test("rule usage counts successful assessments by recorded version across clients", async () => {
+    const { app, store } = setup();
+    const first = await store.createClient({ name: "Apollo" });
+    const second = await store.createClient({ name: "Other" });
+    const firstRule = store.versions[0]!;
+    const secondRule = { ...firstRule, id: "01K4ZJ9QJ7F3TWHDW1B1T6A4YW", version: "Rule B" };
+    store.versions.push(secondRule);
+    const add = (clientId: string, ruleVersionId: string | undefined, capability: "SCORING" | "FACE_SCAN" = "SCORING", outcome: "SUCCEEDED" | "FAILED" = "SUCCEEDED") =>
+      store.usages.push({ id: crypto.randomUUID(), clientId, deploymentId: crypto.randomUUID(), capability, outcome, ...(ruleVersionId ? { ruleVersionId } : {}), idempotencyKey: crypto.randomUUID(), occurredAt: new Date("2025-01-01T00:00:00Z") });
+    add(first.id, firstRule.id);
+    add(first.id, firstRule.id);
+    add(second.id, secondRule.id);
+    add(first.id, undefined);
+    add(first.id, secondRule.id, "FACE_SCAN");
+    add(first.id, secondRule.id, "SCORING", "FAILED");
+
+    const global = await app.request("/admin/usage/rules", { headers: adminHeaders });
+    expect(global.status).toBe(200);
+    expect((await global.json()).rules).toEqual([
+      { ruleVersionId: firstRule.id, name: firstRule.version, count: 2 },
+      { ruleVersionId: secondRule.id, name: secondRule.version, count: 1 },
+      { ruleVersionId: null, name: "Rule not recorded", count: 1 },
+    ]);
+    const scoped = await app.request(`/admin/usage/rules?clientId=${first.id}`, { headers: adminHeaders });
+    expect((await scoped.json()).rules).toEqual([
+      { ruleVersionId: firstRule.id, name: firstRule.version, count: 2 },
+      { ruleVersionId: null, name: "Rule not recorded", count: 1 },
+    ]);
+    expect((await app.request("/admin/usage/rules?clientId=invalid", { headers: adminHeaders })).status).toBe(400);
+    expect((await app.request(`/admin/usage/rules?clientId=${secondRule.id}`, { headers: adminHeaders })).status).toBe(404);
+  });
+
   test("rejects another client's request even when its idempotency key matches a completed request", async () => {
     const { app, store, client, deployment, credential } = await onboard();
     expect((await app.request("/v1/provisional/calculate", jsonRequest(scoringInput(client.id), `Bearer ${credential}`))).status).toBe(200);

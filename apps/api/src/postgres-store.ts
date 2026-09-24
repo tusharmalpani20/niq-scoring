@@ -13,7 +13,7 @@ import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
 import { decideEntitlement, type Capability } from "@niq-scoring/entitlements";
 import { createEntityId } from "./lib/id";
 import { buildUsageSummary, type DeploymentUsage, type UsageCount } from "./usage-summary";
-import type { Deployment, DeploymentIdentity, Client, ScoringStore, UsageReservation } from "./store";
+import type { Deployment, DeploymentIdentity, Client, ScoringStore, UsageReservation, RuleUsage } from "./store";
 
 type Database = ReturnType<typeof postgres>;
 
@@ -44,6 +44,20 @@ export class PostgresScoringStore implements ScoringStore {
       this.database<UsageCount[]>`select deployment_id as "deploymentId", capability, to_char(occurred_at at time zone 'UTC','YYYY-MM') as month, count(*)::int as count from usage_events where client_id=${clientId} and outcome='SUCCEEDED' and occurred_at>=${start} and occurred_at<=${now} group by deployment_id, capability, month`,
     ]);
     return buildUsageSummary(deployments.map(item => item.id), totals, monthly, now);
+  }
+
+  async usageByRule(clientId?: string): Promise<RuleUsage[]> {
+    const rows = await this.database<RuleUsage[]>`
+      select u.scoring_rule_version_id as "ruleVersionId",
+             coalesce(v.version, 'Rule not recorded') as name,
+             count(*)::int as count
+      from usage_events u
+      left join scoring_rule_versions v on v.id = u.scoring_rule_version_id
+      where u.capability = 'SCORING' and u.outcome = 'SUCCEEDED'
+        and (${clientId ?? null}::varchar is null or u.client_id = ${clientId ?? null})
+      group by u.scoring_rule_version_id, v.version
+      order by count desc, name asc`;
+    return [...rows];
   }
 
   async createClient(input: CreateClient) {
