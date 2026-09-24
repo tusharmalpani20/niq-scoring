@@ -116,7 +116,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
         <ErrorNotice error={accessError} />
         <AlertDialogFooter>
           <AlertDialogCancel disabled={accessBusy}>Cancel</AlertDialogCancel>
-          <AlertDialogAction disabled={accessBusy} onClick={async event => {
+          <AlertDialogAction variant={accessClient?.enabled ? "destructive" : "default"} disabled={accessBusy} onClick={async event => {
             event.preventDefault();
             if (!accessClient) return;
             setAccessBusy(true); setAccessError("");

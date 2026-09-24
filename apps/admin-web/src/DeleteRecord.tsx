@@ -21,7 +21,7 @@ export function DeleteRecord({ kind, id, name, refresh, revision, iconOnly = fal
     <AlertDialog open={open} onOpenChange={next => { if (!busy) setOpen(next); }}><AlertDialogContent>
       <AlertDialogHeader><AlertDialogTitle>Delete {name}?</AlertDialogTitle><AlertDialogDescription>This permanently removes this unused {kind === "clients" ? "client" : "deployment and its activation tokens"}. This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
       <ErrorNotice error={error} />
-      <AlertDialogFooter><AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel><AlertDialogAction disabled={busy} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={async event => {
+      <AlertDialogFooter><AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" disabled={busy} onClick={async event => {
         event.preventDefault(); setBusy(true); setError("");
         try {
           const eligibility = await request<{ allowed: boolean; reason?: string }>(`/admin/${kind}/${id}/deletion`);
