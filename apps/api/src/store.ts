@@ -19,6 +19,7 @@ import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
 import { createEntityId } from "./lib/id";
 import { buildUsageSummary, type DeploymentUsage, type UsageCount } from "./usage-summary";
 import { buildAdminDashboard, type DashboardAudit } from "./admin-dashboard";
+import type { AdminMutationAudit } from "./admin-mutation-audit";
 
 export type StoredActivationToken = { id: string; tokenHash: string; tokenCiphertext: string; expiresAt: Date | null };
 export type TokenRecord = { id: string; expiresAt: Date | null; createdAt: Date; usedAt: Date | null; revokedAt: Date | null; canCopy: boolean; credentialStatus: "Active" | "Revoked" | "Expired" | null };
@@ -41,23 +42,23 @@ export interface ScoringStore {
   bindAssessment(input: BindingInput): Promise<BoundAssessment>;
   rules: RuleStore;
   deletionStatus(kind: RecordKind, id: string): Promise<DeletionStatus>;
-  deleteUnused(kind: RecordKind, id: string): Promise<DeletionStatus>;
+  deleteUnused(kind: RecordKind, id: string, audit?: AdminMutationAudit): Promise<DeletionStatus>;
   overview(): Promise<{ clients: Client[]; deployments: Deployment[]; entitlements: Array<EntitlementInput & { deploymentId: string }>; assignments: VersionAssignment[]; versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault?: boolean }> }>;
   dashboard(now: Date): Promise<ReturnType<typeof buildAdminDashboard>>;
   usageByDeployment(clientId: string, now: Date): Promise<DeploymentUsage[]>;
   usageByRule(clientId?: string): Promise<RuleUsage[]>;
-  createClient(input: CreateClient): Promise<Client>;
-  setClientEnabled(id: string, enabled: boolean): Promise<boolean>;
-  saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken): Promise<Deployment | null>;
-  createDeployment(input: CreateDeployment): Promise<Deployment>;
-  setDeploymentEnabled(id: string, enabled: boolean): Promise<boolean>;
-  setEntitlement(deploymentId: string, input: EntitlementInput): Promise<void>;
-  assignVersion(deploymentId: string, input: VersionAssignmentInput): Promise<void>;
-  storeActivationToken(input: StoredActivationToken & { deploymentId: string }): Promise<void>;
+  createClient(input: CreateClient, audit?: AdminMutationAudit): Promise<Client>;
+  setClientEnabled(id: string, enabled: boolean, audit?: AdminMutationAudit): Promise<boolean>;
+  saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken, audit?: AdminMutationAudit): Promise<Deployment | null>;
+  createDeployment(input: CreateDeployment, audit?: AdminMutationAudit): Promise<Deployment>;
+  setDeploymentEnabled(id: string, enabled: boolean, audit?: AdminMutationAudit): Promise<boolean>;
+  setEntitlement(deploymentId: string, input: EntitlementInput, audit?: AdminMutationAudit): Promise<void>;
+  assignVersion(deploymentId: string, input: VersionAssignmentInput, audit?: AdminMutationAudit): Promise<void>;
+  storeActivationToken(input: StoredActivationToken & { deploymentId: string }, audit?: AdminMutationAudit): Promise<void>;
   getActivationToken(deploymentId: string, now: Date, tokenId?: string): Promise<{ tokenCiphertext: string; expiresAt: Date | null } | null>;
   listActivationTokens(deploymentId: string): Promise<TokenRecord[]>;
-  revokeActivationToken(deploymentId: string, tokenId: string, now: Date): Promise<boolean>;
-  revokeTokenCredential(deploymentId: string, tokenId: string, now: Date): Promise<CredentialRevocation>;
+  revokeActivationToken(deploymentId: string, tokenId: string, now: Date, audit?: AdminMutationAudit): Promise<boolean>;
+  revokeTokenCredential(deploymentId: string, tokenId: string, now: Date, audit?: AdminMutationAudit): Promise<CredentialRevocation>;
   exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }): Promise<{ deploymentId: string; clientId: string } | null>;
   authenticateDeployment(keyPrefix: string, secretHash: string): Promise<DeploymentIdentity | null>;
   reserveUsage(input: ReserveInput): Promise<UsageReservation>;
@@ -76,7 +77,7 @@ export class MemoryScoringStore implements ScoringStore {
   bindings: AssessmentBinding[] = [];
   rules = new MemoryRuleStore(id => this.bindings.some(b => b.ruleVersionId === id) || this.assignments.some(a => a.mode === "PINNED" && a.scoringRuleVersionId === id));
   async deletionStatus(kind: RecordKind, id: string) { return memoryDeletion(this, kind, id); }
-  async deleteUnused(kind: RecordKind, id: string) { return memoryDeletion(this, kind, id, true); }
+  async deleteUnused(kind: RecordKind, id: string, audit?: AdminMutationAudit) { return memoryDeletion(this, kind, id, true, audit); }
   clients: Client[] = [];
   deployments: Deployment[] = [];
   entitlements: Array<EntitlementInput & { deploymentId: string }> = [];
@@ -86,6 +87,10 @@ export class MemoryScoringStore implements ScoringStore {
   usages: Usage[] = [];
   faceScans: Array<{ id: string; state: "REQUESTED"; clientId: string; deploymentId: string }> = [];
   auditEvents: DashboardAudit[] = [];
+  adminMutationEvents: Array<AdminMutationAudit & { action: string; resourceType: string; resourceId: string; metadata: Record<string, unknown> }> = [];
+  private logAdmin(audit: AdminMutationAudit | undefined, action: string, resourceType: string, resourceId: string, metadata: Record<string, unknown> = {}) {
+    if (audit) this.adminMutationEvents.push({ ...audit, action, resourceType, resourceId, metadata });
+  }
 
   versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault: boolean }> = [{ id: "01K4ZJ9QJ7F3TWHDW1B1T6A4YV", version: PROVISIONAL_SCORING_VERSION, lifecycle: "DRAFT", clinicalUsePermitted: false, isDefault: false }];
   async overview() { return { clients: this.clients, deployments: this.deployments, entitlements: this.entitlements, assignments: this.assignments, versions: [...this.versions, ...await this.rules.list()] }; }
@@ -129,33 +134,40 @@ export class MemoryScoringStore implements ScoringStore {
       count,
     })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }
-  async createClient(input: CreateClient) { if (this.clients.some(client => client.name.trim().toLowerCase() === input.name.trim().toLowerCase())) throw new DuplicateClientNameError(); const value = { id: createEntityId(), ...input, enabled: true }; this.clients.push(value); return value; }
-  async setClientEnabled(id: string, enabled: boolean) { const row = this.clients.find((item) => item.id === id); if (!row) return false; row.enabled = enabled; return true; }
-  async createDeployment(input: CreateDeployment) { const value = { id: createEntityId(), ...input, enabled: true, hostingType: null }; this.deployments.push(value); return value; }
-  async saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken) {
+  async createClient(input: CreateClient, audit?: AdminMutationAudit) { if (this.clients.some(client => client.name.trim().toLowerCase() === input.name.trim().toLowerCase())) throw new DuplicateClientNameError(); const value = { id: createEntityId(), ...input, enabled: true }; this.clients.push(value); this.logAdmin(audit, "CLIENT_CREATED", "CLIENT", value.id, { name: input.name }); return value; }
+  async setClientEnabled(id: string, enabled: boolean, audit?: AdminMutationAudit) { const row = this.clients.find((item) => item.id === id); if (!row) return false; const before = row.enabled; row.enabled = enabled; if (before !== enabled) this.logAdmin(audit, "CLIENT_STATUS_CHANGED", "CLIENT", id, { before, after: enabled }); return true; }
+  async createDeployment(input: CreateDeployment, audit?: AdminMutationAudit) { const value = { id: createEntityId(), ...input, enabled: true, hostingType: null }; this.deployments.push(value); this.logAdmin(audit, "DEPLOYMENT_CREATED", "DEPLOYMENT", value.id, { clientId: input.clientId, name: input.name, environment: input.environment }); return value; }
+  async saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken, audit?: AdminMutationAudit) {
     this.checkAssignment(id, input.versionAssignment);
     const existing = id ? this.deployments.find(d => d.id === id && d.clientId === input.clientId) : null;
     if (id && !existing) return null;
+    const before = existing ? { ...existing } : null;
     const deployment = existing ?? await this.createDeployment({ name: input.name, clientId: input.clientId, environment: input.environment });
     Object.assign(deployment, { name: input.name, environment: input.environment, hostingType: input.hostingType, enabled: input.enabled });
     await this.setEntitlement(deployment.id, { capability: "SCORING", ...input.scoring });
     await this.setEntitlement(deployment.id, { capability: "FACE_SCAN", ...input.faceScan });
     await this.assignVersion(deployment.id, input.versionAssignment);
     if (activation) await this.storeActivationToken({ ...activation, deploymentId: deployment.id });
+    this.logAdmin(audit, id ? "DEPLOYMENT_CONFIGURATION_UPDATED" : "DEPLOYMENT_CREATED", "DEPLOYMENT", deployment.id, {
+      clientId: input.clientId, before,
+      after: { name: input.name, environment: input.environment, hostingType: input.hostingType, enabled: input.enabled, scoring: input.scoring, faceScan: input.faceScan, versionAssignment: input.versionAssignment },
+      ...(activation ? { activationTokenId: activation.id, activationExpiresAt: activation.expiresAt } : {}),
+    });
     return deployment;
   }
-  async setDeploymentEnabled(id: string, enabled: boolean) { const row = this.deployments.find((item) => item.id === id); if (!row) return false; row.enabled = enabled; return true; }
-  async setEntitlement(deploymentId: string, input: EntitlementInput) { this.entitlements = this.entitlements.filter((item) => item.deploymentId !== deploymentId || item.capability !== input.capability); this.entitlements.push({ deploymentId, ...input }); }
+  async setDeploymentEnabled(id: string, enabled: boolean, audit?: AdminMutationAudit) { const row = this.deployments.find((item) => item.id === id); if (!row) return false; const before = row.enabled; row.enabled = enabled; if (before !== enabled) this.logAdmin(audit, "DEPLOYMENT_STATUS_CHANGED", "DEPLOYMENT", id, { before, after: enabled }); return true; }
+  async setEntitlement(deploymentId: string, input: EntitlementInput, audit?: AdminMutationAudit) { const before = this.entitlements.find(item => item.deploymentId === deploymentId && item.capability === input.capability); this.entitlements = this.entitlements.filter((item) => item.deploymentId !== deploymentId || item.capability !== input.capability); this.entitlements.push({ deploymentId, ...input }); this.logAdmin(audit, "DEPLOYMENT_ENTITLEMENT_UPDATED", "DEPLOYMENT", deploymentId, { capability: input.capability, before: before ?? null, after: input }); }
   private checkAssignment(deploymentId: string | null, input: VersionAssignmentInput) {
     if (input.mode !== "PINNED") return;
     if (this.assignments.some(a => a.deploymentId === deploymentId && a.mode === "PINNED" && a.scoringRuleVersionId === input.scoringRuleVersionId)) return;
     if (this.versions.some(v => v.id === input.scoringRuleVersionId && v.version === PROVISIONAL_SCORING_VERSION)) return;
     if (!this.rules.records.some(r => r.id === input.scoringRuleVersionId && eligibleRule(r))) throw new RuleStoreError("VERSION_UNAVAILABLE");
   }
-  async assignVersion(deploymentId: string, input: VersionAssignmentInput) { this.checkAssignment(deploymentId, input); this.assignments = this.assignments.filter((item) => item.deploymentId !== deploymentId); this.assignments.push({ deploymentId, ...input }); }
-  async storeActivationToken(input: StoredActivationToken & { deploymentId: string }) {
+  async assignVersion(deploymentId: string, input: VersionAssignmentInput, audit?: AdminMutationAudit) { this.checkAssignment(deploymentId, input); const before = this.assignments.find(item => item.deploymentId === deploymentId); this.assignments = this.assignments.filter((item) => item.deploymentId !== deploymentId); this.assignments.push({ deploymentId, ...input }); this.logAdmin(audit, "DEPLOYMENT_RULE_ASSIGNED", "DEPLOYMENT", deploymentId, { before: before ?? null, after: input }); }
+  async storeActivationToken(input: StoredActivationToken & { deploymentId: string }, audit?: AdminMutationAudit) {
     for (const token of this.activations) if (token.deploymentId === input.deploymentId && !token.usedAt && !token.revokedAt) { token.revokedAt = new Date(); token.tokenCiphertext = null; }
     this.activations.push({ ...input, credentialId: null, usedAt: null, revokedAt: null, createdAt: new Date() });
+    this.logAdmin(audit, "ACTIVATION_TOKEN_CREATED", "ACTIVATION_TOKEN", input.id, { deploymentId: input.deploymentId, expiresAt: input.expiresAt });
   }
   async getActivationToken(deploymentId: string, now: Date, tokenId?: string) {
     const token = this.activations.find(token => token.deploymentId === deploymentId && !token.usedAt && !token.revokedAt && (!tokenId || token.id === tokenId) && (!token.expiresAt || token.expiresAt > now) && token.tokenCiphertext);
@@ -167,17 +179,18 @@ export class MemoryScoringStore implements ScoringStore {
       return { id: t.id, expiresAt: t.expiresAt, createdAt: t.createdAt, usedAt: t.usedAt, revokedAt: t.revokedAt, canCopy: Boolean(t.tokenCiphertext), credentialStatus: credential ? credential.revokedAt ? "Revoked" as const : credential.expiresAt && credential.expiresAt <= new Date() ? "Expired" as const : "Active" as const : null };
     }).reverse();
   }
-  async revokeActivationToken(deploymentId: string, tokenId: string, now: Date) {
+  async revokeActivationToken(deploymentId: string, tokenId: string, now: Date, audit?: AdminMutationAudit) {
     const token = this.activations.find(t => t.deploymentId === deploymentId && t.id === tokenId && !t.usedAt && !t.revokedAt);
     if (!token) return false;
-    token.revokedAt = now; token.tokenCiphertext = null; return true;
+    token.revokedAt = now; token.tokenCiphertext = null; this.logAdmin(audit, "ACTIVATION_TOKEN_REVOKED", "ACTIVATION_TOKEN", tokenId, { deploymentId }); return true;
   }
-  async revokeTokenCredential(deploymentId: string, tokenId: string, now: Date): Promise<CredentialRevocation> {
+  async revokeTokenCredential(deploymentId: string, tokenId: string, now: Date, audit?: AdminMutationAudit): Promise<CredentialRevocation> {
     const token = this.activations.find(t => t.id === tokenId && t.deploymentId === deploymentId && t.usedAt && t.credentialId);
     const credential = this.credentials.find(c => c.credentialId === token?.credentialId && c.deploymentId === deploymentId);
     if (!credential) return "UNAVAILABLE";
     if (credential.revokedAt) return "ALREADY_REVOKED";
     credential.revokedAt = now;
+    this.logAdmin(audit, "DEPLOYMENT_CREDENTIAL_REVOKED", "DEPLOYMENT_CREDENTIAL", credential.credentialId, { deploymentId, tokenId });
     return "REVOKED";
   }
   async exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {

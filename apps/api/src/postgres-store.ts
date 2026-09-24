@@ -14,6 +14,7 @@ import { decideEntitlement, type Capability } from "@niq-scoring/entitlements";
 import { createEntityId } from "./lib/id";
 import { buildUsageSummary, type DeploymentUsage, type UsageCount } from "./usage-summary";
 import { buildAdminDashboard, type DashboardUsageEvent, type DashboardActivation } from "./admin-dashboard";
+import { recordAdminMutation, type AdminMutationAudit } from "./admin-mutation-audit";
 import type { Deployment, DeploymentIdentity, Client, ScoringStore, UsageReservation, RuleUsage } from "./store";
 
 type Database = ReturnType<typeof postgres>;
@@ -22,7 +23,7 @@ export class PostgresScoringStore implements ScoringStore {
   async organizationInfo(identity: DeploymentIdentity, now: Date) { return postgresOrganizationInfo(this.database, identity, now); }
   async bindAssessment(input: BindingInput) { return postgresBindAssessment(this.database, input); }
   async deletionStatus(kind: RecordKind, id: string) { return postgresDeletion(this.database, kind, id); }
-  async deleteUnused(kind: RecordKind, id: string) { return postgresDeletion(this.database, kind, id, true); }
+  async deleteUnused(kind: RecordKind, id: string, audit?: AdminMutationAudit) { return postgresDeletion(this.database, kind, id, true, audit); }
   readonly rules: PostgresRuleStore;
   constructor(private readonly database: Database) { this.rules = new PostgresRuleStore(database); }
 
@@ -87,23 +88,38 @@ export class PostgresScoringStore implements ScoringStore {
     return [...rows];
   }
 
-  async createClient(input: CreateClient) {
-    const id = createEntityId();
-    const [row] = await this.database<Client[]>`insert into clients (id, name) values (${id}, ${input.name}) on conflict (lower(btrim(name))) do nothing returning id, name, enabled`;
-    if (!row) throw new DuplicateClientNameError();
-    return row;
+  async createClient(input: CreateClient, audit?: AdminMutationAudit) {
+    return this.database.begin(async tx => {
+      const id = createEntityId();
+      const [row] = await tx<Client[]>`insert into clients (id, name) values (${id}, ${input.name}) on conflict (lower(btrim(name))) do nothing returning id, name, enabled`;
+      if (!row) throw new DuplicateClientNameError();
+      await recordAdminMutation(tx, audit, "CLIENT_CREATED", "CLIENT", id, { name: input.name });
+      return row;
+    });
   }
-  async setClientEnabled(id: string, enabled: boolean) { const rows = await this.database`update clients set enabled=${enabled}, updated_at=now() where id=${id} returning id`; return rows.length === 1; }
-  async createDeployment(input: CreateDeployment) {
+  async setClientEnabled(id: string, enabled: boolean, audit?: AdminMutationAudit) {
+    return this.database.begin(async tx => {
+      const [prior] = await tx<Array<{ enabled: boolean }>>`select enabled from clients where id=${id} for update`;
+      if (!prior) return false;
+      if (prior.enabled === enabled) return true;
+      await tx`update clients set enabled=${enabled}, updated_at=now() where id=${id}`;
+      await recordAdminMutation(tx, audit, "CLIENT_STATUS_CHANGED", "CLIENT", id, { before: prior.enabled, after: enabled });
+      return true;
+    });
+  }
+  async createDeployment(input: CreateDeployment, audit?: AdminMutationAudit) {
     return this.database.begin(async (tx) => {
       const id = createEntityId();
       const [row] = await tx<Deployment[]>`insert into deployments (id, client_id, name, environment) values (${id}, ${input.clientId}, ${input.name}, ${input.environment}) returning id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled`;
+      await recordAdminMutation(tx, audit, "DEPLOYMENT_CREATED", "DEPLOYMENT", id, { clientId: input.clientId, name: input.name, environment: input.environment });
       return row!;
     });
   }
-  async saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken) {
+  async saveDeploymentConfiguration(id: string | null, input: DeploymentConfiguration, activation?: StoredActivationToken, audit?: AdminMutationAudit) {
     return this.database.begin(async tx => {
       const deploymentId = id ?? createEntityId();
+      const [before] = id ? await tx<Deployment[]>`select id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled from deployments where id=${id} and client_id=${input.clientId} for update` : [];
+      const beforeEntitlements: Array<{ capability: string; enabled: boolean; monthlyLimit: number | null }> = [];
       const [deployment] = id
         ? await tx<Deployment[]>`update deployments set name=${input.name}, environment=${input.environment}, hosting_type=${input.hostingType}, enabled=${input.enabled}, updated_at=now() where id=${id} and client_id=${input.clientId} returning id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled`
         : await tx<Deployment[]>`insert into deployments (id,client_id,name,environment,hosting_type,enabled) values (${deploymentId},${input.clientId},${input.name},${input.environment},${input.hostingType},${input.enabled}) returning id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled`;
@@ -112,40 +128,63 @@ export class PostgresScoringStore implements ScoringStore {
       for (const capability of ["SCORING", "FACE_SCAN"] as const) {
         const setting = capability === "SCORING" ? input.scoring : input.faceScan;
         await tx`select pg_advisory_xact_lock(hashtext(${`${deploymentId}:${capability}`}))`;
+        const [prior] = await tx<Array<{ capability: string; enabled: boolean; monthlyLimit: number | null }>>`select capability,enabled,monthly_limit as "monthlyLimit" from entitlements where deployment_id=${deploymentId} and capability=${capability} and effective_until is null`;
+        if (prior) beforeEntitlements.push(prior);
         await tx`update entitlements set effective_until=clock_timestamp(), updated_at=clock_timestamp() where deployment_id=${deploymentId} and capability=${capability} and effective_until is null`;
         await tx`insert into entitlements (id,deployment_id,capability,enabled,monthly_limit) values (${createEntityId()},${deploymentId},${capability},${setting.enabled},${setting.monthlyLimit})`;
       }
       const policy = input.versionAssignment;
       await tx`select pg_advisory_xact_lock(hashtext(${`version:${deploymentId}`}))`;
       await assertAssignmentEligible(tx, deploymentId, policy);
+      const [beforeAssignment] = await tx<Array<{ mode: string; scoringRuleVersionId: string | null }>>`select mode,scoring_rule_version_id as "scoringRuleVersionId" from deployment_version_assignments where deployment_id=${deploymentId} and effective_until is null`;
       await tx`update deployment_version_assignments set effective_until=clock_timestamp() where deployment_id=${deploymentId} and effective_until is null`;
       await tx`insert into deployment_version_assignments (id,deployment_id,mode,scoring_rule_version_id) values (${createEntityId()},${deploymentId},${policy.mode},${policy.mode === "PINNED" ? policy.scoringRuleVersionId : null})`;
       if (activation) await tx`insert into activation_tokens (id,deployment_id,token_hash,token_ciphertext,expires_at) values (${activation.id},${deploymentId},${activation.tokenHash},${activation.tokenCiphertext},${activation.expiresAt})`;
+      await recordAdminMutation(tx, audit, id ? "DEPLOYMENT_CONFIGURATION_UPDATED" : "DEPLOYMENT_CREATED", "DEPLOYMENT", deploymentId, {
+        clientId: input.clientId,
+        before: before ? { name: before.name, environment: before.environment, hostingType: before.hostingType, enabled: before.enabled, entitlements: beforeEntitlements, versionAssignment: beforeAssignment ?? null } : null,
+        after: { name: input.name, environment: input.environment, hostingType: input.hostingType, enabled: input.enabled, scoring: input.scoring, faceScan: input.faceScan, versionAssignment: policy },
+        ...(activation ? { activationTokenId: activation.id, activationExpiresAt: activation.expiresAt } : {}),
+      });
       return deployment;
     });
   }
-  async setDeploymentEnabled(id: string, enabled: boolean) { const rows = await this.database`update deployments set enabled=${enabled}, updated_at=now() where id=${id} returning id`; return rows.length === 1; }
-  async setEntitlement(deploymentId: string, input: EntitlementInput) {
-    await this.database.begin(async (tx) => {
-      await tx`select pg_advisory_xact_lock(hashtext(${`${deploymentId}:${input.capability}`}))`;
-      await tx`update entitlements set effective_until=now(), updated_at=now() where deployment_id=${deploymentId} and capability=${input.capability} and effective_until is null`;
-      await tx`insert into entitlements (id, deployment_id, capability, enabled, monthly_limit) values (${createEntityId()}, ${deploymentId}, ${input.capability}, ${input.enabled}, ${input.monthlyLimit})`;
+  async setDeploymentEnabled(id: string, enabled: boolean, audit?: AdminMutationAudit) {
+    return this.database.begin(async tx => {
+      const [prior] = await tx<Array<{ enabled: boolean }>>`select enabled from deployments where id=${id} for update`;
+      if (!prior) return false;
+      if (prior.enabled === enabled) return true;
+      await tx`update deployments set enabled=${enabled}, updated_at=now() where id=${id}`;
+      await recordAdminMutation(tx, audit, "DEPLOYMENT_STATUS_CHANGED", "DEPLOYMENT", id, { before: prior.enabled, after: enabled });
+      return true;
     });
   }
-  async assignVersion(deploymentId: string, input: VersionAssignmentInput) {
+  async setEntitlement(deploymentId: string, input: EntitlementInput, audit?: AdminMutationAudit) {
+    await this.database.begin(async (tx) => {
+      await tx`select pg_advisory_xact_lock(hashtext(${`${deploymentId}:${input.capability}`}))`;
+      const [before] = await tx<Array<{ enabled: boolean; monthlyLimit: number | null }>>`select enabled,monthly_limit as "monthlyLimit" from entitlements where deployment_id=${deploymentId} and capability=${input.capability} and effective_until is null`;
+      await tx`update entitlements set effective_until=now(), updated_at=now() where deployment_id=${deploymentId} and capability=${input.capability} and effective_until is null`;
+      await tx`insert into entitlements (id, deployment_id, capability, enabled, monthly_limit) values (${createEntityId()}, ${deploymentId}, ${input.capability}, ${input.enabled}, ${input.monthlyLimit})`;
+      await recordAdminMutation(tx, audit, "DEPLOYMENT_ENTITLEMENT_UPDATED", "DEPLOYMENT", deploymentId, { capability: input.capability, before: before ?? null, after: { enabled: input.enabled, monthlyLimit: input.monthlyLimit } });
+    });
+  }
+  async assignVersion(deploymentId: string, input: VersionAssignmentInput, audit?: AdminMutationAudit) {
     await this.database.begin(async (tx) => {
       await tx`select pg_advisory_xact_lock(hashtext(${`version:${deploymentId}`}))`;
       await assertAssignmentEligible(tx, deploymentId, input);
+      const [before] = await tx<Array<{ mode: string; scoringRuleVersionId: string | null }>>`select mode,scoring_rule_version_id as "scoringRuleVersionId" from deployment_version_assignments where deployment_id=${deploymentId} and effective_until is null`;
       await tx`update deployment_version_assignments set effective_until=now() where deployment_id=${deploymentId} and effective_until is null`;
       await tx`insert into deployment_version_assignments (id, deployment_id, mode, scoring_rule_version_id) values (${createEntityId()}, ${deploymentId}, ${input.mode}, ${input.mode === "PINNED" ? input.scoringRuleVersionId : null})`;
+      await recordAdminMutation(tx, audit, "DEPLOYMENT_RULE_ASSIGNED", "DEPLOYMENT", deploymentId, { before: before ?? null, after: input });
     });
   }
-  async storeActivationToken(input: StoredActivationToken & { deploymentId: string }) {
+  async storeActivationToken(input: StoredActivationToken & { deploymentId: string }, audit?: AdminMutationAudit) {
     await this.database.begin(async tx => {
       // Serialize replacement requests so only the latest unused token survives.
       await tx`select id from deployments where id=${input.deploymentId} for update`;
-      await tx`update activation_tokens set revoked_at=now(), token_ciphertext=null where deployment_id=${input.deploymentId} and used_at is null and revoked_at is null`;
+      const replaced = await tx<Array<{ id: string }>>`update activation_tokens set revoked_at=now(), token_ciphertext=null where deployment_id=${input.deploymentId} and used_at is null and revoked_at is null returning id`;
       await tx`insert into activation_tokens (id,deployment_id,token_hash,token_ciphertext,expires_at) values (${input.id},${input.deploymentId},${input.tokenHash},${input.tokenCiphertext},${input.expiresAt})`;
+      await recordAdminMutation(tx, audit, "ACTIVATION_TOKEN_CREATED", "ACTIVATION_TOKEN", input.id, { deploymentId: input.deploymentId, expiresAt: input.expiresAt, replacedTokenIds: replaced.map(row => row.id) });
     });
   }
   async getActivationToken(deploymentId: string, now: Date, tokenId?: string) {
@@ -155,16 +194,21 @@ export class PostgresScoringStore implements ScoringStore {
   async listActivationTokens(deploymentId: string) {
     return this.database<TokenRecord[]>`select token.id, token.expires_at as "expiresAt", token.created_at as "createdAt", token.used_at as "usedAt", token.revoked_at as "revokedAt", (token.token_ciphertext is not null) as "canCopy", case when credential.id is null then null when credential.revoked_at is not null then 'Revoked' when credential.expires_at is not null and credential.expires_at<=now() then 'Expired' else 'Active' end as "credentialStatus" from activation_tokens token left join deployment_credentials credential on credential.id=token.credential_id and credential.deployment_id=token.deployment_id where token.deployment_id=${deploymentId} order by token.created_at desc, token.id desc`;
   }
-  async revokeActivationToken(deploymentId: string, tokenId: string, now: Date) {
-    const rows = await this.database`update activation_tokens set revoked_at=${now}, token_ciphertext=null where deployment_id=${deploymentId} and id=${tokenId} and used_at is null and revoked_at is null returning id`;
-    return rows.length > 0;
+  async revokeActivationToken(deploymentId: string, tokenId: string, now: Date, audit?: AdminMutationAudit) {
+    return this.database.begin(async tx => {
+      const rows = await tx`update activation_tokens set revoked_at=${now}, token_ciphertext=null where deployment_id=${deploymentId} and id=${tokenId} and used_at is null and revoked_at is null returning id`;
+      if (!rows.length) return false;
+      await recordAdminMutation(tx, audit, "ACTIVATION_TOKEN_REVOKED", "ACTIVATION_TOKEN", tokenId, { deploymentId });
+      return true;
+    });
   }
-  async revokeTokenCredential(deploymentId: string, tokenId: string, now: Date): Promise<CredentialRevocation> {
+  async revokeTokenCredential(deploymentId: string, tokenId: string, now: Date, audit?: AdminMutationAudit): Promise<CredentialRevocation> {
     return this.database.begin(async tx => {
       const [credential] = await tx<Array<{ id: string; revokedAt: Date | null }>>`select credential.id, credential.revoked_at as "revokedAt" from activation_tokens token join deployment_credentials credential on credential.id=token.credential_id and credential.deployment_id=token.deployment_id where token.deployment_id=${deploymentId} and token.id=${tokenId} and token.used_at is not null for update of credential`;
       if (!credential) return "UNAVAILABLE";
       if (credential.revokedAt) return "ALREADY_REVOKED";
       await tx`update deployment_credentials set revoked_at=${now} where id=${credential.id} and deployment_id=${deploymentId}`;
+      await recordAdminMutation(tx, audit, "DEPLOYMENT_CREDENTIAL_REVOKED", "DEPLOYMENT_CREDENTIAL", credential.id, { deploymentId, tokenId });
       return "REVOKED";
     });
   }

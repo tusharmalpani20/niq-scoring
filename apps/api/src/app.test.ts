@@ -57,6 +57,24 @@ describe("scoring API", () => {
     expect(dashboard.clients).toEqual([expect.objectContaining({ id: client.id })]);
   });
 
+  test("admin mutations record their actor without preventing unused record deletion", async () => {
+    const { app, store } = setup();
+    const headers = { ...adminHeaders, "x-request-id": "admin-mutation-request" };
+    const clientResponse = await app.request("/admin/clients", { method: "POST", headers, body: JSON.stringify({ name: "Audited client" }) });
+    expect(clientResponse.status).toBe(201);
+    const client = await clientResponse.json() as { id: string };
+    const deploymentResponse = await app.request("/admin/deployments", { method: "POST", headers, body: JSON.stringify({ clientId: client.id, name: "Production", environment: "production" }) });
+    expect(deploymentResponse.status).toBe(201);
+    const deployment = await deploymentResponse.json() as { id: string };
+    expect(store.adminMutationEvents.map(event => event.action)).toEqual(["CLIENT_CREATED", "DEPLOYMENT_CREATED"]);
+    expect(store.adminMutationEvents.every(event => event.actorId === "01J00000000000000000000001" && event.requestId === "admin-mutation-request")).toBe(true);
+    expect((await app.request(`/admin/deployments/${deployment.id}/enabled`, { method: "PATCH", headers, body: JSON.stringify({ enabled: "invalid" }) })).status).toBe(400);
+    expect(store.adminMutationEvents).toHaveLength(2);
+    expect((await app.request(`/admin/deployments/${deployment.id}`, { method: "DELETE", headers })).status).toBe(200);
+    expect((await app.request(`/admin/clients/${client.id}`, { method: "DELETE", headers })).status).toBe(200);
+    expect(store.adminMutationEvents.map(event => event.action)).toEqual(["CLIENT_CREATED", "DEPLOYMENT_CREATED", "DEPLOYMENT_DELETED", "CLIENT_DELETED"]);
+  });
+
   test("client usage reports successful deployment events and six UTC months", async () => {
     const { app, store } = setup();
     const client = await store.createClient({ name: "Apollo" });

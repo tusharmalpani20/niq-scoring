@@ -16,6 +16,7 @@ import {
 } from "@niq-scoring/contracts";
 import { calculateProvisionalScore } from "@niq-scoring/scoring-engine";
 import { installAdminAuth } from "./admin-auth";
+import { adminMutationAudit, type AdminMutationAudit } from "./admin-mutation-audit";
 import { type AdminAuthStore } from "./admin-auth-store";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
@@ -98,7 +99,7 @@ export function createApp(options: AppOptions) {
   app.post("/admin/clients", async (context) => {
     const parsed = createClientSchema.safeParse(await parseJson(context));
     if (!parsed.success) return context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
-    try { return context.json(await options.store.createClient(parsed.data), 201); }
+    try { return context.json(await options.store.createClient(parsed.data, adminMutationAudit(context)), 201); }
     catch (error) {
       if (error instanceof DuplicateClientNameError) return context.json({ error: "CLIENT_NAME_EXISTS" }, 409);
       throw error;
@@ -134,7 +135,7 @@ export function createApp(options: AppOptions) {
         return context.json({ error: "DEPLOYMENT_NAME_EXISTS" }, 409);
       }
       try {
-        const saved = await options.store.saveDeploymentConfiguration(id, { ...parsed.data, name }, activation?.stored);
+        const saved = await options.store.saveDeploymentConfiguration(id, { ...parsed.data, name }, activation?.stored, adminMutationAudit(context));
         context.header("cache-control", "no-store");
         return saved ? context.json({ ...saved, ...(activation ? { activation: activation.public } : {}) }, id ? 200 : 201) : context.json({ error: "DEPLOYMENT_NOT_FOUND" }, 404);
       } catch (error) {
@@ -148,14 +149,14 @@ export function createApp(options: AppOptions) {
   app.put("/admin/deployments/:id/configuration", context => saveDeploymentConfiguration(context, context.req.param("id")));
   app.post("/admin/deployments", async (context) => {
     const parsed = createDeploymentSchema.safeParse(await parseJson(context));
-    return parsed.success ? context.json(await options.store.createDeployment(parsed.data), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+    return parsed.success ? context.json(await options.store.createDeployment(parsed.data, adminMutationAudit(context)), 201) : context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
   });
   app.patch("/admin/deployments/:id/enabled", async (context) => updateEnabled(context, options.store.setDeploymentEnabled.bind(options.store)));
   app.put("/admin/deployments/:id/entitlement", async (context) => {
     const id = ulidSchema.safeParse(context.req.param("id")); const body = entitlementInputSchema.safeParse(await parseJson(context));
     if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
     if (!(await options.store.overview()).deployments.some(d => d.id === id.data)) return context.json({ error: "NOT_FOUND" }, 404);
-    await options.store.setEntitlement(id.data, body.data); return context.json({ deploymentId: id.data, ...body.data });
+    await options.store.setEntitlement(id.data, body.data, adminMutationAudit(context)); return context.json({ deploymentId: id.data, ...body.data });
   });
   app.put("/admin/deployments/:id/version-assignment", async (context) => {
     const id = ulidSchema.safeParse(context.req.param("id")); const body = versionAssignmentInputSchema.safeParse(await parseJson(context));
@@ -168,7 +169,7 @@ export function createApp(options: AppOptions) {
       const unchanged = overview.assignments.some(a => a.deploymentId === id.data && a.mode === "PINNED" && a.scoringRuleVersionId === pin);
       if (!selected || !unchanged && !(selected.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(selected.lifecycle) || provisionalScoringEnabled && selected.version === PROVISIONAL_SCORING_VERSION)) return context.json({ error: "VERSION_UNAVAILABLE" }, 409);
     }
-    await options.store.assignVersion(id.data, body.data); return context.json({ deploymentId: id.data, ...body.data });
+    await options.store.assignVersion(id.data, body.data, adminMutationAudit(context)); return context.json({ deploymentId: id.data, ...body.data });
   });
   function tokenExpiryDate(input: { expiresAt?: string | null | undefined; expiresInMinutes?: number | undefined }): Date | null | false {
     if (input.expiresAt === null) return null;
@@ -200,7 +201,7 @@ export function createApp(options: AppOptions) {
     const expiresAt = tokenExpiryDate(body.data);
     if (expiresAt === false) return context.json({ error: "INVALID_TOKEN_EXPIRY" }, 400);
     const activation = await newActivation(expiresAt);
-    await options.store.storeActivationToken({ ...activation.stored, deploymentId: id.data });
+    await options.store.storeActivationToken({ ...activation.stored, deploymentId: id.data }, adminMutationAudit(context));
     return context.json(activation.public, 201);
   });
 
@@ -223,13 +224,13 @@ export function createApp(options: AppOptions) {
   app.delete("/admin/deployments/:id/activation-tokens/:tokenId", async context => {
     const id = ulidSchema.safeParse(context.req.param("id")); const tokenId = ulidSchema.safeParse(context.req.param("tokenId"));
     if (!id.success || !tokenId.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    return await options.store.revokeActivationToken(id.data, tokenId.data, now()) ? context.json({ revoked: true }) : context.json({ error: "TOKEN_UNAVAILABLE" }, 409);
+    return await options.store.revokeActivationToken(id.data, tokenId.data, now(), adminMutationAudit(context)) ? context.json({ revoked: true }) : context.json({ error: "TOKEN_UNAVAILABLE" }, 409);
   });
   app.delete("/admin/deployments/:id/activation-tokens/:tokenId/credential", async context => {
     context.header("cache-control", "no-store");
     const id = ulidSchema.safeParse(context.req.param("id")); const tokenId = ulidSchema.safeParse(context.req.param("tokenId"));
     if (!id.success || !tokenId.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    const result = await options.store.revokeTokenCredential(id.data, tokenId.data, now());
+    const result = await options.store.revokeTokenCredential(id.data, tokenId.data, now(), adminMutationAudit(context));
     return result === "REVOKED" ? context.json({ revoked: true })
       : result === "ALREADY_REVOKED" ? context.json({ error: "CREDENTIAL_ALREADY_REVOKED" }, 409)
       : context.json({ error: "CREDENTIAL_UNAVAILABLE" }, 404);
@@ -274,8 +275,8 @@ export function createApp(options: AppOptions) {
   return app;
 }
 
-async function updateEnabled(context: Context, update: (id: string, enabled: boolean) => Promise<boolean>) {
+async function updateEnabled(context: Context, update: (id: string, enabled: boolean, audit?: AdminMutationAudit) => Promise<boolean>) {
   const id = ulidSchema.safeParse(context.req.param("id")); const body = updateEnabledSchema.safeParse(await parseJson(context));
   if (!id.success || !body.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-  return (await update(id.data, body.data.enabled)) ? context.json({ id: id.data, ...body.data }) : context.json({ error: "NOT_FOUND" }, 404);
+  return (await update(id.data, body.data.enabled, adminMutationAudit(context))) ? context.json({ id: id.data, ...body.data }) : context.json({ error: "NOT_FOUND" }, 404);
 }

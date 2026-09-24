@@ -2,13 +2,14 @@ import type postgres from "postgres";
 import type { Hono } from "hono";
 import { ulidSchema } from "@niq-scoring/contracts";
 import type { MemoryScoringStore } from "./store";
+import { adminMutationAudit, recordAdminMutation, type AdminMutationAudit } from "./admin-mutation-audit";
 
 export type RecordKind = "clients" | "deployments";
 export type DeletionStatus = { allowed: boolean; reason?: string; missing?: boolean };
 const used = { allowed: false, reason: "This record has been activated or used. Disable it instead." };
 const missing = { allowed: false, missing: true, reason: "This record no longer exists." };
 
-export function memoryDeletion(store: MemoryScoringStore, kind: RecordKind, id: string, remove = false): DeletionStatus {
+export function memoryDeletion(store: MemoryScoringStore, kind: RecordKind, id: string, remove = false, audit?: AdminMutationAudit): DeletionStatus {
   if (!store[kind].some(row => row.id === id)) return missing;
   const history = store as MemoryScoringStore & { auditEvents?: Array<{ clientId?: string; deploymentId?: string }> };
   const scans = store.faceScans as Array<{ clientId?: string; deploymentId?: string }>;
@@ -28,10 +29,11 @@ export function memoryDeletion(store: MemoryScoringStore, kind: RecordKind, id: 
       store.deployments = store.deployments.filter(row => row.id !== id);
     }
   }
+  if (remove && audit) store.adminMutationEvents.push({ ...audit, action: kind === "clients" ? "CLIENT_DELETED" : "DEPLOYMENT_DELETED", resourceType: kind === "clients" ? "CLIENT" : "DEPLOYMENT", resourceId: id, metadata: {} });
   return { allowed: true };
 }
 
-export async function postgresDeletion(database: ReturnType<typeof postgres>, kind: RecordKind, id: string, remove = false): Promise<DeletionStatus> {
+export async function postgresDeletion(database: ReturnType<typeof postgres>, kind: RecordKind, id: string, remove = false, audit?: AdminMutationAudit): Promise<DeletionStatus> {
   try {
     return await database.begin(async tx => {
       // Lock tokens before their parent, matching activation exchange. Parent locks
@@ -57,6 +59,7 @@ export async function postgresDeletion(database: ReturnType<typeof postgres>, ki
           await tx`delete from deployments where id=${id}`;
         }
       }
+      if (remove) await recordAdminMutation(tx, audit, kind === "clients" ? "CLIENT_DELETED" : "DEPLOYMENT_DELETED", kind === "clients" ? "CLIENT" : "DEPLOYMENT", id);
       return { allowed: true };
     });
   } catch (error) {
@@ -68,7 +71,7 @@ export async function postgresDeletion(database: ReturnType<typeof postgres>, ki
 
 export function installRecordDeletion(app: Hono, store: {
   deletionStatus(kind: RecordKind, id: string): Promise<DeletionStatus>;
-  deleteUnused(kind: RecordKind, id: string): Promise<DeletionStatus>;
+    deleteUnused(kind: RecordKind, id: string, audit?: AdminMutationAudit): Promise<DeletionStatus>;
 }) {
   for (const kind of ["clients", "deployments"] as const) {
     app.get(`/admin/${kind}/:id/deletion`, async c => {
@@ -78,7 +81,7 @@ export function installRecordDeletion(app: Hono, store: {
     });
     app.delete(`/admin/${kind}/:id`, async c => {
       if (!ulidSchema.safeParse(c.req.param("id")).success) return c.json({ error: "INVALID_REQUEST" }, 400);
-      const result = await store.deleteUnused(kind, c.req.param("id"));
+      const result = await store.deleteUnused(kind, c.req.param("id"), c.get("adminUserId") ? adminMutationAudit(c) : undefined);
       return c.json(result.allowed ? { deleted: true } : { error: result.missing ? "NOT_FOUND" : "RECORD_IN_USE", ...result }, result.allowed ? 200 : result.missing ? 404 : 409);
     });
   }
