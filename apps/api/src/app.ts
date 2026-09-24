@@ -12,7 +12,7 @@ import {
   activationExchangeSchema, activationTokenInputSchema, calculateRequestSchema,
    deploymentConfigurationRequestSchema, createDeploymentSchema,
   createClientSchema, entitlementInputSchema, PROVISIONAL_SCORING_VERSION,
-  PROVISIONAL_VERSION_STATUS, ulidSchema, updateEnabledSchema, versionAssignmentInputSchema,
+  PROVISIONAL_VERSION_STATUS, suggestDeploymentLabel, ulidSchema, updateEnabledSchema, versionAssignmentInputSchema,
 } from "@niq-scoring/contracts";
 import { calculateProvisionalScore } from "@niq-scoring/scoring-engine";
 import { installAdminAuth } from "./admin-auth";
@@ -117,30 +117,32 @@ export function createApp(options: AppOptions) {
     if (existing && (existing.environment !== parsed.data.environment || (existing.hostingType && existing.hostingType !== parsed.data.hostingType))) {
       return context.json({ error: "DEPLOYMENT_IDENTITY_IMMUTABLE" }, 409);
     }
-    const clientSlug = client.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) || "client";
-    const hosting = parsed.data.hostingType === "NIQ_HOSTED" ? "niq" : "client-cloud";
-    const input = {
-      ...parsed.data,
-      name: existing?.name ?? `${clientSlug}-${parsed.data.environment}-${hosting}-${crypto.randomUUID().slice(0, 8)}`,
-    };
-    const policy = input.versionAssignment;
+    const policy = parsed.data.versionAssignment;
     if (policy.mode === "PINNED") {
       const selected = current.versions.find(v => v.id === policy.scoringRuleVersionId);
       const unchanged = current.assignments.some(a => a.deploymentId === id && a.mode === "PINNED" && a.scoringRuleVersionId === policy.scoringRuleVersionId);
       if (!selected || !unchanged && !(selected.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(selected.lifecycle) || provisionalScoringEnabled && selected.version === PROVISIONAL_SCORING_VERSION)) return context.json({ error: "VERSION_UNAVAILABLE" }, 409);
     }
-    try {
-      if (!id && !options.activationTokenEncryptionKey) return context.json({ error: "TOKEN_STORAGE_UNAVAILABLE" }, 503);
-      const expiresAt = tokenExpiryDate(parsed.data.tokenExpiry);
-      if (!id && expiresAt === false) return context.json({ error: "INVALID_TOKEN_EXPIRY" }, 400);
-      const activation = id ? undefined : await newActivation(expiresAt === false ? null : expiresAt);
-      const saved = await options.store.saveDeploymentConfiguration(id, input, activation?.stored);
-      context.header("cache-control", "no-store");
-      return saved ? context.json({ ...saved, ...(activation ? { activation: activation.public } : {}) }, id ? 200 : 201) : context.json({ error: "DEPLOYMENT_NOT_FOUND" }, 404);
-    } catch (error) {
-      if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") return context.json({ error: "DEPLOYMENT_NAME_EXISTS" }, 409);
-      throw error;
+    if (!id && !options.activationTokenEncryptionKey) return context.json({ error: "TOKEN_STORAGE_UNAVAILABLE" }, 503);
+    const expiresAt = tokenExpiryDate(parsed.data.tokenExpiry);
+    if (!id && expiresAt === false) return context.json({ error: "INVALID_TOKEN_EXPIRY" }, 400);
+    const activation = id ? undefined : await newActivation(expiresAt === false ? null : expiresAt);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const deployments = attempt ? (await options.store.overview()).deployments : current.deployments;
+      const name = parsed.data.name ?? existing?.name ?? suggestDeploymentLabel(deployments, client.id, parsed.data.environment);
+      if (deployments.some(item => item.clientId === client.id && item.id !== id && item.name.trim().toLowerCase() === name.toLowerCase())) {
+        return context.json({ error: "DEPLOYMENT_NAME_EXISTS" }, 409);
+      }
+      try {
+        const saved = await options.store.saveDeploymentConfiguration(id, { ...parsed.data, name }, activation?.stored);
+        context.header("cache-control", "no-store");
+        return saved ? context.json({ ...saved, ...(activation ? { activation: activation.public } : {}) }, id ? 200 : 201) : context.json({ error: "DEPLOYMENT_NOT_FOUND" }, 404);
+      } catch (error) {
+        if (typeof error !== "object" || error === null || !("code" in error) || error.code !== "23505") throw error;
+        if (id || parsed.data.name || attempt === 2) return context.json({ error: "DEPLOYMENT_NAME_EXISTS" }, 409);
+      }
     }
+    return context.json({ error: "DEPLOYMENT_NAME_EXISTS" }, 409);
   }
   app.post("/admin/deployments/configuration", context => saveDeploymentConfiguration(context, null));
   app.put("/admin/deployments/:id/configuration", context => saveDeploymentConfiguration(context, context.req.param("id")));

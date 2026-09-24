@@ -123,10 +123,23 @@ export const activationTokenInputSchema = z.object({
 }).refine(value => value.expiresAt === undefined || value.expiresInMinutes === undefined, {
   message: "Choose one expiry option.",
 });
-// Admin callers choose configuration; display names are server-generated.
 export const deploymentConfigurationRequestSchema = deploymentConfigurationSchema.omit({ name: true }).extend({
+  name: z.string().trim().min(2).max(120).optional(),
   tokenExpiry: activationTokenInputSchema.default({ expiresInMinutes: 10080 }),
 });
+
+export function suggestDeploymentLabel(deployments: Array<{ clientId: string; name: string; environment: string }>, clientId: string, environment: string) {
+  const base = environment.charAt(0).toUpperCase() + environment.slice(1);
+  const siblings = deployments.filter(item => item.clientId === clientId);
+  const names = new Set(siblings.map(item => item.name.trim().toLowerCase()));
+  let number = siblings.filter(item => item.environment === environment).length + 1;
+  let name = number === 1 ? base : `${base} ${number}`;
+  while (names.has(name.toLowerCase())) {
+    number += 1;
+    name = `${base} ${number}`;
+  }
+  return name;
+}
 export type DeploymentConfiguration = z.infer<typeof deploymentConfigurationSchema>;
 
 export const activationExchangeSchema = z.object({

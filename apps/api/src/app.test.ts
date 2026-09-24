@@ -223,18 +223,24 @@ describe("scoring API", () => {
     expect((await update({ ...input, name: "Final name" })).status).toBe(200);
     expect((await update({ ...input, environment: "staging" })).status).toBe(409);
     expect((await update({ ...input, hostingType: "NIQ_HOSTED" })).status).toBe(409);
-    expect(store.deployments.find(d => d.id === deployment.id)).toMatchObject({ name: "Apollo Production", environment: "production", hostingType: "CLIENT_CLOUD" });
+    expect(store.deployments.find(d => d.id === deployment.id)).toMatchObject({ name: "Final name", environment: "production", hostingType: "CLIENT_CLOUD" });
     expect(store.usages).toHaveLength(1);
     const created = await app.request("/admin/deployments/configuration", jsonRequest(input));
     expect(created.status).toBe(201);
     const saved = await created.json() as { id: string; name: string };
-    expect(saved.name).toMatch(/^apollo-group-production-client-cloud-[a-f0-9]{8}$/);
+    expect(saved.name).toBe("Production 2");
+    expect((await update({ ...input, name: "production 2" })).status).toBe(409);
+    expect(store.deployments.find(d => d.id === deployment.id)?.name).toBe("Final name");
     expect(saved).not.toHaveProperty("region");
     expect(store.entitlements.filter(e => e.deploymentId === saved.id)).toHaveLength(2);
     expect(store.assignments.find(a => a.deploymentId === saved.id)?.mode).toBe("PINNED");
     const again = await app.request("/admin/deployments/configuration", jsonRequest(input));
     expect(again.status).toBe(201);
-    expect((await again.json() as { name: string }).name).not.toBe(saved.name);
+    expect((await again.json() as { name: string }).name).toBe("Production 3");
+    const custom = await app.request("/admin/deployments/configuration", jsonRequest({ ...input, name: "Main production" }));
+    expect(custom.status).toBe(201);
+    expect((await custom.json() as { name: string }).name).toBe("Main production");
+    expect((await app.request("/admin/deployments/configuration", jsonRequest({ ...input, name: "main production" }))).status).toBe(409);
   });
 
   test("recovers unused activation tokens and replaces them without disconnecting credentials", async () => {
