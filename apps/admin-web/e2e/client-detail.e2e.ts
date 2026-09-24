@@ -1,8 +1,13 @@
 import { test, expect } from "@playwright/test";
 
 test("client opens a detail page with usage and its deployments", async ({ page }) => {
+  let credentialRevoked = false;
   await page.route("**/api/**", route => {
     const path = new URL(route.request().url()).pathname;
+    if (path === "/api/admin/deployments/d1/activation-tokens/used12/credential" && route.request().method() === "DELETE") {
+      credentialRevoked = true;
+      return route.fulfill({ json: { revoked: true } });
+    }
     if (path === "/api/auth/status") return route.fulfill({ json: { setupRequired: false } });
     if (path === "/api/auth/session") return route.fulfill({ json: { user: { id: "qa", displayName: "Browser QA", enabled: true } } });
     if (path === "/api/admin/overview") return route.fulfill({ json: {
@@ -16,10 +21,11 @@ test("client opens a detail page with usage and its deployments", async ({ page 
       { month: "2026-08", assessments: 3, vitalIq: 1 }, { month: "2026-09", assessments: 4, vitalIq: 1 },
     ] }] } });
     if (path === "/api/admin/deployments/d1/activation-tokens") return route.fulfill({ json: { tokens: [
-      { id: "unused1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Unused", canCopy: true },
-      { id: "used12", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Used", canCopy: false },
-      { id: "revoked1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Revoked", canCopy: false },
-      { id: "expired1", createdAt: "2026-09-14T00:00:00Z", expiresAt: "2026-09-15T00:00:00Z", status: "Expired", canCopy: false },
+      { id: "unused1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Unused", canCopy: true, credentialStatus: null },
+      { id: "used12", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Used", canCopy: false, credentialStatus: credentialRevoked ? "Revoked" : "Active" },
+      { id: "legacy1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Used", canCopy: false, credentialStatus: null },
+      { id: "revoked1", createdAt: "2026-09-14T00:00:00Z", expiresAt: null, status: "Revoked", canCopy: false, credentialStatus: null },
+      { id: "expired1", createdAt: "2026-09-14T00:00:00Z", expiresAt: "2026-09-15T00:00:00Z", status: "Expired", canCopy: false, credentialStatus: null },
     ] } });
     return route.fulfill({ status: 404, json: { error: "NOT_FOUND" } });
   });
@@ -52,6 +58,16 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("columnheader", { name: "Actions" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Unused/ }).getByRole("button", { name: "Revoke token" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Revoked/ }).getByLabel("No actions available")).toBeVisible();
+  await expect(page.getByRole("row", { name: /egacy1/ }).getByText("Access link unavailable")).toBeVisible();
+  await page.getByRole("button", { name: "Revoke access for token NIQ …used12" }).click();
+  await expect(page.getByRole("alertdialog")).toContainText("Other installations stay connected");
+  await page.getByRole("alertdialog").getByRole("button", { name: "Cancel" }).click();
+  expect(credentialRevoked).toBe(false);
+  await page.getByRole("button", { name: "Revoke access for token NIQ …used12" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Revoke access" }).click();
+  await expect(page.getByRole("row", { name: /used12/ }).getByText("Access revoked")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Revoke access for token NIQ …used12" })).toHaveCount(0);
+  expect(credentialRevoked).toBe(true);
   await page.getByRole("button", { name: "Create token" }).click();
   await expect(page.getByText("A new token replaces any unused token.")).toBeVisible();
   await page.getByRole("region", { name: "Activation tokens" }).getByRole("button", { name: "Cancel" }).click();
