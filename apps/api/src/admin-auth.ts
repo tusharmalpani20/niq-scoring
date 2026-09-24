@@ -103,8 +103,15 @@ export function installAdminAuth(
       .safeParse(await json(c));
     if (!body.success) return c.json({ error: "INVALID_REQUEST" }, 400);
     if (await store.hasUsers()) return c.json({ error: "SETUP_COMPLETE" }, 409);
-    if (!(await store.consumeAttempt("setup", now().toISOString(), 10)))
+    const setupAttempt = await store.consumeAttempt(
+      "setup",
+      now().toISOString(),
+      10,
+    );
+    if (!setupAttempt.allowed) {
+      c.header("Retry-After", String(setupAttempt.retryAfterSeconds));
       return c.json({ error: "RATE_LIMITED" }, 429);
+    }
     if (
       !options.adminBootstrapToken ||
       hash(body.data.setupToken) !== hash(options.adminBootstrapToken)
@@ -126,15 +133,15 @@ export function installAdminAuth(
       })
       .safeParse(await json(c));
     if (!body.success) return c.json({ error: "INVALID_REQUEST" }, 400);
-    if (
-      !(await store.consumeAttempt("login-global", now().toISOString(), 100)) ||
-      !(await store.consumeAttempt(
-        `login:${hash(body.data.email)}`,
-        now().toISOString(),
-        10,
-      ))
-    )
+    const loginAttempt = await store.consumeAttempt(
+      `login:${hash(body.data.email)}`,
+      now().toISOString(),
+      10,
+    );
+    if (!loginAttempt.allowed) {
+      c.header("Retry-After", String(loginAttempt.retryAfterSeconds));
       return c.json({ error: "RATE_LIMITED" }, 429);
+    }
     const user = await store.findUser(body.data.email);
     const valid = await Bun.password.verify(
       body.data.password,

@@ -264,7 +264,9 @@ describe("NIQ named administrator authentication", () => {
           })
         ).status,
       ).toBe(401);
-    expect((await f.setup()).status).toBe(429);
+    const limitedSetup = await f.setup();
+    expect(limitedSetup.status).toBe(429);
+    expect(limitedSetup.headers.get("retry-after")).toBe("900");
     f.advance(900_001);
     expect((await f.setup()).status).toBe(201);
   });
@@ -280,11 +282,45 @@ describe("NIQ named administrator authentication", () => {
           })
         ).status,
       ).toBe(401);
+    const limitedLogin = await f.request("/auth/login", {
+      email: "admin@niq.test",
+      password,
+    });
+    expect(limitedLogin.status).toBe(429);
+    expect(limitedLogin.headers.get("retry-after")).toBe("900");
     expect(
-      (await f.request("/auth/login", { email: "admin@niq.test", password }))
-        .status,
+      f.authStore.state.attempts.map((attempt) => attempt.key),
+    ).not.toContain("login-global");
+    f.advance(300_000);
+    const stillLimited = await f.request("/auth/login", {
+      email: "admin@niq.test",
+      password,
+    });
+    expect(stillLimited.status).toBe(429);
+    expect(stillLimited.headers.get("retry-after")).toBe("600");
+    f.advance(600_001);
+    await f.login();
+  });
+  test("attempts against another account do not block a valid admin", async () => {
+    const f = fixture();
+    await f.setup();
+    for (let i = 0; i < 10; i++)
+      expect(
+        (
+          await f.request("/auth/login", {
+            email: "unknown@niq.test",
+            password: "incorrect",
+          })
+        ).status,
+      ).toBe(401);
+    expect(
+      (
+        await f.request("/auth/login", {
+          email: "unknown@niq.test",
+          password: "incorrect",
+        })
+      ).status,
     ).toBe(429);
-    f.advance(900_001);
     await f.login();
   });
 });

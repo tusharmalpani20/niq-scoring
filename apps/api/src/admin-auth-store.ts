@@ -26,11 +26,15 @@ export interface AuthAudit {
   resourceId?: string;
   requestId: string;
 }
+export interface AttemptResult {
+  allowed: boolean;
+  retryAfterSeconds: number;
+}
 export interface AdminAuthStore {
   hasUsers(): Promise<boolean>;
   findUser(email: string): Promise<AdminUser | undefined>;
   sessionUser(tokenHash: string, now: string): Promise<AdminUser | undefined>;
-  consumeAttempt(key: string, now: string, limit: number): Promise<boolean>;
+  consumeAttempt(key: string, now: string, limit: number): Promise<AttemptResult>;
   bootstrap(user: AdminUser, audit: AuthAudit): Promise<boolean>;
   createSession(session: AdminSession, audit: AuthAudit): Promise<boolean>;
   logout(tokenHash: string, audit: AuthAudit): Promise<void>;
@@ -88,7 +92,13 @@ export class MemoryAdminAuthStore implements AdminAuthStore {
       };
       this.state.attempts.push(a);
     }
-    return ++a.count <= limit;
+    return {
+      allowed: ++a.count <= limit,
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil((Date.parse(a.expiresAt) - Date.parse(now)) / 1000),
+      ),
+    };
   }
   async bootstrap(user: AdminUser, audit: AuthAudit) {
     if (this.state.users.length) return false;
@@ -210,15 +220,19 @@ export class PostgresAdminAuthStore implements AdminAuthStore {
     return r ? normalize(r) : undefined;
   }
   async consumeAttempt(key: string, now: string, limit: number) {
-    // One cleanup on the shared budget bounds rows left by arbitrary-email attacks.
-    if (key === "login-global") {
-      await this
-        .sql`delete from admin_auth_attempts where expires_at <= ${now} and key in (select key from admin_auth_attempts where expires_at <= ${now} limit 1000)`;
-    }
+    // Bound rows left by attempts against arbitrary email addresses.
+    await this
+      .sql`delete from admin_auth_attempts where key in (select key from admin_auth_attempts where expires_at <= ${now} limit 1000)`;
     const expiresAt = new Date(Date.parse(now) + 900_000).toISOString();
     const [r] = await this
-      .sql`insert into admin_auth_attempts (key,count,expires_at) values (${key},1,${expiresAt}) on conflict (key) do update set count = case when admin_auth_attempts.expires_at <= ${now} then 1 else admin_auth_attempts.count + 1 end, expires_at = case when admin_auth_attempts.expires_at <= ${now} then ${expiresAt} else admin_auth_attempts.expires_at end returning count`;
-    return r!.count <= limit;
+      .sql`insert into admin_auth_attempts (key,count,expires_at) values (${key},1,${expiresAt}) on conflict (key) do update set count = case when admin_auth_attempts.expires_at <= ${now} then 1 else admin_auth_attempts.count + 1 end, expires_at = case when admin_auth_attempts.expires_at <= ${now} then ${expiresAt} else admin_auth_attempts.expires_at end returning count,expires_at`;
+    return {
+      allowed: r!.count <= limit,
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil((new Date(r!.expires_at).getTime() - Date.parse(now)) / 1000),
+      ),
+    };
   }
   async bootstrap(user: AdminUser, event: AuthAudit) {
     let created = false;
