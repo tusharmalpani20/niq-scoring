@@ -89,7 +89,7 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
       setBusy(false);
       return;
     }
-    const result = { id: saved.id, created: !deployment, activation: saved.activation };
+    const result = { id: saved.id, created: !deployment, ...(saved.activation ? { activation: saved.activation } : {}) };
     setPendingCreate(null);
     setSavedId(saved.id);
     setSavedResult(result);

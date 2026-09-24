@@ -43,7 +43,7 @@ function AllowanceUsage({ label, usage }: { label: string; usage: Allowance }) {
   </div>;
 }
 
-function AllowanceCell({ usage }: { usage?: Allowance }) {
+function AllowanceCell({ usage }: { usage: Allowance | undefined }) {
   if (!usage) return <span className="text-muted-foreground">—</span>;
   if (!usage.available) return <span className="text-muted-foreground">Unavailable</span>;
   return <div className="space-y-0.5"><p className="tabular-nums">{usage.allowanceUsed.toLocaleString()} used · {usage.limit === null ? "Unlimited" : `${usage.limit.toLocaleString()} limit`}</p><p className="text-xs text-muted-foreground">{usage.completed.toLocaleString()} completed</p></div>;
