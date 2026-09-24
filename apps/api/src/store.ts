@@ -20,7 +20,7 @@ import { createEntityId } from "./lib/id";
 import { buildUsageSummary, type DeploymentUsage, type UsageCount } from "./usage-summary";
 
 export type StoredActivationToken = { id: string; tokenHash: string; tokenCiphertext: string; expiresAt: Date | null };
-export type TokenRecord = { id: string; expiresAt: Date | null; createdAt: Date; usedAt: Date | null; revokedAt: Date | null; canCopy: boolean; credentialStatus: "Active" | "Revoked" | null };
+export type TokenRecord = { id: string; expiresAt: Date | null; createdAt: Date; usedAt: Date | null; revokedAt: Date | null; canCopy: boolean; credentialStatus: "Active" | "Revoked" | "Expired" | null };
 export type CredentialRevocation = "REVOKED" | "ALREADY_REVOKED" | "UNAVAILABLE";
 export type Client = CreateClient & { id: string; enabled: boolean };
 export type Deployment = CreateDeployment & { id: string; enabled: boolean; hostingType: DeploymentConfiguration["hostingType"] | null };
@@ -135,7 +135,7 @@ export class MemoryScoringStore implements ScoringStore {
   async listActivationTokens(deploymentId: string): Promise<TokenRecord[]> {
     return this.activations.filter(t => t.deploymentId === deploymentId).map(t => {
       const credential = this.credentials.find(c => c.credentialId === t.credentialId && c.deploymentId === deploymentId);
-      return { id: t.id, expiresAt: t.expiresAt, createdAt: t.createdAt, usedAt: t.usedAt, revokedAt: t.revokedAt, canCopy: Boolean(t.tokenCiphertext), credentialStatus: credential ? credential.revokedAt ? "Revoked" as const : "Active" as const : null };
+      return { id: t.id, expiresAt: t.expiresAt, createdAt: t.createdAt, usedAt: t.usedAt, revokedAt: t.revokedAt, canCopy: Boolean(t.tokenCiphertext), credentialStatus: credential ? credential.revokedAt ? "Revoked" as const : credential.expiresAt && credential.expiresAt <= new Date() ? "Expired" as const : "Active" as const : null };
     }).reverse();
   }
   async revokeActivationToken(deploymentId: string, tokenId: string, now: Date) {

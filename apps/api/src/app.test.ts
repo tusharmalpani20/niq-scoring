@@ -101,7 +101,7 @@ describe("scoring API", () => {
   test("revokes only the credential issued by a used token", async () => {
     const { app, store, client, deployment, credential } = await onboard();
     const base = `/admin/deployments/${deployment.id}/activation-tokens`;
-    const listed = async () => (await (await app.request(base, { headers: adminHeaders })).json() as { tokens: Array<{ id: string; status: string; credentialStatus: "Active" | "Revoked" | null }> }).tokens;
+    const listed = async () => (await (await app.request(base, { headers: adminHeaders })).json() as { tokens: Array<{ id: string; status: string; credentialStatus: "Active" | "Revoked" | "Expired" | null }> }).tokens;
     const first = (await listed()).find(token => token.status === "Used")!;
     expect(first.credentialStatus).toBe("Active");
 
@@ -122,10 +122,17 @@ describe("scoring API", () => {
     expect((await app.request(revoke, { method: "DELETE", headers: adminHeaders })).status).toBe(409);
 
     // Older used tokens cannot be reliably attributed to a credential.
+    const secondLink = store.activations.find(token => token.id === second.id)!.credentialId;
     store.activations.find(token => token.id === second.id)!.credentialId = null;
     expect((await listed()).find(token => token.id === second.id)?.credentialStatus).toBeNull();
     expect((await app.request(`${base}/${second.id}/credential`, { method: "DELETE", headers: adminHeaders })).status).toBe(404);
     expect((await app.request("/v1/metadata", { headers: { authorization: `Bearer ${secondCredential}` } })).status).toBe(200);
+
+    // A linked credential can expire independently of its spent activation token.
+    store.activations.find(token => token.id === second.id)!.credentialId = secondLink;
+    store.credentials.find(item => item.credentialId === secondLink)!.expiresAt = new Date(0);
+    expect((await listed()).find(token => token.id === second.id)?.credentialStatus).toBe("Expired");
+    expect((await app.request("/v1/metadata", { headers: { authorization: `Bearer ${secondCredential}` } })).status).toBe(401);
   });
 
   test("deployment limits are independent and issuing another credential does not reset usage", async () => {

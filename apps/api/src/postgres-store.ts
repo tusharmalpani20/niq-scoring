@@ -112,7 +112,7 @@ export class PostgresScoringStore implements ScoringStore {
     return token ?? null;
   }
   async listActivationTokens(deploymentId: string) {
-    return this.database<TokenRecord[]>`select token.id, token.expires_at as "expiresAt", token.created_at as "createdAt", token.used_at as "usedAt", token.revoked_at as "revokedAt", (token.token_ciphertext is not null) as "canCopy", case when credential.id is null then null when credential.revoked_at is null then 'Active' else 'Revoked' end as "credentialStatus" from activation_tokens token left join deployment_credentials credential on credential.id=token.credential_id and credential.deployment_id=token.deployment_id where token.deployment_id=${deploymentId} order by token.created_at desc, token.id desc`;
+    return this.database<TokenRecord[]>`select token.id, token.expires_at as "expiresAt", token.created_at as "createdAt", token.used_at as "usedAt", token.revoked_at as "revokedAt", (token.token_ciphertext is not null) as "canCopy", case when credential.id is null then null when credential.revoked_at is not null then 'Revoked' when credential.expires_at is not null and credential.expires_at<=now() then 'Expired' else 'Active' end as "credentialStatus" from activation_tokens token left join deployment_credentials credential on credential.id=token.credential_id and credential.deployment_id=token.deployment_id where token.deployment_id=${deploymentId} order by token.created_at desc, token.id desc`;
   }
   async revokeActivationToken(deploymentId: string, tokenId: string, now: Date) {
     const rows = await this.database`update activation_tokens set revoked_at=${now}, token_ciphertext=null where deployment_id=${deploymentId} and id=${tokenId} and used_at is null and revoked_at is null returning id`;
