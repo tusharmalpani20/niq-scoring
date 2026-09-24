@@ -90,7 +90,7 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByRole("row", { name: /ldkey1/ }).getByText("Expired")).toBeVisible();
   await expect(page.getByRole("row", { name: /ldkey1/ }).getByLabel("No actions available")).toBeVisible();
   await page.getByRole("row", { name: /nused1/ }).getByRole("button", { name: "Revoke token" }).click();
-  await expect(page.getByRole("alertdialog")).toContainText("Already connected installations will keep working.");
+  await expect(page.getByRole("alertdialog")).toContainText("Credentials issued from other tokens remain valid.");
   await expect(page.getByRole("alertdialog").getByRole("button", { name: "Revoke token" })).toHaveAttribute("data-variant", "destructive");
   await page.getByRole("alertdialog").getByRole("button", { name: "Cancel" }).click();
   expect(unusedTokenRevoked).toBe(false);
