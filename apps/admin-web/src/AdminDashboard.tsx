@@ -70,7 +70,7 @@ export function AdminDashboard({ overview }: { overview: Overview }) {
   const metrics: Array<{ label: string; key: keyof Counts }> = [
     { label: "Assessments scored", key: "assessments" },
     { label: "Vital IQ scans completed", key: "faceScans" },
-    { label: "Recorded failures", key: "failedRequests" },
+    { label: "Scoring & scan failures", key: "failedRequests" },
   ];
   return <div className="space-y-6">
     <section aria-labelledby="attention-title" className="space-y-3"><div className="flex items-baseline justify-between gap-3"><h2 id="attention-title" className="text-lg font-semibold">Needs attention</h2><span className="text-xs text-muted-foreground">Current checks</span></div>
