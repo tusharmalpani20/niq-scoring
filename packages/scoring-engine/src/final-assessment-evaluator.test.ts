@@ -125,6 +125,14 @@ describe("client-confirmed assessment", () => {
       expect(evaluateFinalAssessment(definition, { previous_surgeries: "previous_surgeries_yes", previous_surgery_count: count }).classification?.label).toBe(label);
     }
   });
+  test("returns the configured category color and a neutral fallback for older rules", () => {
+    const definition = confirmedTemplate("Color classification");
+    definition.riskCategories[0]!.color = "purple";
+    const answers = { previous_surgeries: "previous_surgeries_no" };
+    expect(evaluateFinalAssessment(definition, answers).classification?.color).toBe("purple");
+    delete definition.riskCategories[0]!.color;
+    expect(evaluateFinalAssessment(definition, answers).classification?.color).toBe("neutral");
+  });
 });
 
 

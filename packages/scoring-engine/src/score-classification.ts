@@ -7,5 +7,5 @@ export function classifyScore(definition: VersionedRuleDefinition, score: number
   const matches = bands.filter(band => inRange(score, band));
   if (matches.length !== 1) return null;
   const band = matches[0]!;
-  return { id: band.id, label: band.label, interpretation: band.interpretation };
+  return { id: band.id, label: band.label, interpretation: band.interpretation, color: "color" in band ? band.color ?? "neutral" : "neutral" };
 }

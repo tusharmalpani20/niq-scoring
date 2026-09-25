@@ -76,9 +76,9 @@ export function createLegacyFinalAssessmentTemplate(name: string): FinalAssessme
       { id: "dietary_intake", label: "Dietary intake change", kind: "select", required: false, options: [option("dietary_intake_normal", "Normal Intake"), option("dietary_intake_more_than_usual", "More than usual"), option("dietary_intake_reduced", "Reduced Intake / less than usual"), option("dietary_intake_liquid", "Liquid Diet"), option("dietary_intake_little_solid", "Little solid food"), option("dietary_intake_tube_feeding", "Tube Feeding")], sources: [source("F126:H152")] },
     ],
     riskCategories: [
-      { id: "low", label: "Low", interpretation: "Temporary development category. Awaiting client confirmation.", min: null, max: 16, minInclusive: true, maxInclusive: false, sources: [source("Development placeholder", "Below 16")] },
-      { id: "moderate", label: "Moderate", interpretation: "Temporary development category. Awaiting client confirmation.", min: 16, max: 26, minInclusive: true, maxInclusive: false, sources: [source("Development placeholder", "16 to below 26")] },
-      { id: "high", label: "High", interpretation: "Temporary development category. Awaiting client confirmation.", min: 26, max: null, minInclusive: true, maxInclusive: true, sources: [source("Development placeholder", "26 and above, unbounded")] },
+      { id: "low", label: "Low", color: "green", interpretation: "Temporary development category. Awaiting client confirmation.", min: null, max: 16, minInclusive: true, maxInclusive: false, sources: [source("Development placeholder", "Below 16")] },
+      { id: "moderate", label: "Moderate", color: "amber", interpretation: "Temporary development category. Awaiting client confirmation.", min: 16, max: 26, minInclusive: true, maxInclusive: false, sources: [source("Development placeholder", "16 to below 26")] },
+      { id: "high", label: "High", color: "red", interpretation: "Temporary development category. Awaiting client confirmation.", min: 26, max: null, minInclusive: true, maxInclusive: true, sources: [source("Development placeholder", "26 and above, unbounded")] },
     ],
     provisional: { status: "DEVELOPMENT_PLACEHOLDER", clinicalUsePermitted: false, notice: "Temporary thresholds — awaiting confirmation. Internal draft evaluation only; blocked from clinical approval and use." },
     interventions: { status: "NOT_APPLICABLE", note: "Interventions are not finalized for the final assessment profile." },
@@ -99,9 +99,9 @@ export function upgradeFinalAssessmentDefinition(input: FinalAssessmentDefinitio
     weight.scoring.bands[2]!.min = 6;
   }
   definition.riskCategories = [
-    { id: "low", label: "Low Risk", interpretation: "", min: 0, max: 15, minInclusive: true, maxInclusive: true, sources: [] },
-    { id: "moderate", label: "Moderate Risk", interpretation: "", min: 16, max: 25, minInclusive: true, maxInclusive: true, sources: [] },
-    { id: "high", label: "High Risk", interpretation: "", min: 25, max: null, minInclusive: false, maxInclusive: false, sources: [] },
+    { id: "low", label: "Low Risk", color: "green", interpretation: "", min: 0, max: 15, minInclusive: true, maxInclusive: true, sources: [] },
+    { id: "moderate", label: "Moderate Risk", color: "amber", interpretation: "", min: 16, max: 25, minInclusive: true, maxInclusive: true, sources: [] },
+    { id: "high", label: "High Risk", color: "red", interpretation: "", min: 25, max: null, minInclusive: false, maxInclusive: false, sources: [] },
   ];
   definition.provisional = { status: "CLIENT_CONFIRMED", clinicalUsePermitted: true, notice: "Scoring categories confirmed by the client. Normal approval is required before use." };
   if (definition.description === createLegacyFinalAssessmentTemplate(input.name).description) definition.description = "Final NIQ assessment scoring profile.";

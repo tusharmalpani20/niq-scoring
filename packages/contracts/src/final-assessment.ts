@@ -5,6 +5,8 @@ import { answerValueSchema, answersSchema, optionSchema, rangeSchema, ruleIdSche
 export const FINAL_ASSESSMENT_PROFILE = "NIQ_FINAL_ASSESSMENT" as const;
 export const FINAL_ASSESSMENT_FORMAT_VERSION = 2 as const;
 export const FINAL_ASSESSMENT_PROVISIONAL_STATUS = "DEVELOPMENT_PLACEHOLDER" as const;
+export const riskCategoryColorSchema = z.enum(["green", "amber", "red", "neutral", "blue", "purple"]);
+export type RiskCategoryColor = z.infer<typeof riskCategoryColorSchema>;
 
 const label = z.string().trim().min(1).max(200);
 const finiteNonNegative = z.number().finite().nonnegative();
@@ -98,6 +100,8 @@ export const finalRiskCategorySchema = rangeSchema.extend({
   id: ruleIdSchema,
   label,
   interpretation: z.string().max(4000),
+  // Older versioned definitions predate category colors.
+  color: riskCategoryColorSchema.optional(),
   sources: sourceList,
 }).strict();
 

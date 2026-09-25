@@ -131,6 +131,7 @@ test("reviewed classification uses final-profile thresholds and rejects uncovere
   const { createFinalAssessmentTemplate } = await import("@niq-scoring/contracts/final-assessment-template");
   const { store, rule, call } = await setup();
   const definition = createFinalAssessmentTemplate("Final reviewed");
+  definition.riskCategories[2]!.color = "purple";
   // This fixture publishes the final profile before its first binding.
   Object.assign(rule, { definition, packageChecksum: ruleChecksum(definition) });
   await call("start", { assessmentReference: "final-reviewed" });
@@ -141,7 +142,7 @@ test("reviewed classification uses final-profile thresholds and rejects uncovere
   expect(store.usages).toHaveLength(0);
   const success = await call("classify-reviewed", { ...input, score: 68 });
   expect(success.status).toBe(200);
-  expect((await success.json()).result).toMatchObject({ score: 68, classification: { id: "high" } });
+  expect((await success.json()).result).toMatchObject({ score: 68, classification: { id: "high", color: "purple" } });
 });
 
 test("reviewed classification cannot access another deployment's binding", async () => {

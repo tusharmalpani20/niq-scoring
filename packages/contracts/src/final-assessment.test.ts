@@ -27,6 +27,15 @@ describe("final assessment profile contract", () => {
     expect(validateFinalAssessmentDefinition(definition).some(issue => issue.code === "FIXED_PROFILE_REQUIRED")).toBe(true);
   });
 
+  test("accepts configured category colors and reads definitions saved before colors existed", () => {
+    const definition = createFinalAssessmentTemplate("Assessment v2");
+    definition.riskCategories[0]!.color = "purple";
+    expect(finalAssessmentDefinitionSchema.safeParse(definition).success).toBe(true);
+    definition.riskCategories[0]!.color = undefined;
+    expect(finalAssessmentDefinitionSchema.safeParse(definition).success).toBe(true);
+    expect(finalAssessmentDefinitionSchema.safeParse({ ...definition, riskCategories: [{ ...definition.riskCategories[0], color: "not-a-color" }, ...definition.riskCategories.slice(1)] }).success).toBe(false);
+  });
+
   test("rejects cap and arbitrary fields through the strict v2 schema", () => {
     const definition = createFinalAssessmentTemplate("Assessment v2");
     expect(finalAssessmentDefinitionSchema.safeParse({ ...definition, cap: 35 }).success).toBe(false);

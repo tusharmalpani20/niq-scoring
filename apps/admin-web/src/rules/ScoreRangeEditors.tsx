@@ -1,6 +1,6 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
+import type { FinalAssessmentDefinition, RiskCategoryColor } from "@niq-scoring/contracts/final-assessment";
 import { faceScanRangeConfigSchema, DEFAULT_FACE_SCAN_SCORING_CONFIG, normalizeFaceScanScoringConfig, type FaceScanRangeConfig } from "@niq-scoring/contracts/face-scan-scoring";
 import { validateFinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment-validation";
 import { Input } from "../components/ui/input";
@@ -9,6 +9,15 @@ import { newRuleId } from "./questionnaire-model";
 
 type DraftProps = { drafts: Record<string, string>; setDrafts: Dispatch<SetStateAction<Record<string, string>>> };
 type EditorProps = DraftProps & { definition: FinalAssessmentDefinition; disabled: boolean; onChange: (definition: FinalAssessmentDefinition) => void };
+
+const riskColors: Array<{ value: RiskCategoryColor; label: string; swatch: string }> = [
+  { value: "green", label: "Green", swatch: "bg-green-600" },
+  { value: "amber", label: "Amber", swatch: "bg-amber-500" },
+  { value: "red", label: "Red", swatch: "bg-red-600" },
+  { value: "neutral", label: "Neutral", swatch: "bg-slate-500" },
+  { value: "blue", label: "Blue", swatch: "bg-blue-600" },
+  { value: "purple", label: "Purple", swatch: "bg-purple-600" },
+];
 
 function NumberCell({ label, draftKey, value, onChange, drafts, setDrafts, percent = false, hideLabel = false }: DraftProps & { label: string; draftKey: string; value: number; percent?: boolean; hideLabel?: boolean; onChange: (value: number) => void }) {
   const raw = drafts[draftKey];
@@ -82,7 +91,7 @@ export function SimpleRiskEditor({ definition, disabled, onChange, drafts, setDr
   }
   const messages = validateFinalAssessmentDefinition(definition).filter(issue => issue.path.startsWith("riskCategories") && issue.code !== "RISK_RANGE_COVERAGE" && issue.code !== "DUPLICATE_CATEGORY_NAME").map(issue => issue.message);
   const clearDraft = (prefix: string) => setDrafts(current => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(prefix))));
-  return <fieldset disabled={disabled} className="min-w-0 space-y-4 rounded-xl border bg-card p-4 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Risk categories</h2><p className="mt-1 text-sm text-muted-foreground">Give each total score a risk category.</p></div><Button type="button" variant="outline" size="sm" disabled={definition.riskCategories.length >= 20} onClick={() => { const id = newRuleId("category"); setEditedRangeId(id); onChange({ ...definition, riskCategories: [...definition.riskCategories, { id, label: "New category", interpretation: "", min: 0, max: null, minInclusive: true, maxInclusive: true, sources: [] }] }); }}><Plus className="size-4" aria-hidden="true" />Add category</Button></div>
+  return <fieldset disabled={disabled} className="min-w-0 space-y-4 rounded-xl border bg-card p-4 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Risk categories</h2><p className="mt-1 text-sm text-muted-foreground">Give each total score a risk category.</p></div><Button type="button" variant="outline" size="sm" disabled={definition.riskCategories.length >= 20} onClick={() => { const id = newRuleId("category"); setEditedRangeId(id); onChange({ ...definition, riskCategories: [...definition.riskCategories, { id, label: "New category", color: "neutral", interpretation: "", min: 0, max: null, minInclusive: true, maxInclusive: true, sources: [] }] }); }}><Plus className="size-4" aria-hidden="true" />Add category</Button></div>
     <div className="divide-y rounded-lg border">{definition.riskCategories.map(category => {
       // Present equivalent inclusive integer endpoints without rewriting historical definitions on render.
       const from = category.min === null ? 0 : Math.max(0, category.minInclusive ? Math.ceil(category.min) : Math.floor(category.min) + 1);
@@ -95,6 +104,7 @@ export function SimpleRiskEditor({ definition, disabled, onChange, drafts, setDr
         </div>
         {rowIssues.length > 0 && <p role="alert" aria-label="Score range issue" className="text-sm text-destructive"><span className="font-medium">Fix this score range.</span> {rowIssues.join(" ")}</p>}
         <label className="block min-w-0 space-y-1 text-sm"><span className="text-xs text-muted-foreground">Category name</span><Input id={`risk-category-name-${category.id}`} className="h-9 shadow-none" value={category.label} aria-invalid={nameIssues.has(category.id)} aria-describedby={nameIssues.has(category.id) ? `risk-category-name-error-${category.id}` : undefined} onChange={event => patch(category.id, { label: event.target.value })} />{nameIssues.has(category.id) && <span id={`risk-category-name-error-${category.id}`} role="alert" className="text-xs text-destructive">{nameIssues.get(category.id)}</span>}</label>
+        <div className="space-y-1.5 text-sm"><p className="text-xs text-muted-foreground">Category color</p><div role="group" aria-label={`Color for ${category.label}`} className="flex flex-wrap gap-2">{riskColors.map(color => <button key={color.value} type="button" aria-pressed={(category.color ?? "neutral") === color.value} onClick={() => patch(category.id, { color: color.value })} className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${(category.color ?? "neutral") === color.value ? "border-primary bg-primary/5 font-semibold" : "border-border"}`}><span aria-hidden="true" className={`size-3 rounded-full ${color.swatch}`} />{color.label}</button>)}</div></div>
         <details className="text-sm"><summary className="cursor-pointer text-primary">Edit score range</summary>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <NumberCell label="From score" draftKey={`risk:${category.id}:from`} value={from} drafts={drafts} setDrafts={setDrafts} onChange={min => patch(category.id, { min, minInclusive: true })} />

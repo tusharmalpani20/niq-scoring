@@ -14,7 +14,7 @@ export type FinalAssessmentEvaluation = {
   profile: typeof FINAL_ASSESSMENT_PROFILE;
   complete: boolean;
   score: number | null;
-  classification: { id: string; label: string; interpretation: string } | null;
+  classification: NonNullable<ReturnType<typeof classifyScore>> | null;
   components: FinalAssessmentComponent[];
   answerCoverage: { totalEntries: 19; answeredEntries: number; unansweredEntries: number; pendingEntries: number; allUnanswered: boolean };
   derived: { weightLossPercent: number | null; proteinAdequacy: "adequate" | "inadequate" | null };
