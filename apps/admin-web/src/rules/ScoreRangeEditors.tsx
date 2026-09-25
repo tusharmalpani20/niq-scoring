@@ -1,5 +1,5 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Check, Plus, Trash2 } from "lucide-react";
 import type { FinalAssessmentDefinition, RiskCategoryColor } from "@niq-scoring/contracts/final-assessment";
 import { faceScanRangeConfigSchema, DEFAULT_FACE_SCAN_SCORING_CONFIG, normalizeFaceScanScoringConfig, type FaceScanRangeConfig } from "@niq-scoring/contracts/face-scan-scoring";
 import { validateFinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment-validation";
@@ -11,12 +11,12 @@ type DraftProps = { drafts: Record<string, string>; setDrafts: Dispatch<SetState
 type EditorProps = DraftProps & { definition: FinalAssessmentDefinition; disabled: boolean; onChange: (definition: FinalAssessmentDefinition) => void };
 
 const riskColors: Array<{ value: RiskCategoryColor; label: string; swatch: string }> = [
-  { value: "green", label: "Green", swatch: "bg-green-600" },
-  { value: "amber", label: "Amber", swatch: "bg-amber-500" },
-  { value: "red", label: "Red", swatch: "bg-red-600" },
-  { value: "neutral", label: "Neutral", swatch: "bg-slate-500" },
-  { value: "blue", label: "Blue", swatch: "bg-blue-600" },
-  { value: "purple", label: "Purple", swatch: "bg-purple-600" },
+  { value: "green", label: "Green", swatch: "bg-green-700" },
+  { value: "amber", label: "Amber", swatch: "bg-amber-700" },
+  { value: "red", label: "Red", swatch: "bg-red-700" },
+  { value: "neutral", label: "Neutral", swatch: "bg-slate-700" },
+  { value: "blue", label: "Blue", swatch: "bg-blue-700" },
+  { value: "purple", label: "Purple", swatch: "bg-purple-700" },
 ];
 
 function NumberCell({ label, draftKey, value, onChange, drafts, setDrafts, percent = false, hideLabel = false }: DraftProps & { label: string; draftKey: string; value: number; percent?: boolean; hideLabel?: boolean; onChange: (value: number) => void }) {
@@ -104,7 +104,10 @@ export function SimpleRiskEditor({ definition, disabled, onChange, drafts, setDr
         </div>
         {rowIssues.length > 0 && <p role="alert" aria-label="Score range issue" className="text-sm text-destructive"><span className="font-medium">Fix this score range.</span> {rowIssues.join(" ")}</p>}
         <label className="block min-w-0 space-y-1 text-sm"><span className="text-xs text-muted-foreground">Category name</span><Input id={`risk-category-name-${category.id}`} className="h-9 shadow-none" value={category.label} aria-invalid={nameIssues.has(category.id)} aria-describedby={nameIssues.has(category.id) ? `risk-category-name-error-${category.id}` : undefined} onChange={event => patch(category.id, { label: event.target.value })} />{nameIssues.has(category.id) && <span id={`risk-category-name-error-${category.id}`} role="alert" className="text-xs text-destructive">{nameIssues.get(category.id)}</span>}</label>
-        <div className="space-y-1.5 text-sm"><p className="text-xs text-muted-foreground">Category color</p><div role="group" aria-label={`Color for ${category.label}`} className="flex flex-wrap gap-2">{riskColors.map(color => <button key={color.value} type="button" aria-pressed={(category.color ?? "neutral") === color.value} onClick={() => patch(category.id, { color: color.value })} className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${(category.color ?? "neutral") === color.value ? "border-primary bg-primary/5 font-semibold" : "border-border"}`}><span aria-hidden="true" className={`size-3 rounded-full ${color.swatch}`} />{color.label}</button>)}</div></div>
+        <div className="space-y-2 text-sm"><p className="text-xs text-muted-foreground">Pick a category color <span className="font-semibold text-foreground">· {category.color ? `Selected: ${riskColors.find(color => color.value === category.color)?.label}` : "Neutral default"}</span></p><div role="group" aria-label={`Color for ${category.label}`} className="flex flex-wrap gap-3">{riskColors.map(color => {
+          const selected = (category.color ?? "neutral") === color.value;
+          return <button key={color.value} type="button" aria-label={`Use ${color.label} for ${category.label}`} aria-pressed={selected} onClick={() => patch(category.id, { color: color.value })} className="flex min-w-12 flex-col items-center gap-1.5 rounded-md text-xs focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"><span aria-hidden="true" className={`flex size-9 items-center justify-center rounded-full ${color.swatch} ${selected ? "ring-2 ring-foreground ring-offset-2 ring-offset-background" : ""}`}>{selected && <Check className="size-5 text-white" strokeWidth={3} />}</span><span className={selected ? "font-semibold text-foreground" : "text-muted-foreground"}>{color.label}</span></button>;
+        })}</div></div>
         <details className="text-sm"><summary className="cursor-pointer text-primary">Edit score range</summary>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <NumberCell label="From score" draftKey={`risk:${category.id}:from`} value={from} drafts={drafts} setDrafts={setDrafts} onChange={min => patch(category.id, { min, minInclusive: true })} />
