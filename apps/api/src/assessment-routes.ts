@@ -33,7 +33,8 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
       if (score !== null && (!Number.isFinite(score) || score < 0 || score > Number.MAX_SAFE_INTEGER)) return c.json({ error: "INVALID_SCORE" }, 422);
       const classification = score === null ? null : classifyScore(definition, score);
       if (score !== null && !classification) return c.json({ error: "UNMATCHED_CLASSIFICATION" }, 422);
-      const result = isFinalAssessmentDefinition(definition) ? { ...resultBase, score, classification, questionnaireScore: evaluated.score, faceScan: input.faceScanSessionId ? { sessionId: input.faceScanSessionId, points: scanPoints! } : null } : resultBase;
+      const result = isFinalAssessmentDefinition(definition) ? { ...resultBase, score, classification, questionnaireScore: evaluated.score, faceScan: input.faceScanSessionId ? { sessionId: input.faceScanSessionId, points: scanPoints! } : null,
+        riskCategories: definition.riskCategories.map(({ id, label, color, min, max, minInclusive, maxInclusive }) => ({ id, label, color, min, max, minInclusive, maxInclusive })) } : resultBase;
       const reservation = await store.reserveUsage({ identity, clientId: identity.clientId, capability: "SCORING", assessmentReference: binding.assessmentReference, idempotencyKey: input.idempotencyKey, platformEnabled, binding, fingerprint: ruleChecksum({ endpoint: "assessment", bindingId: binding.id, checksum: binding.checksum, answers: input.answers, faceScanSessionId: input.faceScanSessionId ?? null }) });
       if (reservation.status === "REJECTED") return c.json({ error: "SCORING_UNAVAILABLE", reason: reservation.reason }, 409);
       if (reservation.status === "DUPLICATE") return c.json(reservation.response as never);

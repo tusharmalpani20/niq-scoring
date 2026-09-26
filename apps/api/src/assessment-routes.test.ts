@@ -145,6 +145,19 @@ test("reviewed classification uses final-profile thresholds and rejects uncovere
   expect((await success.json()).result).toMatchObject({ score: 68, classification: { id: "high", color: "purple" } });
 });
 
+test("final scoring response snapshots the bound version's risk ranges", async () => {
+  const { createFinalAssessmentTemplate } = await import("@niq-scoring/contracts/final-assessment-template");
+  const { rule, call } = await setup();
+  const definition = createFinalAssessmentTemplate("Final range snapshot");
+  Object.assign(rule, { definition, packageChecksum: ruleChecksum(definition) });
+  await call("start", { assessmentReference: "range-snapshot" });
+  const response = await call("calculate", { assessmentReference: "range-snapshot", answers: { previous_surgeries: "previous_surgeries_no" }, idempotencyKey: "range-snapshot-1" });
+  expect(response.status).toBe(200);
+  const payload = await response.json();
+  expect(payload.result.riskCategories).toEqual(definition.riskCategories.map(({ id, label, color, min, max, minInclusive, maxInclusive }) => ({ id, label, color, min, max, minInclusive, maxInclusive })));
+  expect(payload.result.riskCategories[0]).not.toHaveProperty("sources");
+});
+
 test("reviewed classification cannot access another deployment's binding", async () => {
   const { store, client, call, app } = await setup();
   await call("start", { assessmentReference: "private-binding" });
