@@ -17,7 +17,7 @@ import { Label } from "../components/ui/label";
 import { Badge } from "../components/ui/badge";
 import { NativeSelect } from "../components/ui/native-select";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "../components/ui/alert-dialog";
-import { upgradeFinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment-template";
+import { upgradeFinalAssessmentDefinition, withDefaultRiskCategoryColors } from "@niq-scoring/contracts/final-assessment-template";
 import { SimpleRiskEditor, FaceScanEditor } from "./ScoreRangeEditors";
 import { newRuleId } from "./questionnaire-model";
 import type { RuleDetail } from "./rule-api";
@@ -34,6 +34,11 @@ const typeLabel: Record<FinalField["kind"], string> = {
 function parse(value: unknown) {
   const result = finalAssessmentDefinitionSchema.safeParse(value);
   return result.success ? result.data : null;
+}
+
+function editableDefinition(record: RuleDetail) {
+  const definition = parse(record.definition);
+  return definition && ["DRAFT", "VALIDATED"].includes(record.lifecycle) ? withDefaultRiskCategoryColors(definition) : definition;
 }
 
 function scoreSummary(field: FinalField) {
@@ -58,6 +63,7 @@ function PointInput({ label, value, draft, disabled, onDraft, onCommit, hideLabe
 
 const DraftContext = createContext<{ drafts: Record<string, string>; setDrafts: React.Dispatch<React.SetStateAction<Record<string, string>>> }>({ drafts: {}, setDrafts: () => {} });
 function invalidDraft(key: string, value: string) {
+  if (key.startsWith("risk-color:")) return !/^#[0-9a-fA-F]{6}$/.test(value);
   return value.trim() === "" || !Number.isFinite(Number(value)) || ((key.startsWith("face-threshold:") || key.startsWith("face-range:")) ? Number(value) < 0 || Number(value) > 100 : !key.startsWith("range:") && (Number(value) < 0 || !Number.isSafeInteger(Number(value))));
 }
 function BoundaryInput({ id, label, value, inclusive, disabled, onChange }: { id: string; label: string; value: number | null; inclusive: boolean; disabled: boolean; onChange: (value: number | null, inclusive: boolean) => void }) {
@@ -70,7 +76,7 @@ function BoundaryInput({ id, label, value, inclusive, disabled, onChange }: { id
 
 export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: RuleDetail; onClose: () => void; onSaved: (record: RuleDetail) => void }) {
   const [record, setRecord] = useState(initial);
-  const [definition, setDefinition] = useState(() => parse(initial.definition));
+  const [definition, setDefinition] = useState(() => editableDefinition(initial));
   const saved = useMemo(() => parse(record.definition), [record.definition]);
   const [tab, setTab] = useState<Tab>("details");
   const [sectionIndex, setSectionIndex] = useState(0);
@@ -118,7 +124,7 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
     setIssues(next.filter(issue => {
       const path = Array.isArray(issue.path) ? issue.path.join(".") : String(issue.path ?? "");
       if (path === "name") return false;
-      const inlineRisk = definition?.provisional.status === "CLIENT_CONFIRMED" && (path.startsWith("riskCategories") || path.startsWith("risk:"));
+      const inlineRisk = definition?.provisional.status === "CLIENT_CONFIRMED" && (path.startsWith("riskCategories") || path.startsWith("risk:") || path.startsWith("risk-color:"));
       return !path.startsWith("face") && !inlineRisk;
     }));
     const issuePath = next[0]?.path;
@@ -127,7 +133,7 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
     const draftField = definition?.sections.flatMap((section, sectionIndex) => section.fields.map(field => ({ field, sectionIndex }))).find(({ field }) => path.startsWith(`${field.id}:`) || (field.kind === "calculated" && field.scoring.bands.some(band => path.startsWith(`range:${band.id}-`))));
     if (draftField) { setTab("scoring"); setSectionIndex(draftField.sectionIndex); setExpanded(current => [...new Set([...current, draftField.field.id])]); }
     if (path.startsWith("face") ) setTab("face scan");
-    if (path.startsWith("risk:") || path.startsWith("range:") && !draftField) setTab("risk categories");
+    if (path.startsWith("risk:") || path.startsWith("risk-color:") || path.startsWith("range:") && !draftField) setTab("risk categories");
     const sectionMatch = path.match(/^sections\.(\d+)/);
     if (sectionMatch) { setTab("scoring"); setSectionIndex(Number(sectionMatch[1])); const fieldIndex = path.match(/fields\.(\d+)/)?.[1]; const field = definition?.sections[Number(sectionMatch[1])]?.fields[Number(fieldIndex)]; if (field) setExpanded(current => [...new Set([...current, field.id])]); }
     else if (path.startsWith("riskCategories")) setTab("risk categories");
@@ -171,7 +177,7 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
     if (!definition) return;
     update({ ...definition, sections: definition.sections.map(section => ({ ...section, fields: section.fields.map(field => field.id === id ? change(field) : field) })) });
   }
-  function accept(next: RuleDetail) { const parsed = parse(next.definition); setRecord(next); setDefinition(parsed); setPointDrafts({}); setNameError(""); onSaved(next); }
+  function accept(next: RuleDetail) { setRecord(next); setDefinition(editableDefinition(next)); setPointDrafts({}); setNameError(""); onSaved(next); }
   async function reload() {
     setBusy(true); setError("");
     try { accept(await request<RuleDetail>(`/admin/rules/${record.id}`)); setIssues([]); setNotice(""); }
@@ -193,10 +199,10 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
     setError(""); setNotice(""); setIssues([]);
     if (!definition.name.trim()) { showIssues([{ path: "name", message: "Enter a rule name." }]); return; }
     const draftIssue = Object.entries(pointDrafts).find(([key, value]) => invalidDraft(key, value));
-    if (draftIssue) { showIssues([{ path: draftIssue[0], message: "Enter valid ranges and whole-number points of 0 or more." }]); return; }
+    if (draftIssue) { showIssues([{ path: draftIssue[0], message: draftIssue[0].startsWith("risk-color:") ? "Enter a six-digit hex color, such as #2563EB." : "Enter valid ranges and whole-number points of 0 or more." }]); return; }
     const parsed = finalAssessmentDefinitionSchema.safeParse(definition);
     if (!parsed.success) { showIssues(parsed.error.issues); return; }
-    const checks = validateFinalAssessmentDefinition(parsed.data);
+    const checks = validateFinalAssessmentDefinition(parsed.data, { requireRiskCategoryColors: true });
     const invalid = checks.filter(issue => issue.severity === "error" || issue.path.startsWith("riskCategories"));
     if (invalid.length) { showIssues(invalid); return; }
     setBusy(true);
@@ -265,5 +271,5 @@ function DerivedScoring({ field, pointDrafts, setPointDrafts, onChange }: { fiel
 
 function RiskEditor({ definition, disabled, onChange }: { definition: FinalAssessmentDefinition; disabled: boolean; onChange: (definition: FinalAssessmentDefinition) => void }) {
   const patch = (id: string, change: Partial<FinalAssessmentDefinition["riskCategories"][number]>) => onChange({ ...definition, riskCategories: definition.riskCategories.map(category => category.id === id ? { ...category, ...change } : category) });
-  return <fieldset disabled={disabled} className="min-w-0 space-y-4 rounded-2xl border border-border/50 bg-card p-5 shadow-sm sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-medium">Risk categories</h2><p className="mt-1 text-sm text-muted-foreground">The total assessment score determines the risk category.</p></div><Button type="button" variant="outline" onClick={() => onChange({ ...definition, riskCategories: [...definition.riskCategories, { id: newRuleId("category"), label: "New category", interpretation: "", min: null, max: null, minInclusive: true, maxInclusive: true, sources: [] }] })}>Add category</Button></div>{definition.riskCategories.map(category => <section key={category.id} className="space-y-3 rounded-xl border p-4"><div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1 text-sm"><span className="font-medium">Category name</span><Input value={category.label} onChange={event => patch(category.id, { label: event.target.value })} /></label><label className="space-y-1 text-sm"><span className="font-medium">What it means</span><Input value={category.interpretation} onChange={event => patch(category.id, { interpretation: event.target.value })} /></label><BoundaryInput id={`${category.id}-from`} label="From score" value={category.min} inclusive={category.minInclusive} disabled={disabled} onChange={(min, minInclusive) => patch(category.id, { min, minInclusive })} /><BoundaryInput id={`${category.id}-to`} label="To score" value={category.max} inclusive={category.maxInclusive} disabled={disabled} onChange={(max, maxInclusive) => patch(category.id, { max, maxInclusive })} /></div><Button type="button" variant="ghost" className="text-destructive" disabled={definition.riskCategories.length <= 1} onClick={() => onChange({ ...definition, riskCategories: definition.riskCategories.filter(item => item.id !== category.id) })}>Remove category</Button></section>)}<p className="text-sm text-muted-foreground">Ranges must cover every possible non-negative score exactly once. Duplicate labels and gaps are rejected.</p></fieldset>;
+  return <fieldset disabled={disabled} className="min-w-0 space-y-4 rounded-2xl border border-border/50 bg-card p-5 shadow-sm sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-medium">Risk categories</h2><p className="mt-1 text-sm text-muted-foreground">The total assessment score determines the risk category.</p></div><Button type="button" variant="outline" onClick={() => onChange({ ...definition, riskCategories: [...definition.riskCategories, { id: newRuleId("category"), label: "New category", color: "neutral", interpretation: "", min: null, max: null, minInclusive: true, maxInclusive: true, sources: [] }] })}>Add category</Button></div>{definition.riskCategories.map(category => <section key={category.id} className="space-y-3 rounded-xl border p-4"><div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1 text-sm"><span className="font-medium">Category name</span><Input value={category.label} onChange={event => patch(category.id, { label: event.target.value })} /></label><label className="space-y-1 text-sm"><span className="font-medium">What it means</span><Input value={category.interpretation} onChange={event => patch(category.id, { interpretation: event.target.value })} /></label><BoundaryInput id={`${category.id}-from`} label="From score" value={category.min} inclusive={category.minInclusive} disabled={disabled} onChange={(min, minInclusive) => patch(category.id, { min, minInclusive })} /><BoundaryInput id={`${category.id}-to`} label="To score" value={category.max} inclusive={category.maxInclusive} disabled={disabled} onChange={(max, maxInclusive) => patch(category.id, { max, maxInclusive })} /></div><Button type="button" variant="ghost" className="text-destructive" disabled={definition.riskCategories.length <= 1} onClick={() => onChange({ ...definition, riskCategories: definition.riskCategories.filter(item => item.id !== category.id) })}>Remove category</Button></section>)}<p className="text-sm text-muted-foreground">Ranges must cover every possible non-negative score exactly once. Duplicate labels and gaps are rejected.</p></fieldset>;
 }
