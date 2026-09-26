@@ -158,6 +158,20 @@ test("final scoring response snapshots the bound version's risk ranges", async (
   expect(payload.result.riskCategories[0]).not.toHaveProperty("sources");
 });
 
+test("risk category lookup reads the pinned version without scoring or creating a binding", async () => {
+  const { createFinalAssessmentTemplate } = await import("@niq-scoring/contracts/final-assessment-template");
+  const { store, rule, call } = await setup();
+  const definition = createFinalAssessmentTemplate("Pinned ranges");
+  Object.assign(rule, { definition, packageChecksum: ruleChecksum(definition) });
+  expect((await call("risk-categories", { assessmentReference: "unknown" })).status).toBe(404);
+  const started = await (await call("start", { assessmentReference: "pinned-ranges" })).json();
+  const response = await call("risk-categories", { assessmentReference: "pinned-ranges" });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ bindingId: started.bindingId, checksum: started.checksum,
+    riskCategories: definition.riskCategories.map(({ id, label, color, min, max, minInclusive, maxInclusive }) => ({ id, label, color, min, max, minInclusive, maxInclusive })) });
+  expect(store.usages).toHaveLength(0);
+});
+
 test("reviewed classification cannot access another deployment's binding", async () => {
   const { store, client, call, app } = await setup();
   await call("start", { assessmentReference: "private-binding" });

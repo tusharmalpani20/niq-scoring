@@ -8,7 +8,26 @@ import { BindingError } from "./assessment-binding";
 import { ruleChecksum } from "./rule-routes";
 import type { DeploymentIdentity, ScoringStore } from "./store";
 const reference = z.string().trim().min(1).max(128);
+const publicRiskCategories = (definition: Extract<z.infer<typeof versionedRuleDefinitionSchema>, { profile: "NIQ_FINAL_ASSESSMENT" }>) =>
+  definition.riskCategories.map(({ id, label, color, min, max, minInclusive, maxInclusive }) => ({ id, label, color, min, max, minInclusive, maxInclusive }));
 export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenticate: (c: Context) => Promise<DeploymentIdentity | null>, now: () => Date, platformEnabled: boolean) {
+  app.post("/v1/assessments/risk-categories", async c => {
+    c.header("Cache-Control", "no-store");
+    const identity = await authenticate(c);
+    if (!identity) return c.json({ error: "UNAUTHORIZED" }, 401);
+    const parsed = z.object({ assessmentReference: reference }).strict().safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+    try {
+      // Only an existing binding may be read: historical ranges must come from its pinned version.
+      const { binding, rule } = await store.bindAssessment({ identity, assessmentReference: parsed.data.assessmentReference, platformEnabled, create: false });
+      const definition = versionedRuleDefinitionSchema.parse(rule.definition);
+      if (!isFinalAssessmentDefinition(definition)) return c.json({ error: "VERSION_UNAVAILABLE" }, 409);
+      return c.json({ assessmentReference: binding.assessmentReference, bindingId: binding.id, ruleVersionId: rule.id, checksum: binding.checksum, version: rule.version, riskCategories: publicRiskCategories(definition) });
+    } catch (cause) {
+      if (cause instanceof BindingError) return c.json({ error: cause.code }, cause.code === "ASSESSMENT_NOT_FOUND" ? 404 : 409);
+      throw cause;
+    }
+  });
   for (const action of ["start", "calculate"] as const) app.post(`/v1/assessments/${action}`, async c => {
     c.header("Cache-Control", "no-store");
     const identity = await authenticate(c);
@@ -34,7 +53,7 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
       const classification = score === null ? null : classifyScore(definition, score);
       if (score !== null && !classification) return c.json({ error: "UNMATCHED_CLASSIFICATION" }, 422);
       const result = isFinalAssessmentDefinition(definition) ? { ...resultBase, score, classification, questionnaireScore: evaluated.score, faceScan: input.faceScanSessionId ? { sessionId: input.faceScanSessionId, points: scanPoints! } : null,
-        riskCategories: definition.riskCategories.map(({ id, label, color, min, max, minInclusive, maxInclusive }) => ({ id, label, color, min, max, minInclusive, maxInclusive })) } : resultBase;
+        riskCategories: publicRiskCategories(definition) } : resultBase;
       const reservation = await store.reserveUsage({ identity, clientId: identity.clientId, capability: "SCORING", assessmentReference: binding.assessmentReference, idempotencyKey: input.idempotencyKey, platformEnabled, binding, fingerprint: ruleChecksum({ endpoint: "assessment", bindingId: binding.id, checksum: binding.checksum, answers: input.answers, faceScanSessionId: input.faceScanSessionId ?? null }) });
       if (reservation.status === "REJECTED") return c.json({ error: "SCORING_UNAVAILABLE", reason: reservation.reason }, 409);
       if (reservation.status === "DUPLICATE") return c.json(reservation.response as never);
