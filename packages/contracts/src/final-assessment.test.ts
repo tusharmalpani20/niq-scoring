@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createFinalAssessmentTemplate, createLegacyFinalAssessmentTemplate, upgradeFinalAssessmentDefinition } from "./final-assessment-template";
+import { createFinalAssessmentTemplate, createLegacyFinalAssessmentTemplate, upgradeFinalAssessmentDefinition, withDefaultRiskCategoryColors } from "./final-assessment-template";
 import { finalAssessmentDefinitionSchema } from "./final-assessment";
 import { isFixedFinalAssessmentDefinition, validateFinalAssessmentDefinition } from "./final-assessment-validation";
 import { publicQuestionnaire } from "./rule-public";
@@ -31,9 +31,24 @@ describe("final assessment profile contract", () => {
     const definition = createFinalAssessmentTemplate("Assessment v2");
     definition.riskCategories[0]!.color = "purple";
     expect(finalAssessmentDefinitionSchema.safeParse(definition).success).toBe(true);
+    definition.riskCategories[0]!.color = "#12aBcD";
+    expect(finalAssessmentDefinitionSchema.safeParse(definition).success).toBe(true);
+    for (const invalid of ["#12345", "#1234567", "#xyzxyz", "red; color: blue"]) {
+      expect(finalAssessmentDefinitionSchema.safeParse({ ...definition, riskCategories: [{ ...definition.riskCategories[0], color: invalid }, ...definition.riskCategories.slice(1)] }).success).toBe(false);
+    }
     definition.riskCategories[0]!.color = undefined;
     expect(finalAssessmentDefinitionSchema.safeParse(definition).success).toBe(true);
+    expect(validateFinalAssessmentDefinition(definition, { requireRiskCategoryColors: true })).toContainEqual(expect.objectContaining({ path: "riskCategories.0.color", code: "RISK_COLOR_REQUIRED" }));
     expect(finalAssessmentDefinitionSchema.safeParse({ ...definition, riskCategories: [{ ...definition.riskCategories[0], color: "not-a-color" }, ...definition.riskCategories.slice(1)] }).success).toBe(false);
+  });
+
+  test("fills missing draft colors without rewriting a historical definition", () => {
+    const historical = createFinalAssessmentTemplate("Old draft");
+    historical.riskCategories.forEach(category => { delete category.color; });
+    historical.riskCategories.push({ id: "custom", label: "Custom", min: 100, max: 101, minInclusive: true, maxInclusive: true, interpretation: "", sources: [] });
+    const filled = withDefaultRiskCategoryColors(historical);
+    expect(filled.riskCategories.map(category => category.color)).toEqual(["green", "amber", "red", "neutral"]);
+    expect(historical.riskCategories.every(category => category.color === undefined)).toBe(true);
   });
 
   test("rejects cap and arbitrary fields through the strict v2 schema", () => {

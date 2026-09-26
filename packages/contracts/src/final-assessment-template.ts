@@ -111,6 +111,19 @@ export function upgradeFinalAssessmentDefinition(input: FinalAssessmentDefinitio
   return definition;
 }
 
+/** Populate colors when an older editable rule is opened or duplicated; locked versions stay unchanged. */
+export function withDefaultRiskCategoryColors(definition: FinalAssessmentDefinition): FinalAssessmentDefinition {
+  if (definition.riskCategories.every(category => category.color)) return definition;
+  const defaults = { low: "green", moderate: "amber", high: "red" } as const;
+  return {
+    ...definition,
+    riskCategories: definition.riskCategories.map(category => ({
+      ...category,
+      color: category.color ?? defaults[category.id as keyof typeof defaults] ?? "neutral",
+    })),
+  };
+}
+
 export function confirmedAssessmentSamples(): FinalAssessmentDefinition["samples"] {
   return [
     { id: "unanswered", name: "No answers", answers: {}, expected: { complete: true, score: null, classificationId: null } },

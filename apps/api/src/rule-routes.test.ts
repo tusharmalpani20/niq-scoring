@@ -1,6 +1,7 @@
 import { createSpreadsheetTemplate } from "@niq-scoring/contracts/rule-template";
 import { describe, expect, test } from "bun:test";
 import { type RuleDefinition } from "@niq-scoring/contracts/rules";
+import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
 import { MemoryAdminAuthStore } from "./admin-auth-store";
 import { createApp } from "./app";
 import { MemoryScoringStore } from "./store";
@@ -57,6 +58,22 @@ async function savedSynthetic(context: ReturnType<typeof setup>, name = "Synthet
 }
 
 describe("rule management API", () => {
+  test("final assessment drafts require a category color and accept custom hex colors", async () => {
+    const { request } = setup();
+    const created = await request("", "POST", { name: "Color rules", requestId: crypto.randomUUID(), template: "final_assessment" });
+    expect(created.status).toBe(201);
+    const draft = await created.json() as RuleRecord;
+    const definition = structuredClone(draft.definition) as FinalAssessmentDefinition;
+    expect(definition.riskCategories.map(category => category.color)).toEqual(["green", "amber", "red"]);
+    delete definition.riskCategories[0]!.color;
+    const missing = await request(`/${draft.id}`, "PUT", { revision: draft.revision, definition });
+    expect(missing.status).toBe(400);
+    expect(await missing.json()).toMatchObject({ error: "INVALID_RULE_DEFINITION", issues: [expect.objectContaining({ code: "RISK_COLOR_REQUIRED" })] });
+    definition.riskCategories[0]!.color = "#12aBcD";
+    const saved = await request(`/${draft.id}`, "PUT", { revision: draft.revision, definition });
+    expect(saved.status).toBe(200);
+    expect(((await saved.json()) as RuleRecord).definition).toMatchObject({ riskCategories: expect.arrayContaining([expect.objectContaining({ color: "#12aBcD" })]) });
+  });
   test("mutation responses include the recorded lifecycle history", async () => {
     const context = setup();
     const input = { name: "Audit response", template: "spreadsheet", requestId: crypto.randomUUID() };

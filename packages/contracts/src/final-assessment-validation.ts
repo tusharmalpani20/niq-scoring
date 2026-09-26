@@ -69,7 +69,7 @@ function validateOptionPoints(field: Extract<FinalAssessmentField, { kind: "sele
   if (seen.size !== expected.size || [...expected].some(id => !seen.has(id))) add(path, "MISSING_OPTION_POINTS", "Every fixed option needs an explicit point value, including zero.", "blocking");
 }
 
-export function validateFinalAssessmentDefinition(definition: FinalAssessmentDefinition): DefinitionIssue[] {
+export function validateFinalAssessmentDefinition(definition: FinalAssessmentDefinition, options: { requireRiskCategoryColors?: boolean } = {}): DefinitionIssue[] {
   const issues: DefinitionIssue[] = [];
   const add = (path: string, code: string, message: string, severity: DefinitionIssue["severity"] = "error") => issues.push({ path, code, message, severity });
   if (!isFixedFinalAssessmentDefinition(definition)) add("profile", "FIXED_PROFILE_REQUIRED", "The final assessment fields, options and dependencies are fixed.", "blocking");
@@ -79,6 +79,7 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
     const normalized = category.label.trim().replace(/\s+/g, " ").toLowerCase();
     if (categoryNames.has(normalized)) add(`riskCategories.${index}.label`, "DUPLICATE_CATEGORY_NAME", "Risk category names must be unique ignoring case and repeated spaces.");
     categoryNames.add(normalized);
+    if (options.requireRiskCategoryColors && !category.color) add(`riskCategories.${index}.color`, "RISK_COLOR_REQUIRED", "Choose a color for every risk category.");
   });
   if (definition.provisional.status === "CLIENT_CONFIRMED") {
     const checkPoints = (value: unknown, path: string) => {

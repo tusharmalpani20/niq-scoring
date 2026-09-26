@@ -130,6 +130,8 @@ describe("client-confirmed assessment", () => {
     definition.riskCategories[0]!.color = "purple";
     const answers = { previous_surgeries: "previous_surgeries_no" };
     expect(evaluateFinalAssessment(definition, answers).classification?.color).toBe("purple");
+    definition.riskCategories[0]!.color = "#123aBc";
+    expect(evaluateFinalAssessment(definition, answers).classification?.color).toBe("#123aBc");
     delete definition.riskCategories[0]!.color;
     expect(evaluateFinalAssessment(definition, answers).classification?.color).toBe("neutral");
   });

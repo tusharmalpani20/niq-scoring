@@ -4,7 +4,7 @@ import { z } from "zod";
 import { answersSchema } from "@niq-scoring/contracts/rules";
 import { isFinalAssessmentDefinition, versionedRuleDefinitionSchema } from "@niq-scoring/contracts/versioned-definition";
 import { createSpreadsheetTemplate } from "@niq-scoring/contracts/rule-template";
-import { createFinalAssessmentTemplate } from "@niq-scoring/contracts/final-assessment-template";
+import { createFinalAssessmentTemplate, withDefaultRiskCategoryColors } from "@niq-scoring/contracts/final-assessment-template";
 import { isFixedFinalAssessmentDefinition, validateFinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment-validation";
 import { validateRuleDefinition } from "@niq-scoring/contracts/rule-validation";
 import { evaluateVersionedRule } from "@niq-scoring/scoring-engine/versioned";
@@ -24,7 +24,7 @@ export function ruleChecksum(value: unknown) { return new Bun.CryptoHasher("sha2
 const revisionSchema = z.object({ revision: z.number().int().positive() }).strict();
 const createSchema = z.object({ name: z.string().trim().min(1).max(80), requestId: z.uuid(), template: z.enum(["spreadsheet", "final_assessment"]).default("final_assessment"), duplicateId: ulidSchema.optional() }).strict();
 const isFixedVersionedDefinition = (value: unknown) => isFinalAssessmentDefinition(value) ? isFixedFinalAssessmentDefinition(value) : isFixedRuleDefinition(value);
-const definitionIssues = (value: z.infer<typeof versionedRuleDefinitionSchema>) => isFinalAssessmentDefinition(value) ? validateFinalAssessmentDefinition(value) : validateRuleDefinition(value);
+const definitionIssues = (value: z.infer<typeof versionedRuleDefinitionSchema>) => isFinalAssessmentDefinition(value) ? validateFinalAssessmentDefinition(value, { requireRiskCategoryColors: true }) : validateRuleDefinition(value);
 const sampleIssues = (value: z.infer<typeof versionedRuleDefinitionSchema>) => isFinalAssessmentDefinition(value) ? validateFinalAssessmentSamples(value) : validateSamples(value);
 
 export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) {
@@ -49,7 +49,7 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
       const sourceDefinition = versionedRuleDefinitionSchema.safeParse(source.definition);
       if (!sourceDefinition.success) return c.json({ error: "LEGACY_RULE_FORMAT" }, 409);
       if (!isFixedVersionedDefinition(sourceDefinition.data)) return c.json({ error: "FIXED_RULE_REQUIRED" }, 409);
-      definition = { ...sourceDefinition.data, name: input.name };
+      definition = { ...(isFinalAssessmentDefinition(sourceDefinition.data) ? withDefaultRiskCategoryColors(sourceDefinition.data) : sourceDefinition.data), name: input.name };
     }
     const record = await store.create({ id: createEntityId(), definition, checksum: ruleChecksum(definition), actor: actor(c), requestId: input.requestId, fingerprint, now: now().toISOString() });
     return c.json({ ...record, audit: await store.audit(record.id) }, 201);

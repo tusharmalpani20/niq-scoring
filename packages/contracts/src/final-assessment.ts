@@ -5,7 +5,10 @@ import { answerValueSchema, answersSchema, optionSchema, rangeSchema, ruleIdSche
 export const FINAL_ASSESSMENT_PROFILE = "NIQ_FINAL_ASSESSMENT" as const;
 export const FINAL_ASSESSMENT_FORMAT_VERSION = 2 as const;
 export const FINAL_ASSESSMENT_PROVISIONAL_STATUS = "DEVELOPMENT_PLACEHOLDER" as const;
-export const riskCategoryColorSchema = z.enum(["green", "amber", "red", "neutral", "blue", "purple"]);
+export const riskCategoryColorSchema = z.union([
+  z.enum(["green", "amber", "red", "neutral", "blue", "purple"]),
+  z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex color, such as #2563EB."),
+]);
 export type RiskCategoryColor = z.infer<typeof riskCategoryColorSchema>;
 
 const label = z.string().trim().min(1).max(200);
