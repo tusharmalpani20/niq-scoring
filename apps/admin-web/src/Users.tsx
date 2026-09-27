@@ -224,12 +224,12 @@ export function Users({ currentUser }: { currentUser: User }) {
                     <TableRow key={u.id}>
                       <TableCell data-label="Administrator">
                         <span className="min-w-0 text-right sm:text-left">
-                          <strong>{u.displayName}{u.id === currentUser.id ? " (you)" : ""}</strong>
+                          <strong className="text-primary">{u.displayName}{u.id === currentUser.id ? " (you)" : ""}</strong>
                           <small>{u.email}</small>
                         </span>
                       </TableCell>
                       <TableCell data-label="Status">
-                        <Badge variant={u.enabled ? "default" : "secondary"}>
+                        <Badge variant="status">
                           {u.enabled ? "Enabled" : "Disabled"}
                         </Badge>
                       </TableCell>
@@ -280,7 +280,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                 {invitations.rows.map((i) => (
                   <TableRow key={i.id}>
                     <TableCell data-label="Invitee">
-                      <span className="min-w-0 text-right sm:text-left"><strong>{i.displayName}</strong><small>{i.email}</small></span>
+                      <span className="min-w-0 text-right sm:text-left"><strong className="text-primary">{i.displayName}</strong><small>{i.email}</small></span>
                     </TableCell>
                     <TableCell data-label="Expires">{new Date(i.expiresAt).toLocaleString()}</TableCell>
                     <TableCell data-label="Action">
