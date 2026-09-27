@@ -271,13 +271,14 @@ export function Users({ currentUser }: { currentUser: User }) {
         </TabsContent>
         <TabsContent value="invitations">
           <Card><CardContent className="pt-6">
+        <h2 className="mb-4 text-lg font-semibold">Pending invitations</h2>
         {!data ? (
           loadError ? <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button> : <p role="status">Loading invitations…</p>
         ) : invitations.total === 0 ? (
           <div className="flex min-h-64 flex-col items-center justify-center gap-3 py-8 text-center">
             <InvitationEmptyIllustration />
             <div className="space-y-1">
-              <h2 className="font-semibold">No pending invitations</h2>
+              <h3 className="font-semibold">No pending invitations</h3>
               <p className="text-sm text-muted-foreground">Create an invitation for a teammate to join the scoring workspace.</p>
             </div>
             <Button className="mt-2" onClick={() => setInviteOpen(true)}>
