@@ -12,16 +12,16 @@ import { paginate } from "./pagination";
 
 export type ActivationToken = { activationToken: string; expiresAt: string | null };
 type TokenRow = { id: string; createdAt: string; expiresAt: string | null; status: "Unused" | "Used" | "Expired" | "Revoked"; canCopy: boolean; credentialStatus: "Active" | "Revoked" | "Expired" | null };
-const statusColors: Record<TokenRow["status"], string> = {
-  Unused: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
-  Used: "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200",
-  Expired: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200",
-  Revoked: "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200",
+const tokenStatusVariant: Record<TokenRow["status"], "success" | "info" | "warning" | "inactive"> = {
+  Unused: "success",
+  Used: "info",
+  Expired: "warning",
+  Revoked: "inactive",
 };
-const accessColors: Record<NonNullable<TokenRow["credentialStatus"]>, string> = {
-  Active: statusColors.Unused,
-  Revoked: statusColors.Revoked,
-  Expired: statusColors.Expired,
+const accessStatusVariant: Record<NonNullable<TokenRow["credentialStatus"]>, "success" | "warning" | "inactive"> = {
+  Active: "success",
+  Revoked: "inactive",
+  Expired: "warning",
 };
 export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreatingChange }: { deploymentId: string; disabled: boolean; creating: boolean; onCreatingChange: (creating: boolean) => void }) {
   const [tokens, setTokens] = useState<TokenRow[]>([]);
@@ -107,8 +107,8 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
         <TableCell className="py-3.5 font-medium">NIQ …{token.id.slice(-6)}</TableCell>
         <TableCell className="py-3.5">{new Date(token.createdAt).toLocaleDateString()}</TableCell>
         <TableCell className="py-3.5">{token.expiresAt ? new Date(token.expiresAt).toLocaleString() : "Never"}</TableCell>
-        <TableCell className="py-3.5"><Badge variant="outline" className={statusColors[token.status]}>{token.status}</Badge></TableCell>
-        <TableCell className="py-3.5">{token.status === "Used" ? token.credentialStatus ? <Badge variant="outline" className={accessColors[token.credentialStatus]} aria-label={`Issued credential ${token.credentialStatus.toLowerCase()}`}>{token.credentialStatus}</Badge> : <span className="text-xs text-muted-foreground">Unknown</span> : <span className="text-muted-foreground">—</span>}</TableCell>
+        <TableCell className="py-3.5"><Badge variant={tokenStatusVariant[token.status]}>{token.status}</Badge></TableCell>
+        <TableCell className="py-3.5">{token.status === "Used" ? token.credentialStatus ? <Badge variant={accessStatusVariant[token.credentialStatus]} aria-label={`Issued credential ${token.credentialStatus.toLowerCase()}`}>{token.credentialStatus}</Badge> : <span className="text-xs text-muted-foreground">Unknown</span> : <span className="text-muted-foreground">—</span>}</TableCell>
         <TableCell className="py-3.5"><div className="flex justify-end gap-2">
           {token.status === "Unused" && <><Button type="button" size="icon" variant="ghost" title={copied === token.id ? "Copied" : "Copy token"} aria-label={copied === token.id ? "Copied" : "Copy token"} disabled={disabled || busy || !token.canCopy} onClick={() => action(async () => {
             const result = await request<ActivationToken>(`/admin/deployments/${deploymentId}/activation-tokens/${token.id}`);
