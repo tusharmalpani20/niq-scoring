@@ -148,6 +148,7 @@ strong {
   align-items: center;
   gap: 12px;
 }
+.brandmark img { display: block; width: 6.5rem; height: 4rem; object-fit: contain; }
 .brandmark span {
   font-size: 15px;
   font-weight: 500;
@@ -254,10 +255,10 @@ td small {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  background: var(--card);
+  background: var(--background);
 }
 .auth-intro {
-  background: var(--accent);
+  background: radial-gradient(circle at 15% 15%, color-mix(in srgb, var(--primary) 18%, white), transparent 42%), var(--accent);
   padding: 55px 65px;
   display: flex;
   flex-direction: column;
@@ -283,8 +284,10 @@ td small {
 .auth-content > div {
   width: 100%;
   max-width: 440px;
-  box-shadow: none;
-  border: 0;
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  background: var(--card);
+  box-shadow: 0 18px 45px rgb(17 41 50 / 7%);
 }
 .auth-content .form-stack > button {
   width: 100%;

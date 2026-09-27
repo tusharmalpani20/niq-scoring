@@ -98,7 +98,7 @@ export function Auth({
     <div className="auth-shell">
       <div className="auth-intro">
         <div className="brandmark">
-          NIQ<span>Scoring</span>
+          <img src="/nutra-iq-logo.png" alt="Nutra-IQ" /><span>Scoring</span>
         </div>
         <div>
           <h1>
