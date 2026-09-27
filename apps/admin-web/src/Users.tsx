@@ -22,6 +22,22 @@ type Invitation = {
   expiresAt: string;
   createdAt: string;
 };
+
+function InvitationEmptyIllustration() {
+  return (
+    <svg viewBox="0 0 192 136" className="h-28 w-40" aria-hidden="true" focusable="false">
+      <circle cx="96" cy="64" r="56" fill="var(--accent)" />
+      <ellipse cx="96" cy="125" rx="57" ry="4" fill="var(--border)" opacity="0.5" />
+      <circle cx="28" cy="43" r="4" fill="var(--primary)" opacity="0.45" />
+      <circle cx="167" cy="85" r="3" fill="var(--primary)" opacity="0.45" />
+      <rect x="38" y="44" width="116" height="72" rx="13" fill="var(--card)" stroke="var(--border)" strokeWidth="2" />
+      <path d="m48 56 48 34 48-34M48 104l29-26m67 26-29-26" fill="none" stroke="var(--primary)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
+      <circle cx="145" cy="37" r="18" fill="var(--primary)" />
+      <path d="M145 29v16m-8-8h16" stroke="var(--primary-foreground)" strokeLinecap="round" strokeWidth="2.5" />
+    </svg>
+  );
+}
+
 export function Users({ currentUser }: { currentUser: User }) {
   const [data, setData] = useState<{
     users: User[];
@@ -257,6 +273,17 @@ export function Users({ currentUser }: { currentUser: User }) {
           <Card><CardContent className="pt-6">
         {!data ? (
           loadError ? <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button> : <p role="status">Loading invitations…</p>
+        ) : invitations.total === 0 ? (
+          <div className="flex min-h-64 flex-col items-center justify-center gap-3 py-8 text-center">
+            <InvitationEmptyIllustration />
+            <div className="space-y-1">
+              <h2 className="font-semibold">No pending invitations</h2>
+              <p className="text-sm text-muted-foreground">Create an invitation for a teammate to join the scoring workspace.</p>
+            </div>
+            <Button className="mt-2" onClick={() => setInviteOpen(true)}>
+              <Plus aria-hidden="true" /> Invite teammates
+            </Button>
+          </div>
         ) : (
           <div>
             <Table className="mobile-record-table">
@@ -268,15 +295,6 @@ export function Users({ currentUser }: { currentUser: User }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invitations.total === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={3} className="h-32 text-center">
-                      <Button onClick={() => setInviteOpen(true)}>
-                        <Plus aria-hidden="true" /> Invite teammates
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                )}
                 {invitations.rows.map((i) => (
                   <TableRow key={i.id}>
                     <TableCell data-label="Invitee">
@@ -309,7 +327,7 @@ export function Users({ currentUser }: { currentUser: User }) {
         )}
           </CardContent></Card>
         </TabsContent>
-        {data && (
+        {data && (activeTab !== "invitations" || invitations.total > 0) && (
           <Pagination aria-label={`${activeTab === "users" ? "Users" : "Pending invitations"} pagination`} className="mt-4">
             <PaginationContent>
               <PaginationItem>
