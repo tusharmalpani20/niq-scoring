@@ -83,14 +83,14 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
     </div>
     <TabsContent value="clients" className="space-y-5">
     <Card><CardContent className="pt-6">
-      <Table>
+      <Table className="mobile-record-table">
         <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Deployments</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
           {clients.rows.map(client => <TableRow key={client.id}>
-            <TableCell className="font-medium"><Link to={clientUrl(client)} className="text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{client.name}</Link></TableCell>
-            <TableCell><Badge variant={client.enabled ? "default" : "secondary"}>{client.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
-            <TableCell className="text-right tabular-nums">{data.deployments.filter(deployment => deployment.clientId === client.id).length}</TableCell>
-            <TableCell className="text-right"><div className="flex items-center justify-end gap-1">
+            <TableCell data-label="Client" className="font-medium"><Link to={clientUrl(client)} className="text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{client.name}</Link></TableCell>
+            <TableCell data-label="Status"><Badge variant={client.enabled ? "default" : "secondary"}>{client.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
+            <TableCell data-label="Deployments" className="text-right tabular-nums">{data.deployments.filter(deployment => deployment.clientId === client.id).length}</TableCell>
+            <TableCell data-label="Actions" className="text-right"><div className="flex items-center justify-end gap-1">
               <Button variant="ghost" size="icon" title={`${client.enabled ? "Disable" : "Enable"} ${client.name}`} aria-label={`${client.enabled ? "Disable" : "Enable"} ${client.name}`} onClick={() => { setAccessError(""); setAccessClient(client); }}>
                 {client.enabled ? <Ban className="size-4" aria-hidden="true" /> : <CircleCheck className="size-4 text-primary" aria-hidden="true" />}
               </Button>
