@@ -271,23 +271,7 @@ export function Users({ currentUser }: { currentUser: User }) {
         </TabsContent>
         <TabsContent value="invitations">
           <Card><CardContent className="pt-6">
-        <h2 className="mb-4 text-lg font-semibold">Pending invitations</h2>
-        {!data ? (
-          loadError ? <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button> : <p role="status">Loading invitations…</p>
-        ) : invitations.total === 0 ? (
-          <div className="flex min-h-64 flex-col items-center justify-center gap-3 py-8 text-center">
-            <InvitationEmptyIllustration />
-            <div className="space-y-1">
-              <h3 className="font-semibold">No pending invitations</h3>
-              <p className="text-sm text-muted-foreground">Create an invitation for a teammate to join the scoring workspace.</p>
-            </div>
-            <Button className="mt-2" onClick={() => setInviteOpen(true)}>
-              <Plus aria-hidden="true" /> Invite teammates
-            </Button>
-          </div>
-        ) : (
-          <div>
-            <Table className="mobile-record-table">
+            <Table className={invitations.total > 0 ? "mobile-record-table" : undefined}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Invitee</TableHead>
@@ -296,7 +280,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invitations.rows.map((i) => (
+                {data && invitations.rows.map((i) => (
                   <TableRow key={i.id}>
                     <TableCell data-label="Invitee">
                       <span className="min-w-0 text-right sm:text-left"><strong className="text-primary">{i.displayName}</strong><small>{i.email}</small></span>
@@ -324,8 +308,20 @@ export function Users({ currentUser }: { currentUser: User }) {
                 ))}
               </TableBody>
             </Table>
-          </div>
-        )}
+            {!data ? (
+              loadError ? <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button> : <p role="status" className="py-8 text-center">Loading invitations…</p>
+            ) : invitations.total === 0 && (
+              <div className="flex min-h-64 flex-col items-center justify-center gap-3 py-8 text-center">
+                <InvitationEmptyIllustration />
+                <div className="space-y-1">
+                  <h2 className="font-semibold">No pending invitations</h2>
+                  <p className="text-sm text-muted-foreground">Create an invitation for a teammate to join the scoring workspace.</p>
+                </div>
+                <Button className="mt-2" onClick={() => setInviteOpen(true)}>
+                  <Plus aria-hidden="true" /> Invite teammates
+                </Button>
+              </div>
+            )}
           </CardContent></Card>
         </TabsContent>
         {data && (activeTab !== "invitations" || invitations.total > 0) && (
