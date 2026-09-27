@@ -214,7 +214,6 @@ function Console() {
         <div className="scoring-header-inner">
           <NavLink to="/overview" className="scoring-brand" aria-label="NIQ scoring overview">
             <img src="/nutra-iq-logo.png" alt="" />
-            <span>Scoring</span>
           </NavLink>
           <details className="scoring-account">
             <summary role="button" aria-label={`Account menu for ${user.displayName}`}>

@@ -384,9 +384,8 @@ td small {
   backdrop-filter: blur(18px);
   pointer-events: auto;
 }
-.scoring-brand { display: flex; min-width: 0; align-items: center; gap: .7rem; font-size: .9rem; font-weight: 600; }
+.scoring-brand { display: flex; min-width: 0; align-items: center; }
 .scoring-brand img { display: block; width: 4.6rem; height: 2.75rem; object-fit: contain; }
-.scoring-brand > span { padding-left: .7rem; border-left: 1px solid var(--border); }
 .scoring-account { position: relative; flex: 0 0 auto; }
 .scoring-account summary {
   display: flex;
@@ -429,7 +428,7 @@ td small {
 @media (max-width: 600px) {
   .scoring-header { right: .65rem; left: .65rem; }
   .scoring-header-inner { padding-inline: .75rem; }
-  .scoring-brand > span, .scoring-account-name { display: none; }
+  .scoring-account-name { display: none; }
   .scoring-dock-item { font-size: .61rem; }
   .scoring-dock-item svg { width: 18px; height: 18px; }
 }
