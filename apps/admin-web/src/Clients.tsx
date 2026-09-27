@@ -93,7 +93,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
       </div>
     </div>
     <TabsContent value="clients" className="space-y-5">
-    <Card><CardContent className="pt-6">
+    <Card className={clients.total > 0 ? "mobile-list-card" : undefined}><CardContent className="pt-6">
       <Table className={clients.total > 0 ? "mobile-record-table" : undefined}>
         <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Deployments</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>

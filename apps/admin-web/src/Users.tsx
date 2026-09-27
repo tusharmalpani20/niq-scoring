@@ -222,7 +222,7 @@ export function Users({ currentUser }: { currentUser: User }) {
           </Dialog>
         </div>
         <TabsContent value="users">
-          <Card><CardContent className="pt-6">
+          <Card className={users.total > 0 ? "mobile-list-card" : undefined}><CardContent className="pt-6">
           {!data ? (
             loadError ? <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button> : <p role="status">Loading users…</p>
           ) : (
@@ -239,7 +239,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                   {users.rows.map((u) => (
                     <TableRow key={u.id}>
                       <TableCell data-label="Administrator">
-                        <span className="min-w-0 text-right sm:text-left">
+                        <span className="min-w-0 text-left">
                           <strong className="text-primary">{u.displayName}{u.id === currentUser.id ? " (you)" : ""}</strong>
                           <small>{u.email}</small>
                         </span>
@@ -270,7 +270,7 @@ export function Users({ currentUser }: { currentUser: User }) {
           </CardContent></Card>
         </TabsContent>
         <TabsContent value="invitations">
-          <Card><CardContent className="pt-6">
+          <Card className={invitations.total > 0 ? "mobile-list-card" : undefined}><CardContent className="pt-6">
             <Table className={invitations.total > 0 ? "mobile-record-table" : undefined}>
               <TableHeader>
                 <TableRow>
@@ -283,7 +283,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                 {data && invitations.rows.map((i) => (
                   <TableRow key={i.id}>
                     <TableCell data-label="Invitee">
-                      <span className="min-w-0 text-right sm:text-left"><strong className="text-primary">{i.displayName}</strong><small>{i.email}</small></span>
+                      <span className="min-w-0 text-left"><strong className="text-primary">{i.displayName}</strong><small>{i.email}</small></span>
                     </TableCell>
                     <TableCell data-label="Expires">{new Date(i.expiresAt).toLocaleString()}</TableCell>
                     <TableCell data-label="Action">

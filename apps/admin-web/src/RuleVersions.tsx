@@ -64,7 +64,7 @@ export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
     <TabsContent value="versions" className="space-y-5">
       <div className="max-w-xs"><NativeSelect aria-label="Filter by lifecycle" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">All statuses</option>{["DRAFT", "VALIDATED", "APPROVED", "ACTIVE", "RETIRED"].map(value => <option key={value} value={value}>{value === "VALIDATED" ? "Checked" : value.charAt(0) + value.slice(1).toLowerCase()}</option>)}</NativeSelect></div>
       {loading && <p role="status" className="text-sm text-muted-foreground">Loading rules…</p>}
-      <Card><CardContent className="pt-6"><Table className={versions.total > 0 ? "mobile-record-table" : undefined}>
+      <Card className={versions.total > 0 ? "mobile-list-card" : undefined}><CardContent className="pt-6"><Table className={versions.total > 0 ? "mobile-record-table" : undefined}>
         <TableHeader><TableRow><TableHead>Rule</TableHead><TableHead>Status</TableHead><TableHead>Clinical use</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
           {versions.rows.map(version => <TableRow key={version.id}>

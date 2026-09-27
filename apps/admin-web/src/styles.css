@@ -458,15 +458,32 @@ td small {
 
 /* Keep the list's table semantics while presenting each record as a readable card on phones. */
 @media (max-width: 700px) {
+  .scoring-workspace .page-content { padding-bottom: calc(7rem + env(safe-area-inset-bottom)); }
+  .mobile-list-card { border: 0; background: transparent; box-shadow: none; }
+  .mobile-list-card > div { padding: 0; }
+  .mobile-list-card [data-slot="table-container"] { overflow: visible; }
   .mobile-record-table,
   .mobile-record-table tbody,
   .mobile-record-table tr,
   .mobile-record-table td { display: block; width: 100%; }
   .mobile-record-table thead { display: none; }
   .mobile-record-table tbody { display: grid; gap: .75rem; }
-  .mobile-record-table tr { padding: .65rem .85rem; border: 1px solid var(--border) !important; border-radius: .85rem; background: var(--card); }
-  .mobile-record-table td { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 1rem; padding: .4rem 0; white-space: normal; text-align: right; overflow-wrap: anywhere; }
-  .mobile-record-table td::before { content: attr(data-label); flex: 0 0 6rem; color: var(--muted-foreground); font-size: .75rem; font-weight: 500; text-align: left; }
+  .mobile-record-table tr { padding: .85rem 1rem; border: 1px solid var(--border) !important; border-radius: .85rem; background: var(--card); box-shadow: 0 1px 2px rgb(20 40 70 / 5%); }
+  .mobile-record-table td { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: .5rem; padding: .25rem 0; white-space: normal; text-align: right; overflow-wrap: anywhere; }
+  .mobile-record-table td::before { content: attr(data-label); flex: 0 0 6.5rem; color: var(--muted-foreground); font-size: .75rem; font-weight: 500; text-align: left; }
+  .mobile-record-table:not(.deployment-record-table) td:first-child,
+  .deployment-record-table td[data-label="Deployment"] { display: block; padding: 0 0 .65rem; margin-bottom: .35rem; border-bottom: 1px solid var(--border); text-align: left; }
+  .mobile-record-table:not(.deployment-record-table) td:first-child::before,
+  .deployment-record-table td[data-label="Deployment"]::before { content: none; }
+  .mobile-record-table td:first-child a,
+  .mobile-record-table td:first-child strong,
+  .deployment-record-table td[data-label="Deployment"] a,
+  .mobile-record-table td:first-child button { font-size: 1rem; font-weight: 600; }
+  .mobile-record-table td:first-child button { max-width: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; word-break: break-word; text-align: left; }
+  .mobile-record-table td:first-child .ml-2 { margin-left: .5rem; }
+  .deployment-record-table tr { display: flex; flex-direction: column; }
+  .deployment-record-table td[data-label="Deployment"] { order: -1; }
+  .deployment-record-table td[data-label="Deployment"] > span { margin-top: .125rem; }
   .mobile-record-table td small { overflow-wrap: anywhere; }
   .mobile-record-table td:not([data-label]) { display: block; height: auto; padding: 1rem 0; text-align: center; }
   .mobile-record-table td:not([data-label])::before { content: none; }

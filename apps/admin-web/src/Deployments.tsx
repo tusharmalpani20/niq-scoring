@@ -66,7 +66,7 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
       {filter("Rules", ruleVersion, setRuleVersion, [["default", "Following default"], ...data.versions.map(version => [version.id, version.version] as [string, string]), ["unassigned", "No available rule"]])}
       {filtersActive && <Button variant="ghost" size="sm" onClick={() => { setHosting("all"); setStatus("all"); setEnvironment("all"); setRuleVersion("all"); setPage(1); }}>Clear filters</Button>}
     </div>
-    <TabsContent value="deployments" className="space-y-5"><Card><CardContent className="pt-6"><Table className={deployments.total > 0 ? "mobile-record-table" : undefined}>
+    <TabsContent value="deployments" className="space-y-5"><Card className={deployments.total > 0 ? "mobile-list-card" : undefined}><CardContent className="pt-6"><Table className={deployments.total > 0 ? "mobile-record-table deployment-record-table" : undefined}>
       <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Deployment</TableHead><TableHead>Hosting</TableHead><TableHead>Status</TableHead><TableHead>Rule</TableHead><TableHead>Assessments</TableHead><TableHead>Vital IQ</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
       <TableBody>{deployments.rows.map(deployment => { const client = data.clients.find(item => item.id === deployment.clientId); return <TableRow key={deployment.id}>
         <TableCell data-label="Client">{client ? <Link to={clientUrl(client)} className="font-medium text-primary hover:underline">{client.name}</Link> : clientName(deployment.clientId)}</TableCell>
