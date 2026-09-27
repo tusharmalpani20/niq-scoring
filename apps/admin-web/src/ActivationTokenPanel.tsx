@@ -137,7 +137,7 @@ export function ActivationTokenPanel({ deploymentId, disabled, creating, onCreat
   </section>
     <Pagination aria-label="Activation tokens pagination"><PaginationContent>
       <PaginationItem><Button type="button" variant="outline" size="sm" disabled={rows.page === 1} onClick={() => setPage(rows.page - 1)}>Previous</Button></PaginationItem>
-      <PaginationItem><span className="flex flex-col items-center gap-1 px-2 text-xs text-muted-foreground sm:block sm:px-3 sm:text-sm" role="status"><span className="whitespace-nowrap">Page {rows.page} of {rows.pageCount}</span><span className="whitespace-nowrap"><span className="hidden sm:inline"> · </span>{rows.total} total</span></span></PaginationItem>
+      <PaginationItem><span className="whitespace-nowrap px-2 text-xs text-muted-foreground sm:px-3 sm:text-sm" role="status">Page {rows.page} of {rows.pageCount}</span></PaginationItem>
       <PaginationItem><Button type="button" variant="outline" size="sm" disabled={rows.page === rows.pageCount} onClick={() => setPage(rows.page + 1)}>Next</Button></PaginationItem>
     </PaginationContent></Pagination>
   </div>;

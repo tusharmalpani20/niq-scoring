@@ -30,6 +30,6 @@ export function DashboardClientUsage({ clients, overview }: { clients: Dashboard
       </li>;
     })}</ul>}
   </CardContent></Card>
-    {clientPage.pageCount > 1 && <Pagination aria-label="Dashboard clients pagination"><PaginationContent><PaginationItem><Button variant="outline" size="sm" disabled={clientPage.page === 1} onClick={() => setPage(clientPage.page - 1)}>Previous</Button></PaginationItem><PaginationItem><span className="px-2 text-xs text-muted-foreground" role="status">Page {clientPage.page} of {clientPage.pageCount} · {clientPage.total} clients</span></PaginationItem><PaginationItem><Button variant="outline" size="sm" disabled={clientPage.page === clientPage.pageCount} onClick={() => setPage(clientPage.page + 1)}>Next</Button></PaginationItem></PaginationContent></Pagination>}
+    {clientPage.pageCount > 1 && <Pagination aria-label="Dashboard clients pagination"><PaginationContent><PaginationItem><Button variant="outline" size="sm" disabled={clientPage.page === 1} onClick={() => setPage(clientPage.page - 1)}>Previous</Button></PaginationItem><PaginationItem><span className="px-2 text-xs text-muted-foreground" role="status">Page {clientPage.page} of {clientPage.pageCount}</span></PaginationItem><PaginationItem><Button variant="outline" size="sm" disabled={clientPage.page === clientPage.pageCount} onClick={() => setPage(clientPage.page + 1)}>Next</Button></PaginationItem></PaginationContent></Pagination>}
   </div>;
 }
