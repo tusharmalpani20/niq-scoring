@@ -17,6 +17,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
 import { ruleStatusVariant } from "./rules/rule-status";
+import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
 
 export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
   const [records, setRecords] = useState<RuleMetadata[]>([]);
@@ -28,7 +29,7 @@ export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
   const navigate = useNavigate();
   const [deleting, setDeleting] = useState<RuleMetadata | null>(null);
   const [busy, setBusy] = useState(false);
-  async function load() { setLoading(true); setError(""); try { setRecords((await request<{ versions: RuleMetadata[] }>("/admin/rules")).versions); } catch(cause) { setError(message(cause)); } finally { setLoading(false); } }
+  async function load() { setLoading(true); setError(""); try { setRecords((await request<{ versions: RuleMetadata[] }>("/admin/rules")).versions.filter(version => version.version !== PROVISIONAL_SCORING_VERSION)); } catch(cause) { setError(message(cause)); } finally { setLoading(false); } }
   useEffect(() => { void load(); }, []);
   function open(name: string) { navigate(versionUrl(name)); }
   function updated() { void load(); void refresh().catch(cause => setError(message(cause))); }

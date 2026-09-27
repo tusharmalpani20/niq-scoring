@@ -1,6 +1,7 @@
 import { createSpreadsheetTemplate } from "@niq-scoring/contracts/rule-template";
 import { describe, expect, test } from "bun:test";
 import { type RuleDefinition } from "@niq-scoring/contracts/rules";
+import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
 import { MemoryAdminAuthStore } from "./admin-auth-store";
 import { createApp } from "./app";
@@ -58,6 +59,22 @@ async function savedSynthetic(context: ReturnType<typeof setup>, name = "Synthet
 }
 
 describe("rule management API", () => {
+  test("hides the historical provisional rule from management without removing its record", async () => {
+    const { request, store, create } = setup();
+    const ordinary = await create("Manageable draft");
+    const legacy: RuleRecord = {
+      ...ordinary,
+      id: "01K4ZJ9QJ7F3TWHDW1B1T6A4YV",
+      version: PROVISIONAL_SCORING_VERSION,
+      definition: { status: "DRAFT_NON_CLINICAL", clinicalUsePermitted: false },
+    };
+    store.rules.records.push(legacy);
+
+    const list = await (await request("")).json() as { versions: RuleRecord[] };
+    expect(list.versions.map(rule => rule.version)).toEqual(["Manageable draft"]);
+    expect((await request(`/${legacy.id}`)).status).toBe(200);
+  });
+
   test("final assessment drafts require a category color and accept custom hex colors", async () => {
     const { request } = setup();
     const created = await request("", "POST", { name: "Color rules", requestId: crypto.randomUUID(), template: "final_assessment" });
