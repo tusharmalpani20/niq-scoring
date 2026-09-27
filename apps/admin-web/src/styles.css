@@ -331,20 +331,40 @@ td small {
   }
 
   .auth-shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
     min-height: 100svh;
+    padding: 1.5rem 1rem;
   }
   .auth-intro {
-    padding: 20px 18px 8px;
+    width: 100%;
+    margin-top: auto;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    background: none;
   }
   .auth-intro > div:nth-child(2),
   .auth-intro > small {
     display: none;
   }
+  .auth-intro .brandmark img {
+    width: 8rem;
+    height: 5rem;
+  }
+  .auth-intro .brandmark span {
+    display: none;
+  }
   .auth-content {
-    align-items: flex-start;
-    padding: 16px 18px 36px;
+    display: block;
+    width: 100%;
+    margin-bottom: auto;
+    padding: 0;
+  }
+  .auth-content > div {
+    margin: 0 auto;
   }
   .version {
     align-items: flex-start;
