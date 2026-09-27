@@ -20,6 +20,8 @@ Client creation needs only a name. Activation tokens identify a specific deploym
 
 Administrators create and edit deployments from a single configuration dialog. A configuration save writes the deployment details, both capability limits and the rule assignment in one transaction. A deployment cannot be moved to a different client through this editor. Existing credentials and usage remain attached to its unchanged deployment ID.
 
+The legacy `NIQ-DRAFT-2026-09` rule is a single historical record, not a rule created for each deployment. New deployments cannot pin it, even in a development environment. They may follow the approved default or pin another clinically permitted approved or active rule. Existing deployments already pinned to the legacy rule can retain that assignment while updating unrelated settings.
+
 New deployments select NIQ hosted or Client cloud. Hosting is descriptive metadata; choosing it does not provision infrastructure. Client, environment and hosting cannot change after creation. Older deployments without hosting can select it once; existing on-premises deployments retain their legacy value.
 
 The configuration API generates a display name from the client, environment, hosting and a random suffix (for example, `apollo-production-niq-7f3a91bc`). Editing preserves this name and the internal deployment ID. Name is not a form input. Deployment records do not store region; the API retains its separate runtime region configuration.
