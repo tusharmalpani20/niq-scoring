@@ -1,4 +1,4 @@
-import { PROVISIONAL_SCORING_VERSION, type VersionAssignmentInput } from "@niq-scoring/contracts";
+import { type VersionAssignmentInput } from "@niq-scoring/contracts";
 import { RuleStoreError } from "./rule-store";
 export async function assertAssignmentEligible(tx: import("postgres").TransactionSql, deploymentId: string, policy: VersionAssignmentInput) {
   if (policy.mode !== "PINNED") return;
@@ -6,5 +6,5 @@ export async function assertAssignmentEligible(tx: import("postgres").Transactio
   // Preserve an existing retired pin when editing unrelated deployment settings.
   if (current?.scoring_rule_version_id === policy.scoringRuleVersionId) return;
   const [rule] = await tx`select version,lifecycle,clinical_use_permitted from scoring_rule_versions where id=${policy.scoringRuleVersionId} for share`;
-  if (!rule || !(rule.version === PROVISIONAL_SCORING_VERSION || rule.clinical_use_permitted && ["APPROVED", "ACTIVE"].includes(rule.lifecycle))) throw new RuleStoreError("VERSION_UNAVAILABLE");
+  if (!rule || !(rule.clinical_use_permitted && ["APPROVED", "ACTIVE"].includes(rule.lifecycle))) throw new RuleStoreError("VERSION_UNAVAILABLE");
 }

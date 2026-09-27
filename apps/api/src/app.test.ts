@@ -23,7 +23,8 @@ async function onboard() {
   const client = await (await app.request("/admin/clients", jsonRequest({ name: "Apollo Group" }))).json() as { id: string };
   const deployment = await (await app.request("/admin/deployments", jsonRequest({ name: "Apollo Production", environment: "production", clientId: client.id }))).json() as { id: string };
   for (const capability of ["SCORING", "FACE_SCAN"] as const) await app.request(`/admin/deployments/${deployment.id}/entitlement`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ capability, enabled: true, monthlyLimit: null }) });
-  await app.request(`/admin/deployments/${deployment.id}/version-assignment`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id }) });
+  // This fixture represents a deployment pinned before new provisional assignments were blocked.
+  store.assignments.push({ deploymentId: deployment.id, mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id });
   const activation = await (await app.request(`/admin/deployments/${deployment.id}/activation-token`, jsonRequest({ expiresInMinutes: 30 }))).json() as { activationToken: string };
   const activated = await (await app.request("/v1/activate", jsonRequest({ activationToken: activation.activationToken }, ""))).json() as { credential: string };
   return { app, store, client, deployment, activationToken: activation.activationToken, credential: activated.credential };
@@ -84,7 +85,7 @@ describe("scoring API", () => {
     const client = await store.createClient({ name: "Retry client" });
     const body = { clientId: client.id, environment: "production", hostingType: "NIQ_HOSTED", enabled: true,
       scoring: { enabled: true, monthlyLimit: 7 }, faceScan: { enabled: true, monthlyLimit: 5 },
-      versionAssignment: { mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id } };
+      versionAssignment: { mode: "LATEST_APPROVED" } };
     const headers = { ...adminHeaders, "idempotency-key": crypto.randomUUID() };
     const create = (input: unknown) => app.request("/admin/deployments/configuration", { method: "POST", headers, body: JSON.stringify(input) });
     const first = await create(body);
@@ -98,6 +99,29 @@ describe("scoring API", () => {
     expect((await create({ ...body, scoring: { enabled: true, monthlyLimit: 8 } })).status).toBe(409);
     expect((await app.request(`/admin/deployments/${created.id}`, { method: "DELETE", headers })).status).toBe(200);
     expect((await create(body)).status).toBe(409);
+  });
+
+  test("new deployments cannot select the legacy provisional rule", async () => {
+    const { app, store } = setup();
+    const client = await store.createClient({ name: "New client" });
+    const provisionalId = store.versions[0]!.id;
+    const configuration = {
+      clientId: client.id, environment: "production", hostingType: "NIQ_HOSTED", enabled: true,
+      scoring: { enabled: true, monthlyLimit: null }, faceScan: { enabled: true, monthlyLimit: null },
+      versionAssignment: { mode: "PINNED", scoringRuleVersionId: provisionalId },
+    };
+    const create = await app.request("/admin/deployments/configuration", jsonRequest(configuration));
+    expect(create.status).toBe(409);
+    expect(await create.json()).toEqual({ error: "VERSION_UNAVAILABLE" });
+    expect(store.deployments).toHaveLength(0);
+
+    const deployment = await store.createDeployment({ clientId: client.id, name: "Existing API path", environment: "test" });
+    const assign = await app.request(`/admin/deployments/${deployment.id}/version-assignment`, {
+      method: "PUT", headers: adminHeaders,
+      body: JSON.stringify({ mode: "PINNED", scoringRuleVersionId: provisionalId }),
+    });
+    expect(assign.status).toBe(409);
+    await expect(store.assignVersion(deployment.id, { mode: "PINNED", scoringRuleVersionId: provisionalId })).rejects.toThrow("VERSION_UNAVAILABLE");
   });
 
   test("client usage reports successful deployment events and six UTC months", async () => {
@@ -219,7 +243,7 @@ describe("scoring API", () => {
     await store.setEntitlement(deployment.id, { capability: "SCORING", enabled: true, monthlyLimit: 1 });
     const second = await store.createDeployment({ clientId: client.id, name: "Second", environment: "test" });
     await store.setEntitlement(second.id, { capability: "SCORING", enabled: true, monthlyLimit: 2 });
-    await store.assignVersion(second.id, { mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id });
+    store.assignments.push({ deploymentId: second.id, mode: "PINNED", scoringRuleVersionId: store.versions[0]!.id });
     async function activate(id: string) {
       const token = await (await app.request(`/admin/deployments/${id}/activation-token`, jsonRequest({}))).json() as { activationToken: string };
       return (await (await app.request("/v1/activate", jsonRequest(token))).json() as { credential: string }).credential;
@@ -268,7 +292,8 @@ describe("scoring API", () => {
     expect((await update({ ...input, hostingType: "NIQ_HOSTED" })).status).toBe(409);
     expect(store.deployments.find(d => d.id === deployment.id)).toMatchObject({ name: "Final name", environment: "production", hostingType: "CLIENT_CLOUD" });
     expect(store.usages).toHaveLength(1);
-    const created = await app.request("/admin/deployments/configuration", jsonRequest(input));
+    const newDeploymentInput = { ...input, versionAssignment: { mode: "LATEST_APPROVED" } };
+    const created = await app.request("/admin/deployments/configuration", jsonRequest(newDeploymentInput));
     expect(created.status).toBe(201);
     const saved = await created.json() as { id: string; name: string };
     expect(saved.name).toBe("Production 2");
@@ -276,14 +301,14 @@ describe("scoring API", () => {
     expect(store.deployments.find(d => d.id === deployment.id)?.name).toBe("Final name");
     expect(saved).not.toHaveProperty("region");
     expect(store.entitlements.filter(e => e.deploymentId === saved.id)).toHaveLength(2);
-    expect(store.assignments.find(a => a.deploymentId === saved.id)?.mode).toBe("PINNED");
-    const again = await app.request("/admin/deployments/configuration", jsonRequest(input));
+    expect(store.assignments.find(a => a.deploymentId === saved.id)?.mode).toBe("LATEST_APPROVED");
+    const again = await app.request("/admin/deployments/configuration", jsonRequest(newDeploymentInput));
     expect(again.status).toBe(201);
     expect((await again.json() as { name: string }).name).toBe("Production 3");
-    const custom = await app.request("/admin/deployments/configuration", jsonRequest({ ...input, name: "Main production" }));
+    const custom = await app.request("/admin/deployments/configuration", jsonRequest({ ...newDeploymentInput, name: "Main production" }));
     expect(custom.status).toBe(201);
     expect((await custom.json() as { name: string }).name).toBe("Main production");
-    expect((await app.request("/admin/deployments/configuration", jsonRequest({ ...input, name: "main production" }))).status).toBe(409);
+    expect((await app.request("/admin/deployments/configuration", jsonRequest({ ...newDeploymentInput, name: "main production" }))).status).toBe(409);
   });
 
   test("recovers unused activation tokens and replaces them without disconnecting credentials", async () => {

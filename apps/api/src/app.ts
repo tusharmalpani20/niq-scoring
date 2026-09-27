@@ -143,7 +143,7 @@ export function createApp(options: AppOptions) {
     if (policy.mode === "PINNED") {
       const selected = current.versions.find(v => v.id === policy.scoringRuleVersionId);
       const unchanged = current.assignments.some(a => a.deploymentId === id && a.mode === "PINNED" && a.scoringRuleVersionId === policy.scoringRuleVersionId);
-      if (!selected || !unchanged && !(selected.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(selected.lifecycle) || provisionalScoringEnabled && selected.version === PROVISIONAL_SCORING_VERSION)) return context.json({ error: "VERSION_UNAVAILABLE" }, 409);
+      if (!selected || !unchanged && !(selected.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(selected.lifecycle))) return context.json({ error: "VERSION_UNAVAILABLE" }, 409);
     }
     if (!id && !options.activationTokenEncryptionKey) return context.json({ error: "TOKEN_STORAGE_UNAVAILABLE" }, 503);
     const expiresAt = tokenExpiryDate(parsed.data.tokenExpiry);
@@ -196,7 +196,7 @@ export function createApp(options: AppOptions) {
       const pin = body.data.scoringRuleVersionId;
       const selected = overview.versions.find(v => v.id === pin);
       const unchanged = overview.assignments.some(a => a.deploymentId === id.data && a.mode === "PINNED" && a.scoringRuleVersionId === pin);
-      if (!selected || !unchanged && !(selected.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(selected.lifecycle) || provisionalScoringEnabled && selected.version === PROVISIONAL_SCORING_VERSION)) return context.json({ error: "VERSION_UNAVAILABLE" }, 409);
+      if (!selected || !unchanged && !(selected.clinicalUsePermitted && ["APPROVED", "ACTIVE"].includes(selected.lifecycle))) return context.json({ error: "VERSION_UNAVAILABLE" }, 409);
     }
     await options.store.assignVersion(id.data, body.data, adminMutationAudit(context)); return context.json({ deploymentId: id.data, ...body.data });
   });

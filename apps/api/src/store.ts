@@ -174,7 +174,6 @@ export class MemoryScoringStore implements ScoringStore {
   private checkAssignment(deploymentId: string | null, input: VersionAssignmentInput) {
     if (input.mode !== "PINNED") return;
     if (this.assignments.some(a => a.deploymentId === deploymentId && a.mode === "PINNED" && a.scoringRuleVersionId === input.scoringRuleVersionId)) return;
-    if (this.versions.some(v => v.id === input.scoringRuleVersionId && v.version === PROVISIONAL_SCORING_VERSION)) return;
     if (!this.rules.records.some(r => r.id === input.scoringRuleVersionId && eligibleRule(r))) throw new RuleStoreError("VERSION_UNAVAILABLE");
   }
   async assignVersion(deploymentId: string, input: VersionAssignmentInput, audit?: AdminMutationAudit) { this.checkAssignment(deploymentId, input); const before = this.assignments.find(item => item.deploymentId === deploymentId); this.assignments = this.assignments.filter((item) => item.deploymentId !== deploymentId); this.assignments.push({ deploymentId, ...input }); this.logAdmin(audit, "DEPLOYMENT_RULE_ASSIGNED", "DEPLOYMENT", deploymentId, { before: before ?? null, after: input }); }
