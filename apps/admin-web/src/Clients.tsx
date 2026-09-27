@@ -21,6 +21,17 @@ import { Pagination, PaginationContent, PaginationItem } from "./components/ui/p
 import { Link } from "react-router-dom";
 import { clientUrl } from "./record-urls";
 
+function ClientEmptyIllustration() {
+  return <svg viewBox="0 0 192 136" className="h-28 w-40" aria-hidden="true" focusable="false">
+    <circle cx="96" cy="64" r="56" fill="var(--accent)" />
+    <ellipse cx="96" cy="125" rx="57" ry="4" fill="var(--border)" opacity="0.5" />
+    <rect x="55" y="31" width="82" height="87" rx="9" fill="var(--card)" stroke="var(--border)" strokeWidth="2" />
+    <path d="M55 51h82M71 67h15v15H71zm35 0h15v15h-15zM71 92h15v15H71zm35 0h15v26h-15z" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinejoin="round" />
+    <circle cx="143" cy="36" r="18" fill="var(--primary)" />
+    <path d="M143 28v16m-8-8h16" stroke="var(--primary-foreground)" strokeLinecap="round" strokeWidth="2.5" />
+  </svg>;
+}
+
 export function Clients({ data, refresh }: { data: Overview; refresh: () => Promise<void> }) {
   const [accessClient, setAccessClient] = useState<Overview["clients"][number] | null>(null);
   const [accessBusy, setAccessBusy] = useState(false);
@@ -83,7 +94,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
     </div>
     <TabsContent value="clients" className="space-y-5">
     <Card><CardContent className="pt-6">
-      <Table className="mobile-record-table">
+      <Table className={clients.total > 0 ? "mobile-record-table" : undefined}>
         <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Deployments</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
           {clients.rows.map(client => <TableRow key={client.id}>
@@ -97,16 +108,24 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
               <DeleteRecord kind="clients" id={client.id} name={client.name} refresh={refresh} revision={data} iconOnly />
             </div></TableCell>
           </TableRow>)}
-          {data.clients.length === 0 && <TableRow><TableCell colSpan={4} className="h-32 text-center"><Button variant="ghost" onClick={() => setOpen(true)}><Plus aria-hidden="true" /> Create your first client</Button></TableCell></TableRow>}
-          {data.clients.length > 0 && clients.total === 0 && <TableRow><TableCell colSpan={4} className="h-32 text-center text-muted-foreground">No clients match your search.</TableCell></TableRow>}
         </TableBody>
       </Table>
+      {data.clients.length === 0 ? (
+        <div className="flex min-h-64 flex-col items-center justify-center gap-3 py-8 text-center">
+          <ClientEmptyIllustration />
+          <div className="space-y-1">
+            <h2 className="font-semibold">No clients yet</h2>
+            <p className="text-sm text-muted-foreground">Create a client to set up its deployments.</p>
+          </div>
+          <Button className="mt-2" onClick={() => setOpen(true)}><Plus aria-hidden="true" /> Create client</Button>
+        </div>
+      ) : clients.total === 0 && <p className="py-12 text-center text-sm text-muted-foreground">No clients match your search.</p>}
     </CardContent></Card>
-    <Pagination aria-label="Clients pagination"><PaginationContent>
+    {clients.total > 0 && <Pagination aria-label="Clients pagination"><PaginationContent>
       <PaginationItem><Button variant="outline" size="sm" disabled={clients.page === 1} onClick={() => setPage(clients.page - 1)}>Previous</Button></PaginationItem>
       <PaginationItem><span className="whitespace-nowrap px-2 text-xs text-muted-foreground sm:px-3 sm:text-sm" role="status">Page {clients.page} of {clients.pageCount}</span></PaginationItem>
       <PaginationItem><Button variant="outline" size="sm" disabled={clients.page === clients.pageCount} onClick={() => setPage(clients.page + 1)}>Next</Button></PaginationItem>
-    </PaginationContent></Pagination>
+    </PaginationContent></Pagination>}
     </TabsContent>
     <AlertDialog open={accessClient !== null} onOpenChange={next => { if (!next && !accessBusy) setAccessClient(null); }}>
       <AlertDialogContent>
