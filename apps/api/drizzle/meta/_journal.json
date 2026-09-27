@@ -155,6 +155,13 @@
       "when": 1790223804630,
       "tag": "0021_admin_deployment_create_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790504232609,
+      "tag": "0022_remove_legacy_provisional_rule",
+      "breakpoints": true
     }
   ]
 }
