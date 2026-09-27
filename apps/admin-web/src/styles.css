@@ -442,6 +442,7 @@ td small {
   .mobile-record-table tr { padding: .65rem .85rem; border: 1px solid var(--border) !important; border-radius: .85rem; background: var(--card); }
   .mobile-record-table td { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 1rem; padding: .4rem 0; white-space: normal; text-align: right; overflow-wrap: anywhere; }
   .mobile-record-table td::before { content: attr(data-label); flex: 0 0 6rem; color: var(--muted-foreground); font-size: .75rem; font-weight: 500; text-align: left; }
+  .mobile-record-table td small { overflow-wrap: anywhere; }
   .mobile-record-table td:not([data-label]) { display: block; height: auto; padding: 1rem 0; text-align: center; }
   .mobile-record-table td:not([data-label])::before { content: none; }
 }

@@ -211,7 +211,7 @@ export function Users({ currentUser }: { currentUser: User }) {
             loadError ? <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button> : <p role="status">Loading users…</p>
           ) : (
             <div>
-              <Table>
+              <Table className="mobile-record-table">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Administrator</TableHead>
@@ -222,19 +222,18 @@ export function Users({ currentUser }: { currentUser: User }) {
                 <TableBody>
                   {users.rows.map((u) => (
                     <TableRow key={u.id}>
-                      <TableCell>
-                        <strong>
-                          {u.displayName}
-                          {u.id === currentUser.id ? " (you)" : ""}
-                        </strong>
-                        <small>{u.email}</small>
+                      <TableCell data-label="Administrator">
+                        <span className="min-w-0 text-right sm:text-left">
+                          <strong>{u.displayName}{u.id === currentUser.id ? " (you)" : ""}</strong>
+                          <small>{u.email}</small>
+                        </span>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Status">
                         <Badge variant={u.enabled ? "default" : "secondary"}>
                           {u.enabled ? "Enabled" : "Disabled"}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Access">
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -260,7 +259,7 @@ export function Users({ currentUser }: { currentUser: User }) {
           loadError ? <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button> : <p role="status">Loading invitations…</p>
         ) : (
           <div>
-            <Table>
+            <Table className="mobile-record-table">
               <TableHeader>
                 <TableRow>
                   <TableHead>Invitee</TableHead>
@@ -280,12 +279,11 @@ export function Users({ currentUser }: { currentUser: User }) {
                 )}
                 {invitations.rows.map((i) => (
                   <TableRow key={i.id}>
-                    <TableCell>
-                      <strong>{i.displayName}</strong>
-                      <small>{i.email}</small>
+                    <TableCell data-label="Invitee">
+                      <span className="min-w-0 text-right sm:text-left"><strong>{i.displayName}</strong><small>{i.email}</small></span>
                     </TableCell>
-                    <TableCell>{new Date(i.expiresAt).toLocaleString()}</TableCell>
-                    <TableCell>
+                    <TableCell data-label="Expires">{new Date(i.expiresAt).toLocaleString()}</TableCell>
+                    <TableCell data-label="Action">
                       <Button
                         variant="outline"
                         size="sm"
