@@ -332,16 +332,19 @@ td small {
 
   .auth-shell {
     grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    min-height: 100svh;
   }
   .auth-intro {
-    padding: 24px;
+    padding: 20px 18px 8px;
   }
   .auth-intro > div:nth-child(2),
   .auth-intro > small {
     display: none;
   }
   .auth-content {
-    padding: 30px 12px;
+    align-items: flex-start;
+    padding: 16px 18px 36px;
   }
   .version {
     align-items: flex-start;
