@@ -229,7 +229,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                         </span>
                       </TableCell>
                       <TableCell data-label="Status">
-                        <Badge variant="status">
+                        <Badge variant={u.enabled ? "success" : "inactive"}>
                           {u.enabled ? "Enabled" : "Disabled"}
                         </Badge>
                       </TableCell>

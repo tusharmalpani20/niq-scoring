@@ -88,7 +88,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
         <TableBody>
           {clients.rows.map(client => <TableRow key={client.id}>
             <TableCell data-label="Client" className="font-medium"><Link to={clientUrl(client)} className="text-primary hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{client.name}</Link></TableCell>
-            <TableCell data-label="Status"><Badge variant="status">{client.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
+            <TableCell data-label="Status"><Badge variant={client.enabled ? "success" : "inactive"}>{client.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
             <TableCell data-label="Deployments" className="text-right tabular-nums">{data.deployments.filter(deployment => deployment.clientId === client.id).length}</TableCell>
             <TableCell data-label="Actions" className="text-right"><div className="flex items-center justify-end gap-1">
               <Button variant="ghost" size="icon" title={`${client.enabled ? "Disable" : "Enable"} ${client.name}`} aria-label={`${client.enabled ? "Disable" : "Enable"} ${client.name}`} onClick={() => { setAccessError(""); setAccessClient(client); }}>
