@@ -12,7 +12,9 @@ const badgeVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
         status:
-          "border-border bg-secondary/60 text-foreground before:size-1.5 before:rounded-full before:bg-muted-foreground",
+          "border-slate-200 bg-slate-50 text-slate-700 before:size-1.5 before:rounded-full before:bg-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200",
+        retired:
+          "border-zinc-300 bg-zinc-100 text-zinc-600 before:size-1.5 before:rounded-full before:bg-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300",
         success:
           "border-emerald-200 bg-emerald-50 text-emerald-800 before:size-1.5 before:rounded-full before:bg-emerald-600 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
         inactive:
@@ -20,7 +22,11 @@ const badgeVariants = cva(
         info:
           "border-sky-200 bg-sky-50 text-sky-800 before:size-1.5 before:rounded-full before:bg-sky-600 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200",
         review:
-          "border-violet-200 bg-violet-50 text-violet-800 before:size-1.5 before:rounded-full before:bg-violet-600 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200",
+          "border-blue-200 bg-blue-50 text-blue-800 before:size-1.5 before:rounded-full before:bg-blue-600 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200",
+        warning:
+          "border-amber-200 bg-amber-50 text-amber-800 before:size-1.5 before:rounded-full before:bg-amber-600 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200",
+        highlight:
+          "border-primary/30 bg-primary/10 text-foreground before:size-1.5 before:rounded-full before:bg-primary",
         destructive:
           "bg-destructive text-white focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40 [a&]:hover:bg-destructive/90",
         outline:
