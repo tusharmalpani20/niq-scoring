@@ -16,6 +16,7 @@ import { Input } from "./components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
+import { ruleStatusVariant } from "./rules/rule-status";
 
 export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
   const [records, setRecords] = useState<RuleMetadata[]>([]);
@@ -55,9 +56,9 @@ export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
         <TableHeader><TableRow><TableHead>Rule</TableHead><TableHead>Status</TableHead><TableHead>Clinical use</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
           {versions.rows.map(version => <TableRow key={version.id}>
-            <TableCell data-label="Rule" className="font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-left text-primary" disabled={busy} onClick={() => void open(version.version)}>{version.version}</Button>{version.isDefault && <Badge variant="status" className="ml-2">Default</Badge>}</TableCell>
-            <TableCell data-label="Status"><Badge variant="status">{version.lifecycle === "VALIDATED" ? "Checked" : version.lifecycle.charAt(0) + version.lifecycle.slice(1).toLowerCase()}</Badge></TableCell>
-            <TableCell data-label="Clinical use"><span className={version.clinicalUsePermitted ? "text-foreground" : "text-destructive"}>{version.clinicalUsePermitted ? "Permitted" : "Prohibited"}</span></TableCell>
+            <TableCell data-label="Rule" className="font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-left text-primary" disabled={busy} onClick={() => void open(version.version)}>{version.version}</Button>{version.isDefault && <Badge variant="info" className="ml-2">Default</Badge>}</TableCell>
+            <TableCell data-label="Status"><Badge variant={ruleStatusVariant(version.lifecycle)}>{version.lifecycle === "VALIDATED" ? "Checked" : version.lifecycle.charAt(0) + version.lifecycle.slice(1).toLowerCase()}</Badge></TableCell>
+            <TableCell data-label="Clinical use"><Badge variant={version.clinicalUsePermitted ? "success" : "inactive"}>{version.clinicalUsePermitted ? "Permitted" : "Prohibited"}</Badge></TableCell>
             <TableCell data-label="Actions"><div className="flex justify-end gap-1">{version.editable && <Button variant="ghost" size="icon" title={`Edit ${version.version}`} aria-label={`Edit ${version.version}`} onClick={() => open(version.version)}><Pencil className="size-4" /></Button>}<Button variant="ghost" size="icon" title={`Duplicate ${version.version}`} aria-label={`Duplicate ${version.version}`} disabled={busy || version.duplicable === false} onClick={() => { setSource(version); setCreating(true); }}><Copy className="size-4" /></Button>{(version.deletable ?? version.editable) && version.lifecycle === "DRAFT" && <Button variant="ghost" size="icon" className="text-destructive" title={`Delete ${version.version}`} aria-label={`Delete ${version.version}`} onClick={() => { setError(""); setDeleting(version); }}><Trash2 className="size-4" /></Button>}</div></TableCell>
           </TableRow>)}
           {versions.total === 0 && <TableRow><TableCell colSpan={4} className="h-32 text-center text-muted-foreground">{records.length ? "No rules match your search." : "No rules configured."}</TableCell></TableRow>}

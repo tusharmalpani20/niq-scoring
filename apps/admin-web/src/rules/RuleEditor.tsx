@@ -18,6 +18,7 @@ import { ScoringEditor } from './ScoringEditor';
 import { descriptionText } from './editor-copy';
 import type { RuleDetail } from './rule-api';
 import { FinalAssessmentEditor } from './FinalAssessmentEditor';
+import { ruleStatusVariant } from './rule-status';
 
 export function RuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; onClose: () => void; onSaved: (record: RuleDetail) => void }) {
   if (finalAssessmentDefinitionSchema.safeParse(initial.definition).success) return <FinalAssessmentEditor initial={initial} onClose={onClose} onSaved={onSaved} />;
@@ -68,7 +69,7 @@ function LegacyRuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; 
   return <section className="min-w-0 space-y-6 pt-6" aria-label="Rule editor">
     <header className="space-y-4">
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm"><Button variant="link" className="h-auto shrink-0 p-0 font-normal" aria-label="Back to rules" disabled={busy} onClick={onClose}>Rules</Button><span aria-hidden="true" className="text-muted-foreground">/</span><span aria-current="page" className="truncate text-muted-foreground">{record.version}</span></nav>
-      <div className="flex flex-wrap items-center gap-3"><h1 className="min-w-0 break-words text-3xl font-semibold tracking-tight sm:text-4xl">{record.version}</h1><Badge variant="secondary" className="gap-1.5 rounded-full px-2.5 py-1"><span className="size-1.5 rounded-full bg-current" aria-hidden="true"/>{record.lifecycle.charAt(0) + record.lifecycle.slice(1).toLowerCase()}</Badge>{dirty && <span className="text-sm text-muted-foreground">Unsaved changes</span>}{!editable && <span className="text-sm text-muted-foreground">Read-only</span>}</div>
+      <div className="flex flex-wrap items-center gap-3"><h1 className="min-w-0 break-words text-3xl font-semibold tracking-tight sm:text-4xl">{record.version}</h1><Badge variant={ruleStatusVariant(record.lifecycle)} className="gap-1.5 rounded-full px-2.5 py-1">{record.lifecycle.charAt(0) + record.lifecycle.slice(1).toLowerCase()}</Badge>{dirty && <span className="text-sm text-muted-foreground">Unsaved changes</span>}{!editable && <span className="text-sm text-muted-foreground">Read-only</span>}</div>
     </header>
     {definition ? <>
       {!editable && <p className="text-sm text-muted-foreground">This version is read-only. Create a new version to change its scoring configuration.</p>}
