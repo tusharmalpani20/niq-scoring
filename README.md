@@ -29,6 +29,8 @@ bun run dev
 
 The commented [`.env.example`](.env.example) is the canonical reference for every environment variable, its valid values, default, and security constraints. Client/deployment identities and credentials are records managed by the scoring provisioning workflow, not environment variables.
 
+For Docker Compose, copy `.env.example` to the private `.env` file, set a unique `NIQ_SCORING_POSTGRES_PASSWORD` (a 64-character hex value works in the database URL), and set a random `ADMIN_BOOTSTRAP_TOKEN` before first-admin setup. Compose requires the private file and password, keeps PostgreSQL off host ports, and binds the admin console to localhost. Remove the bootstrap token after setup. If a PostgreSQL volume already exists, changing the environment password does not rotate its database password; rotate the role password in that database before restarting with a new value.
+
 Use `bun run db:generate` only after intentionally changing the Drizzle schema.
 
 API: `http://localhost:4100`; administration UI: `http://localhost:4173`.

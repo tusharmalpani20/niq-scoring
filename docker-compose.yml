@@ -4,9 +4,7 @@ services:
     environment:
       POSTGRES_DB: niq_scoring
       POSTGRES_USER: niq_scoring
-      POSTGRES_PASSWORD: change-me
-    ports:
-      - "5433:5432"
+      POSTGRES_PASSWORD: ${NIQ_SCORING_POSTGRES_PASSWORD:?Set NIQ_SCORING_POSTGRES_PASSWORD in the private .env file}
     volumes:
       - scoring-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -20,9 +18,9 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    env_file: ${NIQ_SCORING_ENV_FILE:-.env.example}
+    env_file: ${NIQ_SCORING_ENV_FILE:-.env}
     environment:
-      DATABASE_URL: postgresql://niq_scoring:change-me@postgres:5432/niq_scoring
+      DATABASE_URL: postgresql://niq_scoring:${NIQ_SCORING_POSTGRES_PASSWORD:?Set NIQ_SCORING_POSTGRES_PASSWORD in the private .env file}@postgres:5432/niq_scoring
     ports:
       - "127.0.0.1:4100:4100"
     depends_on:
@@ -36,9 +34,9 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
       target: migrations
-    env_file: ${NIQ_SCORING_ENV_FILE:-.env.example}
+    env_file: ${NIQ_SCORING_ENV_FILE:-.env}
     environment:
-      DATABASE_URL: postgresql://niq_scoring:change-me@postgres:5432/niq_scoring
+      DATABASE_URL: postgresql://niq_scoring:${NIQ_SCORING_POSTGRES_PASSWORD:?Set NIQ_SCORING_POSTGRES_PASSWORD in the private .env file}@postgres:5432/niq_scoring
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,7 +46,7 @@ services:
       context: .
       dockerfile: apps/admin-web/Dockerfile
     ports:
-      - "4173:80"
+      - "127.0.0.1:4173:80"
     depends_on:
       - api
 
