@@ -104,7 +104,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
     </CardContent></Card>
     <Pagination aria-label="Clients pagination"><PaginationContent>
       <PaginationItem><Button variant="outline" size="sm" disabled={clients.page === 1} onClick={() => setPage(clients.page - 1)}>Previous</Button></PaginationItem>
-      <PaginationItem><span className="flex flex-col items-center gap-1 px-2 text-xs text-muted-foreground sm:block sm:px-3 sm:text-sm" role="status"><span className="whitespace-nowrap">Page {clients.page} of {clients.pageCount}</span><span className="whitespace-nowrap"><span className="hidden sm:inline"> · </span>{clients.total} total</span></span></PaginationItem>
+      <PaginationItem><span className="whitespace-nowrap px-2 text-xs text-muted-foreground sm:px-3 sm:text-sm" role="status">Page {clients.page} of {clients.pageCount}</span></PaginationItem>
       <PaginationItem><Button variant="outline" size="sm" disabled={clients.page === clients.pageCount} onClick={() => setPage(clients.page + 1)}>Next</Button></PaginationItem>
     </PaginationContent></Pagination>
     </TabsContent>

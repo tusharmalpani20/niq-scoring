@@ -67,7 +67,7 @@ export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
       </Table></CardContent></Card>
       <Pagination aria-label="Rules pagination"><PaginationContent>
         <PaginationItem><Button variant="outline" size="sm" disabled={versions.page === 1} onClick={() => setPage(versions.page - 1)}>Previous</Button></PaginationItem>
-        <PaginationItem><span className="flex flex-col items-center gap-1 px-2 text-xs text-muted-foreground sm:block sm:px-3 sm:text-sm" role="status"><span className="whitespace-nowrap">Page {versions.page} of {versions.pageCount}</span><span className="whitespace-nowrap"><span className="hidden sm:inline"> · </span>{versions.total} total</span></span></PaginationItem>
+        <PaginationItem><span className="whitespace-nowrap px-2 text-xs text-muted-foreground sm:px-3 sm:text-sm" role="status">Page {versions.page} of {versions.pageCount}</span></PaginationItem>
         <PaginationItem><Button variant="outline" size="sm" disabled={versions.page === versions.pageCount} onClick={() => setPage(versions.page + 1)}>Next</Button></PaginationItem>
       </PaginationContent></Pagination>
     </TabsContent>
