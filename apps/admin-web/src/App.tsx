@@ -22,6 +22,7 @@ import { request, message, type User } from "./api";
 import { Auth } from "./Auth";
 import { Users } from "./Users";
 import { Operations, type Overview } from "./Operations";
+import { OverviewGreeting } from "./OverviewGreeting";
 import { ClientDetail } from "./ClientDetail";
 import { DeploymentDetail } from "./DeploymentDetail";
 import { Button } from "./components/ui/button";
@@ -231,8 +232,8 @@ function Console() {
       </header>
       <div className="workspace">
         <main className="page-content">
-          {!ruleId && !clientSegment && !deploymentSegment && <header className="page-header">
-            <h1>{page.label}</h1>
+          {!ruleId && !clientSegment && !deploymentSegment && <header className="page-header" aria-label={page.path === "overview" ? "Overview greeting" : undefined}>
+            {page.path === "overview" ? <OverviewGreeting displayName={user.displayName} /> : <h1>{page.label}</h1>}
           </header>}
           <ErrorNotice error={error} />
           {page.path !== "users" && !ruleId && data && overviewError && (
