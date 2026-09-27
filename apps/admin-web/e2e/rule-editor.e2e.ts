@@ -110,12 +110,7 @@ test("creation protects name changes and back navigation", async ({ page }) => {
 
 async function navigateToVersions(page: Page) {
   await page.goto("/overview");
-  if (!await page.getByRole("link", { name: "Rules", exact: true }).isVisible()) {
-    await page.getByRole("button", { name: "Toggle Sidebar", exact: true }).click();
-  }
-  await page.getByRole("link", { name: "Rules", exact: true }).click();
-  const sidebar = page.getByRole("dialog", { name: "Sidebar", exact: true });
-  if (await sidebar.isVisible()) await page.keyboard.press("Escape");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Rules", exact: true }).click();
 }
 
 test("editing keeps unsaved changes on back navigation until discard", async ({ page }) => {
