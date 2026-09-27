@@ -152,6 +152,18 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
     await db`insert into deployment_version_assignments(id,deployment_id,mode,scoring_rule_version_id) values(${createEntityId()},${deploymentId},'PINNED',${ruleId})`;
     const pinned = await workflow.create(identity, input("pinned"));
     await db`update deployment_version_assignments set effective_until=clock_timestamp() where deployment_id=${deploymentId}`;
+    await db`insert into assessment_bindings(id,deployment_id,client_id,assessment_reference,scoring_rule_version_id,package_checksum) values(${createEntityId()},${deploymentId},${clientId},'retired-bound',${ruleId},${"c".repeat(64)})`;
+    await db`update scoring_rule_versions set lifecycle='RETIRED',clinical_use_permitted=false where id=${ruleId}`;
+    const retiredBound = await workflow.create(identity, input("retired-bound"));
+    const [retiredMapping] = await db`select mapping from face_scan_workflows where session_id=${retiredBound.session.id}`;
+    expect(retiredMapping?.mapping.ruleVersionId).toBe(ruleId);
+    const unmappedRuleId=createEntityId();
+    await db`insert into scoring_rule_versions(id,version,lifecycle,clinical_use_permitted,package_checksum,definition) values(${unmappedRuleId},${`scan-fixture-${unmappedRuleId}`},'APPROVED',true,${"d".repeat(64)},${db.json({})})`;
+    await db`insert into assessment_bindings(id,deployment_id,client_id,assessment_reference,scoring_rule_version_id,package_checksum) values(${createEntityId()},${deploymentId},${clientId},'unmapped-bound',${unmappedRuleId},${"d".repeat(64)})`;
+    const [usageBeforeMappingRejection] = await db`select count(*)::int as n from usage_events where deployment_id=${deploymentId}`;
+    await expect(workflow.create(identity,input("unmapped-bound"))).rejects.toMatchObject({code:"FACE_SCAN_MAPPING_UNAVAILABLE"});
+    const [usageAfterMappingRejection] = await db`select count(*)::int as n from usage_events where deployment_id=${deploymentId}`;
+    expect(usageAfterMappingRejection?.n).toBe(usageBeforeMappingRejection?.n);
     await workflow.upload(identity, pinned.session.id, "organization-a", signal);
     await workflow.tick();
     expect((await workflow.get(identity, pinned.session.id, "organization-a")).session.score).toMatchObject({ points: 7, ruleVersionId: ruleId });
@@ -205,6 +217,7 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
     await db`delete from face_scan_workflows where deployment_id=${deploymentId}`;
     await db`delete from face_scan_sessions where deployment_id=${deploymentId}`;
     await db`delete from usage_events where deployment_id=${deploymentId}`;
+    await db`delete from assessment_bindings where deployment_id=${deploymentId}`;
     await db`delete from entitlements where deployment_id=${deploymentId}`;
     await db`delete from deployment_credentials where deployment_id=${deploymentId}`;
     await db`delete from deployment_version_assignments where deployment_id=${deploymentId}`;

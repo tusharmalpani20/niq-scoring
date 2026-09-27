@@ -62,16 +62,20 @@ export class FaceScanWorkflow {
      if (active) throw new FaceScanError("ACTIVE_FACE_SCAN_EXISTS");
      const [usage] = await tx<{ count: number }[]>`select count(*)::integer as count from usage_events where deployment_id=${identity.deploymentId} and capability='FACE_SCAN' and outcome in ('PENDING','SUCCEEDED') and occurred_at>=date_trunc('month',now() at time zone 'UTC') at time zone 'UTC'`;
      if (entitlement.monthly_limit !== null && (usage?.count ?? 0) >= entitlement.monthly_limit) throw new FaceScanError("MONTHLY_LIMIT_REACHED");
-     // Only an explicit approved mapping qualifies. Missing mappings never inherit a provisional default.
-     const [rule] = await tx<{ id: string; package_checksum: string; assignment_id: string; configuration: unknown }[]>`select r.id,r.package_checksum,a.id as assignment_id,r.definition->'faceScanScoring' as configuration
-       from deployment_version_assignments a
-       left join assessment_bindings b on b.deployment_id=a.deployment_id and b.assessment_reference=${input.assessmentReference}
-       join scoring_rule_versions r on r.id=coalesce(b.scoring_rule_version_id,case when a.mode='PINNED' then a.scoring_rule_version_id else (select rule_id from scoring_rule_default where singleton=true) end)
+     // An assessment keeps its rule even after retirement or assignment changes.
+     const [binding] = await tx<{ id: string; rule_id: string | null; package_checksum: string | null; configuration: unknown }[]>`select b.id,r.id as rule_id,r.package_checksum,r.definition->'faceScanScoring' as configuration
+       from assessment_bindings b left join scoring_rule_versions r on r.id=b.scoring_rule_version_id and r.package_checksum=b.package_checksum
+         and (r.lifecycle='RETIRED' or r.lifecycle in ('APPROVED','ACTIVE') and r.clinical_use_permitted=true)
+       where b.deployment_id=${identity.deploymentId} and b.client_id=${identity.clientId} and b.assessment_reference=${input.assessmentReference}`;
+     const [assigned] = binding ? [] : await tx<{ id: string; rule_id: string; package_checksum: string; configuration: unknown }[]>`select a.id,r.id as rule_id,r.package_checksum,r.definition->'faceScanScoring' as configuration
+       from deployment_version_assignments a join scoring_rule_versions r on r.id=case when a.mode='PINNED' then a.scoring_rule_version_id else (select rule_id from scoring_rule_default where singleton=true) end
        where a.deployment_id=${identity.deploymentId} and a.effective_from<=now() and a.effective_until is null
-         and (b.id is not null and r.lifecycle in ('APPROVED','ACTIVE','RETIRED') or b.id is null and r.lifecycle in ('APPROVED','ACTIVE'))
-         and r.clinical_use_permitted=true limit 1`;
-     const config = faceScanScoringConfigSchema.safeParse(rule?.configuration);
-     const mapping: Mapping | null = rule && config.success ? { ruleVersionId: rule.id, checksum: rule.package_checksum, assignmentId: rule.assignment_id, configuration: config.data } : null;
+         and r.lifecycle in ('APPROVED','ACTIVE') and r.clinical_use_permitted=true limit 1`;
+     const selected = binding ?? assigned;
+     const config = faceScanScoringConfigSchema.safeParse(selected?.configuration);
+     // Standalone scans may have no mapping; a bound assessment must never be billed without one.
+     if (binding && (!binding.rule_id || !config.success)) throw new FaceScanError("FACE_SCAN_MAPPING_UNAVAILABLE");
+     const mapping: Mapping | null = selected?.rule_id && selected.package_checksum && config.success ? { ruleVersionId: selected.rule_id, checksum: selected.package_checksum, assignmentId: selected.id, configuration: config.data } : null;
      const sessionId = createEntityId(), usageId = createEntityId();
      await tx`insert into usage_events(id,client_id,deployment_id,credential_id,capability,scoring_rule_version_id,request_id,idempotency_key,assessment_reference,outcome,request_fingerprint)
        values(${usageId},${identity.clientId},${identity.deploymentId},${identity.credentialId},'FACE_SCAN',${mapping?.ruleVersionId ?? null},${sessionId},${input.idempotencyKey},${input.assessmentReference},'PENDING',${fingerprint})`;
