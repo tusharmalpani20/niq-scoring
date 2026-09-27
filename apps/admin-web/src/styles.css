@@ -434,9 +434,9 @@ td small {
   bottom: calc(1rem + env(safe-area-inset-bottom));
   left: 50%;
   display: flex;
-  width: min(620px, calc(100% - 1.5rem));
-  gap: .2rem;
-  padding: .4rem;
+  width: min(500px, calc(100% - 1.5rem));
+  gap: .125rem;
+  padding: .3rem;
   transform: translateX(-50%);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -444,7 +444,7 @@ td small {
   box-shadow: 0 14px 38px rgb(17 41 50 / 14%);
   backdrop-filter: blur(18px);
 }
-.scoring-dock-item { display: grid; min-width: 0; min-height: 4rem; flex: 1; align-content: center; justify-items: center; gap: .25rem; border-radius: 999px; color: var(--muted-foreground); font-size: .72rem; font-weight: 600; text-align: center; }
+.scoring-dock-item { display: grid; min-width: 0; min-height: 3rem; flex: 1; align-content: center; justify-items: center; gap: .1rem; border-radius: 999px; color: var(--muted-foreground); font-size: .7rem; font-weight: 600; text-align: center; }
 .scoring-dock-item[aria-current="page"] { color: var(--primary-foreground); background: var(--primary); }
 .scoring-dock-item:not([aria-current="page"]):hover { color: var(--foreground); background: var(--accent); }
 .scoring-dock-item span { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
