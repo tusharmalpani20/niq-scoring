@@ -16,6 +16,7 @@ import {
   Layers3,
   LogOut,
   CircleUserRound,
+  ChevronDown,
 } from "lucide-react";
 import { request, message, type User } from "./api";
 import { Auth } from "./Auth";
@@ -24,7 +25,6 @@ import { Operations, type Overview } from "./Operations";
 import { ClientDetail } from "./ClientDetail";
 import { DeploymentDetail } from "./DeploymentDetail";
 import { Button } from "./components/ui/button";
-import { Sidebar, SidebarProvider, SidebarHeader, SidebarContent, SidebarFooter, SidebarGroup, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarTrigger } from "./components/ui/sidebar";
 import { ErrorNotice } from "./shared";
 import { clientUrl, deploymentUrl, resolveClient, resolveDeployment } from "./record-urls";
 const pages = [
@@ -192,68 +192,46 @@ function Console() {
     const canonical = deploymentUrl(data, deployment, tab);
     if (`${location.pathname}${location.search}` !== canonical) return <Navigate to={canonical} replace />;
   }
+  const initials = user.displayName.split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase();
+  async function signOut() {
+    setLoggingOut(true);
+    try {
+      await request("/auth/logout", {});
+      requestSequence.current += 1;
+      setUser(null);
+      setData(null);
+      setError("");
+      setOverviewError("");
+    } catch (cause) {
+      setError(message(cause));
+    } finally {
+      setLoggingOut(false);
+    }
+  }
   return (
-    <SidebarProvider>
-      <Sidebar collapsible="icon">
-        <SidebarHeader className="p-6 group-data-[collapsible=icon]:p-2">
-        <div className="flex items-center gap-3 whitespace-nowrap text-3xl font-extrabold tracking-tight text-foreground group-data-[collapsible=icon]:hidden">
-          NIQ<span className="border-l pl-3 text-sm font-medium tracking-normal text-muted-foreground">Scoring</span>
-        </div>
-          <span className="hidden text-center text-xs font-extrabold text-foreground group-data-[collapsible=icon]:block">NIQ</span>
-        </SidebarHeader>
-        <SidebarContent>
-        <SidebarGroup>
-        <SidebarMenu>
-          {pages.map((p) => (
-            <SidebarMenuItem key={p.path}>
-            <SidebarMenuButton asChild isActive={page.path === p.path} tooltip={p.label}>
-            <NavLink to={`/${p.path}`}>
-              <p.icon size={18} />
-              <span>{p.label}</span>
-            </NavLink>
-            </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-        </SidebarGroup>
-        </SidebarContent>
-        <SidebarFooter className="flex-row items-center justify-between gap-2 border-t p-4 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:p-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2 text-xs group-data-[collapsible=icon]:flex-none">
-            <CircleUserRound size={24} className="shrink-0 text-primary" aria-hidden="true" />
-            <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-              <strong className="block truncate" title={user.displayName}>{user.displayName}</strong>
+    <div className="scoring-workspace">
+      <header className="scoring-header" aria-label="Workspace header">
+        <div className="scoring-header-inner">
+          <NavLink to="/overview" className="scoring-brand" aria-label="NIQ scoring overview">
+            <img src="/nutra-iq-logo.png" alt="" />
+            <span>Scoring</span>
+          </NavLink>
+          <details className="scoring-account">
+            <summary role="button" aria-label={`Account menu for ${user.displayName}`}>
+              <span className="scoring-account-avatar" aria-hidden="true">{initials || <CircleUserRound size={18} />}</span>
+              <span className="scoring-account-name">{user.displayName}</span>
+              <ChevronDown size={16} aria-hidden="true" />
+            </summary>
+            <div className="scoring-account-menu">
+              <strong>{user.displayName}</strong>
               <small>Administrator</small>
+              <Button variant="ghost" disabled={loggingOut} onClick={() => { void signOut(); }}><LogOut size={16} aria-hidden="true" />Sign out</Button>
             </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Sign out"
-            title="Sign out"
-            disabled={loggingOut}
-            onClick={async () => {
-              setLoggingOut(true);
-              try {
-                await request("/auth/logout", {});
-                requestSequence.current += 1;
-                setUser(null);
-                setData(null);
-                setError("");
-                setOverviewError("");
-              } catch (c) {
-                setError(message(c));
-              } finally {
-                setLoggingOut(false);
-              }
-            }}
-          >
-            <LogOut size={18} aria-hidden="true" />
-          </Button>
-        </SidebarFooter>
-      </Sidebar>
+          </details>
+        </div>
+      </header>
       <div className="workspace">
         <main className="page-content">
-          <SidebarTrigger title="Toggle sidebar" />
           {!ruleId && !clientSegment && !deploymentSegment && <header className="page-header">
             <h1>{page.label}</h1>
           </header>}
@@ -285,6 +263,12 @@ function Console() {
           )}
         </main>
       </div>
-    </SidebarProvider>
+      <nav className="scoring-dock" aria-label="Main navigation">
+        {pages.map(item => <NavLink key={item.path} to={`/${item.path}`} className="scoring-dock-item" aria-current={page.path === item.path ? "page" : undefined}>
+          <item.icon size={20} aria-hidden="true" />
+          <span>{item.label}</span>
+        </NavLink>)}
+      </nav>
+    </div>
   );
 }
