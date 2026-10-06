@@ -15,6 +15,46 @@ test("face scan responses omit stored scoring bands", () => {
   expect(publicFaceScanScore(score)).toEqual({ status: "SCORED", points: 1, ruleVersionId: "rule-1", wellnessScore: 85, scoringVersion: null });
   expect(publicFaceScanScore(null)).toBeNull();
 });
+test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("face scan quota ignores nonbillable completions but reserves pending scans", async () => {
+  const db = postgres(process.env.DATABASE_URL!, { max: 2 });
+  const clientId = createEntityId(), deploymentId = createEntityId(), credentialId = createEntityId();
+  const identity = { clientId, deploymentId, credentialId };
+  const workflow = new FaceScanWorkflow(db, {
+    enabled: () => true, provider: {} as CarePlixProvider, encryptionKey: "a".repeat(64),
+    providerAccount: "synthetic:staging", retentionHours: 24,
+  });
+  const input = (key: string) => faceScanCreateSchema.parse({
+    clientId, organizationReference: "quota-test", assessmentReference: key, idempotencyKey: key,
+    context: { dob: "1990-01-01", gender: "female", heightCm: 170, weightKg: 70, posture: "resting", employeeId: "operator" },
+  });
+  try {
+    await db`insert into clients(id,name) values(${clientId},${`Quota test ${clientId}`})`;
+    await db`insert into deployments(id,client_id,name,environment) values(${deploymentId},${clientId},'quota test','test')`;
+    await db`insert into deployment_credentials(id,deployment_id,key_prefix,secret_hash) values(${credentialId},${deploymentId},${clientId.slice(0,20)},${"b".repeat(64)})`;
+    await db`insert into entitlements(id,deployment_id,capability,enabled,monthly_limit) values(${createEntityId()},${deploymentId},'FACE_SCAN',true,2)`;
+    for (const billable of [false, true]) {
+      const id = createEntityId();
+      await db`insert into usage_events(id,client_id,deployment_id,capability,request_id,idempotency_key,assessment_reference,outcome,billable)
+        values(${id},${clientId},${deploymentId},'FACE_SCAN',${id},${id},${id},'SUCCEEDED',${billable})`;
+    }
+    expect(await workflow.availability(identity)).toEqual({ available: true, reason: null });
+    const scan = await workflow.create(identity, input("new-scan"));
+    expect(scan.session.state).toBe("REQUESTED");
+    expect(await workflow.availability(identity)).toEqual({ available: false, reason: "MONTHLY_LIMIT_REACHED" });
+    await expect(workflow.create(identity, input("another-scan"))).rejects.toThrow("MONTHLY_LIMIT_REACHED");
+    await workflow.cancel(identity, scan.session.id, "quota-test");
+    expect(await workflow.availability(identity)).toEqual({ available: true, reason: null });
+  } finally {
+    await db`delete from face_scan_workflows where deployment_id=${deploymentId}`;
+    await db`delete from face_scan_sessions where deployment_id=${deploymentId}`;
+    await db`delete from usage_events where deployment_id=${deploymentId}`;
+    await db`delete from entitlements where deployment_id=${deploymentId}`;
+    await db`delete from deployment_credentials where deployment_id=${deploymentId}`;
+    await db`delete from deployments where id=${deploymentId}`;
+    await db`delete from clients where id=${clientId}`;
+    await db.end();
+  }
+});
 test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans isolate scope, reserve atomically, survive restart and never retry ambiguous dispatch", async () => {
   const db = postgres(process.env.DATABASE_URL!, { max: 4 });
   const clientId = createEntityId(), deploymentId = createEntityId(), credentialId = createEntityId(), ruleId = createEntityId();

@@ -52,7 +52,7 @@ export class FaceScanWorkflow {
    const [entitlement] = await this.sql<{ monthly_limit: number | null }[]>`select e.monthly_limit from entitlements e join deployments d on d.id=e.deployment_id join clients c on c.id=d.client_id
      where d.id=${identity.deploymentId} and c.id=${identity.clientId} and c.enabled and d.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now()) order by e.effective_from desc limit 1`;
    if (!entitlement) return { available: false, reason: "CAPABILITY_DISABLED" };
-   const [usage] = await this.sql<{ count: number }[]>`select count(*)::integer as count from usage_events where deployment_id=${identity.deploymentId} and capability='FACE_SCAN' and outcome in ('PENDING','SUCCEEDED') and occurred_at>=date_trunc('month',now() at time zone 'UTC') at time zone 'UTC'`;
+   const [usage] = await this.sql<{ count: number }[]>`select count(*)::integer as count from usage_events where deployment_id=${identity.deploymentId} and capability='FACE_SCAN' and (billable=true or outcome='PENDING') and occurred_at>=date_trunc('month',now() at time zone 'UTC') at time zone 'UTC'`;
    if (entitlement.monthly_limit !== null && (usage?.count ?? 0) >= entitlement.monthly_limit) return { available: false, reason: "MONTHLY_LIMIT_REACHED" };
    return { available: true, reason: null };
  }
@@ -70,7 +70,7 @@ export class FaceScanWorkflow {
      if (!entitlement) throw new FaceScanError("CAPABILITY_DISABLED", 403);
      const [active] = await tx`select session_id from face_scan_workflows where deployment_id=${identity.deploymentId} and organization_reference=${input.organizationReference} and assessment_reference=${input.assessmentReference} and state in ('REQUESTED','UPLOAD_ACCEPTED','PROCESSING','RECONCILIATION_REQUIRED','PAUSED')`;
      if (active) throw new FaceScanError("ACTIVE_FACE_SCAN_EXISTS");
-     const [usage] = await tx<{ count: number }[]>`select count(*)::integer as count from usage_events where deployment_id=${identity.deploymentId} and capability='FACE_SCAN' and outcome in ('PENDING','SUCCEEDED') and occurred_at>=date_trunc('month',now() at time zone 'UTC') at time zone 'UTC'`;
+     const [usage] = await tx<{ count: number }[]>`select count(*)::integer as count from usage_events where deployment_id=${identity.deploymentId} and capability='FACE_SCAN' and (billable=true or outcome='PENDING') and occurred_at>=date_trunc('month',now() at time zone 'UTC') at time zone 'UTC'`;
      if (entitlement.monthly_limit !== null && (usage?.count ?? 0) >= entitlement.monthly_limit) throw new FaceScanError("MONTHLY_LIMIT_REACHED");
      // An assessment keeps its rule even after retirement or assignment changes.
      const [binding] = await tx<{ id: string; rule_id: string | null; package_checksum: string | null; configuration: unknown }[]>`select b.id,r.id as rule_id,r.package_checksum,r.definition->'faceScanScoring' as configuration
