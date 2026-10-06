@@ -55,6 +55,54 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("face scan quota ignore
     await db.end();
   }
 });
+test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("confirmed provider age rejection permits a corrected scan while unknown rejection stays blocked", async () => {
+  const db = postgres(process.env.DATABASE_URL!, { max: 2 });
+  const clientId = createEntityId(), deploymentId = createEntityId(), credentialId = createEntityId();
+  const identity = { clientId, deploymentId, credentialId };
+  let message = "Age of the user cannot be less than 1 year! DOB should be atleast 1 year ago from the current date.";
+  const workflow = new FaceScanWorkflow(db, {
+    enabled: () => true, encryptionKey: "a".repeat(64), providerAccount: `synthetic:${deploymentId}`,
+    retentionHours: 24, minDispatchIntervalMs: 0,
+    provider: {
+      async createToken() { return { scanId: createEntityId(), token: "synthetic-token" }; },
+      async submit() { throw new CarePlixResponseError(faceScanDiagnostic("/vitals/add-scan", 200, { statusCode: 501, message }, [], "PROVIDER_REJECTION")); },
+    },
+  });
+  const input = (key: string) => faceScanCreateSchema.parse({
+    clientId, organizationReference: "quota-test", assessmentReference: key, idempotencyKey: key,
+    context: { dob: "2026-05-05", gender: "female", heightCm: 170, weightKg: 70, posture: "resting", employeeId: "operator" },
+  });
+  try {
+    await db`insert into clients(id,name) values(${clientId},${`Rejection test ${clientId}`})`;
+    await db`insert into deployments(id,client_id,name,environment) values(${deploymentId},${clientId},'rejection test','test')`;
+    await db`insert into deployment_credentials(id,deployment_id,key_prefix,secret_hash) values(${credentialId},${deploymentId},${clientId.slice(0,20)},${"b".repeat(64)})`;
+    await db`insert into entitlements(id,deployment_id,capability,enabled,monthly_limit) values(${createEntityId()},${deploymentId},'FACE_SCAN',true,3)`;
+    const rejected = await workflow.create(identity, input("age-rejected"));
+    await workflow.upload(identity, rejected.session.id, "quota-test", signal);
+    await workflow.tick();
+    expect((await workflow.get(identity, rejected.session.id, "quota-test")).session).toMatchObject({ state: "FAILED", failureCode: "PATIENT_AGE_UNSUPPORTED" });
+    const [reserved] = await db`select outcome from usage_events where id=(select usage_id from face_scan_workflows where session_id=${rejected.session.id})`;
+    expect(reserved?.outcome).toBe("PENDING");
+    await db`update face_scan_workflows set state='RECONCILIATION_REQUIRED',failure_code='PROVIDER_REJECTED' where session_id=${rejected.session.id}`;
+    expect((await workflow.get(identity, rejected.session.id, "quota-test")).session).toMatchObject({ state: "FAILED", failureCode: "PATIENT_AGE_UNSUPPORTED" });
+    message = "Processing error.";
+    const uncertain = await workflow.create(identity, { ...input("uncertain"), context: { ...input("uncertain").context, dob: "1990-01-01" } });
+    await workflow.upload(identity, uncertain.session.id, "quota-test", signal);
+    await workflow.tick();
+    expect((await workflow.get(identity, uncertain.session.id, "quota-test")).session).toMatchObject({ state: "RECONCILIATION_REQUIRED", failureCode: "PROVIDER_REJECTED" });
+    await expect(workflow.create(identity, { ...input("uncertain"), idempotencyKey: "unsafe-retry" })).rejects.toThrow("ACTIVE_FACE_SCAN_EXISTS");
+  } finally {
+    await db`delete from face_scan_receipts where session_id in(select session_id from face_scan_workflows where deployment_id=${deploymentId})`;
+    await db`delete from face_scan_workflows where deployment_id=${deploymentId}`;
+    await db`delete from face_scan_sessions where deployment_id=${deploymentId}`;
+    await db`delete from usage_events where deployment_id=${deploymentId}`;
+    await db`delete from entitlements where deployment_id=${deploymentId}`;
+    await db`delete from deployment_credentials where deployment_id=${deploymentId}`;
+    await db`delete from deployments where id=${deploymentId}`;
+    await db`delete from clients where id=${clientId}`;
+    await db.end();
+  }
+});
 test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans isolate scope, reserve atomically, survive restart and never retry ambiguous dispatch", async () => {
   const db = postgres(process.env.DATABASE_URL!, { max: 4 });
   const clientId = createEntityId(), deploymentId = createEntityId(), credentialId = createEntityId(), ruleId = createEntityId();

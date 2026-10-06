@@ -11,6 +11,7 @@ import type { DeploymentIdentity } from "./store";
 import type { CarePlixProvider } from "./careplix-provider";
 import { allowlistedFaceScanReceipt } from "./face-scan-receipt";
 import { CarePlixResponseError, CarePlixUnprocessableResultError, normalizeCarePlixResult } from "./careplix-provider";
+import { faceScanDiagnostic } from "./face-scan-diagnostic";
 
 type Database = ReturnType<typeof postgres>;
 type Mapping = { ruleVersionId: string; checksum: string; assignmentId: string; configuration: FaceScanScoringConfig };
@@ -24,6 +25,12 @@ type Row = {
 export class FaceScanError extends Error { constructor(public code: string, public status: 400 | 403 | 404 | 408 | 409 | 413 | 503 = 409) { super(code); } }
 export const faceScanHash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const semanticHash = (result: FaceScanResult) => { const { providerCompletedAt: _timestamp, ...fields } = result; return ruleChecksum(fields); };
+function confirmedSubmissionRejection(diagnostic: ReturnType<typeof faceScanDiagnostic> | undefined): string | null {
+ if (diagnostic?.stage !== "/vitals/add-scan" || diagnostic.failure !== "PROVIDER_REJECTION") return null;
+ if (diagnostic.message === "Device is invalid.") return "DEVICE_NOT_SUPPORTED";
+ if (diagnostic.message?.startsWith("Age of the user cannot be less than 1 year!")) return "PATIENT_AGE_UNSUPPORTED";
+ return null;
+}
 // Keep the pinned scoring bands in the durable record, but expose only the outcome to consumers.
 export function publicFaceScanScore(score: Row["score"]) {
  if (!score) return null;
@@ -45,7 +52,26 @@ export class FaceScanWorkflow {
      where w.session_id=${id} and w.organization_reference=${organization} and s.deployment_id=${identity.deploymentId} and s.client_id=${identity.clientId}`;
    if (!row) throw new FaceScanError("NOT_FOUND", 404); return row;
  }
- async get(identity: DeploymentIdentity, id: string, organization: string) { return this.envelope(await this.scoped(identity, id, organization)); }
+ async get(identity: DeploymentIdentity, id: string, organization: string) {
+   let row = await this.scoped(identity, id, organization);
+   if (row.state === "RECONCILIATION_REQUIRED" && row.failure_code === "PROVIDER_REJECTED") {
+     // Earlier explicit validation rejections can be settled from encrypted local evidence.
+     // Unknown provider outcomes stay pending and cannot be retried.
+     const receipts = await this.sql<{ receipt_ciphertext: string }[]>`select receipt_ciphertext from face_scan_receipts
+       where session_id=${id} and channel='DIRECT' and disposition='UNPROCESSABLE' order by id desc`;
+     for (const receipt of receipts) {
+       let code: string | null = null;
+       try { code = confirmedSubmissionRejection(this.decrypt<ReturnType<typeof faceScanDiagnostic>>(receipt.receipt_ciphertext)); }
+       catch { /* Unreadable evidence cannot establish that a retry is safe. */ }
+       if (!code) continue;
+       const [settled] = await this.sql<Row[]>`update face_scan_workflows set state='FAILED',failure_code=${code},updated_at=now()
+         where session_id=${id} and state='RECONCILIATION_REQUIRED' and failure_code='PROVIDER_REJECTED' returning *`;
+       row = settled ?? await this.scoped(identity, id, organization);
+       break;
+     }
+   }
+   return this.envelope(row);
+ }
  /** A current admission snapshot. create() repeats these checks under its quota lock. */
  async availability(identity: DeploymentIdentity): Promise<{ available: boolean; reason: string | null }> {
    if (!this.options.enabled()) return { available: false, reason: "FACE_SCAN_DISABLED" };
@@ -212,14 +238,12 @@ export class FaceScanWorkflow {
          set state='FAILED',failure_code='SCAN_NOT_SUBMITTED',signal_ciphertext=null,token_ciphertext=null,updated_at=now()
          where session_id=${row.session_id} and fence=${fence} and state='PROCESSING' and dispatch_phase='TOKEN' returning usage_id`;
        for (const item of failed) await tx`update usage_events set outcome='FAILED',completed_at=now() where id=${item.usage_id}`;
-       // A confirmed device rejection permits a fresh manual attempt. Keep its usage reservation
-       // because the provider has not confirmed whether rejected submissions consume allowance.
-       const deviceRejected = error instanceof CarePlixResponseError &&
-         error.diagnostic?.stage === "/vitals/add-scan" && error.diagnostic.failure === "PROVIDER_REJECTION" &&
-         error.diagnostic.message === "Device is invalid.";
+       // Explicit validation rejections permit a new attempt once the invalid input is fixed.
+       // Keep the reservation because provider billing for rejected submissions is unconfirmed.
+       const confirmedRejection = error instanceof CarePlixResponseError ? confirmedSubmissionRejection(error.diagnostic) : null;
        const failureCode = error instanceof CarePlixResponseError && error.diagnostic?.failure === "PROVIDER_REJECTION"
-         ? deviceRejected ? "DEVICE_NOT_SUPPORTED" : "PROVIDER_REJECTED" : "PROVIDER_OUTCOME_UNCONFIRMED";
-       await tx`update face_scan_workflows set state=${deviceRejected ? 'FAILED' : 'RECONCILIATION_REQUIRED'},failure_code=${failureCode},updated_at=now()
+         ? confirmedRejection ?? "PROVIDER_REJECTED" : "PROVIDER_OUTCOME_UNCONFIRMED";
+       await tx`update face_scan_workflows set state=${confirmedRejection ? 'FAILED' : 'RECONCILIATION_REQUIRED'},failure_code=${failureCode},updated_at=now()
          where session_id=${row.session_id} and fence=${fence} and state='PROCESSING' and dispatch_phase='SUBMIT'`;
      });
    } finally {
