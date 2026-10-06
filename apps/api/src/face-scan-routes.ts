@@ -53,6 +53,14 @@ export function installFaceScanRoutes(app: Hono, options: { workflow?: FaceScanW
     if (!parsed.success) throw new FaceScanError("INVALID_REQUEST", 400);
     return workflow.create(identity, parsed.data);
   }, true));
+  app.get("/v1/face-scans/availability", async c => {
+    c.header("cache-control", "no-store");
+    const identity = await options.authenticate(c);
+    if (!identity) return c.json({ error: "UNAUTHORIZED" }, 401);
+    return c.json(options.workflow
+      ? await options.workflow.availability(identity)
+      : { available: false, reason: "FACE_SCAN_DISABLED" });
+  });
   app.get("/v1/face-scans/:id", run((c, identity, workflow) => workflow.get(identity, c.req.param("id")!, organization(c))));
   app.post("/v1/face-scans/:id/signal", run(async (c, identity, workflow) => {
     const parsed = faceScanSignalSchema.safeParse(await boundedFaceScanJson(c.req.raw));

@@ -21,7 +21,12 @@ test("HTTP scan and webhook gates reject unauthorized callers and never expose s
   let authenticated = false;
   installFaceScanRoutes(app, { authenticate: async () => authenticated ? { clientId: "c", deploymentId: "d", credentialId: "k" } : null });
   expect((await app.request("/v1/face-scans", { method: "POST", body: "{}" })).status).toBe(401);
+  expect((await app.request("/v1/face-scans/availability")).status).toBe(401);
   authenticated = true;
+  const availability = await app.request("/v1/face-scans/availability");
+  expect(availability.status).toBe(200);
+  expect(availability.headers.get("cache-control")).toBe("no-store");
+  expect(await availability.json()).toEqual({ available: false, reason: "FACE_SCAN_DISABLED" });
   const disabled = await app.request("/v1/face-scans", { method: "POST", body: "{}" });
   expect(disabled.status).toBe(503);
   expect(disabled.headers.get("cache-control")).toBe("no-store");

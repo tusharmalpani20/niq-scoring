@@ -46,6 +46,16 @@ export class FaceScanWorkflow {
    if (!row) throw new FaceScanError("NOT_FOUND", 404); return row;
  }
  async get(identity: DeploymentIdentity, id: string, organization: string) { return this.envelope(await this.scoped(identity, id, organization)); }
+ /** A current admission snapshot. create() repeats these checks under its quota lock. */
+ async availability(identity: DeploymentIdentity): Promise<{ available: boolean; reason: string | null }> {
+   if (!this.options.enabled()) return { available: false, reason: "FACE_SCAN_DISABLED" };
+   const [entitlement] = await this.sql<{ monthly_limit: number | null }[]>`select e.monthly_limit from entitlements e join deployments d on d.id=e.deployment_id join clients c on c.id=d.client_id
+     where d.id=${identity.deploymentId} and c.id=${identity.clientId} and c.enabled and d.enabled and e.capability='FACE_SCAN' and e.enabled and e.effective_from<=now() and (e.effective_until is null or e.effective_until>now()) order by e.effective_from desc limit 1`;
+   if (!entitlement) return { available: false, reason: "CAPABILITY_DISABLED" };
+   const [usage] = await this.sql<{ count: number }[]>`select count(*)::integer as count from usage_events where deployment_id=${identity.deploymentId} and capability='FACE_SCAN' and outcome in ('PENDING','SUCCEEDED') and occurred_at>=date_trunc('month',now() at time zone 'UTC') at time zone 'UTC'`;
+   if (entitlement.monthly_limit !== null && (usage?.count ?? 0) >= entitlement.monthly_limit) return { available: false, reason: "MONTHLY_LIMIT_REACHED" };
+   return { available: true, reason: null };
+ }
  async create(identity: DeploymentIdentity, input: FaceScanCreate) {
    if (input.clientId !== identity.clientId) throw new FaceScanError("CLIENT_NOT_ALLOWED", 403);
    const fingerprint = faceScanHash(input);

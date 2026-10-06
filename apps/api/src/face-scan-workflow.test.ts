@@ -34,12 +34,17 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
     await db`insert into deployments(id,client_id,name,environment) values(${deploymentId},${clientId},'synthetic','test')`;
     await db`insert into deployment_credentials(id,deployment_id,key_prefix,secret_hash) values(${credentialId},${deploymentId},${clientId.slice(0,20)},${"b".repeat(64)})`;
     await db`insert into entitlements(id,deployment_id,capability,enabled,monthly_limit) values(${createEntityId()},${deploymentId},'FACE_SCAN',true,20)`;
+    expect(await workflow.availability(identity)).toEqual({ available: true, reason: null });
+    await db`update entitlements set monthly_limit=0 where deployment_id=${deploymentId} and capability='FACE_SCAN'`;
+    expect(await workflow.availability(identity)).toEqual({ available: false, reason: "MONTHLY_LIMIT_REACHED" });
+    await db`update entitlements set monthly_limit=20 where deployment_id=${deploymentId} and capability='FACE_SCAN'`;
     const pair = await Promise.all([workflow.create(identity, input("first")), workflow.create(identity, input("first"))]);
     const id = pair[0]!.session.id;
     expect(pair[1]!.session.id).toBe(id);
     expect(tokenCalls).toBe(0);
     const [count] = await db`select count(*)::int as n from usage_events where deployment_id=${deploymentId}`;
     expect(count?.n).toBe(1);
+    expect(await workflow.availability(identity)).toEqual({ available: true, reason: null });
     await expect(workflow.create(identity, { ...input("first"), context: { ...input("first").context, heightCm: 180 } })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
     await expect(workflow.create(identity, { ...input("first"), idempotencyKey: "different-key" })).rejects.toThrow("ACTIVE_FACE_SCAN_EXISTS");
     await expect(workflow.get(identity, id, "organization-b")).rejects.toThrow("NOT_FOUND");
@@ -51,6 +56,7 @@ test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("durable face scans iso
     expect(encrypted?.context_ciphertext).not.toContain("1990"); expect(encrypted?.signal_ciphertext).not.toContain("raw_intensity");
     workflow = new FaceScanWorkflow(db, options); // durable accepted work survives process replacement
     enabled = false;
+    expect(await workflow.availability(identity)).toEqual({ available: false, reason: "FACE_SCAN_DISABLED" });
     await workflow.tick(); expect((await workflow.get(identity, id, "organization-a")).session.state).toBe("PAUSED");
     expect((await workflow.create(identity, input("first"))).session.id).toBe(id);
     enabled = true;
