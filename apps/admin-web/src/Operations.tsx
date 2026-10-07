@@ -1,7 +1,6 @@
 import { Deployments } from "./Deployments";
 import { Clients } from "./Clients";
 import { RuleVersions } from "./RuleVersions";
-import { AdminDashboard } from "./AdminDashboard";
 export type Overview = {
   clients: Array<{
     id: string;
@@ -40,8 +39,6 @@ export function Operations({
   data: Overview;
   refresh: () => Promise<void>;
 }) {
-  if (page === "overview")
-    return <AdminDashboard overview={data} />;
   if (page === "clients") return <Clients data={data} refresh={refresh} />;
   if (page === "deployments") return <Deployments data={data} refresh={refresh} />;
   return <RuleVersions refresh={refresh} />;

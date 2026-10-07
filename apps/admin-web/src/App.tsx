@@ -23,6 +23,7 @@ import { Auth } from "./Auth";
 import { Users } from "./Users";
 import { Operations, type Overview } from "./Operations";
 import { OverviewGreeting } from "./OverviewGreeting";
+import { AdminDashboard } from "./AdminDashboard";
 import { ClientDetail } from "./ClientDetail";
 import { DeploymentDetail } from "./DeploymentDetail";
 import { Button } from "./components/ui/button";
@@ -74,6 +75,7 @@ function Console() {
   const [data, setData] = useState<Overview | null>(null);
   const requestSequence = useRef(0);
   const [loggingOut, setLoggingOut] = useState(false);
+  const needsOverview = !["/", "/overview", "/users"].includes(location.pathname) && !/^\/versions\/[^/]+$/.test(location.pathname);
   const [invitationToken, setInvitationToken] = useState(() =>
     location.pathname === "/accept-invitation"
       ? (new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "")
@@ -131,8 +133,8 @@ function Console() {
     }
   }
   useEffect(() => {
-    if (user) void refresh().catch(() => {});
-  }, [user]);
+    if (user && needsOverview && !data) void refresh().catch(() => {});
+  }, [user, needsOverview]);
   if (loading)
     return (
       <div className="loading" role="status">
@@ -236,13 +238,15 @@ function Console() {
             {page.path === "overview" ? <OverviewGreeting displayName={user.displayName} /> : <h1>{page.label}</h1>}
           </header>}
           <ErrorNotice error={error} />
-          {page.path !== "users" && !ruleId && data && overviewError && (
+          {page.path !== "users" && page.path !== "overview" && !ruleId && data && overviewError && (
             <div className="space-y-3">
               <ErrorNotice error={overviewError} />
               <Button variant="outline" disabled={overviewLoading} onClick={() => void refresh().catch(() => {})}>Try again</Button>
             </div>
           )}
-          {ruleId ? <RulePage key={ruleId} id={ruleId}/> : page.path === "users" ? (
+          {ruleId ? <RulePage key={ruleId} id={ruleId}/> : page.path === "overview" ? (
+            <AdminDashboard />
+          ) : page.path === "users" ? (
             <Users currentUser={user} />
           ) : data && clientId ? <ClientDetail key={clientId} data={data} clientId={clientId} refresh={refresh} /> : data && deploymentId ? <DeploymentDetail key={deploymentId} data={data} deploymentId={deploymentId} refresh={refresh} /> : data ? (
             <Operations
