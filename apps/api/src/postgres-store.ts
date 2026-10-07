@@ -14,6 +14,7 @@ import { decideEntitlement, type Capability } from "@niq-scoring/entitlements";
 import { createEntityId } from "./lib/id";
 import { buildUsageSummary, type DeploymentUsage, type UsageCount } from "./usage-summary";
 import { buildAdminDashboard, previousMonthComparisonEnd, type DashboardUsageEvent, type DashboardActivation } from "./admin-dashboard";
+import { dashboardSummary, type DashboardClientPage, type DashboardClientRow } from "./dashboard-pages";
 import { recordAdminMutation, type AdminMutationAudit } from "./admin-mutation-audit";
 import type { Deployment, DeploymentCreateRequest, PriorDeploymentCreate, DeploymentIdentity, Client, ScoringStore, UsageReservation, RuleUsage } from "./store";
 
@@ -47,18 +48,52 @@ export class PostgresScoringStore implements ScoringStore {
     return { clients: [...clients], deployments: [...deployments], entitlements: [...entitlements], assignments: assignments.map((row) => row.mode === "PINNED" ? { deploymentId: row.deploymentId, mode: "PINNED" as const, scoringRuleVersionId: row.scoringRuleVersionId! } : { deploymentId: row.deploymentId, mode: "LATEST_APPROVED" as const }), versions: [...versions] };
   }
 
-  async dashboard(now: Date) {
+  async dashboard(now: Date) { return (await this.dashboardData(now, true)).dashboard; }
+
+  async dashboardSummary(now: Date) {
+    const { dashboard, clients, deployments } = await this.dashboardData(now, false);
+    return dashboardSummary(dashboard, clients, deployments);
+  }
+
+  async dashboardClients(now: Date, page: number, pageSize: number): Promise<DashboardClientPage> {
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const [countRows, rows] = await Promise.all([
+      this.database<Array<{ total: number }>>`select count(*)::int as total from clients`,
+      this.database<DashboardClientRow[]>`
+        select c.id, c.name,
+          count(u.id) filter (where u.capability='SCORING')::int as assessments,
+          count(u.id) filter (where u.capability='FACE_SCAN')::int as "faceScans",
+          (select count(*)::int from deployments d where d.client_id=c.id) as "deploymentCount"
+        from clients c left join usage_events u on u.client_id=c.id and u.outcome='SUCCEEDED'
+          and u.occurred_at >= ${monthStart} and u.occurred_at <= ${now}
+        group by c.id, c.name
+        order by count(u.id) desc, c.name asc, c.id asc
+        limit ${pageSize} offset ${(page - 1) * pageSize}`,
+    ]);
+    const total = countRows[0]?.total ?? 0;
+    return { items: [...rows], page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) };
+  }
+
+  private async dashboardData(now: Date, includeClients: boolean) {
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
     const comparisonEnd = previousMonthComparisonEnd(now);
     const previousStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
     const lastDay = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const [overview, usage, recentFailures, limitUsage, activations, previousComparable] = await Promise.all([
-      this.overview(),
-      this.database<DashboardUsageEvent[]>`select client_id as "clientId", deployment_id as "deploymentId", capability, outcome,
-        date_trunc('month', occurred_at at time zone 'UTC') at time zone 'UTC' as "occurredAt",
-        count(*)::int as count
-        from usage_events where occurred_at >= ${start} and occurred_at <= ${now}
-        group by client_id, deployment_id, capability, outcome, "occurredAt"`,
+    const [clients, deployments, entitlements, usage, recentFailures, limitUsage, activations, previousComparable] = await Promise.all([
+      this.database<Client[]>`select id, name, enabled from clients order by created_at`,
+      this.database<Deployment[]>`select id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled from deployments order by created_at, id`,
+      this.database<Array<EntitlementInput & { deploymentId: string }>>`select deployment_id as "deploymentId", capability, enabled, monthly_limit as "monthlyLimit" from entitlements where effective_until is null`,
+      includeClients
+        ? this.database<DashboardUsageEvent[]>`select client_id as "clientId", deployment_id as "deploymentId", capability, outcome,
+            date_trunc('month', occurred_at at time zone 'UTC') at time zone 'UTC' as "occurredAt",
+            count(*)::int as count
+            from usage_events where occurred_at >= ${start} and occurred_at <= ${now}
+            group by client_id, deployment_id, capability, outcome, "occurredAt"`
+        : this.database<DashboardUsageEvent[]>`select '' as "clientId", '' as "deploymentId", capability, outcome,
+            date_trunc('month', occurred_at at time zone 'UTC') at time zone 'UTC' as "occurredAt",
+            count(*)::int as count
+            from usage_events where occurred_at >= ${start} and occurred_at <= ${now}
+            group by capability, outcome, "occurredAt"`,
       this.database<Array<{ count: number }>>`select count(*)::int as count from usage_events
         where capability='SCORING' and outcome='FAILED' and completed_at >= ${lastDay} and completed_at <= ${now}`,
       this.database<Array<{ deploymentId: string; capability: "SCORING" | "FACE_SCAN"; used: number }>>`select deployment_id as "deploymentId", capability, count(*)::int as used
@@ -73,12 +108,13 @@ export class PostgresScoringStore implements ScoringStore {
           (count(*) filter (where outcome='FAILED'))::int as "failedRequests"
         from usage_events where occurred_at >= ${previousStart} and occurred_at <= ${comparisonEnd}` : Promise.resolve([]),
     ]);
-    return buildAdminDashboard({
-      now, clients: overview.clients, deployments: overview.deployments,
-      entitlements: overview.entitlements, usage, activations,
+    const dashboard = buildAdminDashboard({
+      now, clients, deployments,
+      entitlements, usage, activations, includeClients,
       recentFailedScoringCount: recentFailures[0]?.count ?? 0, limitUsage,
       ...(previousComparable[0] ? { previousComparableCounts: previousComparable[0] } : {}),
     });
+    return { dashboard, clients, deployments };
   }
 
   async usageByDeployment(clientId: string, now: Date): Promise<DeploymentUsage[]> {

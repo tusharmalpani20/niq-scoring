@@ -58,6 +58,28 @@ describe("scoring API", () => {
     expect(dashboard.clients).toEqual([expect.objectContaining({ id: client.id })]);
   });
 
+  test("dashboard summary excludes the full client list and client usage is paged by the server", async () => {
+    const { app, store } = setup();
+    const names = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
+    for (const name of names) await store.createClient({ name });
+    const beta = store.clients.find(client => client.name === "Beta")!;
+    store.usages.push({ id: "usage-1", clientId: beta.id, deploymentId: "deployment-1", capability: "SCORING", outcome: "SUCCEEDED", occurredAt: new Date("2026-09-12T12:00:00Z"), idempotencyKey: "usage-key" });
+
+    expect((await app.request("/admin/dashboard/summary")).status).toBe(401);
+    const summary = await (await app.request("/admin/dashboard/summary", { headers: adminHeaders })).json() as Record<string, unknown>;
+    expect(summary.clients).toBeUndefined();
+    expect(summary).toMatchObject({ period: { current: "2026-09" }, activity: { current: { assessments: 1 } }, attention: { deployments: [] } });
+
+    const first = await (await app.request("/admin/dashboard/clients?page=1&pageSize=2", { headers: adminHeaders })).json() as { items: Array<{ name: string; assessments: number }>; total: number; pageCount: number };
+    expect(first).toMatchObject({ total: 6, pageCount: 3 });
+    expect(first.items.map(item => item.name)).toEqual(["Beta", "Alpha"]);
+    expect(first.items[0]?.assessments).toBe(1);
+    const second = await (await app.request("/admin/dashboard/clients?page=2&pageSize=2", { headers: adminHeaders })).json() as { items: Array<{ name: string }> };
+    expect(second.items.map(item => item.name)).toEqual(["Delta", "Epsilon"]);
+    expect((await app.request("/admin/dashboard/clients?page=0&pageSize=2", { headers: adminHeaders })).status).toBe(400);
+    expect((await app.request("/admin/dashboard/clients?page=1&pageSize=51", { headers: adminHeaders })).status).toBe(400);
+  });
+
   test("admin mutations record their actor without preventing unused record deletion", async () => {
     const { app, store } = setup();
     const headers = { ...adminHeaders, "x-request-id": "admin-mutation-request" };

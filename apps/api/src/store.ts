@@ -19,6 +19,7 @@ import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
 import { createEntityId } from "./lib/id";
 import { buildUsageSummary, type DeploymentUsage, type UsageCount } from "./usage-summary";
 import { buildAdminDashboard, type DashboardAudit } from "./admin-dashboard";
+import { dashboardSummary, pageDashboardClients, type DashboardClientPage } from "./dashboard-pages";
 import type { AdminMutationAudit } from "./admin-mutation-audit";
 
 export type StoredActivationToken = { id: string; tokenHash: string; tokenCiphertext: string; expiresAt: Date | null };
@@ -48,6 +49,8 @@ export interface ScoringStore {
   deleteUnused(kind: RecordKind, id: string, audit?: AdminMutationAudit): Promise<DeletionStatus>;
   overview(): Promise<{ clients: Client[]; deployments: Deployment[]; entitlements: Array<EntitlementInput & { deploymentId: string }>; assignments: VersionAssignment[]; versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault?: boolean }> }>;
   dashboard(now: Date): Promise<ReturnType<typeof buildAdminDashboard>>;
+  dashboardSummary(now: Date): Promise<ReturnType<typeof dashboardSummary>>;
+  dashboardClients(now: Date, page: number, pageSize: number): Promise<DashboardClientPage>;
   usageByDeployment(clientId: string, now: Date): Promise<DeploymentUsage[]>;
   usageByRule(clientId?: string): Promise<RuleUsage[]>;
   createClient(input: CreateClient, audit?: AdminMutationAudit): Promise<Client>;
@@ -111,6 +114,20 @@ export class MemoryScoringStore implements ScoringStore {
       usage: this.usages,
       activations: this.activations,
     });
+  }
+  async dashboardSummary(now: Date) {
+    const dashboard = buildAdminDashboard({ now, clients: this.clients, deployments: this.deployments, entitlements: this.entitlements, usage: this.usages, activations: this.activations, includeClients: false });
+    return dashboardSummary(dashboard, this.clients, this.deployments);
+  }
+  async dashboardClients(now: Date, page: number, pageSize: number) {
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const rows = this.clients.map(client => {
+      const successful = this.usages.filter(item => item.clientId === client.id && item.outcome === "SUCCEEDED" && item.occurredAt >= monthStart && item.occurredAt <= now);
+      return { id: client.id, name: client.name, assessments: successful.filter(item => item.capability === "SCORING").length,
+        faceScans: successful.filter(item => item.capability === "FACE_SCAN").length,
+        deploymentCount: this.deployments.filter(item => item.clientId === client.id).length };
+    });
+    return pageDashboardClients(rows, page, pageSize);
   }
   async usageByDeployment(clientId: string, now: Date): Promise<DeploymentUsage[]> {
     const deploymentIds = this.deployments.filter(item => item.clientId === clientId).map(item => item.id);

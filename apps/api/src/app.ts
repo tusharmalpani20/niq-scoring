@@ -84,6 +84,16 @@ export function createApp(options: AppOptions) {
   app.get("/ready", async (context) => { const ready = await (options.readinessCheck ?? (async () => true))(); return context.json({ status: ready ? "ready" : "not_ready" }, ready ? 200 : 503); });
   app.get("/admin/overview", async (context) => context.json(await options.store.overview()));
   app.get("/admin/dashboard", async (context) => context.json(await options.store.dashboard(now())));
+  app.get("/admin/dashboard/summary", async (context) => context.json(await options.store.dashboardSummary(now())));
+  app.get("/admin/dashboard/clients", async (context) => {
+    const rawPage = context.req.query("page") ?? "1";
+    const rawPageSize = context.req.query("pageSize") ?? "5";
+    if (!/^[1-9]\d*$/.test(rawPage) || !/^[1-9]\d*$/.test(rawPageSize)) return context.json({ error: "INVALID_REQUEST" }, 400);
+    const page = Number(rawPage);
+    const pageSize = Number(rawPageSize);
+    if (!Number.isSafeInteger(page) || !Number.isSafeInteger(pageSize) || pageSize > 50) return context.json({ error: "INVALID_REQUEST" }, 400);
+    return context.json(await options.store.dashboardClients(now(), page, pageSize));
+  });
   app.get("/admin/usage/rules", async context => {
     const rawClientId = context.req.query("clientId");
     if (rawClientId !== undefined) {

@@ -42,6 +42,7 @@ export function buildAdminDashboard(input: {
   recentFailedScoringCount?: number;
   limitUsage?: Array<{ deploymentId: string; capability: Capability; used: number }>;
   previousComparableCounts?: ReturnType<typeof counts>;
+  includeClients?: boolean;
 }) {
   const { now, clients, deployments, entitlements, usage, activations } = input;
   const months = Array.from({ length: 6 }, (_, index) => monthKey(startOfMonth(now, index - 5)));
@@ -123,7 +124,7 @@ export function buildAdminDashboard(input: {
       previous: comparisonEnd ? previousComparable : null,
     },
     monthlyUsage,
-    clients: clients.map(client => ({
+    clients: input.includeClients === false ? [] : clients.map(client => ({
       id: client.id,
       name: client.name,
       assessments: clientCounts.get(client.id)?.assessments ?? 0,
