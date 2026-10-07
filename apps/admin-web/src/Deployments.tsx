@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Input } from "./components/ui/input";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
+import { Tabs, TabsContent } from "./components/ui/tabs";
+import { ListTab, ListTabHeader } from "./ListTabHeader";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
 import { clientUrl, deploymentUrl } from "./record-urls";
@@ -55,10 +56,9 @@ export function Deployments({ data, refresh }: { data: Overview; refresh: () => 
     </Select>;
   const filtersActive = hosting !== "all" || status !== "all" || environment !== "all" || ruleVersion !== "all";
   return <Tabs defaultValue="deployments" className="gap-5">
-    <div className="flex items-center justify-between gap-3">
-      <TabsList variant="line" aria-label="Deployment management" className="p-0"><TabsTrigger value="deployments" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Deployments <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{data.deployments.length}</Badge></TabsTrigger></TabsList>
+    <ListTabHeader label="Deployment management" tabs={<ListTab value="deployments" count={data.deployments.length}>Deployments</ListTab>} actions={
       <div className="flex min-w-0 items-center justify-end gap-2"><div className="relative w-full max-w-xs"><Input aria-label="Search by client or deployment label" placeholder="Search clients or deployments…" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="pr-9" />{search && <Button variant="ghost" size="icon" aria-label="Clear search" className="absolute right-0 top-0 size-9 text-muted-foreground" onClick={() => { setSearch(""); setPage(1); }}><X className="size-4" /></Button>}</div><Button size="icon" aria-label="Create deployment" onClick={() => setSelected(null)}><Plus /></Button></div>
-    </div>
+    } />
     <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
       {filter("Hosting", hosting, setHosting, [...Object.entries(hostingLabels).filter(([key]) => key !== "ON_PREMISES" || data.deployments.some(d => d.hostingType === key)) as Array<[string, string]>, ...(data.deployments.some(d => !d.hostingType) ? [["unspecified", "Not specified"] as [string, string]] : [])])}
       {filter("Statuses", status, setStatus, [["enabled", "Enabled"], ["disabled", "Disabled"]])}

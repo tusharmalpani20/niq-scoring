@@ -13,7 +13,8 @@ import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { Input } from "./components/ui/input";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
+import { Tabs, TabsContent } from "./components/ui/tabs";
+import { ListTab, ListTabHeader } from "./ListTabHeader";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
 import { ruleStatusVariant } from "./rules/rule-status";
@@ -49,10 +50,7 @@ export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
   const query = search.trim().toLowerCase();
   const versions = paginate(records.filter(version => version.version.toLowerCase().includes(query) && (!status || version.lifecycle === status)), page);
   return <><ErrorNotice error={error} />{error && <Button variant="outline" onClick={() => void load()}>Retry</Button>}<Tabs defaultValue="versions" className="gap-5">
-    <div className="flex items-center justify-between gap-3">
-      <TabsList variant="line" aria-label="Rule management" className="shrink-0 p-0">
-        <TabsTrigger value="versions" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Rules <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{records.length}</Badge></TabsTrigger>
-      </TabsList>
+    <ListTabHeader label="Rule management" tabs={<ListTab value="versions" count={records.length}>Rules</ListTab>} actions={
       <div className="flex min-w-0 items-center justify-end gap-2">
       <div className="relative min-w-0 w-full max-w-xs">
         <Input aria-label="Search rules" placeholder="Search rules…" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="pr-9" />
@@ -60,7 +58,7 @@ export function RuleVersions({ refresh }: { refresh: () => Promise<void> }) {
       </div>
       <Button size="icon" aria-label="Create rule" title="Create rule" onClick={createRule}><Plus aria-hidden="true" /></Button>
       </div>
-    </div>
+    } />
     <TabsContent value="versions" className="space-y-5">
       <div className="max-w-xs"><NativeSelect aria-label="Filter by lifecycle" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">All statuses</option>{["DRAFT", "VALIDATED", "APPROVED", "ACTIVE", "RETIRED"].map(value => <option key={value} value={value}>{value === "VALIDATED" ? "Checked" : value.charAt(0) + value.slice(1).toLowerCase()}</option>)}</NativeSelect></div>
       {loading && <p role="status" className="text-sm text-muted-foreground">Loading rules…</p>}

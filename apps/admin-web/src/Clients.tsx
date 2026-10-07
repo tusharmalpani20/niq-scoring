@@ -11,7 +11,8 @@ import { FormInput, ErrorNotice } from "./shared";
 import { paginate } from "./pagination";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
+import { Tabs, TabsContent } from "./components/ui/tabs";
+import { ListTab, ListTabHeader } from "./ListTabHeader";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "./components/ui/table";
@@ -64,10 +65,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
   }
   return <Tabs defaultValue="clients" className="gap-5">
     {!open && <ErrorNotice error={error} />}
-    <div className="flex items-center justify-between gap-3">
-      <TabsList variant="line" aria-label="Client management" className="gap-2 p-0 sm:gap-5">
-        <TabsTrigger value="clients" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Clients <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{data.clients.length}</Badge></TabsTrigger>
-      </TabsList>
+    <ListTabHeader label="Client management" tabs={<ListTab value="clients" count={data.clients.length}>Clients</ListTab>} actions={
       <div className="flex min-w-0 items-center justify-end gap-2">
         <div className="relative w-full max-w-xs">
           <Input aria-label="Search clients" placeholder="Search clients…" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="pr-9" />
@@ -91,7 +89,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
         </DialogContent>
       </Dialog>
       </div>
-    </div>
+    } />
     <TabsContent value="clients" className="space-y-5">
     <Card className={clients.total > 0 ? "mobile-list-card" : undefined}><CardContent className="pt-6">
       <Table className={clients.total > 0 ? "mobile-record-table" : undefined}>

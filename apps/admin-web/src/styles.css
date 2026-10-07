@@ -83,6 +83,30 @@
   box-sizing: border-box;
   border-color: var(--border);
 }
+.list-tab-header [data-slot="tabs-list"] {
+  height: 2.75rem;
+}
+.list-tab-header [data-slot="tabs-trigger"] {
+  border-bottom-color: transparent;
+}
+.list-tab-header [data-slot="tabs-trigger"][data-state="active"] {
+  border-bottom-color: var(--primary);
+}
+.list-tab-header [data-slot="tabs-trigger"]:not([data-state="active"]):is(:hover, :focus-visible) {
+  color: var(--primary);
+  border-bottom-color: color-mix(in srgb, var(--primary) 45%, transparent);
+}
+[data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"]:not([data-state="active"]):is(:hover, :focus-visible) {
+  color: var(--primary);
+}
+[data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"]:not([data-state="active"]):is(:hover, :focus-visible)::after {
+  background: var(--primary);
+  opacity: .45;
+}
+.tab-count {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
 body {
   margin: 0;
 }

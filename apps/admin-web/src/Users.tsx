@@ -2,7 +2,8 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
 import { paginate } from "./pagination";
 import { Plus, UserRoundCheck, UserRoundX } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
+import { Tabs, TabsContent } from "./components/ui/tabs";
+import { ListTab, ListTabHeader } from "./ListTabHeader";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "./components/ui/dialog";
 import { Card, CardContent } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
@@ -128,11 +129,10 @@ export function Users({ currentUser }: { currentUser: User }) {
       {!inviteOpen && <ErrorNotice error={loadError} />}
       {!inviteOpen && data && loadError && <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button>}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-5">
-        <div className="flex items-center justify-between gap-3 border-b pb-2">
-          <TabsList variant="line" aria-label="User management" className="gap-2 p-0 sm:gap-5">
-            <TabsTrigger value="users" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Users {data && <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{users.total}</Badge>}</TabsTrigger>
-            <TabsTrigger value="invitations" className="rounded-none border-0 px-1 shadow-none data-[state=active]:text-primary after:bg-primary">Pending invitations {data && <Badge variant="secondary" className="px-1.5 py-0 text-xs tabular-nums">{invitations.total}</Badge>}</TabsTrigger>
-          </TabsList>
+        <ListTabHeader label="User management" tabs={<>
+          <ListTab value="users" count={data ? users.total : undefined}>Users</ListTab>
+          <ListTab value="invitations" count={data ? invitations.total : undefined}>Pending invitations</ListTab>
+        </>} actions={
           <Dialog open={inviteOpen} onOpenChange={(open) => {
             if (busy) return;
             if (!open && (secret ? !copied : isDirty)) { setConfirmClose(true); return; }
@@ -220,7 +220,7 @@ export function Users({ currentUser }: { currentUser: User }) {
               )}
             </DialogContent>
           </Dialog>
-        </div>
+        } />
         <TabsContent value="users">
           <Card className={users.total > 0 ? "mobile-list-card" : undefined}><CardContent className="pt-6">
           {!data ? (
