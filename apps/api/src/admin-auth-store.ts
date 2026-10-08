@@ -1,4 +1,5 @@
 import { createEntityId } from "./lib/id";
+import { clampPage, type ListPage } from "./list-page";
 export interface AdminUser {
   id: string;
   email: string;
@@ -41,6 +42,7 @@ export interface AdminAuthStore {
   list(
     now: string,
   ): Promise<{ users: AdminUser[]; invitations: AdminInvitation[] }>;
+  listPage(now: string, query: ListPage & { kind: "users" | "invitations" }): Promise<{ users: AdminUser[]; invitations: AdminInvitation[]; userTotal: number; invitationTotal: number; page: number; pageSize: number; pageCount: number }>;
   invite(invitation: AdminInvitation, audit: AuthAudit): Promise<boolean>;
   findInvitation(
     tokenHash: string,
@@ -124,6 +126,16 @@ export class MemoryAdminAuthStore implements AdminAuthStore {
       users: this.state.users,
       invitations: this.state.invitations.filter((i) => i.expiresAt > now),
     };
+  }
+  async listPage(now: string, { page, pageSize, kind }: ListPage & { kind: "users" | "invitations" }) {
+    const users = this.state.users;
+    const invitations = this.state.invitations.filter(i => i.expiresAt > now);
+    page = clampPage(page, kind === "users" ? users.length : invitations.length, pageSize);
+    const offset = (page - 1) * pageSize;
+    return { users: kind === "users" ? users.slice(offset, offset + pageSize) : [],
+      invitations: kind === "invitations" ? invitations.slice(offset, offset + pageSize) : [],
+      userTotal: users.length, invitationTotal: invitations.length, page, pageSize,
+      pageCount: Math.max(1, Math.ceil((kind === "users" ? users.length : invitations.length) / pageSize)) };
   }
   async invite(invitation: AdminInvitation, audit: AuthAudit) {
     this.state.invitations = this.state.invitations.filter(
@@ -276,6 +288,19 @@ export class PostgresAdminAuthStore implements AdminAuthStore {
       >`select ${this.sql.unsafe(invitationColumns)} from admin_invitations where expires_at > ${now} order by created_at`,
     ]);
     return normalize({ users: [...users], invitations: [...invitations] });
+  }
+  async listPage(now: string, { page, pageSize, kind }: ListPage & { kind: "users" | "invitations" }) {
+    const [userCount, invitationCount] = await Promise.all([
+      this.sql<Array<{ total: number }>>`select count(*)::int as total from admin_users`,
+      this.sql<Array<{ total: number }>>`select count(*)::int as total from admin_invitations where expires_at > ${now}`,
+    ]);
+    const userTotal = userCount[0]?.total ?? 0;
+    const invitationTotal = invitationCount[0]?.total ?? 0;
+    page = clampPage(page, kind === "users" ? userTotal : invitationTotal, pageSize);
+    const users = kind === "users" ? await this.sql<AdminUser[]>`select ${this.sql.unsafe(userColumns)} from admin_users order by created_at, id limit ${pageSize} offset ${(page - 1) * pageSize}` : [];
+    const invitations = kind === "invitations" ? await this.sql<AdminInvitation[]>`select ${this.sql.unsafe(invitationColumns)} from admin_invitations where expires_at > ${now} order by created_at, id limit ${pageSize} offset ${(page - 1) * pageSize}` : [];
+    return { ...normalize({ users: [...users], invitations: [...invitations] }), userTotal, invitationTotal, page, pageSize,
+      pageCount: Math.max(1, Math.ceil((kind === "users" ? userTotal : invitationTotal) / pageSize)) };
   }
   async invite(i: AdminInvitation, event: AuthAudit) {
     let created = false;

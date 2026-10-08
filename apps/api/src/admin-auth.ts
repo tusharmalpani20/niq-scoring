@@ -3,6 +3,7 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { z } from "zod";
 import { createEntityId } from "./lib/id";
 import { type AdminAuthStore, type AdminUser } from "./admin-auth-store";
+import { parseListPage } from "./list-page";
 
 const cookieName = "niq_scoring_session";
 const password = z.string().min(8).max(128);
@@ -181,10 +182,18 @@ export function installAdminAuth(
     return c.json({ success: true });
   });
   app.get("/admin/users", async (c) => {
-    const result = await store.list(now().toISOString());
+    const query = parseListPage(c);
+    const kind = c.req.query("kind") ?? "users";
+    if (!query || !["users", "invitations"].includes(kind)) return c.json({ error: "INVALID_REQUEST" }, 400);
+    const result = await store.listPage(now().toISOString(), { ...query, kind: kind as "users" | "invitations" });
     return c.json({
       users: result.users.map(safeUser),
       invitations: result.invitations.map(({ tokenHash: _, ...i }) => i),
+      userTotal: result.userTotal,
+      invitationTotal: result.invitationTotal,
+      page: result.page,
+      pageSize: result.pageSize,
+      pageCount: result.pageCount,
     });
   });
   app.post("/admin/users/invitations", async (c) => {
