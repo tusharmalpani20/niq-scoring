@@ -1,6 +1,6 @@
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./components/ui/alert-dialog";
 import { Pagination, PaginationContent, PaginationItem } from "./components/ui/pagination";
-import { paginate } from "./pagination";
+import { ListSkeleton } from "./ListSkeleton";
 import { Plus, UserRoundCheck, UserRoundX } from "lucide-react";
 import { Tabs, TabsContent } from "./components/ui/tabs";
 import { ListTab, ListTabHeader } from "./ListTabHeader";
@@ -23,6 +23,8 @@ type Invitation = {
   expiresAt: string;
   createdAt: string;
 };
+type UserPage<T> = { items: T[]; total: number; page: number; pageSize: number; pageCount: number };
+type UsersResponse = { users: User[]; invitations: Invitation[]; userTotal: number; invitationTotal: number; page: number; pageSize: number; pageCount: number };
 
 function InvitationEmptyIllustration() {
   return (
@@ -40,10 +42,10 @@ function InvitationEmptyIllustration() {
 }
 
 export function Users({ currentUser }: { currentUser: User }) {
-  const [data, setData] = useState<{
-    users: User[];
-    invitations: Invitation[];
-  } | null>(null);
+  const [users, setUsers] = useState<UserPage<User> | null>(null);
+  const [invitations, setInvitations] = useState<UserPage<Invitation> | null>(null);
+  const [userTotal, setUserTotal] = useState<number | undefined>();
+  const [invitationTotal, setInvitationTotal] = useState<number | undefined>();
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [loadingData, setLoadingData] = useState(false);
@@ -53,7 +55,7 @@ export function Users({ currentUser }: { currentUser: User }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [userPage, setUserPage] = useState(1);
   const [invitationPage, setInvitationPage] = useState(1);
-  const [activeTab, setActiveTab] = useState("users");
+  const [activeTab, setActiveTab] = useState<"users" | "invitations">("users");
   const [busy, setBusy] = useState(false);
   const [accessTarget, setAccessTarget] = useState<User | null>(null);
   const form = useForm<z.infer<typeof invitationSchema>>({
@@ -65,14 +67,18 @@ export function Users({ currentUser }: { currentUser: User }) {
     value: string;
     expiresAt: string;
   } | null>(null);
-  async function refresh() {
+  async function refresh(kind: "users" | "invitations" = activeTab) {
     const sequence = ++requestSequence.current;
     setLoadingData(true);
     setLoadError("");
     try {
-      const next = await request<{ users: User[]; invitations: Invitation[] }>("/admin/users");
+      const requestedPage = kind === "users" ? userPage : invitationPage;
+      const next = await request<UsersResponse>(`/admin/users?kind=${kind}&page=${requestedPage}&pageSize=10`);
       if (sequence === requestSequence.current) {
-        setData(next);
+        setUserTotal(next.userTotal);
+        setInvitationTotal(next.invitationTotal);
+        if (kind === "users") { setUsers({ items: next.users, total: next.userTotal, page: next.page, pageSize: next.pageSize, pageCount: next.pageCount }); if (next.page !== userPage) setUserPage(next.page); }
+        else { setInvitations({ items: next.invitations, total: next.invitationTotal, page: next.page, pageSize: next.pageSize, pageCount: next.pageCount }); if (next.page !== invitationPage) setInvitationPage(next.page); }
         setLoadError("");
       }
     } catch (c) {
@@ -85,9 +91,9 @@ export function Users({ currentUser }: { currentUser: User }) {
     }
   }
   useEffect(() => {
-    void refresh().catch(() => {});
+    void refresh(activeTab).catch(() => {});
     return () => { requestSequence.current += 1; };
-  }, []);
+  }, [activeTab, userPage, invitationPage]);
   async function action(fn: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -119,19 +125,17 @@ export function Users({ currentUser }: { currentUser: User }) {
       setActiveTab("invitations");
     });
   }
-  const users = paginate(data?.users ?? [], userPage);
-  const invitations = paginate(data?.invitations ?? [], invitationPage);
   const current = activeTab === "users" ? users : invitations;
   const setPage = activeTab === "users" ? setUserPage : setInvitationPage;
   return (
     <>
       {!inviteOpen && <ErrorNotice error={error} />}
       {!inviteOpen && <ErrorNotice error={loadError} />}
-      {!inviteOpen && data && loadError && <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button>}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-5">
+      {!inviteOpen && loadError && <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button>}
+      <Tabs value={activeTab} onValueChange={value => setActiveTab(value as "users" | "invitations")} className="gap-5">
         <ListTabHeader label="User management" tabs={<>
-          <ListTab value="users" count={data ? users.total : undefined}>Users</ListTab>
-          <ListTab value="invitations" count={data ? invitations.total : undefined}>Pending invitations</ListTab>
+          <ListTab value="users" count={userTotal}>Users</ListTab>
+          <ListTab value="invitations" count={invitationTotal}>Pending invitations</ListTab>
         </>} actions={
           <Dialog open={inviteOpen} onOpenChange={(open) => {
             if (busy) return;
@@ -222,10 +226,7 @@ export function Users({ currentUser }: { currentUser: User }) {
           </Dialog>
         } />
         <TabsContent value="users">
-          <Card className={users.total > 0 ? "mobile-list-card" : undefined}><CardContent className="pt-6">
-          {!data ? (
-            loadError ? <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button> : <p role="status">Loading users…</p>
-          ) : (
+          {loadingData ? <ListSkeleton label="users" columns={3} /> : !users ? null : <Card className={users.total > 0 ? "mobile-list-card" : undefined}><CardContent className="pt-6">
             <div>
               <Table className="mobile-record-table">
                 <TableHeader>
@@ -236,7 +237,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.rows.map((u) => (
+                  {users.items.map((u) => (
                     <TableRow key={u.id}>
                       <TableCell data-label="Administrator">
                         <span className="min-w-0 text-left">
@@ -266,12 +267,11 @@ export function Users({ currentUser }: { currentUser: User }) {
                 </TableBody>
               </Table>
             </div>
-          )}
-          </CardContent></Card>
+          </CardContent></Card>}
         </TabsContent>
         <TabsContent value="invitations">
-          <Card className={invitations.total > 0 ? "mobile-list-card" : undefined}><CardContent className="pt-6">
-            <Table className={invitations.total > 0 ? "mobile-record-table" : undefined}>
+          {loadingData ? <ListSkeleton label="invitations" columns={3} /> : <Card className={invitations?.total ? "mobile-list-card" : undefined}><CardContent className="pt-6">
+            <Table className={invitations?.total ? "mobile-record-table" : undefined}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Invitee</TableHead>
@@ -280,7 +280,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data && invitations.rows.map((i) => (
+                {invitations?.items.map((i) => (
                   <TableRow key={i.id}>
                     <TableCell data-label="Invitee">
                       <span className="min-w-0 text-left"><strong className="text-primary">{i.displayName}</strong><small>{i.email}</small></span>
@@ -308,9 +308,7 @@ export function Users({ currentUser }: { currentUser: User }) {
                 ))}
               </TableBody>
             </Table>
-            {!data ? (
-              loadError ? <Button variant="outline" disabled={loadingData} onClick={() => void refresh().catch(() => {})}>Try again</Button> : <p role="status" className="py-8 text-center">Loading invitations…</p>
-            ) : invitations.total === 0 && (
+            {invitations?.total === 0 && (
               <div className="flex min-h-64 flex-col items-center justify-center gap-3 py-8 text-center">
                 <InvitationEmptyIllustration />
                 <div className="space-y-1">
@@ -322,9 +320,9 @@ export function Users({ currentUser }: { currentUser: User }) {
                 </Button>
               </div>
             )}
-          </CardContent></Card>
+          </CardContent></Card>}
         </TabsContent>
-        {data && (activeTab !== "invitations" || invitations.total > 0) && (
+        {current && !loadingData && !loadError && (activeTab !== "invitations" || invitations?.total !== 0) && (
           <Pagination aria-label={`${activeTab === "users" ? "Users" : "Pending invitations"} pagination`} className="mt-4">
             <PaginationContent>
               <PaginationItem>

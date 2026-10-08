@@ -1,14 +1,13 @@
 import { DeleteRecord } from "./DeleteRecord";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Ban, CircleCheck, Plus, X } from "lucide-react";
 import { z } from "zod";
 import { clientSchema } from "./client-validation";
-import type { Overview } from "./Operations";
 import { request, message } from "./api";
 import { FormInput, ErrorNotice } from "./shared";
-import { paginate } from "./pagination";
+import { ListSkeleton } from "./ListSkeleton";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Tabs, TabsContent } from "./components/ui/tabs";
@@ -33,8 +32,11 @@ function ClientEmptyIllustration() {
   </svg>;
 }
 
-export function Clients({ data, refresh }: { data: Overview; refresh: () => Promise<void> }) {
-  const [accessClient, setAccessClient] = useState<Overview["clients"][number] | null>(null);
+type ClientRow = { id: string; name: string; enabled: boolean; deploymentCount: number };
+type ClientPage = { items: ClientRow[]; total: number; page: number; pageSize: number; pageCount: number };
+
+export function Clients() {
+  const [accessClient, setAccessClient] = useState<ClientRow | null>(null);
   const [accessBusy, setAccessBusy] = useState(false);
   const [accessError, setAccessError] = useState("");
   const [open, setOpen] = useState(false);
@@ -43,10 +45,24 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const form = useForm<z.infer<ReturnType<typeof clientSchema>>>({ resolver: zodResolver(clientSchema(data.clients)), defaultValues: { name: "" } });
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [result, setResult] = useState<ClientPage | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [revision, setRevision] = useState(0);
+  const form = useForm<z.infer<ReturnType<typeof clientSchema>>>({ resolver: zodResolver(clientSchema([])), defaultValues: { name: "" } });
   const { isDirty } = form.formState;
-  const query = search.trim().toLocaleLowerCase();
-  const clients = paginate(data.clients.filter(client => client.name.toLocaleLowerCase().includes(query)), page);
+  useEffect(() => { const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250); return () => window.clearTimeout(timer); }, [search]);
+  useEffect(() => {
+    let current = true;
+    setLoading(true); setLoadError("");
+    void request<ClientPage>(`/admin/clients?page=${page}&pageSize=10&search=${encodeURIComponent(debouncedSearch)}`)
+      .then(next => { if (!current) return; setResult(next); if (next.page !== page) setPage(next.page); })
+      .catch(cause => { if (current) setLoadError(message(cause)); })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
+  }, [page, debouncedSearch, revision]);
+  async function refresh() { setRevision(value => value + 1); }
   function close() { setOpen(false); setConfirmClose(false); setError(""); form.reset(); }
   function changeOpen(next: boolean) {
     if (busy) return;
@@ -65,7 +81,7 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
   }
   return <Tabs defaultValue="clients" className="gap-5">
     {!open && <ErrorNotice error={error} />}
-    <ListTabHeader label="Client management" tabs={<ListTab value="clients" count={data.clients.length}>Clients</ListTab>} actions={
+    <ListTabHeader label="Client management" tabs={<ListTab value="clients" count={result?.total}>Clients</ListTab>} actions={
       <div className="flex min-w-0 items-center justify-end gap-2">
         <div className="relative w-full max-w-xs">
           <Input aria-label="Search clients" placeholder="Search clients…" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="pr-9" />
@@ -91,24 +107,24 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
       </div>
     } />
     <TabsContent value="clients" className="space-y-5">
-    <Card className={clients.total > 0 ? "mobile-list-card" : undefined}><CardContent className="pt-6">
-      <Table className={clients.total > 0 ? "mobile-record-table" : undefined}>
+    {loading ? <ListSkeleton label="clients" columns={4} /> : loadError ? <div role="alert" className="space-y-3"><ErrorNotice error={loadError} /><Button variant="outline" onClick={() => setRevision(value => value + 1)}>Try again</Button></div> : <Card className={result?.total ? "mobile-list-card" : undefined}><CardContent className="pt-6">
+      <Table className={result?.total ? "mobile-record-table client-record-table" : undefined}>
         <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Deployments</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
-          {clients.rows.map(client => <TableRow key={client.id}>
+          {result?.items.map(client => <TableRow key={client.id}>
             <TableCell data-label="Client" className="font-medium"><Link to={clientUrl(client)} className="text-primary hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{client.name}</Link></TableCell>
             <TableCell data-label="Status"><Badge variant={client.enabled ? "success" : "inactive"}>{client.enabled ? "Enabled" : "Disabled"}</Badge></TableCell>
-            <TableCell data-label="Deployments" className="text-right tabular-nums">{data.deployments.filter(deployment => deployment.clientId === client.id).length}</TableCell>
+            <TableCell data-label="Deployments" className="text-right tabular-nums">{client.deploymentCount}</TableCell>
             <TableCell data-label="Actions" className="text-right"><div className="flex items-center justify-end gap-1">
               <Button variant="ghost" size="icon" title={`${client.enabled ? "Disable" : "Enable"} ${client.name}`} aria-label={`${client.enabled ? "Disable" : "Enable"} ${client.name}`} onClick={() => { setAccessError(""); setAccessClient(client); }}>
                 {client.enabled ? <Ban className="size-4" aria-hidden="true" /> : <CircleCheck className="size-4 text-primary" aria-hidden="true" />}
               </Button>
-              <DeleteRecord kind="clients" id={client.id} name={client.name} refresh={refresh} revision={data} iconOnly />
+              <DeleteRecord kind="clients" id={client.id} name={client.name} refresh={refresh} revision={revision} iconOnly />
             </div></TableCell>
           </TableRow>)}
         </TableBody>
       </Table>
-      {data.clients.length === 0 ? (
+      {result?.total === 0 && !debouncedSearch ? (
         <div className="flex min-h-64 flex-col items-center justify-center gap-3 py-8 text-center">
           <ClientEmptyIllustration />
           <div className="space-y-1">
@@ -117,12 +133,12 @@ export function Clients({ data, refresh }: { data: Overview; refresh: () => Prom
           </div>
           <Button className="mt-2" onClick={() => setOpen(true)}><Plus aria-hidden="true" /> Create client</Button>
         </div>
-      ) : clients.total === 0 && <p className="py-12 text-center text-sm text-muted-foreground">No clients match your search.</p>}
-    </CardContent></Card>
-    {clients.total > 0 && <Pagination aria-label="Clients pagination"><PaginationContent>
-      <PaginationItem><Button variant="outline" size="sm" disabled={clients.page === 1} onClick={() => setPage(clients.page - 1)}>Previous</Button></PaginationItem>
-      <PaginationItem><span className="whitespace-nowrap px-2 text-xs text-muted-foreground sm:px-3 sm:text-sm" role="status">Page {clients.page} of {clients.pageCount}</span></PaginationItem>
-      <PaginationItem><Button variant="outline" size="sm" disabled={clients.page === clients.pageCount} onClick={() => setPage(clients.page + 1)}>Next</Button></PaginationItem>
+      ) : result?.total === 0 && <p className="py-12 text-center text-sm text-muted-foreground">No clients match your search.</p>}
+    </CardContent></Card>}
+    {!!result?.total && !loadError && <Pagination aria-label="Clients pagination"><PaginationContent>
+      <PaginationItem><Button variant="outline" size="sm" disabled={loading || result.page === 1} onClick={() => setPage(result.page - 1)}>Previous</Button></PaginationItem>
+      <PaginationItem><span className="whitespace-nowrap px-2 text-xs text-muted-foreground sm:px-3 sm:text-sm" role="status">Page {result.page} of {result.pageCount}</span></PaginationItem>
+      <PaginationItem><Button variant="outline" size="sm" disabled={loading || result.page === result.pageCount} onClick={() => setPage(result.page + 1)}>Next</Button></PaginationItem>
     </PaginationContent></Pagination>}
     </TabsContent>
     <AlertDialog open={accessClient !== null} onOpenChange={next => { if (!next && !accessBusy) setAccessClient(null); }}>

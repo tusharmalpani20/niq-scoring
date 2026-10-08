@@ -511,4 +511,15 @@ td small {
   .mobile-record-table td small { overflow-wrap: anywhere; }
   .mobile-record-table td:not([data-label]) { display: block; height: auto; padding: 1rem 0; text-align: center; }
   .mobile-record-table td:not([data-label])::before { content: none; }
+  .client-record-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1rem; }
+  .client-record-table tr::after { content: ""; grid-column: 1 / -1; grid-row: 2; margin: .35rem 0; border-top: 1px solid var(--border); }
+  .mobile-record-table.client-record-table td:first-child { grid-column: 1; grid-row: 1; margin: 0; border: 0; padding: 0; }
+  .client-record-table td[data-label="Actions"] { grid-column: 2; grid-row: 1; align-self: start; padding: 0; }
+  .client-record-table td[data-label="Actions"]::before { content: none; }
+  .client-record-table td[data-label="Status"],
+  .client-record-table td[data-label="Deployments"] { display: grid; gap: .35rem; text-align: left; }
+  .client-record-table td[data-label="Status"] { grid-column: 1; grid-row: 3; justify-items: start; }
+  .client-record-table td[data-label="Deployments"] { grid-column: 2; grid-row: 3; justify-items: end; }
+  .client-record-table td[data-label="Status"]::before,
+  .client-record-table td[data-label="Deployments"]::before { content: attr(data-label); }
 }

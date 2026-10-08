@@ -32,14 +32,10 @@ export type Overview = {
 };
 export function Operations({
   page,
-  data,
-  refresh,
 }: {
   page: string;
-  data: Overview;
-  refresh: () => Promise<void>;
 }) {
-  if (page === "clients") return <Clients data={data} refresh={refresh} />;
-  if (page === "deployments") return <Deployments data={data} refresh={refresh} />;
-  return <RuleVersions refresh={refresh} />;
+  if (page === "clients") return <Clients />;
+  if (page === "deployments") return <Deployments />;
+  return <RuleVersions />;
 }

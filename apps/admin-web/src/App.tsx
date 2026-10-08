@@ -75,7 +75,9 @@ function Console() {
   const [data, setData] = useState<Overview | null>(null);
   const requestSequence = useRef(0);
   const [loggingOut, setLoggingOut] = useState(false);
-  const needsOverview = !["/", "/overview", "/users"].includes(location.pathname) && !/^\/versions\/[^/]+$/.test(location.pathname);
+  // List and client pages fetch their own bounded records. The deployment detail
+  // still uses the broader operations snapshot for its settings and references.
+  const needsOverview = /^\/deployments\/[^/]+/.test(location.pathname);
   const [invitationToken, setInvitationToken] = useState(() =>
     location.pathname === "/accept-invitation"
       ? (new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "")
@@ -248,12 +250,10 @@ function Console() {
             <AdminDashboard />
           ) : page.path === "users" ? (
             <Users currentUser={user} />
-          ) : data && clientId ? <ClientDetail key={clientId} data={data} clientId={clientId} refresh={refresh} /> : data && deploymentId ? <DeploymentDetail key={deploymentId} data={data} deploymentId={deploymentId} refresh={refresh} /> : data ? (
+          ) : clientId ? <ClientDetail key={clientId} clientId={clientId} /> : data && deploymentId ? <DeploymentDetail key={deploymentId} data={data} deploymentId={deploymentId} refresh={refresh} /> : ["clients", "deployments", "versions"].includes(page.path) ? (
             <Operations
               key={page.path}
               page={page.path}
-              data={data}
-              refresh={refresh}
             />
           ) : (
             overviewError ? (
