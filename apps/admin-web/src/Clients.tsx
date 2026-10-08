@@ -107,7 +107,7 @@ export function Clients() {
       </div>
     } />
     <TabsContent value="clients" className="space-y-5">
-    {loading ? <ListSkeleton label="clients" columns={4} /> : loadError ? <div role="alert" className="space-y-3"><ErrorNotice error={loadError} /><Button variant="outline" onClick={() => setRevision(value => value + 1)}>Try again</Button></div> : <Card className={result?.total ? "mobile-list-card" : undefined}><CardContent className="pt-6">
+    {loading ? <ListSkeleton label="clients" columns={4} mobileVariant="client" /> : loadError ? <div role="alert" className="space-y-3"><ErrorNotice error={loadError} /><Button variant="outline" onClick={() => setRevision(value => value + 1)}>Try again</Button></div> : <Card className={result?.total ? "mobile-list-card" : undefined}><CardContent className="pt-6">
       <Table className={result?.total ? "mobile-record-table client-record-table" : undefined}>
         <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Deployments</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>
@@ -118,6 +118,7 @@ export function Clients() {
             <TableCell data-label="Actions" className="text-right"><div className="flex items-center justify-end gap-1">
               <Button variant="ghost" size="icon" title={`${client.enabled ? "Disable" : "Enable"} ${client.name}`} aria-label={`${client.enabled ? "Disable" : "Enable"} ${client.name}`} onClick={() => { setAccessError(""); setAccessClient(client); }}>
                 {client.enabled ? <Ban className="size-4" aria-hidden="true" /> : <CircleCheck className="size-4 text-primary" aria-hidden="true" />}
+                <span className="client-access-label">{client.enabled ? "Disable" : "Enable"}</span>
               </Button>
               <DeleteRecord kind="clients" id={client.id} name={client.name} refresh={refresh} revision={revision} iconOnly />
             </div></TableCell>
