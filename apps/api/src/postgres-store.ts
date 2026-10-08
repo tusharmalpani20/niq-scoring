@@ -17,6 +17,9 @@ import { buildAdminDashboard, previousMonthComparisonEnd, type DashboardUsageEve
 import { dashboardSummary, type DashboardClientPage, type DashboardClientRow } from "./dashboard-pages";
 import { recordAdminMutation, type AdminMutationAudit } from "./admin-mutation-audit";
 import type { Deployment, DeploymentCreateRequest, PriorDeploymentCreate, DeploymentIdentity, Client, ScoringStore, UsageReservation, RuleUsage } from "./store";
+import type { ClientListRow, DeploymentListFilters, DeploymentListRow } from "./store";
+import { clampPage, pageResult, type ListPage } from "./list-page";
+import { deploymentDisplayLabel } from "./deployment-display-label";
 
 type Database = ReturnType<typeof postgres>;
 
@@ -48,7 +51,73 @@ export class PostgresScoringStore implements ScoringStore {
     return { clients: [...clients], deployments: [...deployments], entitlements: [...entitlements], assignments: assignments.map((row) => row.mode === "PINNED" ? { deploymentId: row.deploymentId, mode: "PINNED" as const, scoringRuleVersionId: row.scoringRuleVersionId! } : { deploymentId: row.deploymentId, mode: "LATEST_APPROVED" as const }), versions: [...versions] };
   }
 
+  async listClients({ page, pageSize, search }: ListPage) {
+    const [count] = await this.database<Array<{ total: number }>>`select count(*)::int as total from clients where position(lower(${search}) in lower(name)) > 0`;
+    page = clampPage(page, count?.total ?? 0, pageSize);
+    const rows = await this.database<ClientListRow[]>`select c.id, c.name, c.enabled,
+        (select count(*)::int from deployments d where d.client_id=c.id) as "deploymentCount"
+        from clients c where position(lower(${search}) in lower(c.name)) > 0
+        order by c.created_at, c.id limit ${pageSize} offset ${(page - 1) * pageSize}`;
+    return pageResult([...rows], count?.total ?? 0, page, pageSize);
+  }
+
+  async getClient(id: string) {
+    const [row] = await this.database<ClientListRow[]>`select c.id, c.name, c.enabled,
+      (select count(*)::int from deployments d where d.client_id=c.id) as "deploymentCount"
+      from clients c where c.id=${id} or lower(btrim(c.name))=lower(${id}) limit 1`;
+    return row ?? null;
+  }
+
+  async listDeployments({ page, pageSize, search, clientId, hostingType, status, environment, rule }: DeploymentListFilters) {
+    const where = this.database`
+      (${clientId ?? null}::text is null or d.client_id=${clientId ?? null})
+      and (position(lower(${search}) in lower(c.name)) > 0 or position(lower(${search}) in lower(d.name)) > 0)
+      and (${hostingType ?? null}::text is null or coalesce(d.hosting_type,'unspecified')=${hostingType ?? null})
+      and (${status ?? null}::text is null or d.enabled=(${status ?? null}='enabled'))
+      and (${environment ?? null}::text is null or d.environment=${environment ?? null})
+      and (${rule ?? null}::text is null or (${rule ?? null}='default' and a.mode='LATEST_APPROVED')
+        or (${rule ?? null}='unassigned' and (a.mode is null or (a.mode='LATEST_APPROVED' and default_rule.rule_id is null)))
+        or (${rule ?? null} not in ('default','unassigned') and (a.scoring_rule_version_id=${rule ?? null} or (a.mode='LATEST_APPROVED' and default_rule.rule_id=${rule ?? null}))))`;
+    const from = this.database`from deployments d join clients c on c.id=d.client_id
+      left join deployment_version_assignments a on a.deployment_id=d.id and a.effective_until is null
+      left join scoring_rule_default default_rule on default_rule.singleton=true
+      left join scoring_rule_versions v on v.id=case when a.mode='PINNED' then a.scoring_rule_version_id when a.mode='LATEST_APPROVED' then default_rule.rule_id end`;
+    const [count] = await this.database<Array<{ total: number }>>`select count(*)::int as total ${from} where ${where}`;
+    page = clampPage(page, count?.total ?? 0, pageSize);
+    const rows = await this.database<Array<Deployment & { clientName: string; ruleLabel: string; assignmentMode: "LATEST_APPROVED" | "PINNED" | null; scoringRuleVersionId: string | null }>>`
+        select d.id, d.client_id as "clientId", d.name, d.environment, d.hosting_type as "hostingType", d.enabled,
+          c.name as "clientName", case when a.mode is null then 'Not assigned' when a.mode='LATEST_APPROVED' then 'Default ('||coalesce(v.version,'not set')||')' else coalesce(v.version,'Rule unavailable') end as "ruleLabel",
+          a.mode as "assignmentMode", a.scoring_rule_version_id as "scoringRuleVersionId"
+        ${from} where ${where} order by d.created_at, d.id limit ${pageSize} offset ${(page - 1) * pageSize}`;
+    const ids = rows.map(row => row.id);
+    const entitlements = ids.length ? await this.database<Array<EntitlementInput & { deploymentId: string }>>`
+      select deployment_id as "deploymentId", capability, enabled, monthly_limit as "monthlyLimit"
+      from entitlements where deployment_id in ${this.database(ids)} and effective_until is null` : [];
+    const clientIds = [...new Set(rows.map(row => row.clientId))];
+    const siblings = clientIds.length ? await this.database<Deployment[]>`
+      select id, client_id as "clientId", name, environment, hosting_type as "hostingType", enabled
+      from deployments where client_id in ${this.database(clientIds)} order by created_at, id` : [];
+    const items: DeploymentListRow[] = rows.map(({ assignmentMode, scoringRuleVersionId, ...row }) => ({
+      ...row,
+      displayLabel: deploymentDisplayLabel(row, siblings.filter(item => item.clientId === row.clientId)),
+      assignment: assignmentMode === "PINNED" && scoringRuleVersionId ? { deploymentId: row.id, mode: "PINNED", scoringRuleVersionId }
+        : assignmentMode === "LATEST_APPROVED" ? { deploymentId: row.id, mode: "LATEST_APPROVED" } : null,
+      entitlements: entitlements.filter(item => item.deploymentId === row.id),
+    }));
+    return pageResult(items, count?.total ?? 0, page, pageSize);
+  }
+
   async dashboard(now: Date) { return (await this.dashboardData(now, true)).dashboard; }
+  async dashboardClient(id: string, now: Date) {
+    const dashboard = await this.dashboard(now);
+    const client = dashboard.clients.find(item => item.id === id);
+    if (!client) return null;
+    const ids = new Set(client.deployments.map(item => item.id));
+    return { clients: [client], attention: {
+      expiringTokenDeployments: dashboard.attention.expiringTokenDeployments.filter(item => ids.has(item.deploymentId)),
+      nearLimitDeployments: dashboard.attention.nearLimitDeployments.filter(item => ids.has(item.deploymentId)),
+    } };
+  }
 
   async dashboardSummary(now: Date) {
     const { dashboard, clients, deployments } = await this.dashboardData(now, false);

@@ -1,6 +1,8 @@
 import type postgres from "postgres";
 import { createEntityId } from "./lib/id";
 import { nextRuleState, RuleStoreError, type RuleAudit, type RuleCreate, type RuleRecord, type RuleSave, type RuleStore, type RuleTransition } from "./rule-store";
+import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
+import { clampPage, pageResult } from "./list-page";
 
 type Database = ReturnType<typeof postgres>;
 type Transaction = import("postgres").TransactionSql;
@@ -20,6 +22,20 @@ export class PostgresRuleStore implements RuleStore {
     return rows.map(record);
   }
   async list() { return this.read(this.database); }
+  async listPage({ page, pageSize, search, status }: { page: number; pageSize: number; search: string; status?: RuleRecord["lifecycle"] }) {
+    const [count] = await this.database<Array<{ total: number }>>`select count(*)::int as total from scoring_rule_versions
+        where version<>${PROVISIONAL_SCORING_VERSION} and position(lower(${search}) in lower(version)) > 0
+          and (${status ?? null}::text is null or lifecycle=${status ?? null})`;
+    page = clampPage(page, count?.total ?? 0, pageSize);
+    const rows = await this.database<RawRecord[]>`select id, version, lifecycle, clinical_use_permitted as "clinicalUsePermitted", definition,
+        package_checksum as "packageChecksum", revision, validated_revision as "validatedRevision", created_by as "createdBy",
+        created_at as "createdAt", updated_at as "updatedAt", approved_at as "approvedAt",
+        exists(select 1 from scoring_rule_default where rule_id=scoring_rule_versions.id) as "isDefault"
+        from scoring_rule_versions where version<>${PROVISIONAL_SCORING_VERSION} and position(lower(${search}) in lower(version)) > 0
+          and (${status ?? null}::text is null or lifecycle=${status ?? null})
+        order by created_at desc, id desc limit ${pageSize} offset ${(page - 1) * pageSize}`;
+    return pageResult(rows.map(record), count?.total ?? 0, page, pageSize);
+  }
   async get(id: string) { return (await this.read(this.database, id))[0] ?? null; }
 
   async getByName(name: string) {

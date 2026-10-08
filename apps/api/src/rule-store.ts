@@ -13,6 +13,7 @@ export type RuleSave = { id: string; revision: number; definition: VersionedRule
 export type RuleTransition = { id: string; revision: number; action: "validate" | "approve" | "activate" | "retire"; makeDefault?: boolean; actor: string; now: string };
 export interface RuleStore {
   list(): Promise<RuleRecord[]>;
+  listPage(query: { page: number; pageSize: number; search: string; status?: RuleState }): Promise<{ items: RuleRecord[]; total: number; page: number; pageSize: number; pageCount: number }>;
   get(id: string): Promise<RuleRecord | null>;
   getByName(name: string): Promise<RuleRecord | null>;
   replayCreate(requestId: string, fingerprint: string, actor: string): Promise<RuleRecord | null>;

@@ -24,6 +24,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { createEntityId } from "./lib/id";
 import { StubFaceScanAdapter, type FaceScanAdapter } from "./face-scan";
 import type { DeploymentIdentity, ScoringStore } from "./store";
+import { parseListPage } from "./list-page";
 
 export interface AppOptions {
   store: ScoringStore;
@@ -83,7 +84,35 @@ export function createApp(options: AppOptions) {
   app.get("/health", (context) => context.json({ status: "ok", service: "niq-scoring-api", region: options.region }));
   app.get("/ready", async (context) => { const ready = await (options.readinessCheck ?? (async () => true))(); return context.json({ status: ready ? "ready" : "not_ready" }, ready ? 200 : 503); });
   app.get("/admin/overview", async (context) => context.json(await options.store.overview()));
+  app.get("/admin/clients", async context => {
+    const query = parseListPage(context);
+    return query ? context.json(await options.store.listClients(query)) : context.json({ error: "INVALID_REQUEST" }, 400);
+  });
+  app.get("/admin/clients/:id", async context => {
+    const client = await options.store.getClient(context.req.param("id"));
+    return client ? context.json({ client }) : context.json({ error: "CLIENT_NOT_FOUND" }, 404);
+  });
+  app.get("/admin/deployments", async context => {
+    const query = parseListPage(context);
+    if (!query) return context.json({ error: "INVALID_REQUEST" }, 400);
+    const clientId = context.req.query("clientId");
+    const hostingType = context.req.query("hostingType");
+    const status = context.req.query("status");
+    const environment = context.req.query("environment");
+    const rule = context.req.query("rule");
+    if (clientId && !ulidSchema.safeParse(clientId).success ||
+      hostingType && !["NIQ_HOSTED", "CLIENT_CLOUD", "ON_PREMISES", "unspecified"].includes(hostingType) ||
+      status && !["enabled", "disabled"].includes(status) ||
+      environment && !["development", "test", "staging", "production"].includes(environment) ||
+      rule && !["default", "unassigned"].includes(rule) && !ulidSchema.safeParse(rule).success)
+      return context.json({ error: "INVALID_REQUEST" }, 400);
+    return context.json(await options.store.listDeployments({ ...query, ...(clientId ? { clientId } : {}), ...(hostingType ? { hostingType } : {}), ...(status ? { status } : {}), ...(environment ? { environment } : {}), ...(rule ? { rule } : {}) }));
+  });
   app.get("/admin/dashboard", async (context) => context.json(await options.store.dashboard(now())));
+  app.get("/admin/dashboard/clients/:id", async context => {
+    const dashboard = await options.store.dashboardClient(context.req.param("id"), now());
+    return dashboard ? context.json(dashboard) : context.json({ error: "CLIENT_NOT_FOUND" }, 404);
+  });
   app.get("/admin/dashboard/summary", async (context) => context.json(await options.store.dashboardSummary(now())));
   app.get("/admin/dashboard/clients", async (context) => {
     const rawPage = context.req.query("page") ?? "1";

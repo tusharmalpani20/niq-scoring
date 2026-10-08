@@ -10,9 +10,10 @@ import { validateRuleDefinition } from "@niq-scoring/contracts/rule-validation";
 import { evaluateVersionedRule } from "@niq-scoring/scoring-engine/versioned";
 import { validateFinalAssessmentSamples } from "@niq-scoring/scoring-engine/final-assessment";
 import { validateSamples } from "@niq-scoring/scoring-engine/rules";
-import { PROVISIONAL_SCORING_VERSION, ulidSchema } from "@niq-scoring/contracts";
+import { ulidSchema } from "@niq-scoring/contracts";
 import { RuleStoreError, type RuleStore } from "./rule-store";
 import { createEntityId } from "./lib/id";
+import { parseListPage } from "./list-page";
 
 // Sorted keys make checksums independent of JSON object insertion order; array order remains meaningful.
 export function canonicalRuleJson(value: unknown): string {
@@ -33,10 +34,17 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
     catch (error) { if (error instanceof RuleStoreError) return c.json({ error: error.code }, error.code === "RULE_NOT_FOUND" ? 404 : 409); throw error; }
   };
   const actor = (c: Context): string => c.get("adminUserId");
-  app.get("/admin/rules", guard(async c => c.json({ versions: (await store.list())
-    // Historical provisional scoring may still be referenced, but it is not a manageable rule.
-    .filter(record => record.version !== PROVISIONAL_SCORING_VERSION)
-    .map(({ definition, ...record }) => ({ ...record, editable: isFixedVersionedDefinition(definition) && ["DRAFT", "VALIDATED"].includes(record.lifecycle), duplicable: isFixedVersionedDefinition(definition), deletable: versionedRuleDefinitionSchema.safeParse(definition).success && record.lifecycle === "DRAFT" })) })));
+  app.get("/admin/rules", guard(async c => {
+    const query = parseListPage(c);
+    const status = c.req.query("status") || undefined;
+    if (!query || status && !["DRAFT", "VALIDATED", "APPROVED", "ACTIVE", "RETIRED"].includes(status)) return c.json({ error: "INVALID_REQUEST" }, 400);
+    const result = await store.listPage({ ...query, ...(status ? { status: status as import("./rule-store").RuleState } : {}) });
+    return c.json({ versions: result.items.map(({ definition, ...record }) => ({ ...record,
+      editable: isFixedVersionedDefinition(definition) && ["DRAFT", "VALIDATED"].includes(record.lifecycle),
+      duplicable: isFixedVersionedDefinition(definition),
+      deletable: versionedRuleDefinitionSchema.safeParse(definition).success && record.lifecycle === "DRAFT" })),
+      total: result.total, page: result.page, pageSize: result.pageSize, pageCount: result.pageCount });
+  }));
   app.post("/admin/rules", guard(async c => {
     const parsed = createSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);

@@ -21,6 +21,8 @@ import { buildUsageSummary, type DeploymentUsage, type UsageCount } from "./usag
 import { buildAdminDashboard, type DashboardAudit } from "./admin-dashboard";
 import { dashboardSummary, pageDashboardClients, type DashboardClientPage } from "./dashboard-pages";
 import type { AdminMutationAudit } from "./admin-mutation-audit";
+import { clampPage, pageResult, type ListPage } from "./list-page";
+import { deploymentDisplayLabel } from "./deployment-display-label";
 
 export type StoredActivationToken = { id: string; tokenHash: string; tokenCiphertext: string; expiresAt: Date | null };
 export type TokenRecord = { id: string; expiresAt: Date | null; createdAt: Date; usedAt: Date | null; revokedAt: Date | null; canCopy: boolean; credentialStatus: "Active" | "Revoked" | "Expired" | null };
@@ -30,6 +32,9 @@ export type PriorDeploymentCreate = { deployment: Deployment | null; fingerprint
 export type Client = CreateClient & { id: string; enabled: boolean };
 export type Deployment = CreateDeployment & { id: string; enabled: boolean; hostingType: DeploymentConfiguration["hostingType"] | null };
 export type VersionAssignment = VersionAssignmentInput & { deploymentId: string };
+export type ClientListRow = Client & { deploymentCount: number };
+export type DeploymentListRow = Deployment & { clientName: string; displayLabel: string; ruleLabel: string; assignment: VersionAssignment | null; entitlements: Array<EntitlementInput & { deploymentId: string }> };
+export type DeploymentListFilters = ListPage & { clientId?: string; hostingType?: string; status?: string; environment?: string; rule?: string };
 export type DeploymentIdentity = { credentialId: string; deploymentId: string; clientId: string };
 export type RuleUsage = { ruleVersionId: string | null; name: string; count: number };
 
@@ -48,7 +53,11 @@ export interface ScoringStore {
   deletionStatus(kind: RecordKind, id: string): Promise<DeletionStatus>;
   deleteUnused(kind: RecordKind, id: string, audit?: AdminMutationAudit): Promise<DeletionStatus>;
   overview(): Promise<{ clients: Client[]; deployments: Deployment[]; entitlements: Array<EntitlementInput & { deploymentId: string }>; assignments: VersionAssignment[]; versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault?: boolean }> }>;
+  listClients(query: ListPage): Promise<ReturnType<typeof pageResult<ClientListRow>>>;
+  getClient(id: string): Promise<ClientListRow | null>;
+  listDeployments(query: DeploymentListFilters): Promise<ReturnType<typeof pageResult<DeploymentListRow>>>;
   dashboard(now: Date): Promise<ReturnType<typeof buildAdminDashboard>>;
+  dashboardClient(id: string, now: Date): Promise<{ clients: ReturnType<typeof buildAdminDashboard>["clients"]; attention: Pick<ReturnType<typeof buildAdminDashboard>["attention"], "expiringTokenDeployments" | "nearLimitDeployments"> } | null>;
   dashboardSummary(now: Date): Promise<ReturnType<typeof dashboardSummary>>;
   dashboardClients(now: Date, page: number, pageSize: number): Promise<DashboardClientPage>;
   usageByDeployment(clientId: string, now: Date): Promise<DeploymentUsage[]>;
@@ -105,6 +114,37 @@ export class MemoryScoringStore implements ScoringStore {
 
   versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault: boolean }> = [{ id: "01K4ZJ9QJ7F3TWHDW1B1T6A4YV", version: PROVISIONAL_SCORING_VERSION, lifecycle: "DRAFT", clinicalUsePermitted: false, isDefault: false }];
   async overview() { return { clients: this.clients, deployments: this.deployments, entitlements: this.entitlements, assignments: this.assignments, versions: [...this.versions, ...await this.rules.list()] }; }
+  async listClients({ page, pageSize, search }: ListPage) {
+    const rows = this.clients.filter(item => item.name.toLowerCase().includes(search.toLowerCase()))
+      .map(item => ({ ...item, deploymentCount: this.deployments.filter(deployment => deployment.clientId === item.id).length }));
+    page = clampPage(page, rows.length, pageSize);
+    return pageResult(rows.slice((page - 1) * pageSize, page * pageSize), rows.length, page, pageSize);
+  }
+  async getClient(id: string) {
+    const client = this.clients.find(item => item.id === id || item.name.trim().toLowerCase() === id.toLowerCase());
+    return client ? { ...client, deploymentCount: this.deployments.filter(item => item.clientId === client.id).length } : null;
+  }
+  async listDeployments({ page, pageSize, search, clientId, hostingType, status, environment, rule }: DeploymentListFilters) {
+    const versions = [...this.versions, ...await this.rules.list()];
+    const defaultVersion = versions.find(item => item.isDefault)?.id;
+    const rows = this.deployments.filter(item => {
+      const client = this.clients.find(c => c.id === item.clientId);
+      const assignment = this.assignments.find(a => a.deploymentId === item.id);
+      const versionId = assignment?.mode === "PINNED" ? assignment.scoringRuleVersionId : assignment?.mode === "LATEST_APPROVED" ? defaultVersion : undefined;
+      return (!clientId || item.clientId === clientId) &&
+        (!search || `${client?.name ?? ""} ${item.name}`.toLowerCase().includes(search.toLowerCase())) &&
+        (!hostingType || (item.hostingType ?? "unspecified") === hostingType) &&
+        (!status || item.enabled === (status === "enabled")) &&
+        (!environment || item.environment === environment) &&
+        (!rule || (rule === "default" ? assignment?.mode === "LATEST_APPROVED" : rule === "unassigned" ? !versionId : versionId === rule));
+    }).map(item => { const assignment = this.assignments.find(a => a.deploymentId === item.id);
+      const versionId = assignment?.mode === "PINNED" ? assignment.scoringRuleVersionId : assignment?.mode === "LATEST_APPROVED" ? defaultVersion : undefined;
+      return { ...item, clientName: this.clients.find(c => c.id === item.clientId)?.name ?? "", displayLabel: deploymentDisplayLabel(item, this.deployments.filter(d => d.clientId === item.clientId)), ruleLabel: !assignment ? "Not assigned" : assignment.mode === "LATEST_APPROVED" ? `Default (${versions.find(v => v.id === defaultVersion)?.version ?? "not set"})` : versions.find(v => v.id === versionId)?.version ?? "Rule unavailable", assignment: assignment ?? null,
+      entitlements: this.entitlements.filter(e => e.deploymentId === item.id) };
+    });
+    page = clampPage(page, rows.length, pageSize);
+    return pageResult(rows.slice((page - 1) * pageSize, page * pageSize), rows.length, page, pageSize);
+  }
   async dashboard(now: Date) {
     return buildAdminDashboard({
       now,
@@ -114,6 +154,16 @@ export class MemoryScoringStore implements ScoringStore {
       usage: this.usages,
       activations: this.activations,
     });
+  }
+  async dashboardClient(id: string, now: Date) {
+    const dashboard = await this.dashboard(now);
+    const client = dashboard.clients.find(item => item.id === id);
+    if (!client) return null;
+    const ids = new Set(this.deployments.filter(item => item.clientId === id).map(item => item.id));
+    return { clients: [client], attention: {
+      expiringTokenDeployments: dashboard.attention.expiringTokenDeployments.filter(item => ids.has(item.deploymentId)),
+      nearLimitDeployments: dashboard.attention.nearLimitDeployments.filter(item => ids.has(item.deploymentId)),
+    } };
   }
   async dashboardSummary(now: Date) {
     const dashboard = buildAdminDashboard({ now, clients: this.clients, deployments: this.deployments, entitlements: this.entitlements, usage: this.usages, activations: this.activations, includeClients: false });

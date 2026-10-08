@@ -1,5 +1,7 @@
 import { nextRuleState, normalizedRuleName, RuleStoreError, type RuleAudit, type RuleCreate, type RuleRecord, type RuleSave, type RuleStore, type RuleTransition } from "./rule-store";
 import { createEntityId } from "./lib/id";
+import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
+import { clampPage, pageResult } from "./list-page";
 
 export class MemoryRuleStore implements RuleStore {
   records: RuleRecord[] = [];
@@ -9,6 +11,13 @@ export class MemoryRuleStore implements RuleStore {
   private requests = new Map<string, { fingerprint: string; id: string; actor: string }>();
   constructor(private readonly referenced: (id: string) => boolean = () => false) {}
   async list() { return structuredClone(this.records.map(r => ({ ...r, isDefault: r.id === this.defaultRuleId }))); }
+  async listPage({ page, pageSize, search, status }: { page: number; pageSize: number; search: string; status?: import("./rule-store").RuleState }) {
+    const rows = this.records.filter(r => r.version !== PROVISIONAL_SCORING_VERSION && r.version.toLowerCase().includes(search.toLowerCase()) && (!status || r.lifecycle === status))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+      .map(r => ({ ...r, isDefault: r.id === this.defaultRuleId }));
+    page = clampPage(page, rows.length, pageSize);
+    return pageResult(structuredClone(rows.slice((page - 1) * pageSize, page * pageSize)), rows.length, page, pageSize);
+  }
   async get(id: string) { const row = this.records.find(r => r.id === id); return row ? structuredClone({ ...row, isDefault: row.id === this.defaultRuleId }) : null; }
   async getByName(name: string) {
     const normalized = normalizedRuleName(name);
