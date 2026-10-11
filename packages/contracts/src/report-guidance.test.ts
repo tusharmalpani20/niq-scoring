@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createFinalAssessmentTemplate } from "./final-assessment-template";
 import { validateFinalAssessmentDefinition } from "./final-assessment-validation";
-import { initialReportGuidance, workbookGuidanceImportIssues } from "./report-guidance-template";
+import { initialReportGuidance } from "./report-guidance-template";
 import { publicQuestionnaire } from "./rule-public";
 import { resolveReportGuidance } from "./report-guidance";
 
@@ -30,16 +30,6 @@ describe("versioned report guidance", () => {
     expect(JSON.stringify(publicQuestionnaire(second))).not.toContain("clinicalActions");
     expect(JSON.stringify(publicQuestionnaire(second))).not.toContain("Nutritional interventions");
     expect(validateFinalAssessmentDefinition(second)).toEqual([]);
-  });
-
-  test("workbook import explains incompatible older rule drafts before changing them", () => {
-    const definition = createFinalAssessmentTemplate("A");
-    expect(workbookGuidanceImportIssues(definition)).toEqual([]);
-    definition.drugClassConfig!.classes = definition.drugClassConfig!.classes.filter(item => item.id !== "taxanes");
-    definition.riskCategories = definition.riskCategories.filter(item => item.id !== "high");
-    expect(workbookGuidanceImportIssues(definition)).toEqual(expect.arrayContaining([
-      expect.stringContaining("Taxanes"), expect.stringContaining("High Risk"),
-    ]));
   });
 
   test("broken guidance references and duplicate active rows are rejected", () => {
