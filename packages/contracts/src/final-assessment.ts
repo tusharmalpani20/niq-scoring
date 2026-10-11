@@ -136,6 +136,8 @@ export const reportGuidanceSchema = z.object({
   toxicity: z.array(z.object({
     id: ruleIdSchema, classId: ruleIdSchema, treatmentTypeId: ruleIdSchema,
     expectedToxicity: label, nutritionalInterventions: z.string().trim().min(1).max(8000),
+    // Optional class-level wording when the source row also names an individual drug.
+    classLevelToxicity: label.optional(), classLevelInterventions: z.string().trim().min(1).max(8000).optional(),
     enabled: z.boolean(), requiresDrugConfirmation: z.boolean(), source: sourceSchema,
   }).strict()).max(500),
 }).strict();

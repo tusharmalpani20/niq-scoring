@@ -141,6 +141,8 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
       if (ids.has(rule.id)) add(`${path}.id`, "DUPLICATE_GUIDANCE_ID", "Report guidance IDs must be unique.");
       ids.add(rule.id);
       if (!rule.enabled) return;
+      if (Boolean(rule.classLevelToxicity) !== Boolean(rule.classLevelInterventions)) add(path, "INCOMPLETE_CLASS_LEVEL_GUIDANCE", "Class-level toxicity and intervention must be configured together.");
+      if ((rule.classLevelToxicity || rule.classLevelInterventions) && !rule.requiresDrugConfirmation) add(path, "UNNECESSARY_CLASS_LEVEL_GUIDANCE", "Class-level alternatives require named drug confirmation on the source wording.");
       if (rule.classId === "other") add(`${path}.classId`, "OTHER_MUST_BE_GENERIC", "Other cannot have toxicity interventions.");
       if (!configuredClasses.has(rule.classId)) add(`${path}.classId`, "UNKNOWN_DRUG_CLASS", "Toxicity guidance refers to a missing drug class.");
       if (!treatments.has(rule.treatmentTypeId)) add(`${path}.treatmentTypeId`, "UNKNOWN_TREATMENT", "Toxicity guidance refers to a missing treatment type.");

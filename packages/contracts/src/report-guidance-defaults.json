@@ -109,7 +109,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 6",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Diarrhea",
+      "classLevelInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness"
     },
     {
       "id": "toxicity_row_007",
@@ -123,7 +125,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 7",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Fluid retention",
+      "classLevelInterventions": "• Sodium under 2 g/day, limit processed/packaged foods, adequate protein, weigh daily\n• Do not restrict fluids unless told\n• Call for gain over 1 kg in a day or breathlessness"
     },
     {
       "id": "toxicity_row_008",
@@ -249,7 +253,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 16",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Hand-foot syndrome",
+      "classLevelInterventions": "• No specific diet\n• Maintain hydration and nutrition, avoid alcohol\n• Skin care and dose adjustment per oncologist"
     },
     {
       "id": "toxicity_row_017",
@@ -333,7 +339,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 22",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Mucositis",
+      "classLevelInterventions": "• Soft, moist, lukewarm or cool foods (khichdi, dal, curd, porridge, mashed vegetables)\n• Avoid spicy, acidic, hot, crunchy or sharp foods\n• Use a straw\n• Bland salt–soda rinse after meals\n• Soft toothbrush\n• Call if unable to eat or drink, white patches or fever"
     },
     {
       "id": "toxicity_row_023",
@@ -347,7 +355,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 23",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Hemorrhagic cystitis",
+      "classLevelInterventions": "• Fluids 2.5–3 L/day unless restricted, front-loaded earlier in the day\n• Empty the bladder often, including at bedtime\n• Report blood in urine or burning"
     },
     {
       "id": "toxicity_row_024",
@@ -361,7 +371,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 24",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Diarrhea",
+      "classLevelInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness"
     },
     {
       "id": "toxicity_row_025",
@@ -375,7 +387,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 25",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Constipation",
+      "classLevelInterventions": "• Fluids 2–2.5 L/day\n• Warm drinks\n• Gradual fiber (cooked vegetables, fruit, oats, isabgol)\n• Prunes or papaya\n• Daily walking\n• Laxatives only as prescribed"
     },
     {
       "id": "toxicity_row_026",
@@ -431,7 +445,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 29",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Nausea and vomiting",
+      "classLevelInterventions": "• Small, frequent, bland, cool meals (khichdi, toast, murmura, banana)\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Sit upright 30–60 min after eating\n• Antiemetics on schedule\n• Ginger in modest amounts\n• ORS sips if vomiting\n• Call if more than 3 vomits/day or unable to keep fluids down for 24 h"
     },
     {
       "id": "toxicity_row_030",
@@ -473,7 +489,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 32",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Nephrotoxicity",
+      "classLevelInterventions": "• Hydration 2.5–3 L/day unless restricted\n• Avoid NSAIDs and nephrotoxic herbal products\n• Monitor creatinine and electrolytes each cycle"
     },
     {
       "id": "toxicity_row_033",
@@ -487,7 +505,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 33",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Peripheral neuropathy",
+      "classLevelInterventions": "• No diet prevents it\n• Keep nutrition adequate, control blood glucose, avoid alcohol, check B12 status rather than self-supplementing, avoid high-dose vitamin B6\n• Take care with hot utensils/dishes if sensation is reduced\n• Report new numbness or weakness"
     },
     {
       "id": "toxicity_row_034",
@@ -501,7 +521,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 34",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Hearing change / tinnitus",
+      "classLevelInterventions": "• No nutritional prevention\n• Report hearing change promptly"
     },
     {
       "id": "toxicity_row_035",
@@ -515,7 +537,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 35",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Myelosuppression, anemia, low platelets",
+      "classLevelInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately\n• Request iron studies, B12 and folate before supplementing\n• Iron-rich foods (ragi, bajra, sattu, leafy greens, beetroot, sesame) with a vitamin C source\n• Tea/coffee away from meals"
     },
     {
       "id": "toxicity_row_036",
@@ -543,7 +567,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 37",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Diarrhea / mild mucositis",
+      "classLevelInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness"
     },
     {
       "id": "toxicity_row_038",
@@ -585,7 +611,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 40",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Hand-foot syndrome",
+      "classLevelInterventions": "• No specific diet\n• Maintain hydration and nutrition, avoid alcohol\n• Skin care and dose adjustment per oncologist"
     },
     {
       "id": "toxicity_row_041",
@@ -641,7 +669,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 44",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Raised liver enzymes",
+      "classLevelInterventions": "• Avoid alcohol, herbal/'detox' products, high-dose turmeric and green-tea extract\n• Do not restrict protein\n• Repeat LFT as scheduled"
     },
     {
       "id": "toxicity_row_045",
@@ -655,7 +685,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 45",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Flu-like symptoms, fatigue, edema",
+      "classLevelInterventions": "• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity\n• Sodium under 2 g/day, limit processed/packaged foods, adequate protein, weigh daily\n• Do not restrict fluids unless told\n• Call for gain over 1 kg in a day or breathlessness"
     },
     {
       "id": "toxicity_row_046",
@@ -669,7 +701,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 46",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Anemia",
+      "classLevelInterventions": "• Request iron studies, B12 and folate before supplementing\n• Iron-rich foods (ragi, bajra, sattu, leafy greens, beetroot, sesame) with a vitamin C source\n• Tea/coffee away from meals"
     },
     {
       "id": "toxicity_row_047",
@@ -753,7 +787,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 52",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Mucositis",
+      "classLevelInterventions": "• Soft, moist, lukewarm or cool foods (khichdi, dal, curd, porridge, mashed vegetables)\n• Avoid spicy, acidic, hot, crunchy or sharp foods\n• Use a straw\n• Bland salt–soda rinse after meals\n• Soft toothbrush\n• Call if unable to eat or drink, white patches or fever"
     },
     {
       "id": "toxicity_row_053",
@@ -781,7 +817,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 54",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Anemia",
+      "classLevelInterventions": "• Request iron studies, B12 and folate before supplementing\n• Iron-rich foods (ragi, bajra, sattu, leafy greens, beetroot, sesame) with a vitamin C source\n• Tea/coffee away from meals"
     },
     {
       "id": "toxicity_row_055",
@@ -795,7 +833,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 55",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Constipation / ileus",
+      "classLevelInterventions": "• Fluids 2–2.5 L/day\n• Warm drinks\n• Gradual fiber (cooked vegetables, fruit, oats, isabgol)\n• Prunes or papaya\n• Daily walking\n• Laxatives only as prescribed\n• Severe abdominal pain, vomiting or no stool for 2–3 days: call urgently"
     },
     {
       "id": "toxicity_row_056",
@@ -837,7 +877,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 58",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Neutropenia",
+      "classLevelInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately"
     },
     {
       "id": "toxicity_row_059",
@@ -893,7 +935,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 62",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Diarrhea",
+      "classLevelInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness"
     },
     {
       "id": "toxicity_row_063",
@@ -935,7 +979,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 65",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Hand-foot skin reaction",
+      "classLevelInterventions": "• No specific diet\n• Maintain hydration and nutrition, avoid alcohol\n• Skin care and dose adjustment per oncologist"
     },
     {
       "id": "toxicity_row_066",
@@ -991,7 +1037,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 69",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Edema",
+      "classLevelInterventions": "• Sodium under 2 g/day, limit processed/packaged foods, adequate protein, weigh daily\n• Do not restrict fluids unless told\n• Call for gain over 1 kg in a day or breathlessness"
     },
     {
       "id": "toxicity_row_070",
@@ -1019,7 +1067,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 71",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Hypothyroidism",
+      "classLevelInterventions": "• TSH monitoring per oncologist\n• Levothyroxine on an empty stomach 30–60 min before breakfast, kept at least 4 hours from calcium, iron and multivitamins\n• Steady soy intake"
     },
     {
       "id": "toxicity_row_072",
@@ -1047,7 +1097,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 73",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Low calcium / phosphate",
+      "classLevelInterventions": "• Check levels\n• Calcium- and phosphate-containing foods (dairy, nuts, legumes)\n• Supplements only as prescribed"
     },
     {
       "id": "toxicity_row_074",
@@ -1061,7 +1113,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 74",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "QT prolongation",
+      "classLevelInterventions": "• Keep potassium and magnesium normal\n• Avoid dehydration\n• Avoid herbal products"
     },
     {
       "id": "toxicity_row_075",
@@ -1159,7 +1213,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 81",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Hypertension",
+      "classLevelInterventions": "• Sodium under 2 g/day, DASH-style diet (vegetables, fruit, low-fat dairy, whole grains), limit processed foods and pickles, limit alcohol\n• BP monitoring at home"
     },
     {
       "id": "toxicity_row_082",
@@ -1173,7 +1229,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 82",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Diarrhea",
+      "classLevelInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness"
     },
     {
       "id": "toxicity_row_083",
@@ -1187,7 +1245,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 83",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Nausea and vomiting",
+      "classLevelInterventions": "• Small, frequent, bland, cool meals (khichdi, toast, murmura, banana)\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Sit upright 30–60 min after eating\n• Antiemetics on schedule\n• Ginger in modest amounts\n• ORS sips if vomiting\n• Call if more than 3 vomits/day or unable to keep fluids down for 24 h"
     },
     {
       "id": "toxicity_row_084",
@@ -1257,7 +1317,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 88",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Raised liver enzymes, low platelets",
+      "classLevelInterventions": "• Avoid alcohol, herbal/'detox' products, high-dose turmeric and green-tea extract\n• Do not restrict protein\n• Repeat LFT as scheduled"
     },
     {
       "id": "toxicity_row_089",
@@ -1271,7 +1333,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 89",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Neuropathy",
+      "classLevelInterventions": "• No diet prevents it\n• Keep nutrition adequate, control blood glucose, avoid alcohol, check B12 status rather than self-supplementing, avoid high-dose vitamin B6\n• Take care with hot utensils/dishes if sensation is reduced\n• Report new numbness or weakness"
     },
     {
       "id": "toxicity_row_090",
@@ -1285,7 +1349,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 90",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Neutropenia",
+      "classLevelInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately"
     },
     {
       "id": "toxicity_row_091",
@@ -1579,7 +1645,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 111",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Joint pain / injection-site pain",
+      "classLevelInterventions": "• Adequate protein and hydration\n• Check vitamin D status\n• No new supplements without approval\n• Gentle activity"
     },
     {
       "id": "toxicity_row_112",
@@ -1803,7 +1871,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 127",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Liver toxicity",
+      "classLevelInterventions": "• Avoid alcohol, herbal/'detox' products, high-dose turmeric and green-tea extract\n• Do not restrict protein\n• Repeat LFT as scheduled"
     },
     {
       "id": "toxicity_row_128",
@@ -1817,7 +1887,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 128",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Hypertension, fluid retention, low potassium",
+      "classLevelInterventions": "• Moderate sodium\n• Potassium-rich foods unless restricted\n• Monitor BP and potassium"
     },
     {
       "id": "toxicity_row_129",
@@ -1831,7 +1903,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 129",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Neutropenia",
+      "classLevelInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately"
     },
     {
       "id": "toxicity_row_130",
@@ -1845,7 +1919,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 130",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Diarrhea",
+      "classLevelInterventions": "• Start ORS and fluids at the first loose stool\n• Take the prescribed antidiarrheal\n• Low-residue diet\n• Call if diarrhea lasts over 24 h or comes with fever, vomiting or dizziness"
     },
     {
       "id": "toxicity_row_131",
@@ -1929,7 +2005,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 136",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "QT prolongation",
+      "classLevelInterventions": "• Keep potassium, magnesium and calcium normal through diet and hydration\n• Avoid herbal products\n• ECG monitoring by the oncologist"
     },
     {
       "id": "toxicity_row_137",
@@ -1943,7 +2021,9 @@
         "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
         "location": "row 137",
         "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
-      }
+      },
+      "classLevelToxicity": "Raised creatinine",
+      "classLevelInterventions": "• No protein restriction\n• Keep hydrated\n• Confirm with the oncologist"
     }
   ]
 }
