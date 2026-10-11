@@ -18,7 +18,8 @@ import { Badge } from "../components/ui/badge";
 import { NativeSelect } from "../components/ui/native-select";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "../components/ui/alert-dialog";
 import { removeDietaryStress, upgradeFinalAssessmentDefinition, withDefaultRiskCategoryColors } from "@niq-scoring/contracts/final-assessment-template";
-import { SimpleRiskEditor, FaceScanEditor } from "./ScoreRangeEditors";
+import { DEFAULT_STRESS_SCORING_CONFIG } from "@niq-scoring/contracts/stress-scoring";
+import { SimpleRiskEditor, FaceScanEditor, StressEditor } from "./ScoreRangeEditors";
 import { DrugClassEditor } from "./DrugClassEditor";
 import { ReportGuidanceEditor } from "./ReportGuidanceEditor";
 import { newRuleId } from "./questionnaire-model";
@@ -43,7 +44,8 @@ function parse(value: unknown) {
 
 function editableDefinition(record: RuleDetail) {
   const definition = parse(record.definition);
-  return definition && ["DRAFT", "VALIDATED"].includes(record.lifecycle) ? withDefaultRiskCategoryColors(definition) : definition;
+  return definition && ["DRAFT", "VALIDATED"].includes(record.lifecycle)
+    ? withDefaultRiskCategoryColors({ ...definition, stressScoring: definition.stressScoring ?? structuredClone(DEFAULT_STRESS_SCORING_CONFIG) }) : definition;
 }
 
 function scoreSummary(field: FinalField) {
@@ -69,6 +71,7 @@ function PointInput({ label, icon, value, draft, disabled, onDraft, onCommit, hi
 const DraftContext = createContext<{ drafts: Record<string, string>; setDrafts: React.Dispatch<React.SetStateAction<Record<string, string>>> }>({ drafts: {}, setDrafts: () => {} });
 function invalidDraft(key: string, value: string) {
   if (key.startsWith("risk-color:")) return !/^#[0-9a-fA-F]{6}$/.test(value);
+  if (key.startsWith("stress-cutoff:")) return value.trim() === "" || !Number.isFinite(Number(value)) || Number(value) < 0;
   return value.trim() === "" || !Number.isFinite(Number(value)) || ((key.startsWith("face-threshold:") || key.startsWith("face-range:")) ? Number(value) < 0 || Number(value) > 100 : !key.startsWith("range:") && (Number(value) < 0 || !Number.isSafeInteger(Number(value))));
 }
 function BoundaryInput({ id, label, value, inclusive, disabled, onChange }: { id: string; label: string; value: number | null; inclusive: boolean; disabled: boolean; onChange: (value: number | null, inclusive: boolean) => void }) {
@@ -137,7 +140,7 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
     if (path === "name") setTab("details");
     const draftField = definition?.sections.flatMap((section, sectionIndex) => section.fields.map(field => ({ field, sectionIndex }))).find(({ field }) => path.startsWith(`${field.id}:`) || (field.kind === "calculated" && field.scoring.bands.some(band => path.startsWith(`range:${band.id}-`))));
     if (draftField) { setTab("scoring"); setSectionIndex(draftField.sectionIndex); setExpanded(current => [...new Set([...current, draftField.field.id])]); }
-    if (path.startsWith("face") ) setTab("face scan");
+    if (path.startsWith("face") || path.startsWith("stress")) setTab("face scan");
     if (path.startsWith("drugClassConfig")) setTab("drug classes");
     if (path.startsWith("reportGuidance")) setTab("report guidance");
     if (path.startsWith("risk:") || path.startsWith("risk-color:") || path.startsWith("range:") && !draftField) setTab("risk categories");
@@ -174,6 +177,12 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
           row.scrollIntoView({ block: "center" });
           return;
         }
+      }
+      if (path.startsWith("stress")) {
+        const row = document.querySelector<HTMLElement>('[role="group"][aria-label$="stress band"]');
+        row?.scrollIntoView({ block: "center" });
+        row?.querySelector<HTMLElement>("input")?.focus();
+        return;
       }
       const rangeErrors = document.querySelector<HTMLElement>('[data-state="active"] [aria-label="Range errors"]');
       if (rangeErrors) { rangeErrors.tabIndex = -1; rangeErrors.focus(); }
@@ -237,7 +246,7 @@ export function FinalAssessmentEditor({ initial, onClose, onSaved }: { initial: 
       <TabsContent value="details"><div className="grid gap-5"><section className="rounded-2xl bg-card p-5 shadow-sm sm:p-6"><h2 className="mb-5 border-b pb-4 text-lg font-medium">Rule details</h2><fieldset disabled={!editable || busy} className="space-y-3"><div className="space-y-2 text-sm"><Label htmlFor="final-rule-name">Name<span aria-hidden="true" className="ml-1 text-destructive">*</span></Label><Input id="final-rule-name" aria-label="Name" aria-required="true" aria-invalid={Boolean(nameError)} aria-describedby={nameError ? "final-rule-name-error" : undefined} value={definition.name} maxLength={80} onChange={event => update({ ...definition, name: event.target.value })} />{nameError && <p id="final-rule-name-error" role="alert" className="text-sm text-destructive">{nameError}</p>}</div><label className="block space-y-2 text-sm"><Label htmlFor="final-rule-description">Description</Label><Textarea id="final-rule-description" value={definition.description} onChange={event => update({ ...definition, description: event.target.value })} /></label></fieldset></section><section className="rounded-2xl bg-card p-5 shadow-sm sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-medium">Rule status</h2><p className="mt-1 text-sm text-muted-foreground">NIQ final assessment v2</p></div><div className="flex gap-2">{record.isDefault && <Badge variant="highlight">Default</Badge>}<Badge variant={ruleStatusVariant(record.lifecycle)}>{record.lifecycle === "ACTIVE" ? "Active" : record.lifecycle === "APPROVED" ? "Approved" : record.lifecycle === "VALIDATED" ? "Checked" : record.lifecycle === "RETIRED" ? "Retired" : "Draft"}</Badge></div></div>{definition.provisional.status === "CLIENT_CONFIRMED" && ["DRAFT", "VALIDATED", "APPROVED"].includes(record.lifecycle) && <div className="mt-5 space-y-3 border-t pt-4"><p className="text-sm text-muted-foreground">{dirty ? "Save your changes before continuing." : record.lifecycle === "DRAFT" ? "Check the scoring rules for errors before approval." : record.lifecycle === "VALIDATED" ? "Ready for approval. Approval locks the scoring rules." : "Ready to activate. Once active, you can assign it in Deployments."}</p><Button disabled={dirty || busy} onClick={() => record.lifecycle === "DRAFT" ? void transition("validate") : setConfirmationAction(record.lifecycle === "VALIDATED" ? "approve" : "activate")}>{record.lifecycle === "DRAFT" ? "Check rules" : record.lifecycle === "VALIDATED" ? "Approve version" : "Activate version"}</Button></div>}{record.lifecycle === "ACTIVE" && <div className="mt-4 space-y-3"><p className="text-sm text-muted-foreground">{record.isDefault ? "Deployments following the default use this version for new assessments." : "Ready to use. Assign this version from Deployments or make it the default."}</p>{!record.isDefault && <Button disabled={busy} onClick={() => setConfirmationAction("set-default")}>Make default</Button>}</div>}{record.lifecycle === "RETIRED" && <p className="mt-4 text-sm text-muted-foreground">This version is retired. View its activity history below.</p>}<div className="mt-5 border-t pt-5"><VersionLifecycle record={record} /></div>{["APPROVED", "ACTIVE"].includes(record.lifecycle) && <div className="mt-5 space-y-2 border-t pt-4"><Button variant="outline" className="text-destructive" disabled={busy || record.isDefault} onClick={() => setConfirmationAction("retire")}>Retire version</Button><p className="text-sm text-muted-foreground">{record.isDefault ? "To retire this default, open another active version and choose Make default first." : "Retire this version when it should no longer be used for new assessments."}</p></div>}</section></div></TabsContent>
       <TabsContent value="scoring" forceMount className="min-w-0 data-[state=inactive]:hidden"><div className="min-w-0 space-y-5"><nav aria-label="Scoring sections" className="flex flex-wrap justify-start gap-2">{definition.sections.map((item, index) => { const Icon = sectionIcon(item.id); return <button key={item.id} type="button" className={`flex min-h-11 min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm ${index === sectionIndex ? "border-primary/50 bg-primary/10 font-medium text-primary" : "border-border bg-card hover:bg-muted/60"}`} aria-current={index === sectionIndex ? "page" : undefined} onClick={() => setSectionIndex(index)}><Icon className="size-4 shrink-0" aria-hidden="true" /><span>{item.title}</span><span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">{item.fields.length}</span></button>; })}</nav><section className="min-w-0 space-y-4"><h2 className="flex items-center gap-2 text-xl font-semibold"><SectionIcon className="size-5 shrink-0" aria-hidden="true" />{section.title}</h2><div className="min-w-0 space-y-3">{section.fields.map(field => <FieldRow key={field.id} field={field} expanded={expanded.includes(field.id)} onToggle={() => setExpanded(current => current.includes(field.id) ? current.filter(id => id !== field.id) : [...current, field.id])} definition={definition} disabled={!editable || busy} pointDrafts={pointDrafts} setPointDrafts={setPointDrafts} patchField={patchField} />)}</div></section></div></TabsContent>
       <TabsContent value="risk categories">{definition.provisional.status === "CLIENT_CONFIRMED" ? <SimpleRiskEditor definition={definition} disabled={!editable || busy} onChange={update} drafts={pointDrafts} setDrafts={setPointDrafts} /> : <RiskEditor definition={definition} disabled={!editable || busy} onChange={update} />}</TabsContent>
-      <TabsContent value="face scan"><FaceScanEditor definition={definition} disabled={!editable || busy} onChange={update} drafts={pointDrafts} setDrafts={setPointDrafts} /></TabsContent>
+      <TabsContent value="face scan"><div className="space-y-5"><FaceScanEditor definition={definition} disabled={!editable || busy} onChange={update} drafts={pointDrafts} setDrafts={setPointDrafts} /><StressEditor definition={definition} disabled={!editable || busy} onChange={update} drafts={pointDrafts} setDrafts={setPointDrafts} /></div></TabsContent>
       <TabsContent value="drug classes"><DrugClassEditor definition={definition} disabled={!editable || busy} onChange={update} /></TabsContent>
       <TabsContent value="report guidance"><ReportGuidanceEditor definition={definition} disabled={!editable || busy} onChange={update} /></TabsContent>
     </Tabs>

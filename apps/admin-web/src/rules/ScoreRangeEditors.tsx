@@ -2,6 +2,7 @@ import { useState, type Dispatch, type SetStateAction } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { FinalAssessmentDefinition, RiskCategoryColor } from "@niq-scoring/contracts/final-assessment";
 import { faceScanRangeConfigSchema, DEFAULT_FACE_SCAN_SCORING_CONFIG, normalizeFaceScanScoringConfig, type FaceScanRangeConfig } from "@niq-scoring/contracts/face-scan-scoring";
+import { DEFAULT_STRESS_SCORING_CONFIG, stressScoringConfigSchema, type StressBand } from "@niq-scoring/contracts/stress-scoring";
 import { validateFinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment-validation";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
@@ -22,15 +23,16 @@ const riskColors: Array<{ value: RiskCategoryColor; label: string; swatch: strin
 const presetHex: Record<string, string> = { green: "#16A34A", amber: "#D97706", red: "#DC2626", neutral: "#64748B", blue: "#2563EB", purple: "#9333EA" };
 const isHexColor = (value: unknown): value is string => typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
 
-function NumberCell({ label, draftKey, value, onChange, drafts, setDrafts, percent = false, hideLabel = false }: DraftProps & { label: string; draftKey: string; value: number; percent?: boolean; hideLabel?: boolean; onChange: (value: number) => void }) {
+function NumberCell({ label, draftKey, value, onChange, drafts, setDrafts, percent = false, decimal = false, hideLabel = false }: DraftProps & { label: string; draftKey: string; value: number; percent?: boolean; decimal?: boolean; hideLabel?: boolean; onChange: (value: number) => void }) {
   const raw = drafts[draftKey];
-  const invalid = raw !== undefined && (raw.trim() === "" || !Number.isFinite(Number(raw)) || Number(raw) < 0 || (percent ? Number(raw) > 100 : !Number.isSafeInteger(Number(raw))));
-  return <label className="block min-w-0 space-y-1 text-sm"><span className={hideLabel ? "sr-only" : "text-xs text-muted-foreground"}>{label}</span><Input type="number" className="h-9 shadow-none" aria-label={label} min={0} max={percent ? 100 : undefined} step={percent ? "any" : 1} value={raw ?? value} aria-invalid={invalid} onChange={event => {
+  const validNumber = (number: number) => Number.isFinite(number) && number >= 0 && (percent ? number <= 100 : decimal || Number.isSafeInteger(number));
+  const invalid = raw !== undefined && (raw.trim() === "" || !validNumber(Number(raw)));
+  return <label className="block min-w-0 space-y-1 text-sm"><span className={hideLabel ? "sr-only" : "text-xs text-muted-foreground"}>{label}</span><Input type="number" className="h-9 shadow-none" aria-label={label} min={0} max={percent ? 100 : undefined} step={percent || decimal ? "any" : 1} value={raw ?? value} aria-invalid={invalid} onChange={event => {
     const text = event.target.value;
     setDrafts(current => ({ ...current, [draftKey]: text }));
     const number = Number(text);
-    if (text.trim() !== "" && Number.isFinite(number) && number >= 0 && (percent ? number <= 100 : Number.isSafeInteger(number))) onChange(number);
-  }} />{invalid && <span role="alert" className="text-xs text-destructive">{percent ? "Enter a number from 0 to 100." : "Enter a whole number of 0 or more."}</span>}</label>;
+    if (text.trim() !== "" && validNumber(number)) onChange(number);
+  }} />{invalid && <span role="alert" className="text-xs text-destructive">{percent ? "Enter a number from 0 to 100." : decimal ? "Enter a number of 0 or more." : "Enter a whole number of 0 or more."}</span>}</label>;
 }
 
 function RangeErrors({ messages }: { messages: string[] }) {
@@ -207,5 +209,29 @@ export function FaceScanEditor({ definition, disabled, onChange, drafts, setDraf
       </details>
     </div>)}</div>
     <p className="text-xs text-muted-foreground">Ranges must cover 0–100 without gaps or overlaps. Vital IQ points are separate from questionnaire points.</p>
+  </fieldset>;
+}
+
+export function StressEditor({ definition, disabled, onChange, drafts, setDrafts }: EditorProps) {
+  const config = definition.stressScoring ?? DEFAULT_STRESS_SCORING_CONFIG;
+  const bands: StressBand[] = ["excellent", "good", "average", "fair", "poor"];
+  const validated = stressScoringConfigSchema.safeParse(config);
+  const patchCutoff = (band: Exclude<StressBand, "poor">, value: number) =>
+    onChange({ ...definition, stressScoring: { ...config, cutoffs: { ...config.cutoffs, [band]: value } } });
+  const patchPoints = (band: StressBand, value: number) =>
+    onChange({ ...definition, stressScoring: { ...config, points: { ...config.points, [band]: value } } });
+  return <fieldset disabled={disabled} className="min-w-0 space-y-4 rounded-xl border bg-card p-4 sm:p-5">
+    <div><h2 className="font-semibold">Stress index scoring</h2><p className="mt-1 text-sm text-muted-foreground">CarePlix stress bands are scored separately from the Overall Health Score. Edit the band limits and NIQ points here.</p></div>
+    <div className="divide-y rounded-lg border">{bands.map((band, index) => {
+      const previous = index === 0 ? null : config.cutoffs[bands[index - 1] as Exclude<StressBand, "poor">];
+      const next = band === "poor" ? null : config.cutoffs[band];
+      return <div key={band} role="group" aria-label={`${band} stress band`} className="grid gap-3 p-3 sm:grid-cols-[minmax(9rem,1fr)_minmax(10rem,1fr)_9rem] sm:items-end sm:p-4">
+        <div><h3 className="font-medium capitalize">{band}</h3><p className="text-xs text-muted-foreground">{previous === null ? `Below ${next}` : next === null ? `${previous} and above` : `${previous} to below ${next}`}</p></div>
+        {band === "poor" ? <div className="text-xs text-muted-foreground">No upper limit</div> : <NumberCell label={`Next band starts at (${band})`} draftKey={`stress-cutoff:${band}`} value={next!} decimal drafts={drafts} setDrafts={setDrafts} onChange={value => patchCutoff(band, value)} />}
+        <NumberCell label={`${band} NIQ points`} draftKey={`stress-points:${band}`} value={config.points[band]} drafts={drafts} setDrafts={setDrafts} onChange={value => patchPoints(band, value)} />
+      </div>;
+    })}</div>
+    {!validated.success && <p role="alert" className="text-sm text-destructive">Stress band limits must increase without gaps or overlaps.</p>}
+    <p className="text-xs text-muted-foreground">CarePlix Parameter Reference v2.0, page 8. Fair and Poor have provisional 2-point defaults; other bands start at 0 until the client confirms scoring.</p>
   </fieldset>;
 }
