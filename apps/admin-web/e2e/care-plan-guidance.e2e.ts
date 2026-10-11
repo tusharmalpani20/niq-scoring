@@ -11,6 +11,12 @@ test("care plan rules use risk labels, show workbook rows and save edits", async
   await expect(page.getByRole("button", { name: /Products & doses 12/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Co-morbidity diet 5/ })).toBeVisible();
   await expect(page.getByLabel("Nutritional status for Moderate Risk")).toContainText("Moderately nourished");
+  await page.getByLabel("Nutritional status for Moderate Risk").click();
+  await page.getByRole("option", { name: "Select nutritional status" }).click();
+  await expect(page.getByText("Choose a nutritional status for every risk category before checking this rule version.")).toBeVisible();
+  await page.getByLabel("Nutritional status for Moderate Risk").click();
+  await page.getByRole("option", { name: "Moderately nourished" }).click();
+  await expect(page.getByText("Choose a nutritional status for every risk category before checking this rule version.")).toHaveCount(0);
   await page.getByLabel("Ask the clinician to choose").check();
   await page.getByRole("button", { name: /Products & doses 12/ }).click();
   await page.getByRole("button", { name: "Edit After surgery · Well nourished" }).click();
