@@ -1,5 +1,7 @@
 # Final assessment integration note
 
+For workbook-based report guidance and the additional facts its API accepts, see [care-plan-guidance.md](care-plan-guidance.md).
+
 This note is for the separate NIQ Application implementation. It describes the contract exposed by NIQ Scoring; it does not authorize changes in that repository.
 
 ## Current status

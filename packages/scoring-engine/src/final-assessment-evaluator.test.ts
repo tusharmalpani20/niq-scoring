@@ -144,6 +144,8 @@ test("invariant approval fixtures tolerate category IDs while explicit expectati
   // Report guidance follows the same stable category ID when it is customized.
   const lowGuidance = definition.reportGuidance?.nutrition.find(rule => rule.riskCategoryId === "low");
   if (lowGuidance) lowGuidance.riskCategoryId = "minimal";
+  const lowStatus = definition.carePlanGuidance?.riskStatusMapping.find(row => row.riskCategoryId === "low");
+  if (lowStatus) lowStatus.riskCategoryId = "minimal";
   expect(validateFinalAssessmentSamples(definition)).toEqual([]);
   definition.samples.push({ id: "explicit_risk", name: "Explicit risk expectation", answers: { previous_surgeries: "previous_surgeries_no" }, expected: { complete: true, score: 0, classificationId: "low" } });
   expect(validateFinalAssessmentSamples(definition)).toContainEqual(expect.objectContaining({ code: "SAMPLE_MISMATCH", path: "samples.explicit_risk.classificationId" }));

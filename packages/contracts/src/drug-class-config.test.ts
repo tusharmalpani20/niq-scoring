@@ -84,6 +84,7 @@ test("old definitions without drug classes remain readable", () => {
   const definition = createFinalAssessmentTemplate("Historical");
   delete definition.drugClassConfig;
   delete definition.reportGuidance;
+  delete definition.carePlanGuidance;
   expect(finalAssessmentDefinitionSchema.safeParse(definition).success).toBe(true);
   expect(validateFinalAssessmentDefinition(definition)).toEqual([]);
   const publicView = publicQuestionnaire(definition);
