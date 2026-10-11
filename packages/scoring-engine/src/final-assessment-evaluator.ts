@@ -16,7 +16,7 @@ export type FinalAssessmentEvaluation = {
   score: number | null;
   classification: NonNullable<ReturnType<typeof classifyScore>> | null;
   components: FinalAssessmentComponent[];
-  answerCoverage: { totalEntries: 19; answeredEntries: number; unansweredEntries: number; pendingEntries: number; allUnanswered: boolean };
+  answerCoverage: { totalEntries: number; answeredEntries: number; unansweredEntries: number; pendingEntries: number; allUnanswered: boolean };
   derived: { weightLossPercent: number | null; proteinAdequacy: "adequate" | "inadequate" | null };
   riskStatus: FinalAssessmentDefinition["provisional"]["status"];
   clinicalUsePermitted: boolean;
@@ -29,7 +29,7 @@ const asString = (value: unknown): string | null => typeof value === "string" ? 
 const asStringArray = (value: unknown): string[] | null => Array.isArray(value) && value.every(item => typeof item === "string") ? value : null;
 const issueKey = (issue: EvaluationIssue) => `${issue.path}:${issue.code}`;
 
-function baseResult(issues: EvaluationIssue[] = []): FinalAssessmentEvaluation {
+function baseResult(totalEntries: number, issues: EvaluationIssue[] = []): FinalAssessmentEvaluation {
   return {
     formatVersion: FINAL_ASSESSMENT_FORMAT_VERSION,
     profile: FINAL_ASSESSMENT_PROFILE,
@@ -37,7 +37,7 @@ function baseResult(issues: EvaluationIssue[] = []): FinalAssessmentEvaluation {
     score: null,
     classification: null,
     components: [],
-    answerCoverage: { totalEntries: 19, answeredEntries: 0, unansweredEntries: 19, pendingEntries: 0, allUnanswered: true },
+    answerCoverage: { totalEntries, answeredEntries: 0, unansweredEntries: totalEntries, pendingEntries: 0, allUnanswered: true },
     derived: { weightLossPercent: null, proteinAdequacy: null },
     riskStatus: FINAL_ASSESSMENT_PROVISIONAL_STATUS,
     clinicalUsePermitted: false,
@@ -49,7 +49,7 @@ function baseResult(issues: EvaluationIssue[] = []): FinalAssessmentEvaluation {
 export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, answers: FinalAssessmentAnswers): FinalAssessmentEvaluation {
   const structural = validateFinalAssessmentDefinition(definition);
   const issues: EvaluationIssue[] = structural.map((issue: DefinitionIssue) => ({ path: issue.path, code: "INVALID_CONFIGURATION", message: issue.message }));
-  const result = baseResult(issues);
+  const result = baseResult(definition.sections.reduce((total, section) => total + section.fields.length, 0), issues);
   result.riskStatus = definition.provisional.status;
   result.clinicalUsePermitted = definition.provisional.clinicalUsePermitted;
   if (issues.length) return result;
@@ -190,7 +190,7 @@ export function evaluateFinalAssessment(definition: FinalAssessmentDefinition, a
   const answeredEntries = components.filter(component => component.status === "answered").length;
   const pendingEntries = components.filter(component => component.status === "pending").length;
   const unansweredEntries = components.filter(component => component.status === "unanswered").length;
-  result.answerCoverage = { totalEntries: 19, answeredEntries, unansweredEntries, pendingEntries, allUnanswered: answeredEntries === 0 };
+  result.answerCoverage = { totalEntries: components.length, answeredEntries, unansweredEntries, pendingEntries, allUnanswered: answeredEntries === 0 };
   if (issues.length) return result;
   // An entirely blank final assessment is a valid review result with no score.
   // Current weight alone is patient context; previous weight starts optional weight-loss scoring.

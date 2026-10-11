@@ -1,6 +1,7 @@
 import { finalAssessmentDefinitionSchema, type FinalAssessmentDefinition, type FinalAssessmentField } from "./final-assessment";
 import { createFinalAssessmentTemplate, createLegacyFinalAssessmentTemplate } from "./final-assessment-template";
 import type { DefinitionIssue } from "./rule-definition";
+import { cancerTypeIds } from "./cancer-type-ids";
 
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
@@ -36,7 +37,18 @@ function fixedStructure(definition: FinalAssessmentDefinition) {
 export function isFixedFinalAssessmentDefinition(value: unknown): value is FinalAssessmentDefinition {
   const parsed = finalAssessmentDefinitionSchema.safeParse(value);
   if (!parsed.success) return false;
-  return stable(fixedStructure(parsed.data)) === stable(fixedStructure((parsed.data.provisional.status === "CLIENT_CONFIRMED" ? createFinalAssessmentTemplate : createLegacyFinalAssessmentTemplate)(parsed.data.name)));
+  const actual = stable(fixedStructure(parsed.data));
+  const expected = (parsed.data.provisional.status === "CLIENT_CONFIRMED" ? createFinalAssessmentTemplate : createLegacyFinalAssessmentTemplate)(parsed.data.name);
+  if (actual === stable(fixedStructure(expected))) return true;
+  if (parsed.data.provisional.status !== "CLIENT_CONFIRMED") return false;
+  // Confirmed versions created before dietary stress was removed retain their
+  // original question and score. They remain valid for pinned assessments.
+  const previous = structuredClone(expected);
+  const previousDiet = previous.sections.find(section => section.id === "dietary_details")!;
+  const legacyDiet = createLegacyFinalAssessmentTemplate(parsed.data.name).sections.find(section => section.id === "dietary_details")!;
+  previousDiet.description = legacyDiet.description;
+  previousDiet.fields.splice(3, 0, structuredClone(legacyDiet.fields.find(field => field.id === "stress_level")!));
+  return actual === stable(fixedStructure(previous));
 }
 
 function rangesAreComplete(bands: Array<{ min: number | null; max: number | null; minInclusive: boolean; maxInclusive: boolean }>) {
@@ -81,6 +93,30 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
     categoryNames.add(normalized);
     if (options.requireRiskCategoryColors && !category.color) add(`riskCategories.${index}.color`, "RISK_COLOR_REQUIRED", "Choose a color for every risk category.");
   });
+  if (definition.drugClassConfig) {
+    const { classes, suggestions } = definition.drugClassConfig;
+    const classIds = new Set<string>();
+    const classNames = new Set<string>();
+    classes.forEach((drugClass, index) => {
+      if (classIds.has(drugClass.id)) add(`drugClassConfig.classes.${index}.id`, "DUPLICATE_DRUG_CLASS_ID", "Drug class IDs must be unique.");
+      classIds.add(drugClass.id);
+      const name = drugClass.label.trim().replace(/\s+/g, " ").toLowerCase();
+      if (classNames.has(name)) add(`drugClassConfig.classes.${index}.label`, "DUPLICATE_DRUG_CLASS_NAME", "Drug class names must be unique.");
+      classNames.add(name);
+    });
+    const treatmentIds = new Set(definition.sections.flatMap(section => section.fields).filter(field => field.id === "current_cancer_treatment" && "options" in field).flatMap(field => "options" in field ? field.options.map(option => option.id) : []));
+    const cancerIds = new Set<string>(cancerTypeIds);
+    const triples = new Set<string>();
+    suggestions.forEach((suggestion, index) => {
+      const path = `drugClassConfig.suggestions.${index}`;
+      if (!classIds.has(suggestion.classId)) add(`${path}.classId`, "UNKNOWN_DRUG_CLASS", "Suggestion references a drug class that is not configured.");
+      if (!treatmentIds.has(suggestion.treatmentTypeId)) add(`${path}.treatmentTypeId`, "UNKNOWN_TREATMENT", "Suggestion references an unknown treatment option.");
+      if (suggestion.cancerTypeId !== null && !cancerIds.has(suggestion.cancerTypeId)) add(`${path}.cancerTypeId`, "UNKNOWN_CANCER_TYPE", "Suggestion references an unknown cancer option.");
+      const key = JSON.stringify([suggestion.cancerTypeId, suggestion.treatmentTypeId, suggestion.classId]);
+      if (triples.has(key)) add(path, "DUPLICATE_DRUG_CLASS_SUGGESTION", "This cancer, treatment and drug class suggestion already exists.");
+      triples.add(key);
+    });
+  }
   if (definition.provisional.status === "CLIENT_CONFIRMED") {
     const checkPoints = (value: unknown, path: string) => {
       if (!value || typeof value !== "object") return;

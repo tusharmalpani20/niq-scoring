@@ -5,10 +5,10 @@ import { isFixedFinalAssessmentDefinition, validateFinalAssessmentDefinition } f
 import { publicQuestionnaire } from "./rule-public";
 
 describe("final assessment profile contract", () => {
-  test("matches the audited five-section, nineteen-entry inventory", () => {
+  test("matches the five-section inventory without dietary stress", () => {
     const definition = createFinalAssessmentTemplate("Assessment v2");
-    expect(definition.sections.map(section => section.fields.length)).toEqual([3, 5, 3, 2, 6]);
-    expect(definition.sections.flatMap(section => section.fields)).toHaveLength(19);
+    expect(definition.sections.map(section => section.fields.length)).toEqual([3, 5, 3, 2, 5]);
+    expect(definition.sections.flatMap(section => section.fields)).toHaveLength(18);
     expect(definition.sections.map(section => section.accent)).toEqual(["orange", "green", "grey", "purple", "beige"]);
     expect(definition.riskCategories.at(-1)?.max).toBeNull();
     expect(isFixedFinalAssessmentDefinition(definition)).toBe(true);
@@ -63,7 +63,7 @@ describe("final assessment profile contract", () => {
     expect(JSON.stringify(publicView)).not.toContain("points");
     expect(publicView.sections.flatMap(section => section.fields).map(field => field.id)).not.toContain("patient_name");
     expect(publicView.supportingInputs.map(input => input.id)).not.toEqual(expect.arrayContaining(["age", "gender", "contact"]));
-    expect(publicView.sections.flatMap(section => section.fields)).toHaveLength(19);
+    expect(publicView.sections.flatMap(section => section.fields)).toHaveLength(18);
   });
 });
 

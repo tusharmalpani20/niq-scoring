@@ -41,9 +41,13 @@ test("final assessment creation uses the versioned fixed profile and supports sa
   const draft = await create();
   expect(draft.definition).toMatchObject({ formatVersion: 2, profile: "NIQ_FINAL_ASSESSMENT", provisional: { clinicalUsePermitted: true } });
   const definition = draft.definition as FinalAssessmentDefinition;
-  expect(definition.sections.map(section => section.fields.length)).toEqual([3, 5, 3, 2, 6]);
-  expect(definition.sections.flatMap(section => section.fields)).toHaveLength(19);
+  expect(definition.sections.map(section => section.fields.length)).toEqual([3, 5, 3, 2, 5]);
+  expect(definition.sections.flatMap(section => section.fields)).toHaveLength(18);
   expect(definition.sections.flatMap(section => section.fields).every(field => !Object.hasOwn(field, "cap"))).toBe(true);
+  expect(definition.drugClassConfig?.suggestions).toHaveLength(92);
+  expect(definition.drugClassConfig?.suggestions).toContainEqual({
+    cancerTypeId: "cancer_cml", treatmentTypeId: "current_cancer_treatment_targeted", classId: "tyrosine_kinase_inhibitors",
+  });
   const changed = structuredClone(definition);
   changed.description = "Internal review copy";
   const saved = await request(`/${draft.id}`, "PUT", { revision: draft.revision, definition: changed });
@@ -153,7 +157,7 @@ test("approved final assessment supports credential-bound public scoring and exa
   const blank = await call("calculate", blankInput);
   expect(blank.status).toBe(200);
   const blankResult = await blank.json();
-  expect(blankResult.result).toMatchObject({ complete: true, score: null, classification: null, issues: [], answerCoverage: { allUnanswered: true, answeredEntries: 0, unansweredEntries: 19, pendingEntries: 0 }, ruleVersionId: rule.id, checksum: rule.packageChecksum, resultReference: store.usages[0]!.id });
+  expect(blankResult.result).toMatchObject({ complete: true, score: null, classification: null, issues: [], answerCoverage: { allUnanswered: true, answeredEntries: 0, unansweredEntries: 18, pendingEntries: 0 }, ruleVersionId: rule.id, checksum: rule.packageChecksum, resultReference: store.usages[0]!.id });
   expect(blankResult.result.components.every((component: { status: string; points: number | null }) => component.status === "unanswered" && component.points === null)).toBe(true);
   expect(await (await call("calculate", blankInput)).json()).toEqual(blankResult);
   expect(store.usages).toHaveLength(1);

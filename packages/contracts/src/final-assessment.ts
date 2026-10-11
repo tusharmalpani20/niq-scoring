@@ -119,6 +119,12 @@ export const finalAssessmentSampleSchema = z.object({
   }).strict(),
 }).strict();
 
+/** Drug classes are captured for guidance, never as questionnaire scoring fields. */
+export const drugClassConfigSchema = z.object({
+  classes: z.array(z.object({ id: ruleIdSchema, label, guidance: z.string().max(4000).optional() }).strict()).max(200),
+  suggestions: z.array(z.object({ cancerTypeId: ruleIdSchema.nullable(), treatmentTypeId: ruleIdSchema, classId: ruleIdSchema }).strict()).max(2000),
+}).strict();
+
 export const finalAssessmentDefinitionSchema = z.object({
   formatVersion: z.literal(FINAL_ASSESSMENT_FORMAT_VERSION),
   profile: z.literal(FINAL_ASSESSMENT_PROFILE),
@@ -128,6 +134,8 @@ export const finalAssessmentDefinitionSchema = z.object({
   supportingInputs: z.array(finalAssessmentSupportingInputSchema).length(6),
   // Absence preserves historical definitions; the evaluator uses the original defaults.
   faceScanScoring: faceScanScoringConfigSchema.optional(),
+  // Optional so historical versions remain readable without rewriting their definition.
+  drugClassConfig: drugClassConfigSchema.optional(),
   riskCategories: z.array(finalRiskCategorySchema).min(1).max(20),
   provisional: z.union([z.object({
     status: z.literal(FINAL_ASSESSMENT_PROVISIONAL_STATUS),

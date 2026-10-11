@@ -13,6 +13,10 @@ export type PublicFinalAssessment = {
   profile: "NIQ_FINAL_ASSESSMENT";
   sections: Array<{ id: string; title: string; description: string; fields: Array<{ id: string; label: string; type: string; help: string; unit: string; options: Array<{ id: string; label: string; help: string }>; dependencies: string[] }> }>;
   supportingInputs: Array<{ id: string; label: string; kind: string; unit?: string; required: boolean; options?: Array<{ id: string; label: string; help: string }> }>;
+  drugClassConfig?: {
+    classes: Array<{ id: string; label: string }>;
+    suggestions: Array<{ cancerTypeId: string | null; treatmentTypeId: string; classId: string }>;
+  };
 };
 
 /** Allowlist renderer data: adding an internal field must never expose it automatically. */
@@ -42,6 +46,10 @@ export function publicQuestionnaire(definition: RuleDefinition | FinalAssessment
       required: input.required,
       ...(input.kind === "select" ? { options: input.options.map(option => ({ id: option.id, label: option.label, help: option.help })) } : {}),
     })),
+    ...(definition.drugClassConfig ? { drugClassConfig: {
+      classes: definition.drugClassConfig.classes.map(drugClass => ({ id: drugClass.id, label: drugClass.label })),
+      suggestions: definition.drugClassConfig.suggestions.map(suggestion => ({ cancerTypeId: suggestion.cancerTypeId, treatmentTypeId: suggestion.treatmentTypeId, classId: suggestion.classId })),
+    } } : {}),
   };
   return {
     formatVersion: definition.formatVersion,

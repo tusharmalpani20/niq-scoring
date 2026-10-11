@@ -1,5 +1,6 @@
 import { DEFAULT_FACE_SCAN_SCORING_CONFIG } from "./face-scan-scoring";
 import { finalAssessmentDefinitionSchema, type FinalAssessmentDefinition } from "./final-assessment";
+import { initialDrugClassConfig } from "./drug-class-template";
 
 const document = "Final NIQ Assessment Form_with section_field_details.xlsx";
 const source = (location: string, note = "") => ({ document, location, note });
@@ -82,6 +83,7 @@ export function createLegacyFinalAssessmentTemplate(name: string): FinalAssessme
     ],
     provisional: { status: "DEVELOPMENT_PLACEHOLDER", clinicalUsePermitted: false, notice: "Temporary thresholds — awaiting confirmation. Internal draft evaluation only; blocked from clinical approval and use." },
     interventions: { status: "NOT_APPLICABLE", note: "Interventions are not finalized for the final assessment profile." },
+    drugClassConfig: initialDrugClassConfig(),
     samples: [],
   });
 }
@@ -108,6 +110,17 @@ export function upgradeFinalAssessmentDefinition(input: FinalAssessmentDefinitio
   // Invariant package fixtures remain valid when administrators configure points.
   // Independent engine regression tests verify the client-confirmed nonzero defaults.
   definition.samples = confirmedAssessmentSamples();
+  return removeDietaryStress(definition);
+}
+
+/** New versions no longer ask or score dietary stress; old pinned versions remain unchanged. */
+export function removeDietaryStress(input: FinalAssessmentDefinition): FinalAssessmentDefinition {
+  const definition = structuredClone(input);
+  const dietary = definition.sections.find(section => section.id === "dietary_details");
+  if (dietary?.fields.some(field => field.id === "stress_level")) {
+    dietary.fields = dietary.fields.filter(field => field.id !== "stress_level");
+    dietary.description = "Weight, symptoms, function, protein and fluids.";
+  }
   return definition;
 }
 
