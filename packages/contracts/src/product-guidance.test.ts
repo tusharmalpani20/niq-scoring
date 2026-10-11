@@ -43,6 +43,21 @@ describe("product workbook defaults", () => {
     expect(sourceText).toContain("bevacizumab");
     expect(sourceText).toContain("sunitinib");
     expect(reportText).not.toMatch(/dexamethasone|prednisone|bevacizumab|sorafenib|sunitinib|imatinib|metformin|SGLT2/i);
+    const hypertension = comorbidities.find(row => row.conditionId === "co_morbidities_hypertension")!;
+    expect(hypertension.sourceText).toContain("2.5-3lit of fluid intake per day");
+    expect(hypertension.guidance).not.toContain("2.5-3lit of fluid intake per day");
+    expect(hypertension.guidance).toContain("Check and record BP at home during treatment");
+  });
+
+  test("links each product exception to its actual workbook row", () => {
+    const locations = Object.fromEntries(initialProductGuidance().notes.map(note => [note.kind, note.source.location]));
+    expect(locations).toEqual({
+      pancreatic_nourish_exclusion: "Product_mapping_!A18:C18",
+      liver_nourish_once_daily: "Product_mapping_!A19:C19",
+      surgery_done_liss: "Product_mapping_!A21:D21",
+      surgery_planned_liss: "Product_mapping_!A22:C22",
+      vegetarian_liss_substitution: "Product_mapping_!A23:C23",
+    });
   });
 
   test("returns independent editable copies", () => {

@@ -187,13 +187,13 @@
       "id": "comorbidity_hypertension",
       "conditionId": "co_morbidities_hypertension",
       "label": "Hypertension",
-      "guidance": "•Sodium: under 2 g/day (about 5 g salt). In malnourished patients use under 2.3 g/day, and don't let the restriction cut intake.\n•Diet: DASH approach- Incorporate 1 fruit a day, include potassium-rich foods (banana, coconut water (not more than 2)unless restricted due to renal parameters (CKD), spinach, avocado, potato, rajma, chana, soyabeans, peanuts, raisins etc) Avoid alcohol & smoking, avoid pickles, papads, chutneys, sauces, packed foods etc – as the sodium levels are generally high in these to increase the shelf lives. Maintain 2.5-3lit of fluid intake per day.\nCheck and record BP at home during treatment.\n•Drugs and dehydration: with diarrhea, vomiting or poor fluid intake, BP tablets can cause very low BP. Inform the doctor early, and the patient should not stop tablets alone.\n•Contact the doctor if: BP is persistently 160/100 mmHg or higher, systolic BP is below 90 with dizziness, or there is severe headache, chest pain or vision change.",
+      "guidance": "•Sodium: under 2 g/day (about 5 g salt). In malnourished patients use under 2.3 g/day, and don't let the restriction cut intake.\n•Diet: DASH approach- Incorporate 1 fruit a day, include potassium-rich foods (banana, coconut water (not more than 2)unless restricted due to renal parameters (CKD), spinach, avocado, potato, rajma, chana, soyabeans, peanuts, raisins etc) Avoid alcohol & smoking, avoid pickles, papads, chutneys, sauces, packed foods etc – as the sodium levels are generally high in these to increase the shelf lives.\nCheck and record BP at home during treatment.\n•Drugs and dehydration: with diarrhea, vomiting or poor fluid intake, BP tablets can cause very low BP. Inform the doctor early, and the patient should not stop tablets alone.\n•Contact the doctor if: BP is persistently 160/100 mmHg or higher, systolic BP is below 90 with dizziness, or there is severe headache, chest pain or vision change.",
       "sourceText": "•Sodium: under 2 g/day (about 5 g salt). In malnourished patients use under 2.3 g/day, and don't let the restriction cut intake.\n•Diet: DASH approach- Incorporate 1 fruit a day, include potassium-rich foods (banana, coconut water (not more than 2)unless restricted due to renal parameters (CKD), spinach, avocado, potato, rajma, chana, soyabeans, peanuts, raisins etc) Avoid alcohol & smoking, avoid pickles, papads, chutneys, sauces, packed foods etc – as the sodium levels are generally high in these to increase the shelf lives. Maintain 2.5-3lit of fluid intake per day.\n•Drugs that raise BP: VEGF drugs (bevacizumab, sorafenib, sunitinib, lenvatinib, pazopanib, axitinib, cabozantinib), steroids, NSAIDs, abiraterone, niraparib and ibrutinib. Check and record BP at home during treatment.\n•Drugs and dehydration: with diarrhea, vomiting or poor fluid intake, BP tablets can cause very low BP. Inform the doctor early, and the patient should not stop tablets alone.\n•Contact the doctor if: BP is persistently 160/100 mmHg or higher, systolic BP is below 90 with dizziness, or there is severe headache, chest pain or vision change.",
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
         "location": "Co-morbidities_diet_guidelines!A3:B3",
-        "note": "Named-drug statements and ambiguous source directions were omitted from report-ready guidance; original wording is retained in sourceText."
+        "note": "Named-drug statements and the fixed fluid target were omitted from report-ready guidance because fluid needs may vary with kidney disease; original wording is retained in sourceText."
       }
     },
     {
@@ -246,7 +246,7 @@
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A22:C22",
+        "location": "Product_mapping_!A18:C18",
         "note": "Report-ready wording adapted from the workbook note; retain the source for review."
       }
     },
@@ -259,7 +259,7 @@
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A23:C23",
+        "location": "Product_mapping_!A19:C19",
         "note": "Report-ready wording adapted from the workbook note; retain the source for review."
       }
     },
@@ -272,7 +272,7 @@
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A25:D25",
+        "location": "Product_mapping_!A21:D21",
         "note": "Report-ready wording adapted from the workbook note; retain the source for review."
       }
     },
@@ -285,7 +285,7 @@
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A26:C26",
+        "location": "Product_mapping_!A22:C22",
         "note": "Report-ready wording adapted from the workbook note; retain the source for review."
       }
     },
@@ -298,7 +298,7 @@
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A27:C27",
+        "location": "Product_mapping_!A23:C23",
         "note": "Report-ready wording adapted from the workbook note; retain the source for review."
       }
     }

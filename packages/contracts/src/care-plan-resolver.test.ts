@@ -87,6 +87,38 @@ describe("care plan guidance from the versioned workbooks", () => {
     expect(resolveCarePlanGuidance(rule, { ...surgery, dietPreferenceId: "non_vegetarian" }).products.plans[0]?.stage).toBe("surgical");
   });
 
+  test("only emits Liss WH surgery advice when the selected plan and diet permit it", () => {
+    const rule = definition();
+    const surgery: CarePlanFacts = { ...base, surgicalStatusId: "cancer_surgical_status_done", surgeryDate: "2026-10-08" };
+    const unknownDiet = resolveCarePlanGuidance(rule, surgery).products;
+    expect(unknownDiet.status).toBe("facts_required");
+    expect(unknownDiet.notes.map(row => row.kind)).not.toContain("surgery_done_liss");
+
+    const vegetarian = resolveCarePlanGuidance(rule, { ...surgery, dietPreferenceId: "vegetarian" }).products;
+    expect(vegetarian.status).toBe("clinician_choice_required");
+    expect(vegetarian.notes.map(row => row.kind)).toEqual(["vegetarian_liss_substitution"]);
+    const jain = resolveCarePlanGuidance(rule, { ...surgery, dietPreferenceId: "jain" }).products;
+    expect(jain.status).toBe("clinician_choice_required");
+    expect(jain.notes.map(row => row.kind)).not.toContain("surgery_done_liss");
+
+    const confirmed = resolveCarePlanGuidance(rule, { ...surgery, dietPreferenceId: "non_vegetarian" }).products;
+    expect(confirmed.notes.map(row => row.kind)).toContain("surgery_done_liss");
+    rule.carePlanGuidance!.surgicalOverlapPolicy = "clinician_choice";
+    const overlap = { ...surgery, treatmentStatusId: "treatment_status_under_treatment", dietPreferenceId: "non_vegetarian" };
+    expect(resolveCarePlanGuidance(rule, overlap).products.notes.map(row => row.kind)).not.toContain("surgery_done_liss");
+    expect(resolveCarePlanGuidance(rule, { ...overlap, productStageChoice: "treatment_stage" }).products.notes.map(row => row.kind))
+      .not.toContain("surgery_done_liss");
+    expect(resolveCarePlanGuidance(rule, { ...overlap, productStageChoice: "surgical" }).products.notes.map(row => row.kind))
+      .toContain("surgery_done_liss");
+
+    const planned: CarePlanFacts = { ...base, surgicalStatusId: "cancer_surgical_status_planned", plannedSurgeryDate: "2026-10-14" };
+    expect(resolveCarePlanGuidance(rule, planned).products.notes.map(row => row.kind)).not.toContain("surgery_planned_liss");
+    expect(resolveCarePlanGuidance(rule, { ...planned, dietPreferenceId: "vegetarian" }).products.notes.map(row => row.kind))
+      .not.toContain("surgery_planned_liss");
+    expect(resolveCarePlanGuidance(rule, { ...planned, dietPreferenceId: "non_vegetarian" }).products.notes.map(row => row.kind))
+      .toContain("surgery_planned_liss");
+  });
+
   test("Other receives only the existing generic nutrition layer", () => {
     const result = resolveCarePlanGuidance(definition(), { ...base, drugClassIds: ["other"],
       coMorbidityIds: ["co_morbidities_diabetes"], treatmentStatusId: "treatment_status_under_treatment" });

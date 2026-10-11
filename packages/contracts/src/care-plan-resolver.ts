@@ -98,11 +98,6 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
   const untilSurgery = facts.asOfDate && facts.plannedSurgeryDate ? daysBetween(facts.asOfDate, facts.plannedSurgeryDate) : null;
   const recentSurgery = facts.surgicalStatusId === "cancer_surgical_status_done" && sinceSurgery !== null && sinceSurgery >= 0 && sinceSurgery <= 30;
   const soonSurgery = facts.surgicalStatusId === "cancer_surgical_status_planned" && untilSurgery !== null && untilSurgery >= 0 && untilSurgery <= 7;
-  if (recentSurgery && sinceSurgery !== null && sinceSurgery <= 7) addNote("surgery_done_liss");
-  if (soonSurgery) addNote("surgery_planned_liss");
-  if (facts.cancerTypeId === "cancer_6") addNote("pancreatic_nourish_exclusion");
-  if (facts.cancerTypeId === "cancer_5") addNote("liver_nourish_once_daily");
-  if (facts.dietPreferenceId === "vegetarian") addNote("vegetarian_liss_substitution");
 
   const stages = [applicableTreatmentStage, recentSurgery ? "surgical" : null].filter((stage): stage is ProductPlan["stage"] => Boolean(stage));
   const candidates = config.products.plans.filter(row => row.enabled && row.nutritionalStatus === nutritionalStatus && stages.includes(row.stage));
@@ -111,6 +106,16 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
     ? [candidates.find(row => row.stage === "surgical") ?? candidates[0]!]
     : candidates.length > 1 && config.surgicalOverlapPolicy === "clinician_choice" && selectedStage && candidates.some(row => row.stage === selectedStage)
       ? [candidates.find(row => row.stage === selectedStage)!] : candidates;
+  const hasNourishPlan = chosenCandidates.some(row => /\bNourish\b/i.test(row.products));
+  const hasLissPlan = chosenCandidates.some(row => /\bLiss WH\b/i.test(row.products));
+  if (facts.cancerTypeId === "cancer_6" && hasNourishPlan) addNote("pancreatic_nourish_exclusion");
+  if (facts.cancerTypeId === "cancer_5" && hasNourishPlan) addNote("liver_nourish_once_daily");
+  if (facts.dietPreferenceId === "vegetarian" && hasLissPlan) addNote("vegetarian_liss_substitution");
+  // A surgery note recommends Liss WH, so expose it only when that plan is
+  // selected and the diet is confirmed compatible with the workbook note.
+  if (recentSurgery && sinceSurgery !== null && sinceSurgery <= 7 && chosenCandidates.length === 1
+    && chosenCandidates[0]?.stage === "surgical" && facts.dietPreferenceId === "non_vegetarian") addNote("surgery_done_liss");
+  if (soonSurgery && facts.dietPreferenceId === "non_vegetarian") addNote("surgery_planned_liss");
   const visibleNotes = selectedNotes.map(reportNote);
   const base = { nutritionalStatus, statusModifiers, radiotherapy, coMorbidities };
   if (facts.surgicalStatusId === "cancer_surgical_status_done" && !facts.surgeryDate) {
@@ -123,20 +128,23 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
 
   // A missing cancer/diet fact could hide a workbook exception. Withhold the
   // affected product plan until those facts are known, never infer a dose.
-  if (chosenCandidates.some(row => /\bNourish\b/i.test(row.products)) && !facts.cancerTypeId) {
+  if (hasNourishPlan && !facts.cancerTypeId) {
     return { ...base, products: { status: "facts_required", plans: [], notes: visibleNotes, reason: "Cancer type is needed to check Nourish restrictions." } };
   }
-  if (chosenCandidates.some(row => /\bLiss WH\b/i.test(row.products)) && !facts.dietPreferenceId) {
+  if (hasLissPlan && !facts.dietPreferenceId) {
     return { ...base, products: { status: "facts_required", plans: [], notes: visibleNotes, reason: "Diet preference is needed to check the Liss WH substitution." } };
   }
-  if (facts.cancerTypeId === "cancer_6" && chosenCandidates.some(row => /\bNourish\b/i.test(row.products))) {
+  if (facts.cancerTypeId === "cancer_6" && hasNourishPlan) {
     return { ...base, products: { status: "clinician_choice_required", plans: [], notes: visibleNotes, reason: "The workbook excludes Nourish for pancreatic cancer; the listed plan needs an adjusted dose." } };
   }
   if (facts.cancerTypeId === "cancer_5" && chosenCandidates.some(row => /\b(?:2|3)\s+Nourish\b/i.test(row.dose))) {
     return { ...base, products: { status: "clinician_choice_required", plans: [], notes: visibleNotes, reason: "The workbook limits Nourish to once daily for liver cancer; the listed dose needs adjustment." } };
   }
-  if (facts.dietPreferenceId === "vegetarian" && chosenCandidates.some(row => /\bLiss WH\b/i.test(row.products))) {
-    return { ...base, products: { status: "clinician_choice_required", plans: [], notes: visibleNotes, reason: "The workbook substitutes Invigour for Liss WH for vegetarian patients but gives no replacement dose." } };
+  if (hasLissPlan && facts.dietPreferenceId !== "non_vegetarian") {
+    const reason = facts.dietPreferenceId === "vegetarian"
+      ? "The workbook substitutes Invigour for Liss WH for vegetarian patients but gives no replacement dose."
+      : "The workbook gives no confirmed Liss WH dose for this diet preference; a clinician must choose an appropriate plan.";
+    return { ...base, products: { status: "clinician_choice_required", plans: [], notes: visibleNotes, reason } };
   }
 
   if (chosenCandidates.length > 1 && config.surgicalOverlapPolicy === "clinician_choice") {
