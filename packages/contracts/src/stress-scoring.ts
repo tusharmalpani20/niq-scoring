@@ -16,10 +16,10 @@ export const stressScoringConfigSchema = z.object({
 export type StressScoringConfig = z.infer<typeof stressScoringConfigSchema>;
 export type StressBand = keyof StressScoringConfig["points"];
 
-// Poor/Fair=2 is provisional client guidance; the other points are 0 pending confirmation.
+// Point defaults are provisional until the client confirms the stress mapping.
 export const DEFAULT_STRESS_SCORING_CONFIG: StressScoringConfig = {
   cutoffs: { excellent: 0.5, good: 1.5, average: 5, fair: 9 },
-  points: { excellent: 0, good: 0, average: 0, fair: 2, poor: 2 },
+  points: { excellent: 0, good: 0, average: 1, fair: 2, poor: 2 },
 };
 
 export function stressBand(index: number, config: StressScoringConfig): StressBand {

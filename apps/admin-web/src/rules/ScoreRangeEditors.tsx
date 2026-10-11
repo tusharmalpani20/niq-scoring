@@ -221,7 +221,7 @@ export function StressEditor({ definition, disabled, onChange, drafts, setDrafts
   const patchPoints = (band: StressBand, value: number) =>
     onChange({ ...definition, stressScoring: { ...config, points: { ...config.points, [band]: value } } });
   return <fieldset disabled={disabled} className="min-w-0 space-y-4 rounded-xl border bg-card p-4 sm:p-5">
-    <div><h2 className="font-semibold">Stress index scoring</h2><p className="mt-1 text-sm text-muted-foreground">CarePlix stress bands are scored separately from the Overall Health Score. Edit the band limits and NIQ points here.</p></div>
+    <h2 className="font-semibold">Stress index scoring</h2>
     <div className="divide-y rounded-lg border">{bands.map((band, index) => {
       const previous = index === 0 ? null : config.cutoffs[bands[index - 1] as Exclude<StressBand, "poor">];
       const next = band === "poor" ? null : config.cutoffs[band];
@@ -232,6 +232,5 @@ export function StressEditor({ definition, disabled, onChange, drafts, setDrafts
       </div>;
     })}</div>
     {!validated.success && <p role="alert" className="text-sm text-destructive">Stress band limits must increase without gaps or overlaps.</p>}
-    <p className="text-xs text-muted-foreground">CarePlix Parameter Reference v2.0, page 8. Fair and Poor have provisional 2-point defaults; other bands start at 0 until the client confirms scoring.</p>
   </fieldset>;
 }

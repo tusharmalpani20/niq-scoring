@@ -20,7 +20,7 @@ describe("independent face-scan scoring", () => {
 test("CarePlix stress bands contribute separately to face-scan NIQ points", () => {
   const cases = [
     [0.35, "excellent", 0], [0.5, "good", 0], [1.3, "good", 0],
-    [1.5, "average", 0], [5, "fair", 2], [9, "poor", 2],
+    [1.5, "average", 1], [5, "fair", 2], [9, "poor", 2],
   ] as const;
   for (const [stressIndex, stressBand, stressPoints] of cases) {
     expect(calculateFaceScanScore({ wellnessScore: 75, stressIndex }, DEFAULT_FACE_SCAN_SCORING_CONFIG, "rule-1", DEFAULT_STRESS_SCORING_CONFIG))
