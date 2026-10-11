@@ -141,7 +141,14 @@ export function DrugClassEditor({ definition, disabled, onChange }: Props) {
   };
   const deleteClass = () => {
     if (!deleteId) return;
-    change({ classes: config.classes.filter(item => item.id !== deleteId), suggestions: config.suggestions.filter(item => item.classId !== deleteId) });
+    onChange({
+      ...definition,
+      drugClassConfig: { classes: config.classes.filter(item => item.id !== deleteId), suggestions: config.suggestions.filter(item => item.classId !== deleteId) },
+      reportGuidance: definition.reportGuidance && {
+        ...definition.reportGuidance,
+        toxicity: definition.reportGuidance.toxicity.filter(item => item.classId !== deleteId),
+      },
+    });
     setDeleteId(null);
   };
 
@@ -158,12 +165,12 @@ export function DrugClassEditor({ definition, disabled, onChange }: Props) {
           const cancers = [...new Set(mappings.map(item => item.cancerTypeId ?? ANY_CANCER))].map(id => cancerOptions.find(option => option.id === id) ?? { id, label: id });
           const treatments = [...new Set(mappings.map(item => item.treatmentTypeId))].map(id => treatmentOptions.find(option => option.id === id) ?? { id, label: id });
           return <TableRow key={drugClass.id} className="even:bg-muted/20 hover:bg-primary/5">
-            <TableCell className="whitespace-normal break-words align-top"><span className="font-medium">{drugClass.label}</span>{drugClass.guidance?.trim() && <span className="mt-1 block text-xs text-muted-foreground">Report guidance added</span>}</TableCell>
+            <TableCell className="whitespace-normal break-words align-top"><span className="font-medium">{drugClass.label}</span>{drugClass.id === "other" ? <span className="mt-1 block text-xs text-muted-foreground">Generic nutrition guidance only</span> : drugClass.guidance?.trim() && <span className="mt-1 block text-xs text-muted-foreground">Report guidance added</span>}</TableCell>
             <TableCell className="whitespace-normal align-top">{chips(cancers, "cancer_type")}</TableCell>
             <TableCell className="whitespace-normal align-top">{chips(treatments, "current_cancer_treatment")}</TableCell>
             <TableCell className="align-top"><div className="flex justify-end gap-1">
-              <Button type="button" size="icon" variant="ghost" aria-label={`Edit ${drugClass.label}`} disabled={disabled} onClick={() => openEdit(drugClass)}><Pencil className="size-4" aria-hidden="true" /></Button>
-              <Button type="button" size="icon" variant="ghost" className="text-destructive" aria-label={`Delete ${drugClass.label}`} disabled={disabled} onClick={() => setDeleteId(drugClass.id)}><Trash2 className="size-4" aria-hidden="true" /></Button>
+              <Button type="button" size="icon" variant="ghost" aria-label={`Edit ${drugClass.label}`} disabled={disabled || drugClass.id === "other"} onClick={() => openEdit(drugClass)}><Pencil className="size-4" aria-hidden="true" /></Button>
+              <Button type="button" size="icon" variant="ghost" className="text-destructive" aria-label={`Delete ${drugClass.label}`} disabled={disabled || drugClass.id === "other"} onClick={() => setDeleteId(drugClass.id)}><Trash2 className="size-4" aria-hidden="true" /></Button>
             </div></TableCell>
           </TableRow>;
         })}</TableBody>
@@ -190,7 +197,7 @@ export function DrugClassEditor({ definition, disabled, onChange }: Props) {
       <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Discard changes to this drug class?</AlertDialogTitle><AlertDialogDescription>Your edits in this dialog have not been applied to the rule draft.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep editing</AlertDialogCancel><AlertDialogAction onClick={discardEdit}>Discard changes</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
     </AlertDialog>
     <AlertDialog open={deleteId !== null} onOpenChange={open => { if (!open) setDeleteId(null); }}>
-      <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete drug class?</AlertDialogTitle><AlertDialogDescription>This removes the class and its suggestions from this draft. Save the rule version to keep the change.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={deleteClass}>Delete class</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+      <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete drug class?</AlertDialogTitle><AlertDialogDescription>This removes the class, its suggestions, and its toxicity interventions from this draft. Save the rule version to keep the change.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={deleteClass}>Delete class</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
     </AlertDialog>
   </section>;
 }
