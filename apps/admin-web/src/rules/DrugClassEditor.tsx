@@ -155,7 +155,10 @@ export function DrugClassEditor({ definition, disabled, onChange }: Props) {
   return <section className="min-w-0 space-y-4 rounded-2xl bg-card p-4 shadow-sm sm:p-6" aria-label="Drug classes">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h2 className="text-lg font-medium">Drug classes</h2><p className="mt-1 text-sm text-muted-foreground">Suggestions guide the initial picker. Clinicians can search all classes, and classes add no NIQ points.</p></div>
-      <Button type="button" disabled={disabled || config.classes.length >= 200} onClick={() => openEdit(null)}><Plus className="size-4" aria-hidden="true" /> Add drug class</Button>
+      <div className="flex flex-wrap gap-2">
+        {config.classes.length > 0 && !config.classes.some(item => item.id === "other") && <Button type="button" variant="outline" disabled={disabled || config.classes.length >= 200} onClick={() => change({ ...config, classes: [...config.classes, { id: "other", label: "Other" }] })}>Add Other option</Button>}
+        <Button type="button" disabled={disabled || config.classes.length >= 200} onClick={() => openEdit(null)}><Plus className="size-4" aria-hidden="true" /> Add drug class</Button>
+      </div>
     </div>
     {!config.classes.length ? <div className="space-y-2 rounded-xl border border-dashed p-4"><p className="text-sm text-muted-foreground">This version has no drug classes yet.</p><Button type="button" variant="outline" disabled={disabled} onClick={() => change(initialDrugClassConfig())}>Load workbook classes</Button></div> :
       <Table className="min-w-[42rem] table-fixed">
