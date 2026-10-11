@@ -1,5 +1,6 @@
 import { faceScanScoringConfigSchema } from "./face-scan-scoring";
 import { stressScoringConfigSchema } from "./stress-scoring";
+import { carePlanGuidanceSchema } from "./care-plan-guidance";
 import { z } from "zod";
 import { answerValueSchema, answersSchema, optionSchema, rangeSchema, ruleIdSchema, sourceSchema } from "./rule-definition";
 
@@ -158,6 +159,8 @@ export const finalAssessmentDefinitionSchema = z.object({
   drugClassConfig: drugClassConfigSchema.optional(),
   // Historical rule versions predate report guidance and remain readable.
   reportGuidance: reportGuidanceSchema.optional(),
+  // Later guidance layers are optional so pinned historical versions keep their meaning.
+  carePlanGuidance: carePlanGuidanceSchema.optional(),
   riskCategories: z.array(finalRiskCategorySchema).min(1).max(20),
   provisional: z.union([z.object({
     status: z.literal(FINAL_ASSESSMENT_PROVISIONAL_STATUS),

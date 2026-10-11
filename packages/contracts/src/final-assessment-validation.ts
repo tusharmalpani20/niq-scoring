@@ -151,6 +151,75 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
       toxicityKeys.add(key);
     });
   }
+  if (definition.carePlanGuidance) {
+    const carePlan = definition.carePlanGuidance;
+    const configuredRisks = new Set(definition.riskCategories.map(item => item.id));
+    const configuredClasses = new Set(definition.drugClassConfig?.classes.map(item => item.id) ?? []);
+    const configuredTreatments = new Set(definition.sections.flatMap(section => section.fields)
+      .filter(field => field.id === "current_cancer_treatment" && "options" in field)
+      .flatMap(field => "options" in field ? field.options.map(option => option.id) : []));
+    const configuredConditions = new Set(definition.sections.flatMap(section => section.fields)
+      .filter(field => field.id === "co_morbidities" && "options" in field)
+      .flatMap(field => "options" in field ? field.options.map(option => option.id) : []));
+    const mappedRisks = new Set<string>();
+    carePlan.riskStatusMapping.forEach((mapping, index) => {
+      const path = `carePlanGuidance.riskStatusMapping.${index}`;
+      if (!configuredRisks.has(mapping.riskCategoryId)) add(`${path}.riskCategoryId`, "UNKNOWN_RISK_CATEGORY", "Nutrition status mapping refers to a missing risk category.");
+      if (mappedRisks.has(mapping.riskCategoryId)) add(path, "DUPLICATE_RISK_STATUS_MAPPING", "Each risk category can map to only one nutrition status.");
+      mappedRisks.add(mapping.riskCategoryId);
+    });
+    for (const risk of configuredRisks) if (!mappedRisks.has(risk)) add("carePlanGuidance.riskStatusMapping", "MISSING_RISK_STATUS_MAPPING", "Map every risk category to a nutrition status before using care plan guidance.");
+    const ids = new Set<string>();
+    const unique = (id: string, path: string) => {
+      if (ids.has(id)) add(`${path}.id`, "DUPLICATE_CARE_PLAN_ID", "Each care plan row needs a unique ID.");
+      ids.add(id);
+    };
+    const modifiers = new Set<string>();
+    carePlan.oncology.statusModifiers.forEach((row, index) => {
+      const path = `carePlanGuidance.oncology.statusModifiers.${index}`;
+      unique(row.id, path);
+      if (!row.enabled) return;
+      if (row.classId === "other" || !configuredClasses.has(row.classId)) add(`${path}.classId`, "UNKNOWN_DRUG_CLASS", "Status guidance must use a configured named drug class.");
+      if (!configuredTreatments.has(row.treatmentTypeId)) add(`${path}.treatmentTypeId`, "UNKNOWN_TREATMENT", "Status guidance refers to a missing treatment type.");
+      const key = JSON.stringify([row.classId, row.treatmentTypeId, row.nutritionalStatus]);
+      if (modifiers.has(key)) add(path, "DUPLICATE_STATUS_GUIDANCE", "Only one active status rule may match this class, treatment and nutrition status.");
+      modifiers.add(key);
+    });
+    const radiationStatuses = new Set<string>();
+    carePlan.oncology.radiotherapy.forEach((row, index) => {
+      const path = `carePlanGuidance.oncology.radiotherapy.${index}`;
+      unique(row.id, path);
+      if (!row.enabled) return;
+      if (radiationStatuses.has(row.nutritionalStatus)) add(path, "DUPLICATE_RADIOTHERAPY_GUIDANCE", "Only one active radiotherapy rule may match a nutrition status.");
+      radiationStatuses.add(row.nutritionalStatus);
+    });
+    const productKeys = new Set<string>();
+    carePlan.products.plans.forEach((row, index) => {
+      const path = `carePlanGuidance.products.plans.${index}`;
+      unique(row.id, path);
+      if (!row.enabled) return;
+      const key = JSON.stringify([row.stage, row.nutritionalStatus]);
+      if (productKeys.has(key)) add(path, "DUPLICATE_PRODUCT_PLAN", "Only one active product plan may match a stage and nutrition status.");
+      productKeys.add(key);
+    });
+    const conditions = new Set<string>();
+    carePlan.products.comorbidities.forEach((row, index) => {
+      const path = `carePlanGuidance.products.comorbidities.${index}`;
+      unique(row.id, path);
+      if (!row.enabled) return;
+      if (!configuredConditions.has(row.conditionId)) add(`${path}.conditionId`, "UNKNOWN_CO_MORBIDITY", "Co-morbidity guidance refers to a missing assessment option.");
+      if (conditions.has(row.conditionId)) add(path, "DUPLICATE_CO_MORBIDITY_GUIDANCE", "Only one active guidance row may match a co-morbidity.");
+      conditions.add(row.conditionId);
+    });
+    const noteKinds = new Set<string>();
+    carePlan.products.notes.forEach((row, index) => {
+      const path = `carePlanGuidance.products.notes.${index}`;
+      unique(row.id, path);
+      if (!row.enabled) return;
+      if (noteKinds.has(row.kind)) add(path, "DUPLICATE_PRODUCT_NOTE", "Only one active product note may have this condition.");
+      noteKinds.add(row.kind);
+    });
+  }
   if (definition.provisional.status === "CLIENT_CONFIRMED") {
     const checkPoints = (value: unknown, path: string) => {
       if (!value || typeof value !== "object") return;

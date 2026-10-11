@@ -1,0 +1,306 @@
+{
+  "plans": [
+    {
+      "id": "product_pre_conditioning_well_nourished",
+      "stage": "pre_conditioning",
+      "nutritionalStatus": "well_nourished",
+      "products": "Invigour + Nourish",
+      "dose": "1 Invigour + 1 Nourish",
+      "duration": "15 days before treatment",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A2:E2",
+        "note": ""
+      }
+    },
+    {
+      "id": "product_pre_conditioning_moderately_nourished",
+      "stage": "pre_conditioning",
+      "nutritionalStatus": "moderately_nourished",
+      "products": "Invigour + Nourish",
+      "dose": "1 Invigour + 2 Nourish",
+      "duration": "15 days before treatment",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A3:E3",
+        "note": ""
+      }
+    },
+    {
+      "id": "product_pre_conditioning_severely_malnourished",
+      "stage": "pre_conditioning",
+      "nutritionalStatus": "severely_malnourished",
+      "products": "Invigour + Nourish",
+      "dose": "2 Invigour + 2 Nourish",
+      "duration": "15 days before treatment",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A4:E4",
+        "note": "Source spelling \"Severly malnourished\" normalized to \"severely_malnourished\"."
+      }
+    },
+    {
+      "id": "product_during_treatment_well_nourished",
+      "stage": "during_treatment",
+      "nutritionalStatus": "well_nourished",
+      "products": "Invigour + Protect",
+      "dose": "1 Invigour + 1 Protect",
+      "duration": "Minimum 3 months during treatment",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A6:E6",
+        "note": ""
+      }
+    },
+    {
+      "id": "product_during_treatment_moderately_nourished",
+      "stage": "during_treatment",
+      "nutritionalStatus": "moderately_nourished",
+      "products": "Invigour + Protect",
+      "dose": "1 Invigour + 2 Protect",
+      "duration": "Minimum 3 months during treatment",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A7:E7",
+        "note": ""
+      }
+    },
+    {
+      "id": "product_during_treatment_severely_malnourished",
+      "stage": "during_treatment",
+      "nutritionalStatus": "severely_malnourished",
+      "products": "Invigour + Protect",
+      "dose": "3 Invigour + 2 Protect",
+      "duration": "Minimum 3 months during treatment",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A8:E8",
+        "note": "Source spelling \"Severly malnourished\" normalized to \"severely_malnourished\"."
+      }
+    },
+    {
+      "id": "product_post_treatment_well_nourished",
+      "stage": "post_treatment",
+      "nutritionalStatus": "well_nourished",
+      "products": "Invigour + Recover",
+      "dose": "1 Invigour + 1 Recover",
+      "duration": "12 month or more",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A10:E10",
+        "note": ""
+      }
+    },
+    {
+      "id": "product_post_treatment_moderately_nourished",
+      "stage": "post_treatment",
+      "nutritionalStatus": "moderately_nourished",
+      "products": "Invigour + Recover",
+      "dose": "1 Invigour + 2 Recover",
+      "duration": "12 month or more",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A11:E11",
+        "note": ""
+      }
+    },
+    {
+      "id": "product_post_treatment_severely_malnourished",
+      "stage": "post_treatment",
+      "nutritionalStatus": "severely_malnourished",
+      "products": "Invigour + Recover",
+      "dose": "2 Invigour + 2 Recover",
+      "duration": "12 month or more",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A12:E12",
+        "note": "Source spelling \"Severly malnourished\" normalized to \"severely_malnourished\"."
+      }
+    },
+    {
+      "id": "product_surgical_well_nourished",
+      "stage": "surgical",
+      "nutritionalStatus": "well_nourished",
+      "products": "Liss WH",
+      "dose": "1 leveled scoops in 150ml water",
+      "duration": "30days post surgery",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A14:E14",
+        "note": ""
+      }
+    },
+    {
+      "id": "product_surgical_moderately_nourished",
+      "stage": "surgical",
+      "nutritionalStatus": "moderately_nourished",
+      "products": "Liss WH",
+      "dose": "2 leveled scoops in 150ml water",
+      "duration": "30days post surgery",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A15:E15",
+        "note": ""
+      }
+    },
+    {
+      "id": "product_surgical_severely_malnourished",
+      "stage": "surgical",
+      "nutritionalStatus": "severely_malnourished",
+      "products": "Invigour + Liss WH",
+      "dose": "1 Invigour + 2 leveled scoops in 150ml water",
+      "duration": "30days post surgery",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A16:E16",
+        "note": "Source spelling \"Severly malnourished\" normalized to \"severely_malnourished\"."
+      }
+    }
+  ],
+  "comorbidities": [
+    {
+      "id": "comorbidity_diabetes",
+      "conditionId": "co_morbidities_diabetes",
+      "label": "Diabetes",
+      "guidance": "•Energy and protein: use the targets for the patient's nutritional status. Do not cut energy to control sugar.\n•Carbohydrate: about 45–50% of energy, spread over 5–6 small meals, low-GI choices, paired with protein. No sugary drinks or juices, except to treat a low sugar. Choose a diabetes-appropriate supplement.\n•Contact the doctor if: glucose is below 80 mg/dL or persistently above 250 mg/dL, there is extreme thirst or frequent urination, or the patient is vomiting and cannot keep fluids down.",
+      "sourceText": "•Energy and protein: use the targets for the patient's nutritional status. Do not cut energy to control sugar.\n•Carbohydrate: about 45–50% of energy, spread over 5–6 small meals, low-GI choices, paired with protein. No sugary drinks or juices, except to treat a low sugar. Choose a diabetes-appropriate supplement.\n•Steroids (dexamethasone premedication, prednisone in R-CHOP): sugar usually peaks in the afternoon and evening. Check glucose more often, and the doctor may adjust medicines.\n•Poor intake, vomiting or diarrhea: hypoglycaemia risk rises with insulin and sulfonylureas. Ask the doctor about the \"sick-day\" plan. Metformin and SGLT2 inhibitors are usually held when the patient is dehydrated or eating very little, but only on the doctor's advice.\n•Contact the doctor if: glucose is below 80 mg/dL or persistently above 250 mg/dL, there is extreme thirst or frequent urination, or the patient is vomiting and cannot keep fluids down.",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Co-morbidities_diet_guidelines!A2:B2",
+        "note": "Named-drug statements and ambiguous source directions were omitted from report-ready guidance; original wording is retained in sourceText."
+      }
+    },
+    {
+      "id": "comorbidity_hypertension",
+      "conditionId": "co_morbidities_hypertension",
+      "label": "Hypertension",
+      "guidance": "•Sodium: under 2 g/day (about 5 g salt). In malnourished patients use under 2.3 g/day, and don't let the restriction cut intake.\n•Diet: DASH approach- Incorporate 1 fruit a day, include potassium-rich foods (banana, coconut water (not more than 2)unless restricted due to renal parameters (CKD), spinach, avocado, potato, rajma, chana, soyabeans, peanuts, raisins etc) Avoid alcohol & smoking, avoid pickles, papads, chutneys, sauces, packed foods etc – as the sodium levels are generally high in these to increase the shelf lives. Maintain 2.5-3lit of fluid intake per day.\nCheck and record BP at home during treatment.\n•Drugs and dehydration: with diarrhea, vomiting or poor fluid intake, BP tablets can cause very low BP. Inform the doctor early, and the patient should not stop tablets alone.\n•Contact the doctor if: BP is persistently 160/100 mmHg or higher, systolic BP is below 90 with dizziness, or there is severe headache, chest pain or vision change.",
+      "sourceText": "•Sodium: under 2 g/day (about 5 g salt). In malnourished patients use under 2.3 g/day, and don't let the restriction cut intake.\n•Diet: DASH approach- Incorporate 1 fruit a day, include potassium-rich foods (banana, coconut water (not more than 2)unless restricted due to renal parameters (CKD), spinach, avocado, potato, rajma, chana, soyabeans, peanuts, raisins etc) Avoid alcohol & smoking, avoid pickles, papads, chutneys, sauces, packed foods etc – as the sodium levels are generally high in these to increase the shelf lives. Maintain 2.5-3lit of fluid intake per day.\n•Drugs that raise BP: VEGF drugs (bevacizumab, sorafenib, sunitinib, lenvatinib, pazopanib, axitinib, cabozantinib), steroids, NSAIDs, abiraterone, niraparib and ibrutinib. Check and record BP at home during treatment.\n•Drugs and dehydration: with diarrhea, vomiting or poor fluid intake, BP tablets can cause very low BP. Inform the doctor early, and the patient should not stop tablets alone.\n•Contact the doctor if: BP is persistently 160/100 mmHg or higher, systolic BP is below 90 with dizziness, or there is severe headache, chest pain or vision change.",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Co-morbidities_diet_guidelines!A3:B3",
+        "note": "Named-drug statements and ambiguous source directions were omitted from report-ready guidance; original wording is retained in sourceText."
+      }
+    },
+    {
+      "id": "comorbidity_liver_disease",
+      "conditionId": "co_morbidities_liver_disease",
+      "label": "Liver issues",
+      "guidance": "Fatty liver without cirrhosis: do not diet or lose weight during active treatment. If overweight, plan gradual loss (7–10%) after treatment. Avoid alcohol completely. Avoid sugar & sweetened drinks, fried and ultra-processed food, and saturated fat. Consume more of simple home cooked food with less oil. Have 1 fruit daily\n•Protein: do not restrict it (1.2–1.5 g/kg).\n•Cirrhosis: energy about 35 kcal/kg and protein 1.2–1.5 g/kg (not restricted, even with encephalopathy). Give a late-evening snack and avoid fasting for more than 3–6 hours. If there is ascites, sodium is under 2 g/day. Fluid is not restricted unless the doctor advises.\n•Monitoring: LFT each cycle, plus weight, glucose and lipids.\n•Contact the doctor if: there is yellow eyes or skin, dark urine even after good fluid intake, pale stools, severe abdominal pain or swelling, confusion, or black stools or blood in vomiting.",
+      "sourceText": "Fatty liver without cirrhosis: do not diet or lose weight during active treatment. If overweight, plan gradual loss (7–10%) after treatment. Avoid alcohol completely. Avoid sugar & sweetened drinks, fried and ultra-processed food, and saturated fat. Consume more of simple home cooked food with less oil. Have 1 fruit daily\n•Protein: do not restrict it (1.2–1.5 g/kg).\n•Cirrhosis: energy about 35 kcal/kg and protein 1.2–1.5 g/kg (not restricted, even with encephalopathy). Give a late-evening snack and avoid fasting for more than 3–6 hours. If there is ascites, sodium is under 2 g/day. Fluid is not restricted unless the doctor advises.\n•Monitoring: LFT each cycle, plus weight, glucose and lipids.\n•Contact the doctor if: there is yellow eyes or skin, dark urine even after good fluid intake, pale stools, severe abdominal pain or swelling, confusion, or black stools or blood in vomiting.",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Co-morbidities_diet_guidelines!A4:B4",
+        "note": ""
+      }
+    },
+    {
+      "id": "comorbidity_kidney_disease",
+      "conditionId": "co_morbidities_kidney_disease",
+      "label": "Kidney disease",
+      "guidance": "Dietary recommendations should be individualized based on renal function, electrolyte status, fluid intake/output, and overall nutritional status, in consultation with the treating oncologist and/or oncology dietitian.",
+      "sourceText": "Dietary recommendations should be individualized based on renal function, electrolyte status, fluid intake/output, and overall nutritional status, in consultation with the treating oncologist and/or oncology dietitian.",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Co-morbidities_diet_guidelines!A5:B5",
+        "note": ""
+      }
+    },
+    {
+      "id": "comorbidity_thyroid_disorder",
+      "conditionId": "co_morbidities_thyroid_disorder",
+      "label": "Thyroid issues",
+      "guidance": "Keep 4 hours apart from: calcium, iron, multivitamins, antacids, and protein or soy supplements. Include the oral nutrition supplements. Coffee needs at least 30–60 minutes.\nCheck TSH regularly, and about 6–8 weeks after a dose change.\n•Contact the doctor if: there are palpitations, a fast heart rate, tremor or severe weight loss (hyper), or severe fatigue, a very slow heart rate, marked constipation or confusion (hypo).",
+      "sourceText": "Keep 4 hours apart from: calcium, iron, multivitamins, antacids, and protein or soy supplements. Include the oral nutrition supplements. Coffee needs at least 30–60 minutes.\n•Cancer-specific: tyrosine kinase inhibitors (sunitinib, imatinib and others) can raise the dose needed, and immunotherapy can cause thyroiditis. Check TSH regularly, and about 6–8 weeks after a dose change.\n•Other points: avoid excess iodine. Stop biotin supplement (if consumed) 2–3 days before the TSH test, or tell the lab. Restrict soy intake avoid iodized salt, seafood, seaweed, dairy, egg yolk and commercial bread,\n•Contact the doctor if: there are palpitations, a fast heart rate, tremor or severe weight loss (hyper), or severe fatigue, a very slow heart rate, marked constipation or confusion (hypo).",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Co-morbidities_diet_guidelines!A6:B6",
+        "note": "Named-drug statements and ambiguous source directions were omitted from report-ready guidance; original wording is retained in sourceText."
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "pancreatic_nourish_exclusion",
+      "kind": "pancreatic_nourish_exclusion",
+      "label": "Pancreatic cancer",
+      "guidance": "Do not recommend Es Fortitude Nourish for a patient with pancreatic cancer.",
+      "sourceText": "No Es Fortitude Nourish to be mapped for Pancreatic cancer patient",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A22:C22",
+        "note": "Report-ready wording adapted from the workbook note; retain the source for review."
+      }
+    },
+    {
+      "id": "liver_nourish_once_daily",
+      "kind": "liver_nourish_once_daily",
+      "label": "Liver cancer",
+      "guidance": "For a patient with liver cancer, Nourish is limited to once daily.",
+      "sourceText": "Es Fortitide Nourish: Liver cancer - Nourish only once a day",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A23:C23",
+        "note": "Report-ready wording adapted from the workbook note; retain the source for review."
+      }
+    },
+    {
+      "id": "surgery_done_liss",
+      "kind": "surgery_done_liss",
+      "label": "Recent surgery",
+      "guidance": "After surgery, use the Surgical product plan for the selected nutritional status. The severely malnourished plan also includes Invigour.",
+      "sourceText": "Logic for Surgical - Surgery just done then add Liss WH - If patient score is Mild - Only LIss WH, Moderate- Only Liss WH & if the score is High - Add Invigour once a day & Liss WH [Time: 1 week time]",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A25:D25",
+        "note": "Report-ready wording adapted from the workbook note; retain the source for review."
+      }
+    },
+    {
+      "id": "surgery_planned_liss",
+      "kind": "surgery_planned_liss",
+      "label": "Planned surgery",
+      "guidance": "If surgery is planned within a week, begin Liss WH only after surgery. Do not consume Liss WH before surgery.",
+      "sourceText": "If surgery is planned in a weeks time or next 2-3 days then in report we can give to start with Liss WH and mention to start post surgery, DO NOT CONSUME BEFORE SURGERY",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A26:C26",
+        "note": "Report-ready wording adapted from the workbook note; retain the source for review."
+      }
+    },
+    {
+      "id": "vegetarian_liss_substitution",
+      "kind": "vegetarian_liss_substitution",
+      "label": "Vegetarian diet",
+      "guidance": "For a vegetarian patient, avoid Liss WH and use Invigour instead.",
+      "sourceText": "If patient is vegetarian the avoid mapping Liss WH that time only Invigour",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet.ods",
+        "location": "Product_mapping_!A27:C27",
+        "note": "Report-ready wording adapted from the workbook note; retain the source for review."
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import { DEFAULT_STRESS_SCORING_CONFIG } from "./stress-scoring";
 import { finalAssessmentDefinitionSchema, type FinalAssessmentDefinition } from "./final-assessment";
 import { initialDrugClassConfig } from "./drug-class-template";
 import { initialReportGuidance } from "./report-guidance-template";
+import { initialCarePlanGuidance } from "./care-plan-guidance";
 
 const document = "Final NIQ Assessment Form_with section_field_details.xlsx";
 const source = (location: string, note = "") => ({ document, location, note });
@@ -148,5 +149,5 @@ export function confirmedAssessmentSamples(): FinalAssessmentDefinition["samples
 }
 
 export function createFinalAssessmentTemplate(name: string): FinalAssessmentDefinition {
-  return { ...upgradeFinalAssessmentDefinition(createLegacyFinalAssessmentTemplate(name)), faceScanScoring: structuredClone(DEFAULT_FACE_SCAN_SCORING_CONFIG), stressScoring: structuredClone(DEFAULT_STRESS_SCORING_CONFIG), reportGuidance: initialReportGuidance() };
+  return { ...upgradeFinalAssessmentDefinition(createLegacyFinalAssessmentTemplate(name)), faceScanScoring: structuredClone(DEFAULT_FACE_SCAN_SCORING_CONFIG), stressScoring: structuredClone(DEFAULT_STRESS_SCORING_CONFIG), reportGuidance: initialReportGuidance(), carePlanGuidance: initialCarePlanGuidance() };
 }

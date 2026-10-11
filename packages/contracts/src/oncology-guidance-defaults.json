@@ -1,0 +1,711 @@
+{
+  "statusModifiers": [
+    {
+      "id": "status_taxanes_severely_malnourished",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of neutropenia, febrile neutropenia, mucositis, dose delay or reduction.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options (aim 20–25 g per meal): 2 eggs, or 100 g paneer or tofu, or 1 cup dal + curd, or 1 glass milk + 30 g nuts, or 30 g soy chunks, or fish/chicken if eaten\nSymptom-wise management\n• Mucositis: Incorporate soft, moist, non-acidic, non-spicy foods. Options: khichdi with ghee, curd rice, egg custard, mashed banana, ragi porridge, dal soup, idli soaked in sambar, smoothies. Serve at room temperature or cool; salt-soda rinse before meals\n• Neuropathy: Include B-vitamin foods daily. Options: B1/B6: oats, ragi, whole wheat, dals, groundnuts, sunflower seeds; B12: eggs, milk, curd, paneer (fish if eaten); folate: spinach, methi, rajma, chana. No alcohol\n• Taste change/fatigue: Include cold protein foods. Options: curd, paneer cubes, boiled egg, chilled lassi, chana salad, fruit-curd bowl; use herbs (mint, coriander, jeera) in place of lemon marinades\n• Neutropenia: freshly cooked food, washed and peeled fruit, boiled water. Avoid street food, raw sprouts, unpasteurized milk\n•Steroid days: Options:ragi, jowar, bajra, oats, barley, whole dals, chana.\nModerate sodium:flavour with ginger, jeera, herbs, lemon; limit pickle, papad, namkeen\n•Nausea:Include small bland meals.Options:plain idli, toast, khakhra, poha, ginger tea\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Unable to eat, drink or swallow due to mouth sores, or vomiting that stops fluids staying down: inform your oncologist the same day• Nausea: small bland meals, ginger",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 2",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_taxanes_moderately_nourished",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk; may slide into malnutrition across cycles.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: 2 eggs, paneer, dal + curd, milk, tofu, soy chunks, chana\nSymptom-wise management\n• Fortified meals on a fixed 2–3 hourly schedule for the first 3 cycles. Fortification options: milk powder in milk, dal or porridge; ghee or butter in khichdi and roti; paneer, tofu or besan in parathas and cheela; nut butter or powdered nuts in milk; ragi or oats porridge in milk\n• Teach food safety before the first nadir\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Unable to eat or drink: inform your oncologist the same day• Focus: Fortify meals and keep to a fixed eating schedule through the first 3 cycles.",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 3",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_taxanes_well_nourished",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower baseline risk; toxicity is still regimen-driven.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\n• Protein at every meal (~20–25 g). Options: 2 eggs, or 100 g paneer or tofu, or 1 cup dal + curd, or milk with nuts, or soy chunks\nSymptom-wise management\n• Soft-foods for mucositis: khichdi, curd rice, egg custard, mashed banana, ragi porridge\n• Low-GI for steroid days: ragi, jowar, oats, barley, whole dals\n• Incorporate Food safety in advance\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 4",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_anthracyclines_severely_malnourished",
+      "classId": "anthracyclines",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of febrile neutropenia, severe mucositis, poor cardiac reserve.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: scrambled egg, paneer bhurji, tofu, dal soup, curd, milk, smoothies, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Nausea/vomiting: small bland dry meals. Options: toast, khakhra, plain idli, poha, crackers, puffed rice. Ginger tea or candy. Cold foods: curd, buttermilk, chilled fruit. Sip fluids between meals. Avoid greasy, fried, strong-smelling food\n• Mucositis: soft high-protein foods. Options: scrambled egg, paneer bhurji, dal soup, smoothies, custard. No citrus, spicy or crunchy foods. Ice chips or chilled coconut water to soothe\n• Appetite loss: 6–8 small meals plus ONS. Small meal options: banana with nut butter, curd with fruit, egg sandwich, paneer roll, dal soup with toast\n• Cardiac risk: heart-healthy fats. Options: almonds, walnuts, flaxseed, chia, mustard or groundnut oil, fish if eaten. Moderate sodium (flavour with herbs, jeera, ginger). No high-dose antioxidant supplements\n• Neutropenia: freshly cooked food, washed and peeled fruit, boiled water; avoid street food and raw sprouts\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Breathlessness, chest pain, palpitations, sudden leg swelling or rapid weight gain: consult your oncologist immediately\n• Vomiting that stops fluids staying down for 24 hours, or unable to eat or drink with mouth sores: inform your oncologist the same day",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 5",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_anthracyclines_moderately_nourished",
+      "classId": "anthracyclines",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk; intake falls on high-emesis days.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Small bland meals on infusion days with antiemetics on schedule (options: plain idli, toast, khakhra, poha)\n• Heart-healthy fats (almonds, walnuts, flaxseed, mustard oil) and moderate sodium\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Breathlessness, chest pain, palpitations or leg swelling: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 6",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_anthracyclines_well_nourished",
+      "classId": "anthracyclines",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Heart-healthy pattern. Options: vegetables, whole grains (oats, jowar, brown rice), pulses, nuts, low-fat dairy, moderate sodium\n• Limit alcohol; maintain weight and fitness\n• Bland food list ready for nausea: toast, khakhra, plain idli, poha\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Breathlessness, chest pain, palpitations or leg swelling: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 7",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_alkylating_agents_severely_malnourished",
+      "classId": "alkylating_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of dehydration, mucositis, infection and weight loss.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Nausea: small bland meals (idli, toast, poha), ginger, cold foods (curd, buttermilk)\n• Mucositis: soft or liquid high-protein diet. Options: dal soup, curd, egg custard, smoothies, ragi porridge\n• Diarrhea: ORS (sachet, coconut water, salted buttermilk, rice water). Binding foods: rice, curd rice, banana, toast, stewed apple. Avoid spicy and fried foods\n• Neutropenia: freshly cooked food, washed and peeled fruit, boiled water; avoid street food and raw sprouts\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Blood in urine, pain or burning while passing urine, or very little urine: consult your oncologist immediately\n• Diarrhea with fever, blood or dizziness, or vomiting that stops fluids staying down: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 8",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_alkylating_agents_moderately_nourished",
+      "classId": "alkylating_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Keep fluids up per the individualized plan (water, coconut water, buttermilk, ORS); small frequent meals\n• Bland meals to support antiemetic adherence (idli, toast, poha)\n• Soft diet if mucositis develops (khichdi, curd rice, custard, dal soup)\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Blood in urine or painful urination: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 9",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_alkylating_agents_well_nourished",
+      "classId": "alkylating_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Build the habit of sipping fluids through the day (water, coconut water, buttermilk, nimbu pani, clear soups)\n• Build protein and energy reserves on well days (eggs, paneer, dal, curd, nuts)\n• Food-safety education\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Blood in urine or painful urination: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 10",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_platinum_agents_severely_malnourished",
+      "classId": "platinum_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of dehydration, electrolyte disturbance, weight loss, myelosuppression.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Severe nausea/vomiting: scheduled antiemetics. Dry bland foods in the morning (toast, khakhra, puffed rice). Ginger tea or candy. Cold foods (curd, buttermilk, chilled fruit). Sips between meals\n• Hydration (kidney protection): about 2–2.5 L/day or more. Options: water, ORS, coconut water, buttermilk, clear soups. Individualized by renal function and fluid input/output\n• Mg loss: Mg foods. Options: pumpkin seeds, almonds, cashews, spinach, ragi, oats, rajma, chana, banana\n• K loss: K foods. Options: banana, coconut water, potato, orange, tomato, spinach. Individualize if kidney function is reduced\n• Taste change/metallic taste: egg, paneer, curd, dal or tofu instead of meat; plastic cutlery; herbs (mint, coriander) or ginger for flavour\n• Neuropathy: B-vitamin foods. Options: B1/B6: oats, ragi, whole wheat, dals, groundnuts, sunflower seeds; B12: eggs, milk, curd, paneer (fish if eaten); folate: spinach, methi, rajma, chana\n• Neutropenia: freshly cooked food, washed and peeled fruit, boiled water; avoid street food and raw sprouts\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Vomiting that stops fluids staying down for 24 hours, very little urine, dizziness or muscle cramps: consult your oncologist immediately\n• New ringing in the ears or hearing change: inform your oncologist",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 11",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_platinum_agents_moderately_nourished",
+      "classId": "platinum_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk; intake falls on high-emesis days.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Small bland meals on high-emesis days (idli, toast, poha); keep fluids up (water, ORS, coconut water, buttermilk)\n• Mg food options: pumpkin seeds, almonds, cashews, spinach, ragi, oats, rajma, chana. K food options: banana, coconut water, potato, orange. Daily\n• Food safety during neutropenia (freshly cooked food, washed and peeled fruit, boiled water)\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Vomiting that stops fluids staying down, or very little urine: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 12",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_platinum_agents_well_nourished",
+      "classId": "platinum_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk; nausea still limits intake.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Hydrate well around infusions (water, coconut water, buttermilk, ORS)\n• Bank protein and energy on better days (eggs, paneer, dal, curd, nuts)\n• Mg options: almonds, cashews, pumpkin seeds, spinach, ragi, oats. K options: banana, coconut water, potato, orange\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 13",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_antimetabolites_severely_malnourished",
+      "classId": "antimetabolites",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of severe mucositis, diarrhea and dehydration, which can progress quickly.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: egg custard, paneer bhurji, tofu, dal soup, curd, milk, smoothies, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Mucositis: soft or liquid high-protein diet. Options: dal soup, smoothies, custard, mashed khichdi, ragi porridge, curd rice. No acidic, spicy or rough foods. Salt-soda rinse\n• Diarrhea: ORS (sachet, coconut water, salted buttermilk, rice water). Binding foods: banana, rice, curd rice, stewed apple, toast, khichdi. Soluble fiber: oats, banana, stewed apple. Avoid fried and spicy food, caffeine, sorbitol (sugar-free products). Call early at 4 loose stools above baseline\n• Nausea: bland dry foods (toast, khakhra, poha), ginger\n• Hand-foot syndrome: hydration (water, coconut water, buttermilk) and protein (eggs, paneer, dal, curd); avoid hot foods if the mouth is sore\n• Neutropenia: freshly cooked food, washed and peeled fruit, boiled water; avoid street food and raw sprouts\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• 4 or more loose stools above baseline, diarrhea with fever or blood, or dizziness: consult your oncologist immediately\n• Severe mouth sores or unable to eat or drink: inform your oncologist the same day\n• Painful, cracked or blistering palms or soles: inform your oncologist",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 14",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_antimetabolites_moderately_nourished",
+      "classId": "antimetabolites",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk; intake may drop with mouth sores.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Soft moist foods (khichdi, curd rice, dal soup, mashed vegetables), mouth rinses, a fluid target\n• Diarrhea plan ready at home: ORS plus binding foods (banana, rice, curd rice, toast, stewed apple)\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• 4 or more loose stools above baseline, or diarrhea with fever or blood: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 15",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_antimetabolites_well_nourished",
+      "classId": "antimetabolites",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Start oral care, hydration (water, coconut water, buttermilk) and protein (eggs, paneer, dal, curd) from cycle 1\n• Prepare ORS and binding foods (banana, rice, curd rice, toast) in advance\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• 4 or more loose stools above baseline, or diarrhea with fever or blood: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 16",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_topoisomerase_inhibitors_severely_malnourished",
+      "classId": "topoisomerase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "High risk of dehydration, electrolyte imbalance, febrile neutropenia and hospitalization.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: eggs, tofu, paneer or curd (if lactose is tolerated), dal soup, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Dehydration/electrolyte loss: ORS, coconut water, salted buttermilk, clear soups. K foods: banana, coconut water, potato (individualize in kidney issues)\n• Nausea: small bland meals (idli, toast, poha), ginger\n• Neutropenia: freshly cooked food, washed and peeled fruit, boiled water; avoid street food and raw sprouts\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Diarrhea with fever, blood, dizziness or very little urine, or diarrhea not settling despite the plan: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 17",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_topoisomerase_inhibitors_moderately_nourished",
+      "classId": "topoisomerase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk; diarrhea drives weight loss.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Same diarrhea plan; small frequent meals (rice, banana, curd rice, toast, boiled potato)\n• Fluids (ORS, coconut water, salted buttermilk) and K foods (banana, coconut water, potato) during diarrhea\n• Food safety during neutropenia\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Diarrhea with fever, blood or dizziness: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 18",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_topoisomerase_inhibitors_well_nourished",
+      "classId": "topoisomerase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Prepare the diarrhea plan (ORS, binding foods: banana, rice, curd rice, toast) and hydration habits before cycle 1\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Diarrhea with fever, blood or dizziness: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 19",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_vinca_alkaloids_severely_malnourished",
+      "classId": "vinca_alkaloids",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of ileus, infection and weight loss.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Constipation: bowel plan from day 1. Fluids (water, buttermilk, coconut water, warm water in the morning) with gradual fiber. Fiber options: oats, papaya, prunes, soaked raisins, isabgol, whole wheat roti, vegetables, flaxseed\n• Jaw pain: soft foods. Options: smoothies, soups, mashed khichdi, curd rice, scrambled egg, porridge\n• Neuropathy: B-vitamin foods. Options: B1/B6: oats, ragi, whole wheat, dals, groundnuts, sunflower seeds; B12: eggs, milk, curd, paneer (fish if eaten); folate: spinach, methi, rajma, chana\n• Neutropenia: freshly cooked food, washed and peeled fruit, boiled water; avoid street food and raw sprouts\n• Nausea: small bland meals (idli, toast, poha), ginger\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• No bowel movement for 3 days, severe abdominal pain or swelling, or vomiting with constipation: consult your oncologist immediately\n• Worsening numbness, weakness or difficulty walking: inform your oncologist",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 20",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_vinca_alkaloids_moderately_nourished",
+      "classId": "vinca_alkaloids",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Bowel plan with fluids and gradual fiber (oats, papaya, prunes, soaked raisins, isabgol)\n• Soft foods (smoothies, soups, mashed khichdi) when jaw pain appears\n• Food safety during neutropenia\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• No bowel movement for 3 days or severe abdominal pain: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 21",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_vinca_alkaloids_well_nourished",
+      "classId": "vinca_alkaloids",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Maintain activity, fluids (water, buttermilk) and fiber (oats, vegetables, fruit, whole wheat roti, pulses)\n• Teach constipation warning signs\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• No bowel movement for 3 days or severe abdominal pain: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 22",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_tyrosine_kinase_inhibitors_severely_malnourished",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of weight loss, diarrhea-related dehydration, anorexia and early discontinuation.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Anorexia/taste change: small frequent fortified meals. Fortification options: milk powder in milk or dal; ghee in khichdi and roti; paneer, tofu or besan in parathas and cheela; nut butter in milk. Cold or tangy foods if tolerated (chilled curd, fruit chaat, chilled buttermilk)\n• Diarrhea: ORS (sachet, coconut water, salted buttermilk). Binding foods: banana, rice, curd rice, toast, stewed apple. Avoid caffeine and fried foods\n• Mucositis/hand-foot: soft non-spicy foods (khichdi, curd rice, dal soup, custard); hydration (water, coconut water, buttermilk)\n• Hypertension: moderate sodium (flavour with herbs, jeera, ginger, lemon; limit pickle, papad, namkeen). K-rich options: banana, coconut water, tomato, spinach, orange (individualize in kidney issues)\n• Hyperglycemia: low-GI carbs. Options: ragi, jowar, bajra, oats, barley, whole dals, chana\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell: consult your oncologist immediately for treatment\n• Diarrhea with fever, blood or dizziness, or unable to keep fluids down: consult your oncologist immediately\n• Severe headache, chest pain, or very high blood pressure readings: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 23",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_tyrosine_kinase_inhibitors_moderately_nourished",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell: consult your oncologist immediately for treatment\n• Diarrhea with fever, blood or dizziness: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 24",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_tyrosine_kinase_inhibitors_well_nourished",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Protein (eggs, paneer, dal, curd, tofu) plus resistance exercise to preserve muscle\n• Low-sodium, low-GI, heart-healthy diet. Low-GI options: ragi, jowar, oats, barley, whole dals. Heart-healthy fats: nuts, seeds, mustard or groundnut oil\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell: consult your oncologist immediately for treatment",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 25",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_parp_inhibitors_severely_malnourished",
+      "classId": "parp_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of severe anemia, fatigue and weight loss; dose interruptions.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein toward the upper end (1.5 g/kg/day)\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Nausea: small bland meals (idli, toast, poha), ginger, dry foods (khakhra, puffed rice), cold foods (curd, buttermilk)\n• Anemia: iron-rich foods. Options: ragi, dates, beetroot, lentils, rajma, chana, leafy greens (spinach, methi), eggs, sesame, pumpkin seeds, a little jaggery. Pair with vitamin C: amla, lemon, guava, orange. Keep tea, coffee and calcium away from iron-rich meals. B12 options: eggs, milk, curd, paneer (fish if eaten). Folate options: spinach, methi, rajma, chana, orange. Iron supplements only after iron studies and doctor advice\n• Low neutrophils (neutropenia): freshly cooked food, washed and peeled fruit, boiled water; avoid street food and raw sprouts\n• Fatigue/taste change: ONS; cold protein foods (curd, paneer cubes, boiled egg, chilled lassi)\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Unusual bruising, bleeding, severe breathlessness or marked paleness: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 26",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_parp_inhibitors_moderately_nourished",
+      "classId": "parp_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Small frequent meals and hydration (water, coconut water, buttermilk)\n• Daily iron options (ragi, dates, beetroot, lentils, leafy greens, eggs), B12 options (eggs, milk, curd, paneer), folate options (spinach, methi, rajma, chana)\n• Food safety if neutrophils are low\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Unusual bruising or bleeding: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 27",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_parp_inhibitors_well_nourished",
+      "classId": "parp_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Plan for nausea in the first weeks (idli, toast, ginger); maintain intake and activity\n• Pair iron foods (ragi, dates, beetroot, lentils, leafy greens) with vitamin C (amla, lemon, guava, orange)\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 28",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_her2_targeted_antibodies_severely_malnourished",
+      "classId": "her2_targeted_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of dehydration, weight loss and treatment delays.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Cardiac risk: heart-healthy fats (almonds, walnuts, flaxseed, mustard oil, fish if eaten), moderate sodium, high-fiber foods (oats, pulses, vegetables, fruit, whole grains)\n• Low neutrophils (with chemotherapy): freshly cooked food, washed and peeled fruit, boiled water\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Breathlessness, chest pain, palpitations, leg swelling or sudden weight gain: consult your oncologist immediately\n• Diarrhea with fever, blood or dizziness: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 29",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_her2_targeted_antibodies_moderately_nourished",
+      "classId": "her2_targeted_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Diarrhea plan (ORS, banana, rice, curd rice) and small frequent meals\n• Heart-healthy diet (nuts, flaxseed, mustard oil, oats, pulses, vegetables)\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Breathlessness, chest pain, palpitations or leg swelling: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 30",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_her2_targeted_antibodies_well_nourished",
+      "classId": "her2_targeted_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Heart-healthy diet. Options: vegetables, whole grains (oats, jowar, brown rice), pulses, nuts, seeds\n• Maintain weight and activity\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell: consult your oncologist immediately for treatment\n• Breathlessness, chest pain, palpitations or leg swelling: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 31",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_cd20_monoclonal_antibodies_severely_malnourished",
+      "classId": "cd20_monoclonal_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher infection and dehydration risk; poor reserve during combination chemotherapy.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Add the symptom measures of the accompanying chemotherapy class\n• Infusion day: light meal before the infusion. Options: idli, poha, toast with egg, upma, khichdi, banana. Avoid a heavy meal that may worsen nausea\n• First doses (tumor lysis prevention): fluids as directed by the oncologist (about 2.5–3 L/day unless restricted). Options: water, coconut water, buttermilk, ORS. Individualized by renal function and fluid input/output\n• Infection risk, including late neutropenia (can last after treatment): freshly cooked food, washed and peeled fruit, boiled water; avoid street food and raw sprouts\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment, including weeks to months after the last dose\n• Fever, chills, breathlessness, rash or swelling of lips or face during an infusion: tell the nursing staff and oncologist immediately\n• Reduced urine, muscle cramps or confusion after first doses: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 32",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_cd20_monoclonal_antibodies_moderately_nourished",
+      "classId": "cd20_monoclonal_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Chemotherapy-class measures\n• Food safety and a light pre-infusion meal (idli, poha, toast with egg, upma)\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment, including weeks to months after the last dose\n• Fever, rash or breathlessness during an infusion: tell the nursing staff immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 33",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_cd20_monoclonal_antibodies_well_nourished",
+      "classId": "cd20_monoclonal_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Chemotherapy-class measures\n• Food-safety education; maintain intake and fitness\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment, including weeks to months after the last dose",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 34",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_immune_checkpoint_inhibitors_severely_malnourished",
+      "classId": "immune_checkpoint_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_immunotherapy",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of weight loss, dehydration with colitis, and steroid complications.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Diarrhea/colitis: ORS (sachet, coconut water, salted buttermilk, rice water) and a low-residue diet. Options: rice, banana, curd rice, toast, boiled potato, stewed apple\n• Hyperglycemia: low-GI carbs. Options: ragi, jowar, bajra, oats, barley, whole dals, chana\n• Fatigue/dizziness: ONS, small frequent meals (banana with nut butter, curd with fruit, egg sandwich, paneer roll), salt as advised\n• If steroids start: low sodium (flavour with herbs, jeera, ginger, lemon; limit pickle, papad, namkeen), low-GI carbs (ragi, jowar, oats), more protein (eggs, paneer, dal, curd), calcium foods (milk, curd, paneer, ragi, sesame), vitamin D foods (egg yolk, fortified milk, fatty fish if eaten, sun-exposed mushrooms; 15–20 min morning sunlight). No alcohol\nRed-flag notes\n• 4 or more stools above baseline, blood in stool, abdominal pain or diarrhea with fever: consult your oncologist immediately\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (infection, especially if on steroids): consult your oncologist immediately for treatment\n• Extreme thirst, frequent urination, severe fatigue, dizziness or confusion (possible high sugar or adrenal/thyroid changes): consult your oncologist immediately\n• New cough, breathlessness or severe headache: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 35",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_immune_checkpoint_inhibitors_moderately_nourished",
+      "classId": "immune_checkpoint_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_immunotherapy",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Teach warning signs of colitis, thyroid and glucose changes\n• Steroid-ready diet: low sodium, low-GI carbs (ragi, jowar, oats), calcium foods (milk, curd, paneer, ragi, sesame), vitamin D foods (egg yolk, fortified milk, sun-exposed mushrooms, morning sunlight)\nRed-flag notes\n• 4 or more stools above baseline, blood in stool or abdominal pain: consult your oncologist immediately\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell: consult your oncologist immediately for treatment resistance exercise as tolerated.",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 36",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_immune_checkpoint_inhibitors_well_nourished",
+      "classId": "immune_checkpoint_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_immunotherapy",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Prepare the patient for warning signs\n• Keep protein (eggs, paneer, dal, curd, tofu) and activity up\nRed-flag notes\n• 4 or more stools above baseline, blood in stool or abdominal pain: consult your oncologist immediately\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell: consult your oncologist immediately for treatment",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 37",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_anti_estrogens_serms_severely_malnourished",
+      "classId": "anti_estrogens_serms",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk if underweight or sarcopenic: bone and muscle loss.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Muscle and bone loss: adequate energy and protein plus calcium and vitamin D foods. Calcium options: milk, curd, paneer, ragi, sesame, almonds, calcium-set tofu, small fish with bones, leafy greens (methi, amaranth). Vitamin D options: egg yolk, fortified milk, fatty fish if eaten, sun-exposed mushrooms; 15–20 min morning sunlight\n• Hot flushes: avoid spicy food, caffeine, alcohol. Cool foods: curd, buttermilk, coconut water, cucumber, watermelon\n• Lipid effects: unsaturated fats (almonds, walnuts, flaxseed, mustard or groundnut oil), soluble fiber (oats, pulses, barley, isabgol), limited saturated fat (ghee, butter, fried foods)\n• Soy: whole soy foods in moderation are fine (tofu, soy chunks, soy milk); no concentrated isoflavone supplements\nRed-flag notes\n• Fever of 100°F (37.8°C) or above with chills or feeling unwell: consult your oncologist immediately\n• Sudden leg pain or swelling, chest pain, breathlessness, or abnormal vaginal bleeding: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 38",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_anti_estrogens_serms_moderately_nourished",
+      "classId": "anti_estrogens_serms",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Protein with every meal (eggs, paneer, dal, curd, tofu)\n• Heart-healthy fats (nuts, seeds, mustard oil) and fiber (oats, pulses, vegetables, fruit)\nRed-flag notes\n• Sudden leg pain or swelling, chest pain, breathlessness, or abnormal vaginal bleeding: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 39",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_anti_estrogens_serms_well_nourished",
+      "classId": "anti_estrogens_serms",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower nutritional risk, but weight gain is the main concern.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Mediterranean-style pattern for weight and lipids. Options: vegetables, whole grains, pulses, nuts, olive or mustard oil, curd; fish if eaten. Limit alcohol\nRed-flag notes\n• Sudden leg pain or swelling, chest pain, breathlessness, or abnormal vaginal bleeding: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 40",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_aromatase_inhibitors_severely_malnourished",
+      "classId": "aromatase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of bone and muscle loss (low body weight, poor intake).",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Bone loss: calcium 1,000–1,200 mg/day, food first. Options (approx.): milk 1 glass (250 ml) ~300 mg; curd 1 cup ~300 mg; paneer 50 g ~150 mg; ragi 2 rotis or 1 bowl porridge ~150–250 mg; sesame/til 1 tbsp ~90 mg; almonds 10 ~60 mg; calcium-set tofu; small fish with bones if eaten; leafy greens (methi, amaranth). Vitamin D options: egg yolk, fortified milk, fatty fish if eaten, sun-exposed mushrooms; 15–20 min morning sunlight; supplement per level\n• Muscle loss: protein (options above) with supervised resistance exercise\n• Joint pain: omega-3 foods. Options: flaxseed, chia, walnuts, mustard oil, fish if eaten. Anti-inflammatory pattern: turmeric in cooking, ginger, vegetables, fruit, nuts\n• Hot flushes: avoid spicy food, caffeine, alcohol. Cool foods: curd, buttermilk, coconut water, cucumber\n• Lipids: unsaturated fats (nuts, seeds, mustard or groundnut oil), soluble fiber (oats, pulses, barley), limited saturated fat, sodium and cola\nRed-flag notes\n• Fever of 100°F (37.8°C) or above with chills or feeling unwell: consult your oncologist immediately\n• Sudden bone pain, a fall with injury, or severe joint pain that stops movement: consult your oncologist",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 41",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_aromatase_inhibitors_moderately_nourished",
+      "classId": "aromatase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Daily calcium (milk, curd, paneer, ragi, sesame, almonds), vitamin D (egg yolk, fortified milk, sun-exposed mushrooms, morning sunlight) and protein (eggs, paneer, dal, tofu)\n• Weight-bearing exercise; heart-healthy fats (nuts, seeds, mustard oil)\nRed-flag notes\n• Sudden bone pain or a fall with injury: consult your oncologist",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 42",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_aromatase_inhibitors_well_nourished",
+      "classId": "aromatase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower nutritional risk; weight and bone health remain the focus.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Weight control and bone-health diet. Calcium options: milk, curd, paneer, ragi, sesame, almonds, leafy greens. Vitamin D options: egg yolk, fortified milk, sun-exposed mushrooms, morning sunlight\n• Weight-bearing exercise\nRed-flag notes\n• Sudden bone pain or a fall with injury: consult your oncologist",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 43",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_anti_androgens_androgen_deprivation_therapy_severely_malnourished",
+      "classId": "anti_androgens_androgen_deprivation_therapy",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of sarcopenia and weight loss, particularly if intake is poor.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein toward the upper end (1.5 g/kg/day)\n• Protein options (20–25 g per meal): 2 eggs, 100 g paneer or tofu, 1 cup dal + curd, milk with nuts, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Muscle loss (sarcopenia): protein spread evenly across meals (options above) with resistance exercise; ONS if intake is inadequate\n• Bone loss: calcium options: milk, curd, paneer, ragi, sesame, almonds, calcium-set tofu, leafy greens. Vitamin D options: egg yolk, fortified milk, fatty fish if eaten, sun-exposed mushrooms; morning sunlight\n• Hot flushes: avoid spicy food, caffeine, alcohol. Cool foods: curd, buttermilk, coconut water\n• Glucose/lipid change: low-GI carbs (ragi, jowar, oats, barley, whole dals) and unsaturated fats (nuts, seeds, mustard or groundnut oil)\nRed-flag notes\n• Fever of 100°F (37.8°C) or above with chills or feeling unwell: consult your oncologist immediately\n• Sudden bone pain or a fall with injury: consult your oncologist",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 44",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_anti_androgens_androgen_deprivation_therapy_moderately_nourished",
+      "classId": "anti_androgens_androgen_deprivation_therapy",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Resistance training with adequate protein (eggs, paneer, dal, tofu, curd)\n• Low-GI carbs (ragi, jowar, oats), heart-healthy fats (nuts, seeds, mustard oil), calcium foods (milk, curd, paneer, ragi, sesame) and vitamin D foods (egg yolk, fortified milk, sun-exposed mushrooms)\nRed-flag notes\n• Leg swelling, breathlessness, palpitations or severe weakness: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 45",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_anti_androgens_androgen_deprivation_therapy_well_nourished",
+      "classId": "anti_androgens_androgen_deprivation_therapy",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk of malnutrition but high risk of fat gain and metabolic change.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Prevent fat gain and metabolic change: weight control, low-GI carbs (ragi, jowar, oats, barley), unsaturated fats (nuts, seeds, mustard oil), fiber (oats, pulses, vegetables, fruit), resistance exercise\n• Calcium foods (milk, curd, paneer, ragi, sesame) and vitamin D foods (egg yolk, fortified milk, sun-exposed mushrooms)\nRed-flag notes\n• Leg swelling, breathlessness, palpitations or severe weakness: consult your oncologist immediately as tolerated.",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 46",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_cdk4_6_inhibitors_severely_malnourished",
+      "classId": "cdk4_6_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "severely_malnourished",
+      "riskEmphasis": "Higher risk of neutropenia, diarrhea-related dehydration and dose reduction.",
+      "actions": "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten\nSymptom-wise management\n• Nausea/fatigue: small bland meals (idli, toast, poha), ginger\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Diarrhea with fever, blood or dizziness, or unable to keep fluids down: consult your oncologist immediately\n• Sudden breathlessness, new cough or leg swelling/pain: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 47",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_cdk4_6_inhibitors_moderately_nourished",
+      "classId": "cdk4_6_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "moderately_nourished",
+      "riskEmphasis": "Moderate risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise management\n• Food safety and a diarrhea plan (ORS, banana, rice, curd rice, toast, stewed apple)\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Diarrhea with fever, blood or dizziness: consult your oncologist immediately",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 48",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    },
+    {
+      "id": "status_cdk4_6_inhibitors_well_nourished",
+      "classId": "cdk4_6_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "nutritionalStatus": "well_nourished",
+      "riskEmphasis": "Lower risk.",
+      "actions": "Energy and protein\n• Energy 25–30 kcal/kg/day; protein 1.0–1.2 g/kg/day\nSymptom-wise management\n• Prepare the diarrhea plan (ORS, binding foods) and food safety in advance\n• Maintain intake and activity\nRed-flag notes\n• Fever of 100°F (37.8°C) or above, chills or feeling unwell (possible neutropenia/febrile neutropenia): consult your oncologist immediately for treatment\n• Diarrhea with fever, blood or dizziness: consult your oncologist immediately as tolerated.",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Status_modifier row 49",
+        "note": "Class-level wording only; named-drug and product-dosage clauses are omitted."
+      }
+    }
+  ],
+  "radiotherapy": [
+    {
+      "id": "radiotherapy_severely_malnourished",
+      "nutritionalStatus": "severely_malnourished",
+      "guidance": "Energy and protein\n• Energy: 25–30 kcal/kg/day; protein: 1.2–1.5 g/kg/day, individualised to clinical requirements.\n• Small, frequent, energy- and protein-dense meals; fortify foods with milk powder, curd, paneer, nut paste or suitable oils.\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten.\nFibre, prebiotics and probiotics\n• Include tolerated fibre sources such as oats, banana, cooked vegetables and whole grains when bowel function permits.\n• During significant diarrhoea, temporarily reduce insoluble fibre; increase fibre gradually for constipation if appropriate.\n• Prebiotic foods: oats, banana and tolerated vegetables; reduce fermentable foods if bloating or diarrhoea worsens.\n• Pasteurised curd/yoghurt may be included if tolerated. Avoid routine probiotic supplements in severely immunocompromised patients unless approved by the treating team.\nSymptom-wise nutritional management\n• Mucositis/oral ulcers: Soft, moist, non-spicy and non-acidic foods; avoid coarse, sharp-textured and very hot foods. Maintain oral hygiene and adequate fluid intake.\n• Dysphagia/painful swallowing: Modify texture and fluid consistency according to swallowing safety; arrange assessment if swallowing difficulty develops.\n• Dermatitis: Maintain adequate protein, energy, fluids and micronutrients to support tissue maintenance. Follow the oncology team's skin-care instructions.\n• Nausea/vomiting: Include Small, frequent meals; bland, easily tolerated foods; avoid strong food odours and greasy foods if they worsen symptoms.\n• Diarrhoea/radiation enteritis: Temporarily reduce insoluble fibre; adjust lactose and fermentable foods according to tolerance. Replace fluid and electrolyte losses as indicated; use ORS when appropriate.\n• Constipation: Adequate fluids, tolerated fibre and activity as clinically appropriate.\n• Bloating/abdominal discomfort: Smaller meals; adjust individual triggers, lactose or fermentable foods if they worsen symptoms.\n• Dry mouth/taste changes: Moist foods, gravies and tolerated fluids; adjust flavours and food temperatures according to preference.\n• Fatigue/poor appetite: 5–6 small meals/snacks, food fortification and nourishing fluids or ONS as required.\nMicronutrients and hydration\n• Ensure dietary adequacy of iron, folate, vitamin B12, vitamin D, calcium, zinc and other micronutrients according to assessment; supplement documented deficiencies as indicated.\n• Avoid unnecessary high-dose antioxidant or micronutrient supplements without clinical review.\n• Monitor hydration and replace gastrointestinal losses according to clinical need.\nMonitoring and red-flag notes\n• Monitor weight, food intake, hydration, bowel habits and functional status closely.\n• If intake remains inadequate despite counselling, fortification and ONS, assess promptly for enteral nutrition.\n• Persistent vomiting, severe diarrhoea, dehydration, significant swallowing difficulty or severe skin breakdown: urgent clinical assessment.\n• Fever of 38°C (100.4°F) or above during cancer treatment: contact the oncology team immediately and follow its emergency instructions.",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Sheet1 row 2",
+        "note": "Radiotherapy guidance; source status spelling normalized."
+      }
+    },
+    {
+      "id": "radiotherapy_moderately_nourished",
+      "nutritionalStatus": "moderately_nourished",
+      "guidance": "Energy and protein\n• Energy: 25–30 kcal/kg/day; protein: 1.2–1.5 g/kg/day, individualised to clinical requirements.\n• Provide regular meals and 2–3 snacks; fortify foods and add ONS if intake is insufficient.\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten.\nFibre, prebiotics and probiotics\n• Include tolerated fibre from oats, fruits, vegetables, whole grains and legumes when bowel function permits.\n• Reduce insoluble fibre temporarily during significant diarrhoea; increase fibre gradually for constipation when appropriate.\n• Include prebiotic foods such as oats, banana and tolerated vegetables; modify fermentable foods if bloating occurs.\n• Pasteurised curd/yoghurt may be included if tolerated. Probiotic supplements require clinical approval, particularly during immunosuppression.\nSymptom-wise nutritional management\n• Mucositis/oral ulcers: Incorporate Soft, moist, non-irritating foods; avoid spicy, acidic and coarse foods when painful.\n• Dysphagia: Modify food texture and fluid consistency according to swallowing safety; seek assessment if needed.\n• Dermatitis: Maintain adequate nutrition and follow prescribed skin-care measures.\n• Nausea/vomiting: Small, frequent meals and fluids; avoid individual food triggers.\n• Diarrhoea: Adjust insoluble fibre, lactose and fermentable foods according to tolerance; replace fluid and electrolyte losses as indicated.\n• Constipation: Encourage suitable fluids, tolerated fibre and activity.\n• Bloating/abdominal discomfort: Smaller meals and adjustment of individual food triggers.\n• Dry mouth/taste changes: Moist foods, gravies and tolerated flavour adjustments.\n• Fatigue/poor appetite: Nutrient-dense snacks, food fortification and ONS if required.\nMicronutrients and hydration\n• Ensure adequate dietary vitamins and minerals; correct documented deficiencies and avoid unnecessary high-dose supplementation.\n• Maintain adequate fluid intake and replace gastrointestinal losses as clinically indicated.\nMonitoring and red-flag notes\n• Monitor weight, appetite, intake and treatment-related symptoms; intensify support if weight loss continues.\n• Persistent vomiting, severe diarrhoea, dehydration, significant swallowing difficulty or severe skin reactions: prompt medical assessment.\n• Fever of 38°C (100.4°F) or above during cancer treatment: contact the oncology team immediately and follow its emergency instructions.",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Sheet1 row 4",
+        "note": "Radiotherapy guidance; source status spelling normalized."
+      }
+    },
+    {
+      "id": "radiotherapy_well_nourished",
+      "nutritionalStatus": "well_nourished",
+      "guidance": "Energy and protein\n• Energy: approximately 25–30 kcal/kg/day; protein: 1.0–1.5 g/kg/day, individualised to clinical requirements.\n• Maintain balanced meals with adequate protein and energy.\n• Protein options: eggs, paneer, curd, dal, tofu, milk, soy chunks, fish/chicken if eaten.\nFibre, prebiotics and probiotics\n• Include a variety of fruits, vegetables, whole grains, oats and legumes as tolerated.\n• Adjust fibre according to bowel symptoms and radiation site; reduce insoluble fibre temporarily during significant diarrhoea.\n• Include tolerated prebiotic foods such as oats, banana and vegetables.\n• Pasteurised curd/yoghurt may be consumed if tolerated; probiotic supplements are not routinely required to prevent radiation toxicity.\nSymptom-wise nutritional management\n• Mucositis/oral ulcers: Soft, moist foods; avoid spicy, acidic, coarse and very hot foods if irritating.\n• Dysphagia: Modify food texture and fluid consistency according to swallowing safety.\n• Dermatitis: Maintain balanced nutrition, adequate protein and fluids; follow the oncology team's skin-care guidance.\n• Nausea/vomiting: Small, frequent meals and fluids as tolerated.\n• Diarrhoea: Adjust fibre and lactose according to tolerance; replace fluid and electrolyte losses as indicated.\n• Constipation: Adequate fluids, appropriate fibre and activity when clinically suitable.\n• Bloating/abdominal discomfort: Identify and adjust individual food triggers.\n• Dry mouth/taste changes: Moist foods, gravies and tolerated flavour adjustments.\n• Fatigue/poor appetite: Maintain regular meals and add nutrient-dense snacks if intake declines.\nMicronutrients and hydration\n• Maintain micronutrient adequacy through a balanced diet; supplement only when clinically indicated.\n• Maintain adequate hydration according to clinical requirements.\nMonitoring and red-flag notes\n• Monitor weight, appetite, dietary intake and symptoms to detect nutritional deterioration early.\n• Persistent vomiting, severe diarrhoea, dehydration, significant swallowing difficulty or severe skin reactions: prompt medical assessment.\n• Fever of 38°C (100.4°F) or above during cancer treatment: contact the oncology team immediately and follow its emergency instructions.",
+      "enabled": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ).ods",
+        "location": "Sheet1 row 6",
+        "note": "Radiotherapy guidance; source status spelling normalized."
+      }
+    }
+  ]
+}
