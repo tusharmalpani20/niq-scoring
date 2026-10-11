@@ -31,7 +31,7 @@ const workbookClasses = [
 const cancer = {
   breast: "cancer_1", lung: "cancer_2", colorectal: "cancer_3", stomach: "cancer_4",
   liver: "cancer_5", pancreatic: "cancer_6", headNeck: "cancer_7", brain: "cancer_9",
-  ovarian: "cancer_10", cervical: "cancer_12", prostate: "cancer_13", testicular: "cancer_14",
+  ovarian: "cancer_10", uterine: "cancer_11", cervical: "cancer_12", prostate: "cancer_13", testicular: "cancer_14",
   kidney: "cancer_15", bladder: "cancer_16", bone: "cancer_17", softTissue: "cancer_18",
   leukaemia: "cancer_19", lymphoma: "cancer_20", myeloma: "cancer_21", skin: "cancer_22",
   cml: "cancer_cml", tripleNegativeBreast: "cancer_triple_negative_breast",
@@ -50,7 +50,7 @@ const workbookCancerTypesByClass: Record<(typeof workbookClasses)[number][0], re
   antimetabolites: [cancer.colorectal, cancer.stomach, cancer.breast, cancer.headNeck, cancer.pancreatic, cancer.bladder, cancer.lung, cancer.biliary, cancer.lymphoma, cancer.all, cancer.bone, cancer.nonSmallCellLung, cancer.mesothelioma, cancer.leukaemia],
   topoisomerase_inhibitors: [cancer.colorectal, cancer.pancreatic, cancer.smallCellLung, cancer.ovarian, cancer.cervical, cancer.testicular, cancer.lymphoma],
   vinca_alkaloids: [cancer.lymphoma, cancer.all, cancer.testicular, cancer.lung, cancer.breast],
-  tyrosine_kinase_inhibitors: [cancer.cml, cancer.gist, cancer.all, cancer.lung, cancer.pancreatic, cancer.her2PositiveBreast, cancer.liver, cancer.kidney, cancer.sarcoma, cancer.softTissue, cancer.colorectal, cancer.leukaemia, cancer.lymphoma, cancer.bCellLymphomas],
+  tyrosine_kinase_inhibitors: [cancer.cml, cancer.gist, cancer.all, cancer.lung, cancer.pancreatic, cancer.her2PositiveBreast, cancer.liver, cancer.kidney, cancer.uterine, cancer.sarcoma, cancer.softTissue, cancer.colorectal, cancer.leukaemia, cancer.lymphoma, cancer.bCellLymphomas],
   parp_inhibitors: [cancer.ovarian, cancer.breast, cancer.prostate, cancer.pancreatic],
   her2_targeted_antibodies: [cancer.her2PositiveBreast, cancer.stomach, cancer.breast],
   cd20_monoclonal_antibodies: [cancer.bCellLymphomas, cancer.leukaemia, cancer.lymphoma],

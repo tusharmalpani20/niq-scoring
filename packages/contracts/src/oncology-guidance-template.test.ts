@@ -34,4 +34,18 @@ describe("oncology workbook guidance defaults", () => {
     expect(second.statusModifiers[0].actions).not.toBe("Changed");
     expect(second.radiotherapy[0].guidance).not.toBe("Changed");
   });
+
+  test("class guidance keeps the workbook monitoring and independent instructions", () => {
+    const rows = new Map(initialOncologyGuidance().statusModifiers.map(row => [row.source.location, row.actions]));
+    expect(rows.get("Status_modifier row 3")).toContain("re-screen nutritional status each cycle");
+    expect(rows.get("Status_modifier row 18")).toContain("keep ORS at home");
+    expect(rows.get("Status_modifier row 24")).toContain("Fortified small frequent meals");
+    expect(rows.get("Status_modifier row 36")).toContain("intake stays below 60% of needs for 1–2 weeks");
+    expect(rows.get("Status_modifier row 46")).toContain("baseline handgrip strength");
+    expect(rows.get("Status_modifier row 48")).toContain("Small frequent meals");
+    expect(rows.get("Status_modifier row 49")).toContain("Review CBC per the oncology schedule");
+    for (const actions of rows.values()) {
+      expect(actions).not.toMatch(/same (?:diarrhea )?plan|same day•|immediately as tolerated|treatment resistance exercise/i);
+    }
+  });
 });

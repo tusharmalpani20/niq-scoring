@@ -44,7 +44,7 @@ test("final assessment creation uses the versioned fixed profile and supports sa
   expect(definition.sections.map(section => section.fields.length)).toEqual([3, 5, 3, 2, 5]);
   expect(definition.sections.flatMap(section => section.fields)).toHaveLength(18);
   expect(definition.sections.flatMap(section => section.fields).every(field => !Object.hasOwn(field, "cap"))).toBe(true);
-  expect(definition.drugClassConfig?.suggestions).toHaveLength(92);
+  expect(definition.drugClassConfig?.suggestions).toHaveLength(93);
   expect(definition.drugClassConfig?.suggestions).toContainEqual({
     cancerTypeId: "cancer_cml", treatmentTypeId: "current_cancer_treatment_targeted", classId: "tyrosine_kinase_inhibitors",
   });

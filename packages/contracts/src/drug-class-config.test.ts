@@ -9,7 +9,7 @@ test("new drafts seed 16 workbook classes plus the generic Other option", () => 
   const definition = createFinalAssessmentTemplate("Drug class draft");
   expect(definition.drugClassConfig?.classes).toHaveLength(17);
   expect(definition.drugClassConfig?.classes.at(-1)).toEqual({ id: "other", label: "Other" });
-  expect(definition.drugClassConfig?.suggestions).toHaveLength(92);
+  expect(definition.drugClassConfig?.suggestions).toHaveLength(93);
   expect(definition.drugClassConfig?.suggestions.every(item => item.cancerTypeId !== null)).toBe(true);
   expect(definition.drugClassConfig?.classes.every(item => item.guidance === undefined)).toBe(true);
   expect(validateFinalAssessmentDefinition(definition)).toEqual([]);
@@ -54,6 +54,8 @@ test("baseline class associations match the workbook treatment categories and ca
   expect(classesFor("cancer_her2_positive_breast", "current_cancer_treatment_targeted")).toEqual(["Tyrosine kinase inhibitors", "HER2-targeted antibodies"]);
   expect(classesFor("cancer_er_positive_breast", "current_cancer_treatment_hormonal")).toEqual(["Anti-estrogens / SERMs", "Aromatase inhibitors"]);
   expect(classesFor("cancer_small_cell_lung", "current_cancer_treatment_chemotherapy")).toEqual(["Topoisomerase inhibitors"]);
+  // Endometrial cancer in Drugs_by_treatment row 48 maps to the Uterine choice.
+  expect(classesFor("cancer_11", "current_cancer_treatment_targeted")).toContain("Tyrosine kinase inhibitors");
   expect(classesFor("cancer_other", "current_cancer_treatment_chemotherapy")).toEqual([]);
   expect(config.suggestions.some(item => item.treatmentTypeId === "current_cancer_treatment_radiation" || item.treatmentTypeId === "current_cancer_treatment_other")).toBe(false);
 
