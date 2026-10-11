@@ -191,6 +191,17 @@ test("approved final assessment supports credential-bound public scoring and exa
     classification: { id: "low" }, guidance: { nutrition: [{ id: "nutrition_low" }], toxicity: [{ id: "toxicity_row_002" }] } });
   expect(guidance.guidance.possibleToxicities.map((item: { id: string }) => item.id)).toContain("toxicity_row_002");
   expect(JSON.stringify(guidance.guidance.possibleToxicities)).not.toContain("nutritionalInterventions");
+  const carePlanResponse = await call("report-guidance", { ...savedGuidanceFacts,
+    treatmentStatusId: "treatment_status_under_treatment", coMorbidityIds: ["co_morbidities_diabetes"] });
+  expect(carePlanResponse.status).toBe(200);
+  const carePlan = (await carePlanResponse.json()).guidance.carePlan;
+  expect(carePlan).toMatchObject({ nutritionalStatus: "well_nourished",
+    statusModifiers: [{ id: "status_taxanes_well_nourished" }],
+    coMorbidities: [{ conditionId: "co_morbidities_diabetes" }],
+    products: { status: "selected", plans: [{ id: "product_during_treatment_well_nourished" }] } });
+  expect(carePlan.coMorbidities[0]).not.toHaveProperty("sourceText");
+  expect((await call("report-guidance", { ...savedGuidanceFacts, coMorbidityIds: ["unknown"] })).status).toBe(400);
+  expect((await call("report-guidance", { ...savedGuidanceFacts, surgeryDate: "2026-02-30", surgicalStatusId: "cancer_surgical_status_done" })).status).toBe(400);
   const genericResponse = await call("report-guidance", { ...savedGuidanceFacts, drugClassIds: ["other"] });
   expect(genericResponse.status).toBe(200);
   expect((await genericResponse.json()).guidance).toMatchObject({ possibleToxicities: [], toxicity: [] });

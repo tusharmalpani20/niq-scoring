@@ -4,11 +4,17 @@ import { answersSchema } from "@niq-scoring/contracts/rules";
 import { isFinalAssessmentDefinition, versionedRuleDefinitionSchema } from "@niq-scoring/contracts/versioned-definition";
 import { publicQuestionnaire } from "@niq-scoring/contracts/rule-public";
 import { resolveReportGuidance } from "@niq-scoring/contracts/report-guidance";
+import { resolveCarePlanGuidance } from "@niq-scoring/contracts/care-plan-resolver";
+import { cancerTypeIds } from "@niq-scoring/contracts/cancer-type-ids";
 import { classifyScore, evaluateVersionedRule } from "@niq-scoring/scoring-engine/versioned";
 import { BindingError } from "./assessment-binding";
 import { ruleChecksum } from "./rule-routes";
 import type { DeploymentIdentity, ScoringStore } from "./store";
 const reference = z.string().trim().min(1).max(128);
+const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+}, "Use a valid YYYY-MM-DD date.");
 const publicRiskCategories = (definition: Extract<z.infer<typeof versionedRuleDefinitionSchema>, { profile: "NIQ_FINAL_ASSESSMENT" }>) =>
   definition.riskCategories.map(({ id, label, color, min, max, minInclusive, maxInclusive }) => ({ id, label, color, min, max, minInclusive, maxInclusive }));
 export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenticate: (c: Context) => Promise<DeploymentIdentity | null>, now: () => Date, platformEnabled: boolean) {
@@ -25,6 +31,12 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
       resultReference: reference,
       treatmentTypeIds: ids, drugClassIds: ids,
       confirmedToxicityIds: ids,
+      coMorbidityIds: ids.optional(),
+      cancerTypeId: z.string().optional(),
+      dietPreferenceId: z.enum(["vegetarian", "non_vegetarian", "eggetarian", "jain"]).optional(),
+      treatmentStatusId: z.string().optional(), surgicalStatusId: z.string().optional(),
+      surgeryDate: calendarDate.optional(), plannedSurgeryDate: calendarDate.optional(), plannedTreatmentStartDate: calendarDate.optional(),
+      productStageChoice: z.enum(["surgical", "treatment_stage"]).optional(),
     }).strict().safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
     try {
@@ -47,9 +59,21 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
       const configuredTreatments = new Set(definition.sections.flatMap(section => section.fields)
         .filter(field => field.id === "current_cancer_treatment" && "options" in field)
         .flatMap(field => "options" in field ? field.options.map(option => option.id) : []));
+      const optionSet = (fieldId: string) => new Set(definition.sections.flatMap(section => section.fields)
+        .filter(field => field.id === fieldId && "options" in field)
+        .flatMap(field => "options" in field ? field.options.map(option => option.id) : []));
+      const configuredConditions = optionSet("co_morbidities");
+      const configuredStatuses = optionSet("treatment_status");
+      const configuredSurgicalStatuses = optionSet("cancer_surgical_status");
       if (parsed.data.drugClassIds.some(id => id !== "other" && !configuredClasses.has(id))
         || parsed.data.treatmentTypeIds.some(id => !configuredTreatments.has(id))
-        || parsed.data.drugClassIds.includes("other") && parsed.data.drugClassIds.length > 1) {
+        || parsed.data.drugClassIds.includes("other") && parsed.data.drugClassIds.length > 1
+        || parsed.data.coMorbidityIds?.some(id => !configuredConditions.has(id))
+        || parsed.data.treatmentStatusId && !configuredStatuses.has(parsed.data.treatmentStatusId)
+        || parsed.data.surgicalStatusId && !configuredSurgicalStatuses.has(parsed.data.surgicalStatusId)
+        || parsed.data.cancerTypeId && !cancerTypeIds.includes(parsed.data.cancerTypeId as typeof cancerTypeIds[number])
+        || parsed.data.surgeryDate && parsed.data.surgicalStatusId !== "cancer_surgical_status_done"
+        || parsed.data.plannedSurgeryDate && parsed.data.surgicalStatusId !== "cancer_surgical_status_planned") {
         return c.json({ error: "INVALID_GUIDANCE_FACTS" }, 400);
       }
       const matched = resolveReportGuidance(definition, {
@@ -58,9 +82,24 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
         drugClassIds: parsed.data.drugClassIds,
         confirmedToxicityIds: parsed.data.confirmedToxicityIds,
       });
+      const carePlan = resolveCarePlanGuidance(definition, {
+        riskCategoryId: classification.id,
+        treatmentTypeIds: parsed.data.treatmentTypeIds,
+        drugClassIds: parsed.data.drugClassIds,
+        coMorbidityIds: parsed.data.coMorbidityIds ?? [],
+        cancerTypeId: parsed.data.cancerTypeId ?? null,
+        dietPreferenceId: parsed.data.dietPreferenceId ?? null,
+        treatmentStatusId: parsed.data.treatmentStatusId ?? null,
+        surgicalStatusId: parsed.data.surgicalStatusId ?? null,
+        surgeryDate: parsed.data.surgeryDate ?? null,
+        plannedSurgeryDate: parsed.data.plannedSurgeryDate ?? null,
+        plannedTreatmentStartDate: parsed.data.plannedTreatmentStartDate ?? null,
+        productStageChoice: parsed.data.productStageChoice ?? null,
+        asOfDate: now().toISOString().slice(0, 10),
+      });
       return c.json({ assessmentReference: binding.assessmentReference, bindingId: binding.id,
         ruleVersionId: rule.id, checksum: binding.checksum, classification: { id: classification.id, label: classification.label },
-        guidance: matched });
+        guidance: { ...matched, carePlan } });
     } catch (cause) {
       if (cause instanceof BindingError) return c.json({ error: cause.code }, cause.code === "ASSESSMENT_NOT_FOUND" ? 404 : 409);
       throw cause;

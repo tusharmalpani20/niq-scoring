@@ -1,4 +1,4 @@
-import workbookDefaults from "./report-guidance-defaults.json";
+import workbookDefaults from "./report-guidance-defaults.json" with { type: "json" };
 import { reportGuidanceSchema, type FinalAssessmentDefinition } from "./final-assessment";
 
 type ReportGuidance = NonNullable<FinalAssessmentDefinition["reportGuidance"]>;

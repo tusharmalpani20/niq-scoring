@@ -1,4 +1,4 @@
-import workbookDefaults from "./product-guidance-defaults.json";
+import workbookDefaults from "./product-guidance-defaults.json" with { type: "json" };
 import { productGuidanceSchema, type ProductGuidance } from "./product-guidance";
 
 export { productGuidanceSchema } from "./product-guidance";

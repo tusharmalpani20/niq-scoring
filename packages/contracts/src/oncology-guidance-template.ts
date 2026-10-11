@@ -1,5 +1,5 @@
 import { z } from "zod";
-import workbookDefaults from "./oncology-guidance-defaults.json";
+import workbookDefaults from "./oncology-guidance-defaults.json" with { type: "json" };
 import { ruleIdSchema, sourceSchema } from "./rule-definition";
 
 export const nutritionalStatusSchema = z.enum([
