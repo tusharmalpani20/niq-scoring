@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
-import type { CarePlanGuidance, NutritionalStatus } from "@niq-scoring/contracts/care-plan-guidance";
+import { RADIOTHERAPY_TREATMENT_ID, type CarePlanGuidance, type NutritionalStatus } from "@niq-scoring/contracts/care-plan-guidance";
 import { guidancePresentationText } from "@niq-scoring/contracts/guidance-presentation";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -85,11 +85,12 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
   };
   const start = (kind: Exclude<Section, "mapping">, item?: Row) => {
     const newItem: Row = kind === "statusModifiers" ? { id: id(kind), classId: classes[0]?.id ?? "", treatmentTypeId: treatments[0]?.id ?? "", nutritionalStatus: "well_nourished", riskEmphasis: "", actions: "", enabled: true, source }
-      : kind === "radiotherapy" ? { id: id(kind), nutritionalStatus: "well_nourished", guidance: "", enabled: true, source }
+      : kind === "radiotherapy" ? { id: id(kind), treatmentTypeId: treatments.find(row => row.id !== RADIOTHERAPY_TREATMENT_ID)?.id ?? treatments[0]?.id ?? "", nutritionalStatus: "well_nourished", guidance: "", enabled: true, source }
       : kind === "plans" ? { id: id(kind), stage: "pre_conditioning", nutritionalStatus: "well_nourished", products: "", dose: "", duration: "", enabled: true, source }
       : kind === "comorbidities" ? { id: id(kind), conditionId: conditions[0]?.id ?? "", label: "", guidance: "", sourceText: "Manual entry", enabled: true, source }
       : { id: id(kind), kind: noteKinds[0]!, label: "", guidance: "", sourceText: "Manual entry", enabled: true, source };
     const copy = structuredClone(item ?? newItem);
+    if (kind === "radiotherapy") (copy as Oncology["radiotherapy"][number]).treatmentTypeId ??= RADIOTHERAPY_TREATMENT_ID;
     if ("guidance" in copy) copy.guidance = guidancePresentationText(copy.guidance);
     const entry = { kind, item: copy, isNew: !item } as Entry;
     setEditing(entry); setOriginal(structuredClone(entry)); setError("");
@@ -101,7 +102,7 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
     if (!editing) return;
     const item = editing.item;
     const fieldsToCheck = editing.kind === "statusModifiers" ? ["classId", "treatmentTypeId", "riskEmphasis", "actions"]
-      : editing.kind === "radiotherapy" ? ["guidance"]
+      : editing.kind === "radiotherapy" ? ["treatmentTypeId", "guidance"]
       : editing.kind === "plans" ? ["products", "dose", "duration"]
       : ["label", "guidance"];
     if (fieldsToCheck.some(key => !String((item as unknown as Record<string, unknown>)[key] ?? "").trim())) {
@@ -109,6 +110,9 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
     }
     if (editing.kind === "statusModifiers" && (!classes.some(row => row.id === editing.item.classId) || !treatments.some(row => row.id === editing.item.treatmentTypeId))) {
       setError("Choose a configured drug class and treatment."); return;
+    }
+    if (editing.kind === "radiotherapy" && !treatments.some(row => row.id === editing.item.treatmentTypeId)) {
+      setError("Choose a configured treatment type."); return;
     }
     if (editing.kind === "comorbidities" && !conditions.some(row => row.id === editing.item.conditionId)) {
       setError("Choose a configured co-morbidity."); return;
@@ -128,12 +132,12 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
   };
   if (!guidance) return <section className="rounded-2xl bg-card p-6 shadow-sm"><h2 className="text-lg font-medium">Care plan rules</h2><p className="mt-2 text-sm text-muted-foreground">This historical version has no care plan guidance.</p></section>;
   const counts = { statusModifiers: guidance.oncology.statusModifiers.length, radiotherapy: guidance.oncology.radiotherapy.length, plans: guidance.products.plans.length, comorbidities: guidance.products.comorbidities.length, notes: guidance.products.notes.length };
-  const tabs: Array<[Section, string]> = [["mapping", "Risk mapping"], ["statusModifiers", "Drug-class by status"], ["radiotherapy", "Radiotherapy"], ["plans", "Products & doses"], ["comorbidities", "Co-morbidity diet"], ["notes", "Product exceptions"]];
+  const tabs: Array<[Section, string]> = [["mapping", "Risk mapping"], ["statusModifiers", "Drug-class by status"], ["radiotherapy", "Treatment guidance"], ["plans", "Products & doses"], ["comorbidities", "Co-morbidity diet"], ["notes", "Product exceptions"]];
   const title = tabs.find(([key]) => key === section)?.[1] ?? "";
   const summary = (row: Row) => {
     if ("riskEmphasis" in row) return `${lookup(classes, row.classId)} · ${statusLabels[row.nutritionalStatus]} · ${lookup(treatments, row.treatmentTypeId)}`;
     if ("stage" in row) return `${stageLabels[row.stage]} · ${statusLabels[row.nutritionalStatus]}`;
-    if ("nutritionalStatus" in row) return statusLabels[row.nutritionalStatus];
+    if ("nutritionalStatus" in row) return `${lookup(treatments, row.treatmentTypeId ?? RADIOTHERAPY_TREATMENT_ID)} · ${statusLabels[row.nutritionalStatus]}`;
     if ("conditionId" in row) return lookup(conditions, row.conditionId);
     return row.label;
   };
@@ -156,14 +160,14 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
       {definition.riskCategories.some(category => !guidance.riskStatusMapping.some(item => item.riskCategoryId === category.id)) && <p role="status" className="text-sm text-amber-700">Choose a nutritional status for every risk category before checking this rule version.</p>}
       <fieldset disabled={disabled} className="space-y-2 rounded-lg border p-4"><legend className="px-1 font-medium">When Surgical and a treatment plan both match</legend><p className="text-sm text-muted-foreground">This decides which product plan is used. Doses are never combined automatically.</p><label className="flex gap-2 text-sm"><input type="radio" className="accent-primary" name="surgical-overlap" checked={guidance.surgicalOverlapPolicy === "surgical_priority"} onChange={() => update({ ...guidance, surgicalOverlapPolicy: "surgical_priority" })} />Use the Surgical product plan</label><label className="flex gap-2 text-sm"><input type="radio" className="accent-primary" name="surgical-overlap" checked={guidance.surgicalOverlapPolicy === "clinician_choice"} onChange={() => update({ ...guidance, surgicalOverlapPolicy: "clinician_choice" })} />Ask the clinician to choose</label></fieldset>
     </div> : <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-medium">{title}</h3><p className="text-sm text-muted-foreground">{section === "statusModifiers" ? "Class-level guidance matched with the mapped nutritional status." : section === "plans" ? "One plan per treatment stage and nutritional status." : section === "notes" ? "Conditional product exceptions applied only when the related patient fact is known." : "Editable guidance matched with confirmed assessment facts."}</p></div><Button type="button" disabled={disabled || rows.length >= (section === "statusModifiers" ? 200 : 100)} onClick={() => start(section)}><Plus className="size-4" aria-hidden="true" /> Add rule</Button></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-medium">{title}</h3><p className="text-sm text-muted-foreground">{section === "statusModifiers" ? "Class-level guidance matched with the mapped nutritional status." : section === "radiotherapy" ? "Nutrition guidance matched with the selected treatment and nutritional status." : section === "plans" ? "One plan per treatment stage and nutritional status." : section === "notes" ? "Conditional product exceptions applied only when the related patient fact is known." : "Editable guidance matched with confirmed assessment facts."}</p></div><Button type="button" disabled={disabled || rows.length >= (section === "statusModifiers" ? 200 : 100) || (section === "radiotherapy" && !treatments.length)} onClick={() => start(section)}><Plus className="size-4" aria-hidden="true" /> Add rule</Button></div>
       <label className="relative block"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" aria-hidden="true" /><Input className="pl-9" aria-label={`Search ${title}`} placeholder="Search rules…" value={query} onChange={event => setQuery(event.target.value)} /></label>
       <div className="divide-y overflow-hidden rounded-lg border">{filtered.map(row => <div key={row.id} className="flex min-w-0 items-start justify-between gap-3 p-3 even:bg-muted/20"><div className="min-w-0"><p className="font-medium">{summary(row)}{!row.enabled && <span className="ml-2 text-xs font-normal text-muted-foreground">Disabled</span>}</p><p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{detail(row)}</p></div><div className="flex shrink-0 gap-1"><Button type="button" variant="ghost" size="icon" aria-label={`Edit ${summary(row)}`} disabled={disabled} onClick={() => start(section, row)}><Pencil className="size-4" /></Button><Button type="button" variant="ghost" size="icon" className="text-destructive" aria-label={`Delete ${summary(row)}`} disabled={disabled} onClick={() => setDeleting({ kind: section, id: row.id })}><Trash2 className="size-4" /></Button></div></div>)}{!filtered.length && <p className="p-5 text-sm text-muted-foreground">{rows.length ? "No rules match your search." : "No rules in this section."}</p>}</div>
     </div>}
     <p className="text-xs text-muted-foreground">Changes stay in this draft until you select Save draft below.</p>
     <Dialog open={editing !== null} onOpenChange={open => { if (!open) requestClose(); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>{editing?.isNew ? "Add" : "Edit"} {editing ? tabs.find(([key]) => key === editing.kind)?.[1].toLowerCase() : "rule"}</DialogTitle><DialogDescription>Configure the guidance used by this rule version.</DialogDescription></DialogHeader>{editing && <div className="space-y-4">
       {editing.kind === "statusModifiers" && <><div className="grid gap-3 sm:grid-cols-2"><Field label="Drug class"><NativeSelect value={editing.item.classId} onChange={event => patch({ classId: event.target.value })}>{classes.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</NativeSelect></Field><Field label="Treatment"><NativeSelect value={editing.item.treatmentTypeId} onChange={event => patch({ treatmentTypeId: event.target.value })}>{treatments.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</NativeSelect></Field></div><Field label="Nutritional status">{statusOptions(editing.item.nutritionalStatus, value => patch({ nutritionalStatus: value }))}</Field><Field label="Risk emphasis"><Textarea rows={3} value={editing.item.riskEmphasis} onChange={event => patch({ riskEmphasis: event.target.value })} /></Field><Field label="Added actions"><Textarea rows={8} value={editing.item.actions} onChange={event => patch({ actions: event.target.value })} /></Field></>}
-      {editing.kind === "radiotherapy" && <><Field label="Nutritional status">{statusOptions(editing.item.nutritionalStatus, value => patch({ nutritionalStatus: value }))}</Field><Field label="Radiotherapy guidance"><Textarea rows={10} value={editing.item.guidance} onChange={event => patch({ guidance: event.target.value })} /></Field></>}
+      {editing.kind === "radiotherapy" && <><Field label="Treatment type"><NativeSelect value={editing.item.treatmentTypeId ?? RADIOTHERAPY_TREATMENT_ID} onChange={event => patch({ treatmentTypeId: event.target.value })}>{treatments.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</NativeSelect></Field><Field label="Nutritional status">{statusOptions(editing.item.nutritionalStatus, value => patch({ nutritionalStatus: value }))}</Field><Field label="Nutrition guidance"><Textarea rows={10} value={editing.item.guidance} onChange={event => patch({ guidance: event.target.value })} /></Field></>}
       {editing.kind === "plans" && <><div className="grid gap-3 sm:grid-cols-2"><Field label="Treatment stage"><NativeSelect value={editing.item.stage} onChange={event => patch({ stage: event.target.value as Products["plans"][number]["stage"] })}>{stages.map(item => <option key={item} value={item}>{stageLabels[item]}</option>)}</NativeSelect></Field><Field label="Nutritional status">{statusOptions(editing.item.nutritionalStatus, value => patch({ nutritionalStatus: value }))}</Field></div><Field label="Products"><Input value={editing.item.products} onChange={event => patch({ products: event.target.value })} /></Field><Field label="Dose"><Input value={editing.item.dose} onChange={event => patch({ dose: event.target.value })} /></Field><Field label="Duration"><Input value={editing.item.duration} onChange={event => patch({ duration: event.target.value })} /></Field></>}
       {editing.kind === "comorbidities" && <><Field label="Co-morbidity"><NativeSelect value={editing.item.conditionId} onChange={event => patch({ conditionId: event.target.value })}>{conditions.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</NativeSelect></Field><Field label="Name"><Input value={editing.item.label} onChange={event => patch({ label: event.target.value })} /></Field><Field label="Diet guidance"><Textarea rows={10} value={editing.item.guidance} onChange={event => patch({ guidance: event.target.value })} /></Field></>}
       {editing.kind === "notes" && <><Field label="Exception"><NativeSelect value={editing.item.kind} onChange={event => patch({ kind: event.target.value as Products["notes"][number]["kind"] })}>{noteKinds.map(item => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}</NativeSelect></Field><Field label="Name"><Input value={editing.item.label} onChange={event => patch({ label: event.target.value })} /></Field><Field label="Guidance"><Textarea rows={5} value={editing.item.guidance} onChange={event => patch({ guidance: event.target.value })} /></Field></>}

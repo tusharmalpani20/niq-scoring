@@ -2,6 +2,7 @@ import { finalAssessmentDefinitionSchema, type FinalAssessmentDefinition, type F
 import { createFinalAssessmentTemplate, createLegacyFinalAssessmentTemplate } from "./final-assessment-template";
 import type { DefinitionIssue } from "./rule-definition";
 import { cancerTypeIds } from "./cancer-type-ids";
+import { RADIOTHERAPY_TREATMENT_ID } from "./care-plan-guidance";
 
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
@@ -185,13 +186,16 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
       if (modifiers.has(key)) add(path, "DUPLICATE_STATUS_GUIDANCE", "Only one active status rule may match this class, treatment and nutrition status.");
       modifiers.add(key);
     });
-    const radiationStatuses = new Set<string>();
+    const treatmentStatuses = new Set<string>();
     carePlan.oncology.radiotherapy.forEach((row, index) => {
       const path = `carePlanGuidance.oncology.radiotherapy.${index}`;
       unique(row.id, path);
       if (!row.enabled) return;
-      if (radiationStatuses.has(row.nutritionalStatus)) add(path, "DUPLICATE_RADIOTHERAPY_GUIDANCE", "Only one active radiotherapy rule may match a nutrition status.");
-      radiationStatuses.add(row.nutritionalStatus);
+      const treatmentTypeId = row.treatmentTypeId ?? RADIOTHERAPY_TREATMENT_ID;
+      if (!configuredTreatments.has(treatmentTypeId)) add(`${path}.treatmentTypeId`, "UNKNOWN_TREATMENT", "Treatment guidance refers to a missing treatment type.");
+      const key = JSON.stringify([treatmentTypeId, row.nutritionalStatus]);
+      if (treatmentStatuses.has(key)) add(path, "DUPLICATE_TREATMENT_GUIDANCE", "Only one active guidance rule may match a treatment and nutrition status.");
+      treatmentStatuses.add(key);
     });
     const productKeys = new Set<string>();
     carePlan.products.plans.forEach((row, index) => {

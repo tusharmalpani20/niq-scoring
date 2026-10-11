@@ -5,6 +5,7 @@ import { productGuidanceSchema, initialProductGuidance } from "./product-guidanc
 
 export { nutritionalStatusSchema };
 export type { NutritionalStatus };
+export const RADIOTHERAPY_TREATMENT_ID = "current_cancer_treatment_radiation";
 
 /** Every rule version owns its own clinical mapping and editable workbook guidance. */
 export const carePlanGuidanceSchema = z.object({

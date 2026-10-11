@@ -24,7 +24,7 @@ describe("care plan guidance from the versioned workbooks", () => {
     });
     expect(result.nutritionalStatus).toBe("moderately_nourished");
     expect(result.statusModifiers.map(row => row.id)).toEqual(["status_taxanes_moderately_nourished"]);
-    expect(result.radiotherapy).toHaveLength(1);
+    expect(result.treatmentGuidance).toMatchObject([{ treatmentTypeId: "current_cancer_treatment_radiation", nutritionalStatus: "moderately_nourished" }]);
     expect(result.coMorbidities.map(row => row.conditionId)).toEqual(["co_morbidities_diabetes"]);
     expect(JSON.stringify(result.coMorbidities)).not.toContain("dexamethasone");
     expect(result.coMorbidities[0]).not.toHaveProperty("sourceText");
@@ -37,6 +37,34 @@ describe("care plan guidance from the versioned workbooks", () => {
     const rule = definition();
     rule.riskCategories.push({ id: "custom", label: "Custom", color: "blue", interpretation: "", min: 100, max: null, minInclusive: true, maxInclusive: true, sources: [] });
     expect(validateFinalAssessmentDefinition(rule).map(issue => issue.code)).toContain("MISSING_RISK_STATUS_MAPPING");
+  });
+
+  test("matches added treatment guidance only for its treatment and nutrition status", () => {
+    const rule = definition();
+    rule.carePlanGuidance!.oncology.radiotherapy.push({
+      id: "immunotherapy_moderately_nourished",
+      treatmentTypeId: "current_cancer_treatment_immunotherapy",
+      nutritionalStatus: "moderately_nourished",
+      guidance: "Clinician-approved immunotherapy nutrition guidance.",
+      enabled: true,
+      source: { document: "Manual entry", location: "Rules editor", note: "" },
+    });
+    expect(validateFinalAssessmentDefinition(rule)).toEqual([]);
+    expect(resolveCarePlanGuidance(rule, base).treatmentGuidance).toEqual([]);
+    expect(resolveCarePlanGuidance(rule, { ...base, treatmentTypeIds: ["current_cancer_treatment_immunotherapy"] }).treatmentGuidance)
+      .toMatchObject([{ id: "immunotherapy_moderately_nourished" }]);
+    expect(resolveCarePlanGuidance(rule, { ...base, riskCategoryId: "low", treatmentTypeIds: ["current_cancer_treatment_immunotherapy"] }).treatmentGuidance).toEqual([]);
+    rule.carePlanGuidance!.oncology.radiotherapy.push({ ...rule.carePlanGuidance!.oncology.radiotherapy.at(-1)!, id: "duplicate_immunotherapy" });
+    expect(validateFinalAssessmentDefinition(rule).map(issue => issue.code)).toContain("DUPLICATE_TREATMENT_GUIDANCE");
+  });
+
+  test("keeps older radiotherapy rules attached to Radiation Therapy", () => {
+    const rule = definition();
+    delete rule.carePlanGuidance!.oncology.radiotherapy[1]!.treatmentTypeId;
+    expect(validateFinalAssessmentDefinition(rule)).toEqual([]);
+    const result = resolveCarePlanGuidance(rule, { ...base, treatmentTypeIds: ["current_cancer_treatment_radiation"] });
+    expect(result.treatmentGuidance).toMatchObject([{ id: "radiotherapy_moderately_nourished", treatmentTypeId: "current_cancer_treatment_radiation" }]);
+    expect(resolveCarePlanGuidance(rule, base).treatmentGuidance).toEqual([]);
   });
 
   test("selects one matching product plan and requires dates for time-bound stages", () => {
@@ -122,7 +150,7 @@ describe("care plan guidance from the versioned workbooks", () => {
   test("Other receives only the existing generic nutrition layer", () => {
     const result = resolveCarePlanGuidance(definition(), { ...base, drugClassIds: ["other"],
       coMorbidityIds: ["co_morbidities_diabetes"], treatmentStatusId: "treatment_status_under_treatment" });
-    expect(result).toEqual({ nutritionalStatus: null, statusModifiers: [], radiotherapy: [], coMorbidities: [],
+    expect(result).toEqual({ nutritionalStatus: null, statusModifiers: [], treatmentGuidance: [], coMorbidities: [],
       products: { status: "none", plans: [], notes: [] } });
   });
 });

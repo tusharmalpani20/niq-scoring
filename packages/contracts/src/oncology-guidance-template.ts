@@ -20,8 +20,11 @@ export const oncologyGuidanceSchema = z.object({
     enabled: z.boolean(),
     source: sourceSchema,
   }).strict()).max(200),
+  // Historical storage key; rows can now target any configured treatment.
   radiotherapy: z.array(z.object({
     id: ruleIdSchema,
+    // Older saved versions lack this field and continue to mean radiotherapy.
+    treatmentTypeId: ruleIdSchema.optional(),
     nutritionalStatus: nutritionalStatusSchema,
     guidance: z.string().trim().min(1).max(12000),
     enabled: z.boolean(),

@@ -1,9 +1,9 @@
 import type { FinalAssessmentDefinition } from "./final-assessment";
-import type { CarePlanGuidance, NutritionalStatus } from "./care-plan-guidance";
+import { RADIOTHERAPY_TREATMENT_ID, type CarePlanGuidance, type NutritionalStatus } from "./care-plan-guidance";
 import { guidancePresentationText } from "./guidance-presentation";
 
 type StatusModifier = CarePlanGuidance["oncology"]["statusModifiers"][number];
-type Radiotherapy = CarePlanGuidance["oncology"]["radiotherapy"][number];
+type TreatmentGuidance = CarePlanGuidance["oncology"]["radiotherapy"][number] & { treatmentTypeId: string };
 type ProductPlan = CarePlanGuidance["products"]["plans"][number];
 type ProductNote = CarePlanGuidance["products"]["notes"][number];
 type CoMorbidity = CarePlanGuidance["products"]["comorbidities"][number];
@@ -40,7 +40,7 @@ type ProductSelection = {
 export type MatchedCarePlan = {
   nutritionalStatus: NutritionalStatus | null;
   statusModifiers: StatusModifier[];
-  radiotherapy: Radiotherapy[];
+  treatmentGuidance: TreatmentGuidance[];
   coMorbidities: PublicCoMorbidity[];
   products: ProductSelection;
 };
@@ -71,7 +71,7 @@ function reportCoMorbidity(row: CoMorbidity): PublicCoMorbidity {
 
 /** Assemble guidance from the pinned rule version using explicit, confirmed facts. */
 export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, facts: CarePlanFacts): MatchedCarePlan {
-  const empty: MatchedCarePlan = { nutritionalStatus: null, statusModifiers: [], radiotherapy: [], coMorbidities: [], products: { status: "none", plans: [], notes: [] } };
+  const empty: MatchedCarePlan = { nutritionalStatus: null, statusModifiers: [], treatmentGuidance: [], coMorbidities: [], products: { status: "none", plans: [], notes: [] } };
   const config = definition.carePlanGuidance;
   // The client approved Other as exclusive: only generic nutrition guidance may be used.
   if (!config || facts.drugClassIds.includes("other")) return empty;
@@ -83,8 +83,9 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
   const conditions = new Set(facts.coMorbidityIds ?? []);
   const statusModifiers = config.oncology.statusModifiers.filter(row => row.enabled && classes.has(row.classId)
     && treatments.has(row.treatmentTypeId) && row.nutritionalStatus === nutritionalStatus);
-  const radiotherapy = treatments.has("current_cancer_treatment_radiation")
-    ? config.oncology.radiotherapy.filter(row => row.enabled && row.nutritionalStatus === nutritionalStatus) : [];
+  const treatmentGuidance = config.oncology.radiotherapy
+    .filter(row => row.enabled && row.nutritionalStatus === nutritionalStatus && treatments.has(row.treatmentTypeId ?? RADIOTHERAPY_TREATMENT_ID))
+    .map(row => ({ ...row, treatmentTypeId: row.treatmentTypeId ?? RADIOTHERAPY_TREATMENT_ID }));
   const coMorbidities = config.products.comorbidities.filter(row => row.enabled && conditions.has(row.conditionId)).map(reportCoMorbidity);
 
   const allNotes = config.products.notes.filter(row => row.enabled);
@@ -118,7 +119,7 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
     && chosenCandidates[0]?.stage === "surgical" && facts.dietPreferenceId === "non_vegetarian") addNote("surgery_done_liss");
   if (soonSurgery && facts.dietPreferenceId === "non_vegetarian") addNote("surgery_planned_liss");
   const visibleNotes = selectedNotes.map(reportNote);
-  const base = { nutritionalStatus, statusModifiers, radiotherapy, coMorbidities };
+  const base = { nutritionalStatus, statusModifiers, treatmentGuidance, coMorbidities };
   if (facts.surgicalStatusId === "cancer_surgical_status_done" && !facts.surgeryDate) {
     return { ...base, products: { status: "facts_required", plans: [], notes: visibleNotes, reason: "Surgery date is needed to check the Surgical plan window." } };
   }

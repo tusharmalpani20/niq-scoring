@@ -14,6 +14,7 @@ describe("oncology workbook guidance defaults", () => {
       expect(defaults.statusModifiers.filter(row => row.classId === classId).map(row => row.nutritionalStatus).sort()).toEqual([...statuses].sort());
     }
     expect(defaults.radiotherapy.map(row => row.nutritionalStatus).sort()).toEqual([...statuses].sort());
+    expect(defaults.radiotherapy.every(row => row.treatmentTypeId === "current_cancer_treatment_radiation")).toBe(true);
     expect(new Set([...defaults.statusModifiers, ...defaults.radiotherapy].map(row => row.id)).size).toBe(51);
   });
 
