@@ -77,6 +77,7 @@ export interface ScoringStore {
   revokeTokenCredential(deploymentId: string, tokenId: string, now: Date, audit?: AdminMutationAudit): Promise<CredentialRevocation>;
   exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }): Promise<{ deploymentId: string; clientId: string } | null>;
   authenticateDeployment(keyPrefix: string, secretHash: string): Promise<DeploymentIdentity | null>;
+  completedScoringResult(input: { identity: DeploymentIdentity; assessmentReference: string; resultReference: string }): Promise<unknown | null>;
   reserveUsage(input: ReserveInput): Promise<UsageReservation>;
   completeUsage(usageId: string, response: unknown): Promise<void>;
   storePendingUsageResponse(usageId: string, response: unknown): Promise<void>;
@@ -86,7 +87,7 @@ export interface ScoringStore {
 
 type Credential = DeploymentIdentity & { keyPrefix: string; secretHash: string; revokedAt?: Date | null; expiresAt?: Date | null };
 type Activation = Omit<StoredActivationToken, "tokenCiphertext"> & { tokenCiphertext: string | null; deploymentId: string; credentialId: string | null; usedAt: Date | null; revokedAt: Date | null; createdAt: Date };
-type Usage = { occurredAt: Date; fingerprint?: string; ruleVersionId?: string; id: string; clientId: string; deploymentId: string; capability: Capability; idempotencyKey: string; response?: unknown; outcome: "PENDING" | "SUCCEEDED" | "FAILED" };
+type Usage = { occurredAt: Date; fingerprint?: string; ruleVersionId?: string; id: string; clientId: string; deploymentId: string; assessmentReference?: string; capability: Capability; idempotencyKey: string; response?: unknown; outcome: "PENDING" | "SUCCEEDED" | "FAILED" };
 
 /** Deterministic in-process implementation used by unit tests; production uses PostgreSQL. */
 export class MemoryScoringStore implements ScoringStore {
@@ -350,7 +351,7 @@ export class MemoryScoringStore implements ScoringStore {
     const decision = decideEntitlement({ platformEnabled: input.platformEnabled, clientEnabled: Boolean(client?.enabled), deploymentEnabled: Boolean(deployment.enabled), versionActive: input.capability === "FACE_SCAN" || Boolean(input.binding && this.bindings.some(b => b.id === input.binding!.id && b.deploymentId === deployment.id && b.assessmentReference === input.assessmentReference && b.checksum === input.binding!.checksum)) || resolvedVersion?.version === PROVISIONAL_SCORING_VERSION, monthlyLimit: entitlement?.monthlyLimit ?? null, monthlyUsage: usage });
     if (!entitlement?.enabled) return { status: "REJECTED", reason: "CAPABILITY_DISABLED" };
     if (!decision.allowed) return { status: "REJECTED", reason: decision.reason };
-    const event: Usage = duplicate ?? { occurredAt: new Date(), id: createEntityId(), clientId: input.clientId, deploymentId: input.identity.deploymentId, capability: input.capability, idempotencyKey: input.idempotencyKey, outcome: "PENDING" as const };
+    const event: Usage = duplicate ?? { occurredAt: new Date(), id: createEntityId(), clientId: input.clientId, deploymentId: input.identity.deploymentId, assessmentReference: input.assessmentReference, capability: input.capability, idempotencyKey: input.idempotencyKey, outcome: "PENDING" as const };
     event.outcome = "PENDING";
     event.occurredAt = new Date();
     if (input.fingerprint) event.fingerprint = input.fingerprint;
@@ -359,6 +360,11 @@ export class MemoryScoringStore implements ScoringStore {
     return { status: "NEW", usageId: event.id, version: resolvedVersion?.version ?? PROVISIONAL_SCORING_VERSION };
   }
   async completeUsage(usageId: string, response: unknown) { const row = this.usages.find((item) => item.id === usageId)!; row.outcome = "SUCCEEDED"; row.response = response; }
+  async completedScoringResult(input: { identity: DeploymentIdentity; assessmentReference: string; resultReference: string }): Promise<unknown | null> {
+    return this.usages.find(item => item.id === input.resultReference && item.clientId === input.identity.clientId
+      && item.deploymentId === input.identity.deploymentId && item.assessmentReference === input.assessmentReference
+      && item.capability === "SCORING" && item.outcome === "SUCCEEDED")?.response ?? null;
+  }
   async storePendingUsageResponse(usageId: string, response: unknown) { const row = this.usages.find((item) => item.id === usageId)!; row.response = response; }
   async failUsage(usageId: string) { const row = this.usages.find((item) => item.id === usageId)!; row.outcome = "FAILED"; }
   async createFaceScanSession(input: { clientId: string; identity: DeploymentIdentity }) { const value = { clientId: input.clientId, deploymentId: input.identity.deploymentId, id: createEntityId(), state: "REQUESTED" as const }; this.faceScans.push(value); return value; }

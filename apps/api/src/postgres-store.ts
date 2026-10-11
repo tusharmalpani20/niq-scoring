@@ -388,6 +388,12 @@ export class PostgresScoringStore implements ScoringStore {
     });
   }
   async completeUsage(usageId: string, response: unknown) { await this.database`update usage_events set outcome='SUCCEEDED', billable=true, response_payload=${this.database.json(response as never)}, completed_at=now() where id=${usageId} and outcome='PENDING'`; }
+  async completedScoringResult(input: { identity: DeploymentIdentity; assessmentReference: string; resultReference: string }): Promise<unknown | null> {
+    const [row] = await this.database<Array<{ response: unknown }>>`select response_payload as response from usage_events
+      where id=${input.resultReference} and client_id=${input.identity.clientId} and deployment_id=${input.identity.deploymentId}
+        and assessment_reference=${input.assessmentReference} and capability='SCORING' and outcome='SUCCEEDED'`;
+    return row?.response ?? null;
+  }
   async storePendingUsageResponse(usageId: string, response: unknown) { await this.database`update usage_events set response_payload=${this.database.json(response as never)} where id=${usageId} and outcome='PENDING'`; }
   async failUsage(usageId: string) { await this.database`update usage_events set outcome='FAILED', completed_at=now() where id=${usageId} and outcome='PENDING'`; }
   async createFaceScanSession(input: { identity: DeploymentIdentity; clientId: string; usageId: string; assessmentReference: string; idempotencyKey: string; provider: string; providerSessionReference?: string }) {

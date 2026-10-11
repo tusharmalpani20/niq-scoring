@@ -152,19 +152,10 @@ test("approved final assessment supports credential-bound public scoring and exa
   expect(binding.questionnaire.formatVersion).toBe(2);
   expect(JSON.stringify(binding.questionnaire)).not.toContain('"points"');
   expect(JSON.stringify(binding.questionnaire)).not.toContain("clinicalActions");
-  const guidanceFacts = { assessmentReference: "confirmed-public", score: 0,
+  const guidanceFacts = { assessmentReference: "confirmed-public", resultReference: "missing-result",
     treatmentTypeIds: ["current_cancer_treatment_chemotherapy"], drugClassIds: ["taxanes"],
-    confirmedToxicityIds: ["toxicity_row_002"], confirmedDrugSpecificRuleIds: [] };
-  const guidanceResponse = await call("report-guidance", guidanceFacts);
-  expect(guidanceResponse.status).toBe(200);
-  const guidance = await guidanceResponse.json();
-  expect(guidance).toMatchObject({ ruleVersionId: rule.id, checksum: rule.packageChecksum,
-    classification: { id: "low" }, guidance: { nutrition: [{ id: "nutrition_low" }], toxicity: [{ id: "toxicity_row_002" }] } });
-  expect(guidance.guidance.possibleToxicities.map((item: { id: string }) => item.id)).toContain("toxicity_row_002");
-  const genericResponse = await call("report-guidance", { ...guidanceFacts, drugClassIds: ["other"] });
-  expect(genericResponse.status).toBe(200);
-  expect((await genericResponse.json()).guidance).toMatchObject({ possibleToxicities: [], toxicity: [] });
-  expect((await call("report-guidance", { ...guidanceFacts, drugClassIds: ["other", "taxanes"] })).status).toBe(400);
+    confirmedToxicityIds: ["toxicity_row_002"] };
+  expect((await call("report-guidance", guidanceFacts)).status).toBe(404);
   expect(store.usages).toHaveLength(0);
   const base = { assessmentReference: "confirmed-public", idempotencyKey: "confirmed-score-zero" };
   const blankInput = { ...base, idempotencyKey: "confirmed-score-blank", answers: { current_weight_kg: 70 } };
@@ -173,6 +164,7 @@ test("approved final assessment supports credential-bound public scoring and exa
   const blankResult = await blank.json();
   expect(blankResult.result).toMatchObject({ complete: true, score: null, classification: null, issues: [], answerCoverage: { allUnanswered: true, answeredEntries: 0, unansweredEntries: 18, pendingEntries: 0 }, ruleVersionId: rule.id, checksum: rule.packageChecksum, resultReference: store.usages[0]!.id });
   expect(blankResult.result.components.every((component: { status: string; points: number | null }) => component.status === "unanswered" && component.points === null)).toBe(true);
+  expect((await call("report-guidance", { ...guidanceFacts, resultReference: blankResult.result.resultReference })).status).toBe(409);
   expect(await (await call("calculate", blankInput)).json()).toEqual(blankResult);
   expect(store.usages).toHaveLength(1);
   const unfinished = await call("calculate", { ...base, answers: { previous_weight_kg: 80 } });
@@ -187,6 +179,22 @@ test("approved final assessment supports credential-bound public scoring and exa
   expect(zero.status).toBe(200);
   const zeroResult = await zero.json();
   expect(zeroResult.result).toMatchObject({ score: 0, classification: { label: "Low Risk" }, ruleVersionId: rule.id, checksum: rule.packageChecksum });
+  const savedGuidanceFacts = { ...guidanceFacts, resultReference: zeroResult.result.resultReference };
+  expect((await call("report-guidance", { ...savedGuidanceFacts, score: 26 })).status).toBe(400);
+  expect((await call("report-guidance", { ...savedGuidanceFacts, confirmedDrugSpecificRuleIds: ["toxicity_row_002"] })).status).toBe(400);
+  expect((await call("start", { assessmentReference: "another-assessment" })).status).toBe(200);
+  expect((await call("report-guidance", { ...savedGuidanceFacts, assessmentReference: "another-assessment" })).status).toBe(404);
+  const guidanceResponse = await call("report-guidance", savedGuidanceFacts);
+  expect(guidanceResponse.status).toBe(200);
+  const guidance = await guidanceResponse.json();
+  expect(guidance).toMatchObject({ ruleVersionId: rule.id, checksum: rule.packageChecksum,
+    classification: { id: "low" }, guidance: { nutrition: [{ id: "nutrition_low" }], toxicity: [{ id: "toxicity_row_002" }] } });
+  expect(guidance.guidance.possibleToxicities.map((item: { id: string }) => item.id)).toContain("toxicity_row_002");
+  expect(JSON.stringify(guidance.guidance.possibleToxicities)).not.toContain("nutritionalInterventions");
+  const genericResponse = await call("report-guidance", { ...savedGuidanceFacts, drugClassIds: ["other"] });
+  expect(genericResponse.status).toBe(200);
+  expect((await genericResponse.json()).guidance).toMatchObject({ possibleToxicities: [], toxicity: [] });
+  expect((await call("report-guidance", { ...savedGuidanceFacts, drugClassIds: ["other", "taxanes"] })).status).toBe(400);
   expect(await (await call("calculate", zeroInput)).json()).toEqual(zeroResult);
   expect(store.usages).toHaveLength(2);
   const weightInput = { ...base, idempotencyKey: "confirmed-score-weight", answers: { previous_weight_kg: 80, current_weight_kg: 75.2 } };
