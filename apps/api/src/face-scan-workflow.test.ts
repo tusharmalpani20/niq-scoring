@@ -12,7 +12,8 @@ const signal = faceScanSignalSchema.parse({ raw_intensity: [{ r: 1, g: 2, b: 3 }
 test("face scan responses omit stored scoring bands", () => {
   const score = { status: "SCORED" as const, points: 1, ruleVersionId: "rule-1", wellnessScore: 85,
     scoringVersion: null, configuration: { ranges: [{ id: "above", min: 80, max: 100, minInclusive: false, maxInclusive: true, points: 1 }] } };
-  expect(publicFaceScanScore(score)).toEqual({ status: "SCORED", points: 1, ruleVersionId: "rule-1", wellnessScore: 85, scoringVersion: null });
+  expect(publicFaceScanScore(score)).toEqual({ status: "SCORED", points: 1, ruleVersionId: "rule-1", wellnessScore: 85,
+    wellnessPoints: null, stressIndex: null, stressBand: null, stressPoints: null, scoringVersion: null });
   expect(publicFaceScanScore(null)).toBeNull();
 });
 test.skipIf(process.env.FACE_SCAN_DATABASE_TEST !== "1")("face scan quota ignores nonbillable completions but reserves pending scans", async () => {

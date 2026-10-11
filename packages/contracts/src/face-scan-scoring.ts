@@ -89,6 +89,7 @@ export function normalizeFaceScanScoringConfig(config: FaceScanScoringConfig): F
 
 export const faceScanScoringInputSchema = z.object({
   wellnessScore: z.number().finite().min(0).max(100).nullable().optional(),
+  stressIndex: z.number().finite().min(0).nullable().optional(),
 }).strict();
 
 export const FACE_SCAN_SCORE_RANGES = [
@@ -103,5 +104,9 @@ export type FaceScanScoringResult = {
   configuration: FaceScanRangeConfig;
   status: "SCORED" | "UNAVAILABLE";
   wellnessScore: number | null;
+  wellnessPoints?: number | null;
+  stressIndex?: number | null;
+  stressBand?: string | null;
+  stressPoints?: number | null;
   points: number | null;
 };

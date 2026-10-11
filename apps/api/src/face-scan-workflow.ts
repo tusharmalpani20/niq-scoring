@@ -3,6 +3,7 @@ import type postgres from "postgres";
 import { createHash } from "node:crypto";
 import type { FaceScanCreate, FaceScanContext, FaceScanSignal, FaceScanResult, FaceScanState } from "@niq-scoring/contracts/face-scan-session";
 import { faceScanScoringConfigSchema, type FaceScanScoringConfig } from "@niq-scoring/contracts/face-scan-scoring";
+import { stressScoringConfigSchema, type StressScoringConfig } from "@niq-scoring/contracts/stress-scoring";
 import { calculateFaceScanScore } from "@niq-scoring/scoring-engine/face-scan-scoring";
 import { encryptActivationToken, decryptActivationToken } from "./lib/activation-secret";
 import { ruleChecksum } from "./rule-routes";
@@ -14,7 +15,7 @@ import { CarePlixResponseError, CarePlixUnprocessableResultError, normalizeCareP
 import { faceScanDiagnostic } from "./face-scan-diagnostic";
 
 type Database = ReturnType<typeof postgres>;
-type Mapping = { ruleVersionId: string; checksum: string; assignmentId: string; configuration: FaceScanScoringConfig };
+type Mapping = { ruleVersionId: string; checksum: string; assignmentId: string; configuration: FaceScanScoringConfig; stressConfiguration?: StressScoringConfig };
 type Row = {
  session_id: string; usage_id: string; deployment_id: string; organization_reference: string; assessment_reference: string;
  request_fingerprint: string; context_ciphertext: string; state: FaceScanState; provider_account: string; provider_scan_id: string | null;
@@ -35,7 +36,15 @@ function confirmedSubmissionRejection(diagnostic: ReturnType<typeof faceScanDiag
 export function publicFaceScanScore(score: Row["score"]) {
  if (!score) return null;
  return { status: score.status, points: score.points, ruleVersionId: score.ruleVersionId,
-   wellnessScore: score.wellnessScore, scoringVersion: score.scoringVersion };
+   wellnessScore: score.wellnessScore, wellnessPoints: score.wellnessPoints ?? null,
+   stressIndex: score.stressIndex ?? null, stressBand: score.stressBand ?? null,
+   stressPoints: score.stressPoints ?? null, scoringVersion: score.scoringVersion };
+}
+function scoringInput(result: FaceScanResult) {
+  const value = result.additionalMetrics?.stressIndex;
+  const numeric = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : null;
+  return { wellnessScore: result.wellnessScore,
+    stressIndex: numeric !== null && Number.isFinite(numeric) && numeric >= 0 ? numeric : null };
 }
 export class FaceScanWorkflow {
  constructor(private sql: Database, private options: { enabled: () => boolean; encryptionKey: string; providerAccount: string; retentionHours: number; minDispatchIntervalMs?: number; provider: CarePlixProvider }) {}
@@ -99,19 +108,20 @@ export class FaceScanWorkflow {
      const [usage] = await tx<{ count: number }[]>`select count(*)::integer as count from usage_events where deployment_id=${identity.deploymentId} and capability='FACE_SCAN' and (billable=true or outcome='PENDING') and occurred_at>=date_trunc('month',now() at time zone 'UTC') at time zone 'UTC'`;
      if (entitlement.monthly_limit !== null && (usage?.count ?? 0) >= entitlement.monthly_limit) throw new FaceScanError("MONTHLY_LIMIT_REACHED");
      // An assessment keeps its rule even after retirement or assignment changes.
-     const [binding] = await tx<{ id: string; rule_id: string | null; package_checksum: string | null; configuration: unknown }[]>`select b.id,r.id as rule_id,r.package_checksum,r.definition->'faceScanScoring' as configuration
+     const [binding] = await tx<{ id: string; rule_id: string | null; package_checksum: string | null; configuration: unknown; stress_configuration: unknown }[]>`select b.id,r.id as rule_id,r.package_checksum,r.definition->'faceScanScoring' as configuration,r.definition->'stressScoring' as stress_configuration
        from assessment_bindings b left join scoring_rule_versions r on r.id=b.scoring_rule_version_id and r.package_checksum=b.package_checksum
          and (r.lifecycle='RETIRED' or r.lifecycle in ('APPROVED','ACTIVE') and r.clinical_use_permitted=true)
        where b.deployment_id=${identity.deploymentId} and b.client_id=${identity.clientId} and b.assessment_reference=${input.assessmentReference}`;
-     const [assigned] = binding ? [] : await tx<{ id: string; rule_id: string; package_checksum: string; configuration: unknown }[]>`select a.id,r.id as rule_id,r.package_checksum,r.definition->'faceScanScoring' as configuration
+     const [assigned] = binding ? [] : await tx<{ id: string; rule_id: string; package_checksum: string; configuration: unknown; stress_configuration: unknown }[]>`select a.id,r.id as rule_id,r.package_checksum,r.definition->'faceScanScoring' as configuration,r.definition->'stressScoring' as stress_configuration
        from deployment_version_assignments a join scoring_rule_versions r on r.id=case when a.mode='PINNED' then a.scoring_rule_version_id else (select rule_id from scoring_rule_default where singleton=true) end
        where a.deployment_id=${identity.deploymentId} and a.effective_from<=now() and a.effective_until is null
          and r.lifecycle in ('APPROVED','ACTIVE') and r.clinical_use_permitted=true limit 1`;
      const selected = binding ?? assigned;
      const config = faceScanScoringConfigSchema.safeParse(selected?.configuration);
+     const stressConfig = selected?.stress_configuration == null ? null : stressScoringConfigSchema.safeParse(selected.stress_configuration);
      // Standalone scans may have no mapping; a bound assessment must never be billed without one.
-     if (binding && (!binding.rule_id || !config.success)) throw new FaceScanError("FACE_SCAN_MAPPING_UNAVAILABLE");
-     const mapping: Mapping | null = selected?.rule_id && selected.package_checksum && config.success ? { ruleVersionId: selected.rule_id, checksum: selected.package_checksum, assignmentId: selected.id, configuration: config.data } : null;
+     if (binding && (!binding.rule_id || !config.success || stressConfig !== null && !stressConfig.success)) throw new FaceScanError("FACE_SCAN_MAPPING_UNAVAILABLE");
+     const mapping: Mapping | null = selected?.rule_id && selected.package_checksum && config.success && (stressConfig === null || stressConfig.success) ? { ruleVersionId: selected.rule_id, checksum: selected.package_checksum, assignmentId: selected.id, configuration: config.data, ...(stressConfig?.success ? { stressConfiguration: stressConfig.data } : {}) } : null;
      const sessionId = createEntityId(), usageId = createEntityId();
      await tx`insert into usage_events(id,client_id,deployment_id,credential_id,capability,scoring_rule_version_id,request_id,idempotency_key,assessment_reference,outcome,request_fingerprint)
        values(${usageId},${identity.clientId},${identity.deploymentId},${identity.credentialId},'FACE_SCAN',${mapping?.ruleVersionId ?? null},${sessionId},${input.idempotencyKey},${input.assessmentReference},'PENDING',${fingerprint})`;
@@ -154,7 +164,7 @@ export class FaceScanWorkflow {
      if (!stored || stored.state !== "COMPLETED" || !stored.result || !stored.mapping) throw new FaceScanError("SCORING_RETRY_UNAVAILABLE");
      if (stored.score) return stored;
      let score: ReturnType<typeof calculateFaceScanScore>;
-     try { score = calculateFaceScanScore({ wellnessScore: stored.result.wellnessScore }, stored.mapping.configuration, stored.mapping.ruleVersionId); }
+     try { score = calculateFaceScanScore(scoringInput(stored.result), stored.mapping.configuration, stored.mapping.ruleVersionId, stored.mapping.stressConfiguration); }
      catch { throw new FaceScanError("SCORING_RETRY_UNAVAILABLE"); }
      const [updated] = await tx<Row[]>`update face_scan_workflows set score=${tx.json(score)},failure_code=case when failure_code='SCORE_MAPPING_UNAVAILABLE' then null else failure_code end,updated_at=now() where session_id=${id} returning *`;
      return updated!;
@@ -279,7 +289,7 @@ export class FaceScanWorkflow {
        // Replayed trusted evidence can repair only local scoring, using the original mapping.
        if (!row.score && row.mapping && row.result) {
          let score: ReturnType<typeof calculateFaceScanScore> | null = null;
-         try { score = calculateFaceScanScore({ wellnessScore: row.result.wellnessScore }, row.mapping.configuration, row.mapping.ruleVersionId); } catch { /* Leave the durable scoring failure available for explicit repair. */ }
+         try { score = calculateFaceScanScore(scoringInput(row.result), row.mapping.configuration, row.mapping.ruleVersionId, row.mapping.stressConfiguration); } catch { /* Leave the durable scoring failure available for explicit repair. */ }
          if (score) await tx`update face_scan_workflows set score=${tx.json(score)},failure_code=case when failure_code='SCORE_MAPPING_UNAVAILABLE' then null else failure_code end,updated_at=now() where session_id=${id}`;
        }
        return;
@@ -293,7 +303,7 @@ export class FaceScanWorkflow {
      }
      let score: ReturnType<typeof calculateFaceScanScore> | null = null;
      let scoringFailure: string | null = null;
-     try { if (row.mapping) score = calculateFaceScanScore({ wellnessScore: result!.wellnessScore }, row.mapping.configuration, row.mapping.ruleVersionId); }
+     try { if (row.mapping) score = calculateFaceScanScore(scoringInput(result!), row.mapping.configuration, row.mapping.ruleVersionId, row.mapping.stressConfiguration); }
      catch { scoringFailure = "SCORE_MAPPING_UNAVAILABLE"; } // Trusted provider evidence must survive optional scoring failure.
      await tx`update face_scan_workflows set state='COMPLETED',result=${tx.json(result)},score=${tx.json(score)},signal_ciphertext=null,token_ciphertext=null,completed_at=now(),updated_at=now(),failure_code=${scoringFailure} where session_id=${id}`;
      await tx`update face_scan_sessions set state='COMPLETED',provider_session_reference=${row.provider_scan_id},completed_at=now(),updated_at=now() where id=${id}`;

@@ -19,6 +19,7 @@
     "./final-assessment-validation": "./src/final-assessment-validation.ts",
     "./versioned-definition": "./src/versioned-definition.ts",
     "./face-scan-scoring": "./src/face-scan-scoring.ts",
+    "./stress-scoring": "./src/stress-scoring.ts",
     "./face-scan-session": "./src/face-scan-session.ts"
   },
   "scripts": {

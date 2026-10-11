@@ -1,4 +1,5 @@
 import { faceScanScoringConfigSchema } from "./face-scan-scoring";
+import { stressScoringConfigSchema } from "./stress-scoring";
 import { z } from "zod";
 import { answerValueSchema, answersSchema, optionSchema, rangeSchema, ruleIdSchema, sourceSchema } from "./rule-definition";
 
@@ -151,6 +152,8 @@ export const finalAssessmentDefinitionSchema = z.object({
   supportingInputs: z.array(finalAssessmentSupportingInputSchema).length(6),
   // Absence preserves historical definitions; the evaluator uses the original defaults.
   faceScanScoring: faceScanScoringConfigSchema.optional(),
+  // Kept separate from the Overall Health Score; older rule versions have no stress points.
+  stressScoring: stressScoringConfigSchema.optional(),
   // Optional so historical versions remain readable without rewriting their definition.
   drugClassConfig: drugClassConfigSchema.optional(),
   // Historical rule versions predate report guidance and remain readable.

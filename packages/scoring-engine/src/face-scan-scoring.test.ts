@@ -1,4 +1,5 @@
 import { DEFAULT_FACE_SCAN_SCORING_CONFIG, faceScanRangeConfigSchema, normalizeFaceScanScoringConfig } from "@niq-scoring/contracts/face-scan-scoring";
+import { DEFAULT_STRESS_SCORING_CONFIG } from "@niq-scoring/contracts/stress-scoring";
 import { describe, expect, test } from "bun:test";
 import { calculateFaceScanScore } from "./face-scan-scoring";
 
@@ -14,6 +15,20 @@ describe("independent face-scan scoring", () => {
     expect(() => calculateFaceScanScore({ health_risk_score: 84 })).toThrow();
     expect(() => calculateFaceScanScore({ wellnessScore: 84, assessmentScore: 20 })).toThrow();
   });
+});
+
+test("CarePlix stress bands contribute separately to face-scan NIQ points", () => {
+  const cases = [
+    [0.35, "excellent", 0], [0.5, "good", 0], [1.3, "good", 0],
+    [1.5, "average", 0], [5, "fair", 2], [9, "poor", 2],
+  ] as const;
+  for (const [stressIndex, stressBand, stressPoints] of cases) {
+    expect(calculateFaceScanScore({ wellnessScore: 75, stressIndex }, DEFAULT_FACE_SCAN_SCORING_CONFIG, "rule-1", DEFAULT_STRESS_SCORING_CONFIG))
+      .toMatchObject({ points: 2 + stressPoints, wellnessPoints: 2, stressIndex, stressBand, stressPoints, ruleVersionId: "rule-1" });
+  }
+  expect(calculateFaceScanScore({ wellnessScore: 75 }, DEFAULT_FACE_SCAN_SCORING_CONFIG, "rule-1", DEFAULT_STRESS_SCORING_CONFIG))
+    .toMatchObject({ status: "UNAVAILABLE", points: null });
+  expect(calculateFaceScanScore({ wellnessScore: 75, stressIndex: 9 })).toMatchObject({ points: 2, stressPoints: null });
 });
 
 
