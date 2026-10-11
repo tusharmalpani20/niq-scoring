@@ -3,6 +3,7 @@ import { z } from "zod";
 import { answersSchema } from "@niq-scoring/contracts/rules";
 import { isFinalAssessmentDefinition, versionedRuleDefinitionSchema } from "@niq-scoring/contracts/versioned-definition";
 import { publicQuestionnaire } from "@niq-scoring/contracts/rule-public";
+import { resolveReportGuidance } from "@niq-scoring/contracts/report-guidance";
 import { classifyScore, evaluateVersionedRule } from "@niq-scoring/scoring-engine/versioned";
 import { BindingError } from "./assessment-binding";
 import { ruleChecksum } from "./rule-routes";
@@ -11,6 +12,52 @@ const reference = z.string().trim().min(1).max(128);
 const publicRiskCategories = (definition: Extract<z.infer<typeof versionedRuleDefinitionSchema>, { profile: "NIQ_FINAL_ASSESSMENT" }>) =>
   definition.riskCategories.map(({ id, label, color, min, max, minInclusive, maxInclusive }) => ({ id, label, color, min, max, minInclusive, maxInclusive }));
 export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenticate: (c: Context) => Promise<DeploymentIdentity | null>, now: () => Date, platformEnabled: boolean) {
+  // Server-to-server guidance lookup uses the assessment's pinned rule version.
+  // The caller supplies its reviewed score and explicitly confirmed toxicities;
+  // this endpoint never infers a symptom from a possible drug-class effect.
+  app.post("/v1/assessments/report-guidance", async c => {
+    c.header("Cache-Control", "no-store");
+    const identity = await authenticate(c);
+    if (!identity) return c.json({ error: "UNAUTHORIZED" }, 401);
+    const ids = z.array(z.string().regex(/^[a-z][a-z0-9_]{0,79}$/)).max(500);
+    const parsed = z.object({
+      assessmentReference: reference,
+      score: z.number().finite().min(0).max(Number.MAX_SAFE_INTEGER),
+      treatmentTypeIds: ids, drugClassIds: ids,
+      confirmedToxicityIds: ids, confirmedDrugSpecificRuleIds: ids,
+    }).strict().safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
+    try {
+      const { binding, rule } = await store.bindAssessment({ identity, assessmentReference: parsed.data.assessmentReference, platformEnabled, create: false });
+      const definition = versionedRuleDefinitionSchema.parse(rule.definition);
+      if (!isFinalAssessmentDefinition(definition)) return c.json({ error: "VERSION_UNAVAILABLE" }, 409);
+      const classification = classifyScore(definition, parsed.data.score);
+      if (!classification) return c.json({ error: "UNMATCHED_CLASSIFICATION" }, 422);
+      const configuredClasses = new Set(definition.drugClassConfig?.classes.map(item => item.id) ?? []);
+      const configuredTreatments = new Set(definition.sections.flatMap(section => section.fields)
+        .filter(field => field.id === "current_cancer_treatment" && "options" in field)
+        .flatMap(field => "options" in field ? field.options.map(option => option.id) : []));
+      if (parsed.data.drugClassIds.some(id => id !== "other" && !configuredClasses.has(id))
+        || parsed.data.treatmentTypeIds.some(id => !configuredTreatments.has(id))
+        || parsed.data.drugClassIds.includes("other") && parsed.data.drugClassIds.length > 1
+        || parsed.data.confirmedDrugSpecificRuleIds.some(id => !parsed.data.confirmedToxicityIds.includes(id))) {
+        return c.json({ error: "INVALID_GUIDANCE_FACTS" }, 400);
+      }
+      const matched = resolveReportGuidance(definition, {
+        riskCategoryId: classification.id,
+        treatmentTypeIds: parsed.data.treatmentTypeIds,
+        drugClassIds: parsed.data.drugClassIds,
+        confirmedToxicityIds: parsed.data.confirmedToxicityIds,
+        confirmedDrugSpecificRuleIds: parsed.data.confirmedDrugSpecificRuleIds,
+      });
+      return c.json({ assessmentReference: binding.assessmentReference, bindingId: binding.id,
+        ruleVersionId: rule.id, checksum: binding.checksum, classification: { id: classification.id, label: classification.label },
+        guidance: matched });
+    } catch (cause) {
+      if (cause instanceof BindingError) return c.json({ error: cause.code }, cause.code === "ASSESSMENT_NOT_FOUND" ? 404 : 409);
+      throw cause;
+    }
+  });
   app.post("/v1/assessments/risk-categories", async c => {
     c.header("Cache-Control", "no-store");
     const identity = await authenticate(c);

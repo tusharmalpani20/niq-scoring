@@ -151,6 +151,20 @@ test("approved final assessment supports credential-bound public scoring and exa
   expect(binding.ruleVersionId).toBe(rule.id);
   expect(binding.questionnaire.formatVersion).toBe(2);
   expect(JSON.stringify(binding.questionnaire)).not.toContain('"points"');
+  expect(JSON.stringify(binding.questionnaire)).not.toContain("clinicalActions");
+  const guidanceFacts = { assessmentReference: "confirmed-public", score: 0,
+    treatmentTypeIds: ["current_cancer_treatment_chemotherapy"], drugClassIds: ["taxanes"],
+    confirmedToxicityIds: ["toxicity_row_002"], confirmedDrugSpecificRuleIds: [] };
+  const guidanceResponse = await call("report-guidance", guidanceFacts);
+  expect(guidanceResponse.status).toBe(200);
+  const guidance = await guidanceResponse.json();
+  expect(guidance).toMatchObject({ ruleVersionId: rule.id, checksum: rule.packageChecksum,
+    classification: { id: "low" }, guidance: { nutrition: [{ id: "nutrition_low" }], toxicity: [{ id: "toxicity_row_002" }] } });
+  expect(guidance.guidance.possibleToxicities.map((item: { id: string }) => item.id)).toContain("toxicity_row_002");
+  const genericResponse = await call("report-guidance", { ...guidanceFacts, drugClassIds: ["other"] });
+  expect(genericResponse.status).toBe(200);
+  expect((await genericResponse.json()).guidance).toMatchObject({ possibleToxicities: [], toxicity: [] });
+  expect((await call("report-guidance", { ...guidanceFacts, drugClassIds: ["other", "taxanes"] })).status).toBe(400);
   expect(store.usages).toHaveLength(0);
   const base = { assessmentReference: "confirmed-public", idempotencyKey: "confirmed-score-zero" };
   const blankInput = { ...base, idempotencyKey: "confirmed-score-blank", answers: { current_weight_kg: 70 } };
