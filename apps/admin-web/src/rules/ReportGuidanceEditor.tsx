@@ -73,14 +73,17 @@ export function ReportGuidanceEditor({ definition, disabled, onChange }: Props) 
   };
   const saveEdit = () => {
     if (!editing) return;
-    const source = editing.item.source;
-    if (!source.document.trim() || !source.location.trim()) { setError("Enter a source document and sheet or row."); return; }
+    const source = {
+      document: editing.item.source.document.trim() || "Manual entry",
+      location: editing.item.source.location.trim() || "Rules editor",
+      note: editing.item.source.note.trim(),
+    };
     if (editing.kind === "nutrition") {
       const item = editing.item;
       if (!item.label.trim() || !item.coreStrategy.trim() || !item.clinicalActions.trim()) { setError("Enter a name, core strategy, and clinical actions."); return; }
       if (item.riskCategoryId !== null && !riskCategories.some(category => category.id === item.riskCategoryId)) { setError("Select a configured risk category."); return; }
       if (item.enabled && guidance.nutrition.some(row => row.id !== item.id && row.enabled && item.riskCategoryId !== null && row.riskCategoryId === item.riskCategoryId)) { setError("An active intervention already covers this risk category."); return; }
-      const clean = { ...item, label: item.label.trim(), coreStrategy: item.coreStrategy.trim(), clinicalActions: item.clinicalActions.trim(), source: { document: source.document.trim(), location: source.location.trim(), note: source.note.trim() } };
+      const clean = { ...item, label: item.label.trim(), coreStrategy: item.coreStrategy.trim(), clinicalActions: item.clinicalActions.trim(), source };
       change({ ...guidance, nutrition: editing.isNew ? [...guidance.nutrition, clean] : guidance.nutrition.map(row => row.id === clean.id ? clean : row) });
     } else {
       const item = editing.item;
@@ -90,7 +93,7 @@ export function ReportGuidanceEditor({ definition, disabled, onChange }: Props) 
       if (Boolean(item.classLevelToxicity?.trim()) !== Boolean(item.classLevelInterventions?.trim())) { setError("Enter both class-level fields, or leave both empty."); return; }
       const clean = { ...item, expectedToxicity: item.expectedToxicity.trim(), nutritionalInterventions: item.nutritionalInterventions.trim(),
         classLevelToxicity: item.classLevelToxicity?.trim() || undefined, classLevelInterventions: item.classLevelInterventions?.trim() || undefined,
-        source: { document: source.document.trim(), location: source.location.trim(), note: source.note.trim() } };
+        source };
       change({ ...guidance, toxicity: editing.isNew ? [...guidance.toxicity, clean] : guidance.toxicity.map(row => row.id === clean.id ? clean : row) });
     }
     closeEdit();
@@ -119,7 +122,7 @@ export function ReportGuidanceEditor({ definition, disabled, onChange }: Props) 
     </div>}
     <p className="text-xs text-muted-foreground">Changes stay in this draft until you select Save draft below.</p>
 
-    <Dialog open={editing !== null} onOpenChange={open => { if (!open) requestClose(); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>{editing?.isNew ? "Add" : "Edit"} {editing?.kind === "toxicity" ? "toxicity intervention" : "nutrition intervention"}</DialogTitle><DialogDescription>Define the guidance and its source for this rule version.</DialogDescription></DialogHeader>{editing && <div className="space-y-4">
+    <Dialog open={editing !== null} onOpenChange={open => { if (!open) requestClose(); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>{editing?.isNew ? "Add" : "Edit"} {editing?.kind === "toxicity" ? "toxicity intervention" : "nutrition intervention"}</DialogTitle><DialogDescription>Define the guidance for this rule version.</DialogDescription></DialogHeader>{editing && <div className="space-y-4">
       {editing.kind === "nutrition" ? <>
         <Field label="Name"><Input autoFocus maxLength={200} value={editing.item.label} onChange={event => setEditing({ ...editing, item: { ...editing.item, label: event.target.value } })} /></Field>
         <Field label="NIQ risk category"><NativeSelect value={editing.item.riskCategoryId ?? "any"} onChange={event => setEditing({ ...editing, item: { ...editing.item, riskCategoryId: event.target.value === "any" ? null : event.target.value } })}><option value="any">Any risk category</option>{riskCategories.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</NativeSelect></Field>
@@ -132,7 +135,6 @@ export function ReportGuidanceEditor({ definition, disabled, onChange }: Props) 
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1 size-4 accent-primary" checked={editing.item.requiresDrugConfirmation} onChange={event => setEditing({ ...editing, item: { ...editing.item, requiresDrugConfirmation: event.target.checked, ...(event.target.checked ? {} : { classLevelToxicity: undefined, classLevelInterventions: undefined }) } })} /><span><span className="font-medium">Source wording names an individual drug</span><span className="block text-muted-foreground">Use the class-level wording below in reports. Keep the source text here for reference.</span></span></label>
         {editing.item.requiresDrugConfirmation && <div className="space-y-3 rounded-lg border p-3"><p className="text-sm text-muted-foreground">Optional class-level wording shown when the toxicity is confirmed but the named drug is not. Leave both empty to withhold this row.</p><Field label="Class-level toxicity"><Input maxLength={200} value={editing.item.classLevelToxicity ?? ""} onChange={event => setEditing({ ...editing, item: { ...editing.item, classLevelToxicity: event.target.value } })} /></Field><Field label="Class-level intervention"><Textarea rows={3} maxLength={8000} value={editing.item.classLevelInterventions ?? ""} onChange={event => setEditing({ ...editing, item: { ...editing.item, classLevelInterventions: event.target.value } })} /></Field></div>}
       </>}
-      <div className="space-y-3 border-t pt-4"><p className="text-sm font-medium">Workbook source</p><div className="grid gap-3 sm:grid-cols-2"><Field label="Document"><Input maxLength={200} value={editing.item.source.document} onChange={event => setEditing({ ...editing, item: { ...editing.item, source: { ...editing.item.source, document: event.target.value } } } as EditorState)} /></Field><Field label="Sheet and row"><Input maxLength={300} value={editing.item.source.location} onChange={event => setEditing({ ...editing, item: { ...editing.item, source: { ...editing.item.source, location: event.target.value } } } as EditorState)} /></Field></div><Field label="Source note (optional)"><Input maxLength={2000} value={editing.item.source.note} onChange={event => setEditing({ ...editing, item: { ...editing.item, source: { ...editing.item.source, note: event.target.value } } } as EditorState)} /></Field></div>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={editing.item.enabled} onChange={event => setEditing({ ...editing, item: { ...editing.item, enabled: event.target.checked } } as EditorState)} /><span>Enabled for this rule version</span></label>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     </div>}<DialogFooter><Button type="button" variant="outline" onClick={requestClose}>Cancel</Button><Button type="button" onClick={saveEdit}>{editing?.isNew ? "Add intervention" : "Save changes"}</Button></DialogFooter></DialogContent></Dialog>
