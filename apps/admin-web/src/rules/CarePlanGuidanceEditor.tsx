@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
 import type { CarePlanGuidance, NutritionalStatus } from "@niq-scoring/contracts/care-plan-guidance";
+import { guidancePresentationText } from "@niq-scoring/contracts/guidance-presentation";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
@@ -88,7 +89,9 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
       : kind === "plans" ? { id: id(kind), stage: "pre_conditioning", nutritionalStatus: "well_nourished", products: "", dose: "", duration: "", enabled: true, source }
       : kind === "comorbidities" ? { id: id(kind), conditionId: conditions[0]?.id ?? "", label: "", guidance: "", sourceText: "Manual entry", enabled: true, source }
       : { id: id(kind), kind: noteKinds[0]!, label: "", guidance: "", sourceText: "Manual entry", enabled: true, source };
-    const entry = { kind, item: structuredClone(item ?? newItem), isNew: !item } as Entry;
+    const copy = structuredClone(item ?? newItem);
+    if ("guidance" in copy) copy.guidance = guidancePresentationText(copy.guidance);
+    const entry = { kind, item: copy, isNew: !item } as Entry;
     setEditing(entry); setOriginal(structuredClone(entry)); setError("");
   };
   const close = () => { setEditing(null); setOriginal(null); setError(""); setConfirmClose(false); };
@@ -134,12 +137,12 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
     if ("conditionId" in row) return lookup(conditions, row.conditionId);
     return row.label;
   };
-  const detail = (row: Row) => "riskEmphasis" in row ? row.riskEmphasis : "products" in row ? `${row.products} · ${row.dose}` : row.guidance;
+  const detail = (row: Row) => "riskEmphasis" in row ? row.riskEmphasis : "products" in row ? `${row.products} · ${row.dose}` : guidancePresentationText(row.guidance);
   return <section className="min-w-0 space-y-5 rounded-2xl bg-card p-4 shadow-sm sm:p-6" aria-label="Care plan rules">
-    <div><h2 className="text-lg font-medium">Care plan rules</h2><p className="mt-1 text-sm text-muted-foreground">These saved rules determine which workbook guidance is available to a report for this version.</p></div>
+    <div><h2 className="text-lg font-medium">Care plan rules</h2><p className="mt-1 text-sm text-muted-foreground">These saved rules determine which guidance is available to a report for this version.</p></div>
     <nav className="flex flex-wrap gap-2 border-b pb-3" aria-label="Care plan sections">{tabs.map(([key, label]) => <Button key={key} type="button" variant={section === key ? "default" : "outline"} onClick={() => { setSection(key); setQuery(""); }}>{label}{key !== "mapping" && <span className="ml-1 opacity-75">{counts[key]}</span>}</Button>)}</nav>
     {section === "mapping" ? <div className="space-y-5">
-      <div><h3 className="font-medium">Map NIQ risk to nutritional status</h3><p className="mt-1 text-sm text-muted-foreground">The category names below come from Risk categories. Choose the workbook nutritional status for each one. Renaming a category keeps this mapping.</p></div>
+      <div><h3 className="font-medium">Map NIQ risk to nutritional status</h3><p className="mt-1 text-sm text-muted-foreground">The category names below come from Risk categories. Choose the nutritional status for each one. Renaming a category keeps this mapping.</p></div>
       <fieldset disabled={disabled} className="divide-y rounded-lg border">{definition.riskCategories.map(category => {
         const mapping = guidance.riskStatusMapping.find(item => item.riskCategoryId === category.id);
         return <div key={category.id} className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-center"><span className="font-medium">{category.label}</span><NativeSelect aria-label={`Nutritional status for ${category.label}`} value={mapping?.nutritionalStatus ?? ""} onChange={event => {
@@ -153,7 +156,7 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
       {definition.riskCategories.some(category => !guidance.riskStatusMapping.some(item => item.riskCategoryId === category.id)) && <p role="status" className="text-sm text-amber-700">Choose a nutritional status for every risk category before checking this rule version.</p>}
       <fieldset disabled={disabled} className="space-y-2 rounded-lg border p-4"><legend className="px-1 font-medium">When Surgical and a treatment plan both match</legend><p className="text-sm text-muted-foreground">This decides which product plan is used. Doses are never combined automatically.</p><label className="flex gap-2 text-sm"><input type="radio" className="accent-primary" name="surgical-overlap" checked={guidance.surgicalOverlapPolicy === "surgical_priority"} onChange={() => update({ ...guidance, surgicalOverlapPolicy: "surgical_priority" })} />Use the Surgical product plan</label><label className="flex gap-2 text-sm"><input type="radio" className="accent-primary" name="surgical-overlap" checked={guidance.surgicalOverlapPolicy === "clinician_choice"} onChange={() => update({ ...guidance, surgicalOverlapPolicy: "clinician_choice" })} />Ask the clinician to choose</label></fieldset>
     </div> : <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-medium">{title}</h3><p className="text-sm text-muted-foreground">{section === "statusModifiers" ? "Class-level guidance matched with the mapped nutritional status." : section === "plans" ? "One plan per treatment stage and nutritional status." : section === "notes" ? "Conditional workbook exceptions applied only when the related patient fact is known." : "Editable guidance matched with confirmed assessment facts."}</p></div><Button type="button" disabled={disabled || rows.length >= (section === "statusModifiers" ? 200 : 100)} onClick={() => start(section)}><Plus className="size-4" aria-hidden="true" /> Add rule</Button></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-medium">{title}</h3><p className="text-sm text-muted-foreground">{section === "statusModifiers" ? "Class-level guidance matched with the mapped nutritional status." : section === "plans" ? "One plan per treatment stage and nutritional status." : section === "notes" ? "Conditional product exceptions applied only when the related patient fact is known." : "Editable guidance matched with confirmed assessment facts."}</p></div><Button type="button" disabled={disabled || rows.length >= (section === "statusModifiers" ? 200 : 100)} onClick={() => start(section)}><Plus className="size-4" aria-hidden="true" /> Add rule</Button></div>
       <label className="relative block"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" aria-hidden="true" /><Input className="pl-9" aria-label={`Search ${title}`} placeholder="Search rules…" value={query} onChange={event => setQuery(event.target.value)} /></label>
       <div className="divide-y overflow-hidden rounded-lg border">{filtered.map(row => <div key={row.id} className="flex min-w-0 items-start justify-between gap-3 p-3 even:bg-muted/20"><div className="min-w-0"><p className="font-medium">{summary(row)}{!row.enabled && <span className="ml-2 text-xs font-normal text-muted-foreground">Disabled</span>}</p><p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{detail(row)}</p></div><div className="flex shrink-0 gap-1"><Button type="button" variant="ghost" size="icon" aria-label={`Edit ${summary(row)}`} disabled={disabled} onClick={() => start(section, row)}><Pencil className="size-4" /></Button><Button type="button" variant="ghost" size="icon" className="text-destructive" aria-label={`Delete ${summary(row)}`} disabled={disabled} onClick={() => setDeleting({ kind: section, id: row.id })}><Trash2 className="size-4" /></Button></div></div>)}{!filtered.length && <p className="p-5 text-sm text-muted-foreground">{rows.length ? "No rules match your search." : "No rules in this section."}</p>}</div>
     </div>}

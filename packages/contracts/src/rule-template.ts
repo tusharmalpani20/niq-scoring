@@ -7,7 +7,7 @@ const master = (rows: string, note = "") => source(`NIQ master question sheet!${
 /** Fixed workbook fields and sourced points; unresolved clinical mappings still block approval. */
 export function createSpreadsheetTemplate(name: string): RuleDefinition {
   const definition = blankRuleDefinition(name);
-  definition.description = "Fixed questionnaire and scoring defaults from the NIQ assessment workbook. Assign scoring domains and resolve the remaining source questions before approval. No patient data is included.";
+  definition.description = "NIQ assessment questionnaire and scoring defaults. Assign scoring domains and resolve the remaining questions before approval. No patient data is included.";
   const sections = definition.sections;
   const section = (id: string, title: string, description = "") => {
     const value: RuleDefinition["sections"][number] = { id, title, description, questions: [] };
@@ -181,8 +181,8 @@ export function createSpreadsheetTemplate(name: string): RuleDefinition {
     { id: "high_risk", label: "High Risk", min: 25, max: null, minInclusive: false, maxInclusive: false, interpretation: "Severe nutritional risk / active catabolism", sources: [master("D21:F21")] },
   ];
   const issue = (id: string, path: string, message: string, sources: RuleDefinition["issues"][number]["sources"]) => definition.issues.push({ id, path, message, blocking: true, resolved: false, resolution: "", sources });
-  issue("domain_mapping", "scoring", "Assign each source-derived score to a workbook domain. The workbook supplies domain caps but no question-to-domain mapping. Unassigned is a technical placeholder, not a clinical domain.", [master("D4:F14")]);
-  issue("model_difference", "total", "The workbook uses 35 points and three risk categories; the reference prototype uses a different 100-point model. Confirm the authoritative model and cap semantics.", [master("D4:F21"), { document: "nutra-iq-app", location: "src/app/services/assessment.service.ts", note: "Different prototype model; not imported." }]);
+  issue("domain_mapping", "scoring", "Assign each score to a scoring domain. Domain caps are defined, but question-to-domain assignments are still needed. Unassigned is a technical placeholder, not a clinical domain.", [master("D4:F14")]);
+  issue("model_difference", "total", "This rule uses 35 points and three risk categories; the reference prototype uses a different 100-point model. Confirm the scoring model and cap semantics.", [master("D4:F21"), { document: "nutra-iq-app", location: "src/app/services/assessment.service.ts", note: "Different prototype model; not imported." }]);
   issue("functional_difference", "sections.dietary_assessment.functional_capacity", "Functional capacity is 0/1/2 in the master sheet and 1/2/3 in Assessment. Resolve before scoring.", [master("A183:B186"), source("Assessment!D21")]);
   issue("biomedical_thresholds", "sections.biomedical", "Confirm units and all lab thresholds, including equality boundaries. Haemoglobin bands overlap; SGPT/SGOT/albumin thresholds are incomplete; bilirubin and total proteins have no scoring. Assessment explicitly says Need to confirm.", [master("A112:B118"), source("Assessment!B25:D25")]);
   issue("upload_deferred", "sections.biomedical", "Report upload and automatic extraction are deferred. This template offers manual lab entry only; confirm that workflow before approval.", [source("Assessment!C25")]);
@@ -199,7 +199,7 @@ export function createSpreadsheetTemplate(name: string): RuleDefinition {
   issue("previous_history_scoring", "sections.medical_history", "Previous surgery / long-term illness has none 0, present 1 scoring, but the source provides free text without an explicit none answer. Confirm presence capture; unanswered text is not treated as no history.", [master("A71:B75"), source("Assessment!B11:D11")]);
   issue("medication_aggregation", "sections.treatment_medications", "Each selected medication or supplement carries one source point. Confirm whether categories count once or whether multiple medicines within one category must be captured, and any combined cap.", [master("A130:B147"), source("Assessment!D19")]);
   for (const [id, resolution] of [
-    ["model_difference", "The user confirmed Excel is the latest authoritative source. Use the workbook domain caps and 35-point total as configurable defaults; do not import the prototype's 100-point model."],
+    ["model_difference", "The user confirmed the 35-point model and domain caps as configurable defaults; do not import the prototype's 100-point model."],
     ["functional_difference", "Assessment!G3 explicitly directs use of the NIQ master question sheet for dropdowns and scoring. Default to master A184:B186: normal 0, reduced 1, bedridden 2."],
   ]) {
     const resolved = definition.issues.find(issue => issue.id === id)!;

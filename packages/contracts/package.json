@@ -18,6 +18,7 @@
     "./report-guidance": "./src/report-guidance.ts",
     "./care-plan-guidance": "./src/care-plan-guidance.ts",
     "./care-plan-resolver": "./src/care-plan-resolver.ts",
+    "./guidance-presentation": "./src/guidance-presentation.ts",
     "./cancer-type-ids": "./src/cancer-type-ids.ts",
     "./final-assessment-validation": "./src/final-assessment-validation.ts",
     "./versioned-definition": "./src/versioned-definition.ts",

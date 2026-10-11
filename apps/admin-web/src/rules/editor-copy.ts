@@ -15,5 +15,5 @@ export function decisionText(issue: RuleDefinition['issues'][number]) {
   return decisionCopy[issue.id] ?? issue.message;
 }
 export function descriptionText(description: string) {
-  return description.startsWith('Fixed questionnaire and scoring defaults from the NIQ assessment workbook.') || description.startsWith('Questionnaire transcribed from the supplied NIQ assessment workbook.') ? '' : description;
+  return description.startsWith('NIQ assessment questionnaire and scoring defaults.') || description.startsWith('Fixed questionnaire and scoring defaults from the NIQ assessment workbook.') || description.startsWith('Questionnaire transcribed from the supplied NIQ assessment workbook.') ? '' : description;
 }

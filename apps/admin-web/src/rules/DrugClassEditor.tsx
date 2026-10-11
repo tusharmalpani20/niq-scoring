@@ -160,7 +160,7 @@ export function DrugClassEditor({ definition, disabled, onChange }: Props) {
         <Button type="button" disabled={disabled || config.classes.length >= 200} onClick={() => openEdit(null)}><Plus className="size-4" aria-hidden="true" /> Add drug class</Button>
       </div>
     </div>
-    {!config.classes.length ? <div className="space-y-2 rounded-xl border border-dashed p-4"><p className="text-sm text-muted-foreground">This version has no drug classes yet.</p><Button type="button" variant="outline" disabled={disabled} onClick={() => change(initialDrugClassConfig())}>Load workbook classes</Button></div> :
+    {!config.classes.length ? <div className="space-y-2 rounded-xl border border-dashed p-4"><p className="text-sm text-muted-foreground">This version has no drug classes yet.</p><Button type="button" variant="outline" disabled={disabled} onClick={() => change(initialDrugClassConfig())}>Restore default drug classes</Button></div> :
       <Table className="min-w-[42rem] table-fixed">
         <TableHeader><TableRow className="bg-primary/5"><TableHead className="w-[25%]">Drug class</TableHead><TableHead className="w-[30%]">Cancer types</TableHead><TableHead className="w-[30%]">Treatments</TableHead><TableHead className="w-[15%] text-right">Actions</TableHead></TableRow></TableHeader>
         <TableBody>{config.classes.map(drugClass => {

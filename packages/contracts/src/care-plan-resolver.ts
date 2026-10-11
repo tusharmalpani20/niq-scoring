@@ -1,5 +1,6 @@
 import type { FinalAssessmentDefinition } from "./final-assessment";
 import type { CarePlanGuidance, NutritionalStatus } from "./care-plan-guidance";
+import { guidancePresentationText } from "./guidance-presentation";
 
 type StatusModifier = CarePlanGuidance["oncology"]["statusModifiers"][number];
 type Radiotherapy = CarePlanGuidance["oncology"]["radiotherapy"][number];
@@ -65,7 +66,7 @@ function reportNote(row: ProductNote): PublicProductNote {
 
 function reportCoMorbidity(row: CoMorbidity): PublicCoMorbidity {
   const { sourceText: _sourceText, ...safe } = row;
-  return safe;
+  return { ...safe, guidance: guidancePresentationText(safe.guidance) };
 }
 
 /** Assemble guidance from the pinned rule version using explicit, confirmed facts. */
@@ -135,15 +136,15 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
     return { ...base, products: { status: "facts_required", plans: [], notes: visibleNotes, reason: "Diet preference is needed to check the Liss WH substitution." } };
   }
   if (facts.cancerTypeId === "cancer_6" && hasNourishPlan) {
-    return { ...base, products: { status: "clinician_choice_required", plans: [], notes: visibleNotes, reason: "The workbook excludes Nourish for pancreatic cancer; the listed plan needs an adjusted dose." } };
+    return { ...base, products: { status: "clinician_choice_required", plans: [], notes: visibleNotes, reason: "Nourish is excluded for pancreatic cancer; the listed plan needs an adjusted dose." } };
   }
   if (facts.cancerTypeId === "cancer_5" && chosenCandidates.some(row => /\b(?:2|3)\s+Nourish\b/i.test(row.dose))) {
-    return { ...base, products: { status: "clinician_choice_required", plans: [], notes: visibleNotes, reason: "The workbook limits Nourish to once daily for liver cancer; the listed dose needs adjustment." } };
+    return { ...base, products: { status: "clinician_choice_required", plans: [], notes: visibleNotes, reason: "Nourish is limited to once daily for liver cancer; the listed dose needs adjustment." } };
   }
   if (hasLissPlan && facts.dietPreferenceId !== "non_vegetarian") {
     const reason = facts.dietPreferenceId === "vegetarian"
-      ? "The workbook substitutes Invigour for Liss WH for vegetarian patients but gives no replacement dose."
-      : "The workbook gives no confirmed Liss WH dose for this diet preference; a clinician must choose an appropriate plan.";
+      ? "Vegetarian patients need Invigour instead of Liss WH, but no replacement dose is specified."
+      : "No Liss WH dose is confirmed for this diet preference; a clinician must choose an appropriate plan.";
     return { ...base, products: { status: "clinician_choice_required", plans: [], notes: visibleNotes, reason } };
   }
 

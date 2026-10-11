@@ -226,7 +226,7 @@
       "id": "comorbidity_thyroid_disorder",
       "conditionId": "co_morbidities_thyroid_disorder",
       "label": "Thyroid issues",
-      "guidance": "If thyroid medication is being taken, review its timing with the treating clinician. The workbook lists four-hour separation from calcium, iron, multivitamins, antacids, and protein or soy supplements, and at least 30–60 minutes from coffee.\nCheck TSH regularly, and about 6–8 weeks after a dose change.\n•Contact the doctor if: there are palpitations, a fast heart rate, tremor or severe weight loss (hyper), or severe fatigue, a very slow heart rate, marked constipation or confusion (hypo).",
+      "guidance": "If thyroid medication is being taken, review its timing with the treating clinician. Allow four-hour separation from calcium, iron, multivitamins, antacids, and protein or soy supplements, and at least 30–60 minutes from coffee.\nCheck TSH regularly, and about 6–8 weeks after a dose change.\n•Contact the doctor if: there are palpitations, a fast heart rate, tremor or severe weight loss (hyper), or severe fatigue, a very slow heart rate, marked constipation or confusion (hypo).",
       "sourceText": "Keep 4 hours apart from: calcium, iron, multivitamins, antacids, and protein or soy supplements. Include the oral nutrition supplements. Coffee needs at least 30–60 minutes.\n•Cancer-specific: tyrosine kinase inhibitors (sunitinib, imatinib and others) can raise the dose needed, and immunotherapy can cause thyroiditis. Check TSH regularly, and about 6–8 weeks after a dose change.\n•Other points: avoid excess iodine. Stop biotin supplement (if consumed) 2–3 days before the TSH test, or tell the lab. Restrict soy intake avoid iodized salt, seafood, seaweed, dairy, egg yolk and commercial bread,\n•Contact the doctor if: there are palpitations, a fast heart rate, tremor or severe weight loss (hyper), or severe fatigue, a very slow heart rate, marked constipation or confusion (hypo).",
       "enabled": true,
       "source": {
@@ -247,7 +247,7 @@
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
         "location": "Product_mapping_!A18:C18",
-        "note": "Report-ready wording adapted from the workbook note; retain the source for review."
+        "note": "Report-ready wording; retain the source for review."
       }
     },
     {
@@ -260,7 +260,7 @@
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
         "location": "Product_mapping_!A19:C19",
-        "note": "Report-ready wording adapted from the workbook note; retain the source for review."
+        "note": "Report-ready wording; retain the source for review."
       }
     },
     {
@@ -273,7 +273,7 @@
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
         "location": "Product_mapping_!A21:D21",
-        "note": "Report-ready wording adapted from the workbook note; retain the source for review."
+        "note": "Report-ready wording; retain the source for review."
       }
     },
     {
@@ -286,7 +286,7 @@
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
         "location": "Product_mapping_!A22:C22",
-        "note": "Report-ready wording adapted from the workbook note; retain the source for review."
+        "note": "Report-ready wording; retain the source for review."
       }
     },
     {
@@ -299,7 +299,7 @@
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
         "location": "Product_mapping_!A23:C23",
-        "note": "Report-ready wording adapted from the workbook note; retain the source for review."
+        "note": "Report-ready wording; retain the source for review."
       }
     }
   ]
