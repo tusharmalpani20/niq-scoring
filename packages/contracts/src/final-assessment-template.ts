@@ -1,6 +1,7 @@
 import { DEFAULT_FACE_SCAN_SCORING_CONFIG } from "./face-scan-scoring";
 import { finalAssessmentDefinitionSchema, type FinalAssessmentDefinition } from "./final-assessment";
 import { initialDrugClassConfig } from "./drug-class-template";
+import { initialReportGuidance } from "./report-guidance-template";
 
 const document = "Final NIQ Assessment Form_with section_field_details.xlsx";
 const source = (location: string, note = "") => ({ document, location, note });
@@ -146,5 +147,5 @@ export function confirmedAssessmentSamples(): FinalAssessmentDefinition["samples
 }
 
 export function createFinalAssessmentTemplate(name: string): FinalAssessmentDefinition {
-  return { ...upgradeFinalAssessmentDefinition(createLegacyFinalAssessmentTemplate(name)), faceScanScoring: { ...DEFAULT_FACE_SCAN_SCORING_CONFIG } };
+  return { ...upgradeFinalAssessmentDefinition(createLegacyFinalAssessmentTemplate(name)), faceScanScoring: { ...DEFAULT_FACE_SCAN_SCORING_CONFIG }, reportGuidance: initialReportGuidance() };
 }

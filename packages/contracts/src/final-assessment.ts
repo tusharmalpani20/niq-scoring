@@ -125,6 +125,21 @@ export const drugClassConfigSchema = z.object({
   suggestions: z.array(z.object({ cancerTypeId: ruleIdSchema.nullable(), treatmentTypeId: ruleIdSchema, classId: ruleIdSchema }).strict()).max(2000),
 }).strict();
 
+/** Versioned source guidance for report composition. Toxicities describe possibilities. */
+export const reportGuidanceSchema = z.object({
+  nutrition: z.array(z.object({
+    id: ruleIdSchema, label, riskCategoryId: ruleIdSchema.nullable(),
+    coreStrategy: z.string().trim().min(1).max(4000),
+    clinicalActions: z.string().trim().min(1).max(8000),
+    enabled: z.boolean(), source: sourceSchema,
+  }).strict()).max(30),
+  toxicity: z.array(z.object({
+    id: ruleIdSchema, classId: ruleIdSchema, treatmentTypeId: ruleIdSchema,
+    expectedToxicity: label, nutritionalInterventions: z.string().trim().min(1).max(8000),
+    enabled: z.boolean(), requiresDrugConfirmation: z.boolean(), source: sourceSchema,
+  }).strict()).max(500),
+}).strict();
+
 export const finalAssessmentDefinitionSchema = z.object({
   formatVersion: z.literal(FINAL_ASSESSMENT_FORMAT_VERSION),
   profile: z.literal(FINAL_ASSESSMENT_PROFILE),
@@ -136,6 +151,8 @@ export const finalAssessmentDefinitionSchema = z.object({
   faceScanScoring: faceScanScoringConfigSchema.optional(),
   // Optional so historical versions remain readable without rewriting their definition.
   drugClassConfig: drugClassConfigSchema.optional(),
+  // Historical rule versions predate report guidance and remain readable.
+  reportGuidance: reportGuidanceSchema.optional(),
   riskCategories: z.array(finalRiskCategorySchema).min(1).max(20),
   provisional: z.union([z.object({
     status: z.literal(FINAL_ASSESSMENT_PROVISIONAL_STATUS),

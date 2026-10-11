@@ -5,9 +5,10 @@ import { finalAssessmentDefinitionSchema } from "./final-assessment";
 import { validateFinalAssessmentDefinition } from "./final-assessment-validation";
 import { publicQuestionnaire } from "./rule-public";
 
-test("new drafts seed 16 editable workbook classes without drug-specific guidance or NIQ points", () => {
+test("new drafts seed 16 workbook classes plus the generic Other option", () => {
   const definition = createFinalAssessmentTemplate("Drug class draft");
-  expect(definition.drugClassConfig?.classes).toHaveLength(16);
+  expect(definition.drugClassConfig?.classes).toHaveLength(17);
+  expect(definition.drugClassConfig?.classes.at(-1)).toEqual({ id: "other", label: "Other" });
   expect(definition.drugClassConfig?.suggestions).toHaveLength(92);
   expect(definition.drugClassConfig?.suggestions.every(item => item.cancerTypeId !== null)).toBe(true);
   expect(definition.drugClassConfig?.classes.every(item => item.guidance === undefined)).toBe(true);
@@ -82,6 +83,7 @@ test("public questionnaire includes only class labels and suggestions", () => {
 test("old definitions without drug classes remain readable", () => {
   const definition = createFinalAssessmentTemplate("Historical");
   delete definition.drugClassConfig;
+  delete definition.reportGuidance;
   expect(finalAssessmentDefinitionSchema.safeParse(definition).success).toBe(true);
   expect(validateFinalAssessmentDefinition(definition)).toEqual([]);
   const publicView = publicQuestionnaire(definition);

@@ -1,0 +1,1949 @@
+{
+  "nutrition": [
+    {
+      "id": "nutrition_high",
+      "label": "POOR (High Risk / Severe Malnutrition)",
+      "riskCategoryId": "high",
+      "coreStrategy": "Aggressive, early, and medically supervised nutrition intervention to reverse malnutrition and preserve lean body mass",
+      "clinicalActions": "Achieve energy: 30–35 kcal/kg/day\nAchieve protein: 1.5–2.0 g/kg/day\nEnsure oral intake ≥75% of requirement\nInitiate oral nutritional supplements (ONS) early\nIf intake <50–60% → initiate enteral nutrition (EN)\nIf EN not feasible → consider parenteral nutrition (PN)\nMonitor:\nWeight (weekly)\nIntake adequacy\nFunctional status\nCorrect fluid & electrolyte imbalance\nAdjust nutrition based on treatment tolerance",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet(Nutrition intervention ).csv",
+        "location": "row 2",
+        "note": "Text verified against Nutrition_intervention_ in the supplied ODS because the CSV replaces some symbols with ?."
+      }
+    },
+    {
+      "id": "nutrition_moderate",
+      "label": "MODERATE (At Risk)",
+      "riskCategoryId": "moderate",
+      "coreStrategy": "Early, preventive nutrition intervention to avoid progression to severe malnutrition",
+      "clinicalActions": "Achieve energy: 25–30 kcal/kg/day\nAchieve protein: 1.2–1.5 g/kg/day\nMaintain oral intake ≥75%\nIntroduce ONS if intake is suboptimal\nMonitor:\nWeight trends\nIntake decline\nEarly symptoms\nPrevent muscle loss and fatigue\nAdapt nutrition to treatment-related symptoms",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet(Nutrition intervention ).csv",
+        "location": "row 3",
+        "note": "Text verified against Nutrition_intervention_ in the supplied ODS because the CSV replaces some symbols with ?."
+      }
+    },
+    {
+      "id": "nutrition_low",
+      "label": "GOOD (Low Risk / Stable)",
+      "riskCategoryId": "low",
+      "coreStrategy": "Maintain nutritional status and prevent decline during treatment",
+      "clinicalActions": "Achieve energy: ~25 kcal/kg/day\nAchieve protein: 1.0–1.2 g/kg/day\nMaintain adequate oral intake\nMonitor:\nWeight stability\nAppetite\nTreatment tolerance\nProvide early intervention if decline begins",
+      "enabled": true,
+      "source": {
+        "document": "NIQ - Product & interventions sheet(Nutrition intervention ).csv",
+        "location": "row 4",
+        "note": "Text verified against Nutrition_intervention_ in the supplied ODS because the CSV replaces some symbols with ?."
+      }
+    }
+  ],
+  "toxicity": [
+    {
+      "id": "toxicity_row_002",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Neutropenia / febrile neutropenia",
+      "nutritionalInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 2",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_003",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Mucositis",
+      "nutritionalInterventions": "• Soft, moist, lukewarm or cool foods (khichdi, dal, curd, porridge, mashed vegetables)\n• Avoid spicy, acidic, hot, crunchy or sharp foods\n• Use a straw\n• Bland salt–soda rinse after meals\n• Soft toothbrush\n• Visit oncologists if unable to eat or drink, white patches or fever",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 3",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_004",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Peripheral neuropathy",
+      "nutritionalInterventions": "• No diet prevents it\n• Keep nutrition adequate, control blood glucose, avoid alcohol, check B12 status rather than self-supplementing, avoid high-dose vitamin B6\n• Take care with hot utensils/dishes if sensation is reduced\n• Report new numbness or weakness",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 4",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_005",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Taste changes",
+      "nutritionalInterventions": "\n• Rinse mouth before meals\n• Cold or room-temperature protein foods (curd, paneer, buttermilk)\n• Herbs and mild flavors\n• Tart flavors only if the mouth is not sore",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 5",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_006",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Diarrhea (docetaxel, cabazitaxel)",
+      "nutritionalInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 6",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_007",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Fluid retention (docetaxel)",
+      "nutritionalInterventions": "• Sodium under 2 g/day, limit processed/packaged foods, adequate protein, weigh daily\n• Do not restrict fluids unless told\n• Call for gain over 1 kg in a day or breathlessness",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 7",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_008",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Muscle and joint pain",
+      "nutritionalInterventions": "• Adequate protein and hydration\n• Check vitamin D status\n• No new supplements without approval\n• Gentle activity",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 8",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_009",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Fatigue / reduced appetite",
+      "nutritionalInterventions": "• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity\n• Eat by the clock, not by hunger\n• Small energy- and protein-dense portions (ghee, nut butters, milk-powder fortification)\n• Liquids between meals\n• ONS if intake stays low",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 9",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_010",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Steroid premedication hyperglycemia",
+      "nutritionalInterventions": "• Consistent carbohydrate at each meal, low-GI choices, protein with each meal, no sugary drinks\n• Monitor glucose (especially on steroid days)",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 10",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_011",
+      "classId": "taxanes",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Nausea (mild)",
+      "nutritionalInterventions": "• Small meals every 2–3 hours\n• Dry, bland, cool foods\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Antiemetics on schedule\n• Ginger in modest amounts",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 11",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_012",
+      "classId": "anthracyclines",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Nausea and vomiting (moderate to high)",
+      "nutritionalInterventions": "• Small, frequent, bland, cool meals (khichdi, toast, murmura, banana)\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Sit upright 30–60 min after eating\n• Antiemetics on schedule\n• Ginger in modest amounts\n• ORS sips if vomiting\n• Call if more than 3 vomits/day or unable to keep fluids down for 24 h",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 12",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_013",
+      "classId": "anthracyclines",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Mucositis",
+      "nutritionalInterventions": "• Soft, moist, lukewarm or cool foods (khichdi, dal, curd, porridge, mashed vegetables)\n• Avoid spicy, acidic, hot, crunchy or sharp foods\n• Use a straw\n• Bland salt–soda rinse after meals\n• Soft toothbrush\n• Call if unable to eat or drink, white patches or fever",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 13",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_014",
+      "classId": "anthracyclines",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Neutropenia / febrile neutropenia",
+      "nutritionalInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 14",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_015",
+      "classId": "anthracyclines",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Cardiotoxicity (cumulative)",
+      "nutritionalInterventions": "• Heart-healthy, low-sodium diet\n• Steady fluid intake\n• Control BP, glucose and lipids\n• Limit alcohol\n• Avoid high-dose antioxidant supplements unless approved\n• Report breathlessness, swelling or palpitations",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 15",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_016",
+      "classId": "anthracyclines",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Hand-foot syndrome (liposomal doxorubicin)",
+      "nutritionalInterventions": "• No specific diet\n• Maintain hydration and nutrition, avoid alcohol\n• Skin care and dose adjustment per oncologist",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 16",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_017",
+      "classId": "anthracyclines",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Constipation (from antiemetics)",
+      "nutritionalInterventions": "• Fluids 2–2.5 L/day\n• Warm drinks\n• Gradual fiber (cooked vegetables, fruit, oats, isabgol)\n• Prunes or papaya\n• Daily walking\n• Laxatives only as prescribed",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 17",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_018",
+      "classId": "anthracyclines",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Fatigue",
+      "nutritionalInterventions": "• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 18",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_019",
+      "classId": "anthracyclines",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Red-orange urine (drug color, harmless for 1–2 days)",
+      "nutritionalInterventions": "• Reassure the patient it is an expected drug effect, not blood\n• Maintain fluids",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 19",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_020",
+      "classId": "alkylating_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Nausea and vomiting",
+      "nutritionalInterventions": "• Small, frequent, bland, cool meals (khichdi, toast, murmura, banana)\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Sit upright 30–60 min after eating\n• Antiemetics on schedule\n• Ginger in modest amounts\n• ORS sips if vomiting\n• Call if more than 3 vomits/day or unable to keep fluids down for 24 h",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 20",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_021",
+      "classId": "alkylating_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Myelosuppression / infection risk",
+      "nutritionalInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 21",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_022",
+      "classId": "alkylating_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Mucositis (especially high-dose melphalan)",
+      "nutritionalInterventions": "• Soft, moist, lukewarm or cool foods (khichdi, dal, curd, porridge, mashed vegetables)\n• Avoid spicy, acidic, hot, crunchy or sharp foods\n• Use a straw\n• Bland salt–soda rinse after meals\n• Soft toothbrush\n• Call if unable to eat or drink, white patches or fever",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 22",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_023",
+      "classId": "alkylating_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Hemorrhagic cystitis (cyclophosphamide, ifosfamide)",
+      "nutritionalInterventions": "• Fluids 2.5–3 L/day unless restricted, front-loaded earlier in the day\n• Empty the bladder often, including at bedtime\n• Report blood in urine or burning",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 23",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_024",
+      "classId": "alkylating_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Diarrhea (melphalan, busulfan)",
+      "nutritionalInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 24",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_025",
+      "classId": "alkylating_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Constipation (temozolomide)",
+      "nutritionalInterventions": "• Fluids 2–2.5 L/day\n• Warm drinks\n• Gradual fiber (cooked vegetables, fruit, oats, isabgol)\n• Prunes or papaya\n• Daily walking\n• Laxatives only as prescribed",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 25",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_026",
+      "classId": "alkylating_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Taste changes / anorexia",
+      "nutritionalInterventions": "• Plastic cutlery\n• Rinse mouth before meals\n• Cold or room-temperature protein foods (curd, paneer, buttermilk)\n• Herbs and mild flavors\n• Tart flavors only if the mouth is not sore\n• Eat by the clock, not by hunger\n• Small energy- and protein-dense portions (ghee, nut butters, milk-powder fortification)\n• Liquids between meals\n• ONS if intake stays low",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 26",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_027",
+      "classId": "alkylating_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Steroid hyperglycemia (when co-prescribed)",
+      "nutritionalInterventions": "• Consistent carbohydrate at each meal, low-GI choices, protein with each meal, no sugary drinks\n• Monitor glucose (especially on steroid days)",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 27",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_028",
+      "classId": "alkylating_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Fatigue",
+      "nutritionalInterventions": "• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 28",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_029",
+      "classId": "platinum_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Nausea and vomiting (high with cisplatin)",
+      "nutritionalInterventions": "• Small, frequent, bland, cool meals (khichdi, toast, murmura, banana)\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Sit upright 30–60 min after eating\n• Antiemetics on schedule\n• Ginger in modest amounts\n• ORS sips if vomiting\n• Call if more than 3 vomits/day or unable to keep fluids down for 24 h",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 29",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_030",
+      "classId": "platinum_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Dehydration",
+      "nutritionalInterventions": "• 2–2.5 L fluids/day (water, buttermilk, soups, ORS)\n• Increase with heat, vomiting or diarrhea",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 30",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_031",
+      "classId": "platinum_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Electrolyte loss (Mg, K, Na, Ca)",
+      "nutritionalInterventions": "• Magnesium: nuts, seeds, leafy greens, whole grains\n• Potassium: banana, coconut water, potato (adjust if renal impairment)\n• Replace losses with ORS\n• Supplements only as prescribed\n• Monitor Mg, K, Na",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 31",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_032",
+      "classId": "platinum_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Nephrotoxicity (cisplatin)",
+      "nutritionalInterventions": "• Hydration 2.5–3 L/day unless restricted\n• Avoid NSAIDs and nephrotoxic herbal products\n• Monitor creatinine and electrolytes each cycle",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 32",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_033",
+      "classId": "platinum_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Peripheral neuropathy",
+      "nutritionalInterventions": "• No diet prevents it\n• Keep nutrition adequate, control blood glucose, avoid alcohol, check B12 status rather than self-supplementing, avoid high-dose vitamin B6\n• Take care with hot utensils/dishes if sensation is reduced\n• Report new numbness or weakness\n• For oxaliplatin: avoid cold food and drink, ice and cold water for about 5 days after each infusion\n• Use room-temperature or warm fluids",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 33",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_034",
+      "classId": "platinum_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Hearing change / tinnitus (cisplatin)",
+      "nutritionalInterventions": "• No nutritional prevention\n• Report hearing change promptly",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 34",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_035",
+      "classId": "platinum_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Myelosuppression, anemia, low platelets (carboplatin)",
+      "nutritionalInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately\n• Request iron studies, B12 and folate before supplementing\n• Iron-rich foods (ragi, bajra, sattu, leafy greens, beetroot, sesame) with a vitamin C source\n• Tea/coffee away from meals",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 35",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_036",
+      "classId": "platinum_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Taste changes",
+      "nutritionalInterventions": "• Plastic cutlery\n• Rinse mouth before meals\n• Cold or room-temperature protein foods (curd, paneer, buttermilk)\n• Herbs and mild flavors\n• Tart flavors only if the mouth is not sore",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 36",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_037",
+      "classId": "platinum_agents",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Diarrhea / mild mucositis (oxaliplatin)",
+      "nutritionalInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 37",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_038",
+      "classId": "antimetabolites",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Mucositis / mouth blisters",
+      "nutritionalInterventions": "• Soft, moist, lukewarm or cool foods (khichdi, dal, curd, porridge, mashed vegetables)\n• Avoid spicy, acidic, hot, crunchy or sharp foods\n• Use a straw\n• Bland salt–soda rinse after meals\n• Soft toothbrush\n• Call if unable to eat or drink, white patches or fever",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 38",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_039",
+      "classId": "antimetabolites",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Diarrhea",
+      "nutritionalInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 39",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_040",
+      "classId": "antimetabolites",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Hand-foot syndrome (capecitabine, 5-FU)",
+      "nutritionalInterventions": "• No specific diet\n• Maintain hydration and nutrition, avoid alcohol\n• Skin care and dose adjustment per oncologist",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 40",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_041",
+      "classId": "antimetabolites",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Nausea and vomiting",
+      "nutritionalInterventions": "• Small, frequent, bland, cool meals (khichdi, toast, murmura, banana)\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Sit upright 30–60 min after eating\n• Antiemetics on schedule\n• Ginger in modest amounts\n• ORS sips if vomiting\n• Call if more than 3 vomits/day or unable to keep fluids down for 24 h",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 41",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_042",
+      "classId": "antimetabolites",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Myelosuppression / infection risk",
+      "nutritionalInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 42",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_043",
+      "classId": "antimetabolites",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Dehydration",
+      "nutritionalInterventions": "• 2–2.5 L fluids/day (water, buttermilk, soups, ORS)\n• Increase with heat, vomiting or diarrhea",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 43",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_044",
+      "classId": "antimetabolites",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Raised liver enzymes (gemcitabine, methotrexate)",
+      "nutritionalInterventions": "• Avoid alcohol, herbal/'detox' products, high-dose turmeric and green-tea extract\n• Do not restrict protein\n• Repeat LFT as scheduled",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 44",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_045",
+      "classId": "antimetabolites",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Flu-like symptoms, fatigue, edema (gemcitabine)",
+      "nutritionalInterventions": "• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity\n• Sodium under 2 g/day, limit processed/packaged foods, adequate protein, weigh daily\n• Do not restrict fluids unless told\n• Call for gain over 1 kg in a day or breathlessness",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 45",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_046",
+      "classId": "antimetabolites",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Anemia (trifluridine/tipiracil, methotrexate)",
+      "nutritionalInterventions": "• Request iron studies, B12 and folate before supplementing\n• Iron-rich foods (ragi, bajra, sattu, leafy greens, beetroot, sesame) with a vitamin C source\n• Tea/coffee away from meals",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 46",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_047",
+      "classId": "topoisomerase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Early diarrhea (cholinergic, within 24 h)",
+      "nutritionalInterventions": "• Treated with prescribed atropine\n• Keep fluids up\n• Not a dietary problem",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 47",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_048",
+      "classId": "topoisomerase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Late diarrhea (can be severe)",
+      "nutritionalInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness\n• Take the prescribed antidiarrheal at the first loose stool",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 48",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_049",
+      "classId": "topoisomerase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Neutropenia / febrile neutropenia",
+      "nutritionalInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 49",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_050",
+      "classId": "topoisomerase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Nausea and vomiting",
+      "nutritionalInterventions": "• Small, frequent, bland, cool meals (khichdi, toast, murmura, banana)\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Sit upright 30–60 min after eating\n• Antiemetics on schedule\n• Ginger in modest amounts\n• ORS sips if vomiting\n• Call if more than 3 vomits/day or unable to keep fluids down for 24 h",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 50",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_051",
+      "classId": "topoisomerase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Dehydration and electrolyte loss",
+      "nutritionalInterventions": "• 2–2.5 L fluids/day (water, buttermilk, soups, ORS)\n• Increase with heat, vomiting or diarrhea\n• Magnesium: nuts, seeds, leafy greens, whole grains\n• Potassium: banana, coconut water, potato (adjust if renal impairment)\n• Replace losses with ORS\n• Supplements only as prescribed\n• Monitor Mg, K, Na",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 51",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_052",
+      "classId": "topoisomerase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Mucositis (etoposide, topotecan)",
+      "nutritionalInterventions": "• Soft, moist, lukewarm or cool foods (khichdi, dal, curd, porridge, mashed vegetables)\n• Avoid spicy, acidic, hot, crunchy or sharp foods\n• Use a straw\n• Bland salt–soda rinse after meals\n• Soft toothbrush\n• Call if unable to eat or drink, white patches or fever",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 52",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_053",
+      "classId": "topoisomerase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Anorexia / fatigue",
+      "nutritionalInterventions": "• Eat by the clock, not by hunger\n• Small energy- and protein-dense portions (ghee, nut butters, milk-powder fortification)\n• Liquids between meals\n• ONS if intake stays low\n• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 53",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_054",
+      "classId": "topoisomerase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Anemia (topotecan)",
+      "nutritionalInterventions": "• Request iron studies, B12 and folate before supplementing\n• Iron-rich foods (ragi, bajra, sattu, leafy greens, beetroot, sesame) with a vitamin C source\n• Tea/coffee away from meals",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 54",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_055",
+      "classId": "vinca_alkaloids",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Constipation / ileus (vincristine)",
+      "nutritionalInterventions": "• Fluids 2–2.5 L/day\n• Warm drinks\n• Gradual fiber (cooked vegetables, fruit, oats, isabgol)\n• Prunes or papaya\n• Daily walking\n• Laxatives only as prescribed\n• Severe abdominal pain, vomiting or no stool for 2–3 days: call urgently",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 55",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_056",
+      "classId": "vinca_alkaloids",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Peripheral neuropathy",
+      "nutritionalInterventions": "• No diet prevents it\n• Keep nutrition adequate, control blood glucose, avoid alcohol, check B12 status rather than self-supplementing, avoid high-dose vitamin B6\n• Take care with hot utensils/dishes if sensation is reduced\n• Report new numbness or weakness",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 56",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_057",
+      "classId": "vinca_alkaloids",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Jaw pain",
+      "nutritionalInterventions": "• Soft, easy-to-chew foods\n• Smaller bites\n• Report persistent pain",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 57",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_058",
+      "classId": "vinca_alkaloids",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Neutropenia (vinorelbine, vinblastine)",
+      "nutritionalInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 58",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_059",
+      "classId": "vinca_alkaloids",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Nausea (mild)",
+      "nutritionalInterventions": "• Small meals every 2–3 hours\n• Dry, bland, cool foods\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Antiemetics on schedule\n• Ginger in modest amounts",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 59",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_060",
+      "classId": "vinca_alkaloids",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Mucositis",
+      "nutritionalInterventions": "• Soft, moist, lukewarm or cool foods (khichdi, dal, curd, porridge, mashed vegetables)\n• Avoid spicy, acidic, hot, crunchy or sharp foods\n• Use a straw\n• Bland salt–soda rinse after meals\n• Soft toothbrush\n• Call if unable to eat or drink, white patches or fever",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 60",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_061",
+      "classId": "vinca_alkaloids",
+      "treatmentTypeId": "current_cancer_treatment_chemotherapy",
+      "expectedToxicity": "Low sodium (SIADH, rare)",
+      "nutritionalInterventions": "• Do not over-drink water\n• Report confusion, headache or persistent nausea\n• Fluid advice per physician",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 61",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_062",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Diarrhea (EGFR TKIs, lapatinib, regorafenib, cabozantinib)",
+      "nutritionalInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 62",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_063",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Rash, dry skin, mouth sores",
+      "nutritionalInterventions": "• Soft, moist, lukewarm or cool foods (khichdi, dal, curd, porridge, mashed vegetables)\n• Avoid spicy, acidic, hot, crunchy or sharp foods\n• Use a straw\n• Bland salt–soda rinse after meals\n• Soft toothbrush\n• Call if unable to eat or drink, white patches or fever\n• Keep skin moisturized\n• Adequate fluids",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 63",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_064",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Hypertension (VEGF TKIs)",
+      "nutritionalInterventions": "• Sodium under 2 g/day, DASH-style diet (vegetables, fruit, low-fat dairy, whole grains), limit processed foods and pickles, limit alcohol\n• BP monitoring at home",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 64",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_065",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Hand-foot skin reaction (sorafenib, sunitinib, regorafenib)",
+      "nutritionalInterventions": "• No specific diet\n• Maintain hydration and nutrition, avoid alcohol\n• Skin care and dose adjustment per oncologist",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 65",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_066",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Fatigue / anorexia / weight loss",
+      "nutritionalInterventions": "• Eat by the clock, not by hunger\n• Small energy- and protein-dense portions (ghee, nut butters, milk-powder fortification)\n• Liquids between meals\n• ONS if intake stays low\n• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 66",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_067",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Taste changes",
+      "nutritionalInterventions": "• Plastic cutlery\n• Rinse mouth before meals\n• Cold or room-temperature protein foods (curd, paneer, buttermilk)\n• Herbs and mild flavors\n• Tart flavors only if the mouth is not sore",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 67",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_068",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Nausea",
+      "nutritionalInterventions": "• Small meals every 2–3 hours\n• Dry, bland, cool foods\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Antiemetics on schedule\n• Ginger in modest amounts",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 68",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_069",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Edema (imatinib)",
+      "nutritionalInterventions": "• Sodium under 2 g/day, limit processed/packaged foods, adequate protein, weigh daily\n• Do not restrict fluids unless told\n• Call for gain over 1 kg in a day or breathlessness",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 69",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_070",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Raised liver enzymes",
+      "nutritionalInterventions": "• Avoid alcohol, herbal/'detox' products, high-dose turmeric and green-tea extract\n• Do not restrict protein\n• Repeat LFT as scheduled",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 70",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_071",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Hypothyroidism (e.g., sunitinib)",
+      "nutritionalInterventions": "• TSH monitoring per oncologist\n• Levothyroxine on an empty stomach 30–60 min before breakfast, kept at least 4 hours from calcium, iron and multivitamins\n• Steady soy intake",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 71",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_072",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Hyperglycemia",
+      "nutritionalInterventions": "• Consistent carbohydrate at each meal, low-GI choices, protein with each meal, no sugary drinks\n• Monitor glucose (especially on steroid days)",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 72",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_073",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Low calcium / phosphate (imatinib)",
+      "nutritionalInterventions": "• Check levels\n• Calcium- and phosphate-containing foods (dairy, nuts, legumes)\n• Supplements only as prescribed",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 73",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_074",
+      "classId": "tyrosine_kinase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "QT prolongation (nilotinib)",
+      "nutritionalInterventions": "• Keep potassium and magnesium normal\n• Avoid dehydration\n• Avoid herbal products\n• No foods or drinks that interfere with absorption (see notes)",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 74",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_075",
+      "classId": "parp_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Nausea and vomiting",
+      "nutritionalInterventions": "• Small, frequent, bland, cool meals (khichdi, toast, murmura, banana)\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Sit upright 30–60 min after eating\n• Antiemetics on schedule\n• Ginger in modest amounts\n• ORS sips if vomiting\n• Call if more than 3 vomits/day or unable to keep fluids down for 24 h",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 75",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_076",
+      "classId": "parp_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Reduced appetite / taste changes",
+      "nutritionalInterventions": "• Eat by the clock, not by hunger\n• Small energy- and protein-dense portions (ghee, nut butters, milk-powder fortification)\n• Liquids between meals\n• ONS if intake stays low\n• Plastic cutlery\n• Rinse mouth before meals\n• Cold or room-temperature protein foods (curd, paneer, buttermilk)\n• Herbs and mild flavors\n• Tart flavors only if the mouth is not sore",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 76",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_077",
+      "classId": "parp_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Fatigue",
+      "nutritionalInterventions": "• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 77",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_078",
+      "classId": "parp_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Anemia (common; may need transfusion)",
+      "nutritionalInterventions": "• Request iron studies, B12 and folate before supplementing\n• Iron-rich foods (ragi, bajra, sattu, leafy greens, beetroot, sesame) with a vitamin C source\n• Tea/coffee away from meals\n• Anemia is usually marrow-related, so iron only after iron studies",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 78",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_079",
+      "classId": "parp_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Low platelets / neutropenia",
+      "nutritionalInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately\n• Soft toothbrush\n• Report bleeding",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 79",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_080",
+      "classId": "parp_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Constipation or diarrhea",
+      "nutritionalInterventions": "• Fluids 2–2.5 L/day\n• Warm drinks\n• Gradual fiber (cooked vegetables, fruit, oats, isabgol)\n• Prunes or papaya\n• Daily walking\n• Laxatives only as prescribed. / ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 80",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_081",
+      "classId": "parp_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Hypertension (niraparib)",
+      "nutritionalInterventions": "• Sodium under 2 g/day, DASH-style diet (vegetables, fruit, low-fat dairy, whole grains), limit processed foods and pickles, limit alcohol\n• BP monitoring at home",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 81",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_082",
+      "classId": "her2_targeted_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Diarrhea (especially pertuzumab)",
+      "nutritionalInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 82",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_083",
+      "classId": "her2_targeted_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Nausea and vomiting (notably T-DXd)",
+      "nutritionalInterventions": "• Small, frequent, bland, cool meals (khichdi, toast, murmura, banana)\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Sit upright 30–60 min after eating\n• Antiemetics on schedule\n• Ginger in modest amounts\n• ORS sips if vomiting\n• Call if more than 3 vomits/day or unable to keep fluids down for 24 h",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 83",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_084",
+      "classId": "her2_targeted_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Cardiotoxicity",
+      "nutritionalInterventions": "• Heart-healthy, low-sodium diet\n• Steady fluid intake\n• Control BP, glucose and lipids\n• Limit alcohol\n• Avoid high-dose antioxidant supplements unless approved\n• Report breathlessness, swelling or palpitations",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 84",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_085",
+      "classId": "her2_targeted_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Infusion-related chills / fever",
+      "nutritionalInterventions": "• Eat a light meal beforehand and stay hydrated\n• Report fever after infusion, or any fever later (100 °F / 37.8 °C or above) to the oncologist immediately",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 85",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_086",
+      "classId": "her2_targeted_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Fatigue / reduced appetite",
+      "nutritionalInterventions": "• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity\n• Eat by the clock, not by hunger\n• Small energy- and protein-dense portions (ghee, nut butters, milk-powder fortification)\n• Liquids between meals\n• ONS if intake stays low",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 86",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_087",
+      "classId": "her2_targeted_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Mouth sores",
+      "nutritionalInterventions": "• Soft, moist, lukewarm or cool foods (khichdi, dal, curd, porridge, mashed vegetables)\n• Avoid spicy, acidic, hot, crunchy or sharp foods\n• Use a straw\n• Bland salt–soda rinse after meals\n• Soft toothbrush\n• Call if unable to eat or drink, white patches or fever",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 87",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_088",
+      "classId": "her2_targeted_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Raised liver enzymes, low platelets (T-DM1)",
+      "nutritionalInterventions": "• Avoid alcohol, herbal/'detox' products, high-dose turmeric and green-tea extract\n• Do not restrict protein\n• Repeat LFT as scheduled",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 88",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_089",
+      "classId": "her2_targeted_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Neuropathy (T-DM1)",
+      "nutritionalInterventions": "• No diet prevents it\n• Keep nutrition adequate, control blood glucose, avoid alcohol, check B12 status rather than self-supplementing, avoid high-dose vitamin B6\n• Take care with hot utensils/dishes if sensation is reduced\n• Report new numbness or weakness",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 89",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_090",
+      "classId": "her2_targeted_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Neutropenia (T-DXd)",
+      "nutritionalInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 90",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_091",
+      "classId": "cd20_monoclonal_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Infusion reactions",
+      "nutritionalInterventions": "• Light meal beforehand\n• Avoid heavy or fatty meals\n• Stay hydrated\n• Report chills, flushing or breathlessness during infusion",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 91",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_092",
+      "classId": "cd20_monoclonal_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Infection risk (late neutropenia, low immunoglobulins)",
+      "nutritionalInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 92",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_093",
+      "classId": "cd20_monoclonal_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Tumor lysis syndrome (first doses, high tumor burden)",
+      "nutritionalInterventions": "• Hydration 2.5–3 L/day unless restricted\n• Potassium/phosphate advice only when guided by labs\n• Do not restrict routinely",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 93",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_094",
+      "classId": "cd20_monoclonal_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Nausea (mild)",
+      "nutritionalInterventions": "• Small meals every 2–3 hours\n• Dry, bland, cool foods\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Antiemetics on schedule\n• Ginger in modest amounts",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 94",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_095",
+      "classId": "cd20_monoclonal_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Fatigue",
+      "nutritionalInterventions": "• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 95",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_096",
+      "classId": "cd20_monoclonal_antibodies",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Diarrhea",
+      "nutritionalInterventions": "• ORS and fluids to replace losses\n• Low-residue soft foods (rice, banana, boiled potato, curd/buttermilk if tolerated)\n• Avoid caffeine, alcohol, fried or fatty food, sugar alcohols, raw salads and high-fiber food during an episode\n• Small frequent meals\n• Call for 4 or more stools above baseline, blood, fever or dizziness",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 96",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_097",
+      "classId": "immune_checkpoint_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_immunotherapy",
+      "expectedToxicity": "Immune-related diarrhea / colitis",
+      "nutritionalInterventions": "• Report at the first sign: 4 or more loose stools above baseline, blood or mucus, abdominal pain or fever → contact the oncologist the same day\n• Do not self-treat\n• ORS and low-residue foods until reviewed",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 97",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_098",
+      "classId": "immune_checkpoint_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_immunotherapy",
+      "expectedToxicity": "Hepatitis",
+      "nutritionalInterventions": "• Avoid alcohol, herbal/'detox' products, high-dose turmeric and green-tea extract\n• Do not restrict protein\n• Repeat LFT as scheduled",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 98",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_099",
+      "classId": "immune_checkpoint_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_immunotherapy",
+      "expectedToxicity": "Thyroid dysfunction (hypo- or hyperthyroid)",
+      "nutritionalInterventions": "• TSH monitoring per oncologist\n• Levothyroxine on an empty stomach 30–60 min before breakfast, kept at least 4 hours from calcium, iron and multivitamins\n• Steady soy intake",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 99",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_100",
+      "classId": "immune_checkpoint_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_immunotherapy",
+      "expectedToxicity": "New hyperglycemia / diabetes (can be sudden)",
+      "nutritionalInterventions": "• Report extreme thirst, frequent urination, weight loss or nausea\n• Check glucose\n• No sugary drinks",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 100",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_101",
+      "classId": "immune_checkpoint_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_immunotherapy",
+      "expectedToxicity": "Adrenal / pituitary insufficiency",
+      "nutritionalInterventions": "• Report persistent fatigue, dizziness, low BP or vomiting for urgent medical review\n• Keep regular meals and fluids",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 101",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_102",
+      "classId": "immune_checkpoint_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_immunotherapy",
+      "expectedToxicity": "Rash / itching",
+      "nutritionalInterventions": "• Keep skin moisturized and stay hydrated\n• No dietary cause",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 102",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_103",
+      "classId": "immune_checkpoint_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_immunotherapy",
+      "expectedToxicity": "Fatigue / reduced appetite",
+      "nutritionalInterventions": "• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity\n• Eat by the clock, not by hunger\n• Small energy- and protein-dense portions (ghee, nut butters, milk-powder fortification)\n• Liquids between meals\n• ONS if intake stays low",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 103",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_104",
+      "classId": "immune_checkpoint_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_immunotherapy",
+      "expectedToxicity": "Joint and muscle pain",
+      "nutritionalInterventions": "• Adequate protein and hydration\n• Check vitamin D status\n• No new supplements without approval\n• Gentle activity",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 104",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_105",
+      "classId": "immune_checkpoint_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_immunotherapy",
+      "expectedToxicity": "Steroid treatment for immune-related events",
+      "nutritionalInterventions": "• Take with food\n• Low sodium\n• Low-GI carbohydrate\n• Calcium 1,000–1,200 mg/day and vitamin D\n• Adequate protein\n• Monitor glucose",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 105",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_106",
+      "classId": "anti_estrogens_serms",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Hot flashes",
+      "nutritionalInterventions": "• Avoid triggers (spicy food, caffeine, alcohol, hot drinks)\n• Cool fluids\n• Light layered clothing\n• Regular meals",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 106",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_107",
+      "classId": "anti_estrogens_serms",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Weight gain",
+      "nutritionalInterventions": "• Calorie and portion awareness, protein at each meal, regular activity\n• Avoid fad diets or severe restriction during treatment",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 107",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_108",
+      "classId": "anti_estrogens_serms",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "High triglycerides / lipids",
+      "nutritionalInterventions": "• Low saturated fat\n• Limit sugar and alcohol\n• Include legumes, nuts, oats/soluble fiber, fish or flaxseed\n• Periodic lipid profile",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 108",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_109",
+      "classId": "anti_estrogens_serms",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Fatty liver / raised liver enzymes",
+      "nutritionalInterventions": "• Avoid alcohol, herbal/'detox' products, high-dose turmeric and green-tea extract\n• Do not restrict protein\n• Repeat LFT as scheduled\n• Weight control",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 109",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_110",
+      "classId": "anti_estrogens_serms",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Increased clot risk",
+      "nutritionalInterventions": "• Stay hydrated and mobile\n• Avoid prolonged sitting\n• Report calf pain, swelling or sudden breathlessness",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 110",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_111",
+      "classId": "anti_estrogens_serms",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Joint pain / injection-site pain (fulvestrant)",
+      "nutritionalInterventions": "• Adequate protein and hydration\n• Check vitamin D status\n• No new supplements without approval\n• Gentle activity",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 111",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_112",
+      "classId": "anti_estrogens_serms",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Bone health (premenopausal)",
+      "nutritionalInterventions": "• Calcium 1,000–1,200 mg/day in total (food first: milk, curd, paneer, ragi, sesame, leafy greens)\n• Check 25-OH vitamin D and supplement per level\n• Adequate protein\n• Weight-bearing and resistance exercise\n• Limit alcohol and excess sodium",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 112",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_113",
+      "classId": "anti_estrogens_serms",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Nausea (mild)",
+      "nutritionalInterventions": "• Small meals every 2–3 hours\n• Dry, bland, cool foods\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Antiemetics on schedule\n• Ginger in modest amounts",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 113",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_114",
+      "classId": "aromatase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Bone loss / osteoporosis",
+      "nutritionalInterventions": "• Calcium 1,000–1,200 mg/day in total (food first: milk, curd, paneer, ragi, sesame, leafy greens)\n• Check 25-OH vitamin D and supplement per level\n• Adequate protein\n• Weight-bearing and resistance exercise\n• Limit alcohol and excess sodium",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 114",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_115",
+      "classId": "aromatase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Joint pain and stiffness",
+      "nutritionalInterventions": "• Adequate protein and hydration\n• Check vitamin D status\n• No new supplements without approval\n• Gentle activity\n• Maintain a healthy weight\n• Regular exercise\n• Anti-inflammatory dietary pattern (vegetables, fruit, nuts, flaxseed)",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 115",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_116",
+      "classId": "aromatase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Hot flashes",
+      "nutritionalInterventions": "• Avoid triggers (spicy food, caffeine, alcohol, hot drinks)\n• Cool fluids\n• Light layered clothing\n• Regular meals",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 116",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_117",
+      "classId": "aromatase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "High cholesterol",
+      "nutritionalInterventions": "• Low saturated fat\n• Limit sugar and alcohol\n• Include legumes, nuts, oats/soluble fiber, fish or flaxseed\n• Periodic lipid profile",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 117",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_118",
+      "classId": "aromatase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Weight gain",
+      "nutritionalInterventions": "• Calorie and portion awareness, protein at each meal, regular activity\n• Avoid fad diets or severe restriction during treatment",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 118",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_119",
+      "classId": "aromatase_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Fatigue",
+      "nutritionalInterventions": "• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 119",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_120",
+      "classId": "anti_androgens_androgen_deprivation_therapy",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Hot flashes",
+      "nutritionalInterventions": "• Avoid triggers (spicy food, caffeine, alcohol, hot drinks)\n• Cool fluids\n• Light layered clothing\n• Regular meals",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 120",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_121",
+      "classId": "anti_androgens_androgen_deprivation_therapy",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Muscle loss and fat gain",
+      "nutritionalInterventions": "• Protein 1.2 g/kg/day or more unless renal restriction\n• Resistance exercise 2–3 times/week\n• Avoid unplanned weight loss",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 121",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_122",
+      "classId": "anti_androgens_androgen_deprivation_therapy",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Weight gain",
+      "nutritionalInterventions": "• Calorie and portion awareness, protein at each meal, regular activity\n• Avoid fad diets or severe restriction during treatment",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 122",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_123",
+      "classId": "anti_androgens_androgen_deprivation_therapy",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Insulin resistance / hyperglycemia",
+      "nutritionalInterventions": "• Consistent carbohydrate at each meal, low-GI choices, protein with each meal, no sugary drinks\n• Monitor glucose (especially on steroid days)\n• Monitor HbA1c",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 123",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_124",
+      "classId": "anti_androgens_androgen_deprivation_therapy",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Dyslipidemia and cardiovascular risk",
+      "nutritionalInterventions": "• Low saturated fat\n• Limit sugar and alcohol\n• Include legumes, nuts, oats/soluble fiber, fish or flaxseed\n• Periodic lipid profile\n• Heart-healthy, low-sodium diet\n• Steady fluid intake\n• Control BP, glucose and lipids\n• Limit alcohol\n• Avoid high-dose antioxidant supplements unless approved\n• Report breathlessness, swelling or palpitations",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 124",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_125",
+      "classId": "anti_androgens_androgen_deprivation_therapy",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Bone loss",
+      "nutritionalInterventions": "• Calcium 1,000–1,200 mg/day in total (food first: milk, curd, paneer, ragi, sesame, leafy greens)\n• Check 25-OH vitamin D and supplement per level\n• Adequate protein\n• Weight-bearing and resistance exercise\n• Limit alcohol and excess sodium",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 125",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_126",
+      "classId": "anti_androgens_androgen_deprivation_therapy",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Fatigue / reduced appetite / diarrhea",
+      "nutritionalInterventions": "• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity\n• Eat by the clock, not by hunger\n• Small energy- and protein-dense portions (ghee, nut butters, milk-powder fortification)\n• Liquids between meals\n• ONS if intake stays low",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 126",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_127",
+      "classId": "anti_androgens_androgen_deprivation_therapy",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Liver toxicity (bicalutamide, abiraterone)",
+      "nutritionalInterventions": "• Avoid alcohol, herbal/'detox' products, high-dose turmeric and green-tea extract\n• Do not restrict protein\n• Repeat LFT as scheduled",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 127",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_128",
+      "classId": "anti_androgens_androgen_deprivation_therapy",
+      "treatmentTypeId": "current_cancer_treatment_hormonal",
+      "expectedToxicity": "Hypertension, fluid retention, low potassium (abiraterone with prednisone)",
+      "nutritionalInterventions": "• Moderate sodium\n• Potassium-rich foods unless restricted\n• Monitor BP and potassium",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 128",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_129",
+      "classId": "cdk4_6_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Neutropenia (palbociclib, ribociclib)",
+      "nutritionalInterventions": "• Strict food safety (freshly cooked food; washed/peeled fruit; boiled or filtered water; no street food or leftovers older than 24 h)\n• Adequate protein and energy\n• Fever plan: temperature of 100 °F (37.8 °C) or above, or chills → contact the oncologist immediately",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 129",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_130",
+      "classId": "cdk4_6_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Diarrhea (most notable with abemaciclib)",
+      "nutritionalInterventions": "• Start ORS and fluids at the first loose stool\n• Take the prescribed antidiarrheal\n• Low-residue diet\n• Call if diarrhea lasts over 24 h or comes with fever, vomiting or dizziness",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 130",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_131",
+      "classId": "cdk4_6_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Nausea and vomiting",
+      "nutritionalInterventions": "• Small, frequent, bland, cool meals (khichdi, toast, murmura, banana)\n• Avoid fried, greasy, very sweet or spicy food\n• Sip fluids between meals\n• Sit upright 30–60 min after eating\n• Antiemetics on schedule\n• Ginger in modest amounts\n• ORS sips if vomiting\n• Call if more than 3 vomits/day or unable to keep fluids down for 24 h",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 131",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_132",
+      "classId": "cdk4_6_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Mouth sores",
+      "nutritionalInterventions": "• Soft, moist, lukewarm or cool foods (khichdi, dal, curd, porridge, mashed vegetables)\n• Avoid spicy, acidic, hot, crunchy or sharp foods\n• Use a straw\n• Bland salt–soda rinse after meals\n• Soft toothbrush\n• Call if unable to eat or drink, white patches or fever",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 132",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_133",
+      "classId": "cdk4_6_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Fatigue / reduced appetite",
+      "nutritionalInterventions": "• Regular meals and snacks, adequate protein and fluids\n• Check for anemia, thyroid dysfunction and dehydration\n• Gentle activity\n• Eat by the clock, not by hunger\n• Small energy- and protein-dense portions (ghee, nut butters, milk-powder fortification)\n• Liquids between meals\n• ONS if intake stays low",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 133",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_134",
+      "classId": "cdk4_6_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Anemia",
+      "nutritionalInterventions": "• Request iron studies, B12 and folate before supplementing\n• Iron-rich foods (ragi, bajra, sattu, leafy greens, beetroot, sesame) with a vitamin C source\n• Tea/coffee away from meals",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 134",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_135",
+      "classId": "cdk4_6_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Raised liver enzymes",
+      "nutritionalInterventions": "• Avoid alcohol, herbal/'detox' products, high-dose turmeric and green-tea extract\n• Do not restrict protein\n• Repeat LFT as scheduled",
+      "enabled": true,
+      "requiresDrugConfirmation": false,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 135",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_136",
+      "classId": "cdk4_6_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "QT prolongation (ribociclib)",
+      "nutritionalInterventions": "• Keep potassium, magnesium and calcium normal through diet and hydration\n• Avoid herbal products\n• ECG monitoring by the oncologist",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 136",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    },
+    {
+      "id": "toxicity_row_137",
+      "classId": "cdk4_6_inhibitors",
+      "treatmentTypeId": "current_cancer_treatment_targeted",
+      "expectedToxicity": "Raised creatinine (abemaciclib; usually not true kidney injury)",
+      "nutritionalInterventions": "• No protein restriction\n• Keep hydrated\n• Confirm with the oncologist",
+      "enabled": true,
+      "requiresDrugConfirmation": true,
+      "source": {
+        "document": "Oncology Drug Class & Nutrition Guide (NIQ)(Toxicity-Interventions).csv",
+        "location": "row 137",
+        "note": "Text verified against Toxicity-Interventions in the supplied ODS because the CSV replaces some arrows with ?."
+      }
+    }
+  ]
+}

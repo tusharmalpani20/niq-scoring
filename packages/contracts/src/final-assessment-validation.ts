@@ -103,6 +103,7 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
       const name = drugClass.label.trim().replace(/\s+/g, " ").toLowerCase();
       if (classNames.has(name)) add(`drugClassConfig.classes.${index}.label`, "DUPLICATE_DRUG_CLASS_NAME", "Drug class names must be unique.");
       classNames.add(name);
+      if (drugClass.id === "other" && drugClass.guidance?.trim()) add(`drugClassConfig.classes.${index}.guidance`, "OTHER_MUST_BE_GENERIC", "Other uses generic nutrition guidance only.");
     });
     const treatmentIds = new Set(definition.sections.flatMap(section => section.fields).filter(field => field.id === "current_cancer_treatment" && "options" in field).flatMap(field => "options" in field ? field.options.map(option => option.id) : []));
     const cancerIds = new Set<string>(cancerTypeIds);
@@ -110,11 +111,42 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
     suggestions.forEach((suggestion, index) => {
       const path = `drugClassConfig.suggestions.${index}`;
       if (!classIds.has(suggestion.classId)) add(`${path}.classId`, "UNKNOWN_DRUG_CLASS", "Suggestion references a drug class that is not configured.");
+      if (suggestion.classId === "other") add(`${path}.classId`, "OTHER_MUST_BE_GENERIC", "Other cannot have class-specific suggestions.");
       if (!treatmentIds.has(suggestion.treatmentTypeId)) add(`${path}.treatmentTypeId`, "UNKNOWN_TREATMENT", "Suggestion references an unknown treatment option.");
       if (suggestion.cancerTypeId !== null && !cancerIds.has(suggestion.cancerTypeId)) add(`${path}.cancerTypeId`, "UNKNOWN_CANCER_TYPE", "Suggestion references an unknown cancer option.");
       const key = JSON.stringify([suggestion.cancerTypeId, suggestion.treatmentTypeId, suggestion.classId]);
       if (triples.has(key)) add(path, "DUPLICATE_DRUG_CLASS_SUGGESTION", "This cancer, treatment and drug class suggestion already exists.");
       triples.add(key);
+    });
+  }
+  if (definition.reportGuidance) {
+    const configuredClasses = new Set(definition.drugClassConfig?.classes.map(item => item.id) ?? []);
+    const treatments = new Set(definition.sections.flatMap(section => section.fields)
+      .filter(field => field.id === "current_cancer_treatment" && "options" in field)
+      .flatMap(field => "options" in field ? field.options.map(option => option.id) : []));
+    const risks = new Set(definition.riskCategories.map(item => item.id));
+    const ids = new Set<string>();
+    const nutritionRisks = new Set<string>();
+    definition.reportGuidance.nutrition.forEach((rule, index) => {
+      const path = `reportGuidance.nutrition.${index}`;
+      if (ids.has(rule.id)) add(`${path}.id`, "DUPLICATE_GUIDANCE_ID", "Report guidance IDs must be unique.");
+      ids.add(rule.id);
+      if (rule.enabled && rule.riskCategoryId !== null && !risks.has(rule.riskCategoryId)) add(`${path}.riskCategoryId`, "UNKNOWN_RISK_CATEGORY", "Nutrition guidance refers to a missing risk category.");
+      if (rule.enabled && rule.riskCategoryId !== null && nutritionRisks.has(rule.riskCategoryId)) add(path, "DUPLICATE_NUTRITION_RISK", "Only one active nutrition row may apply to a risk category.");
+      if (rule.enabled && rule.riskCategoryId !== null) nutritionRisks.add(rule.riskCategoryId);
+    });
+    const toxicityKeys = new Set<string>();
+    definition.reportGuidance.toxicity.forEach((rule, index) => {
+      const path = `reportGuidance.toxicity.${index}`;
+      if (ids.has(rule.id)) add(`${path}.id`, "DUPLICATE_GUIDANCE_ID", "Report guidance IDs must be unique.");
+      ids.add(rule.id);
+      if (!rule.enabled) return;
+      if (rule.classId === "other") add(`${path}.classId`, "OTHER_MUST_BE_GENERIC", "Other cannot have toxicity interventions.");
+      if (!configuredClasses.has(rule.classId)) add(`${path}.classId`, "UNKNOWN_DRUG_CLASS", "Toxicity guidance refers to a missing drug class.");
+      if (!treatments.has(rule.treatmentTypeId)) add(`${path}.treatmentTypeId`, "UNKNOWN_TREATMENT", "Toxicity guidance refers to a missing treatment type.");
+      const key = JSON.stringify([rule.classId, rule.treatmentTypeId, rule.expectedToxicity.trim().toLowerCase()]);
+      if (toxicityKeys.has(key)) add(path, "DUPLICATE_TOXICITY_GUIDANCE", "An active toxicity entry already exists for this class, treatment and toxicity.");
+      toxicityKeys.add(key);
     });
   }
   if (definition.provisional.status === "CLIENT_CONFIRMED") {

@@ -63,7 +63,8 @@ const workbookCancerTypesByClass: Record<(typeof workbookClasses)[number][0], re
 
 export function initialDrugClassConfig(): DrugClassConfig {
   return {
-    classes: workbookClasses.map(([id, label]) => ({ id, label })),
+    // Other is a client-requested escape hatch, not a seventeenth workbook class.
+    classes: [...workbookClasses.map(([id, label]) => ({ id, label })), { id: "other", label: "Other" }],
     suggestions: workbookClasses.flatMap(([classId, , treatment]) =>
       workbookCancerTypesByClass[classId].map(cancerTypeId => ({
         cancerTypeId, treatmentTypeId: `current_cancer_treatment_${treatment}`, classId,
