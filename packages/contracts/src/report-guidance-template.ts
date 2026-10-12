@@ -8,7 +8,7 @@ type ReportGuidance = NonNullable<FinalAssessmentDefinition["reportGuidance"]>;
 // arrows/comparison symbols checked against the corresponding supplied ODS tabs.
 const defaults: ReportGuidance = reportGuidanceSchema.parse(workbookDefaults);
 
-/** Return independent editable rows for each new rule version or explicit import. */
+/** Return independent source rows; the rule template attaches audited match defaults. */
 export function initialReportGuidance(): ReportGuidance {
   const guidance = structuredClone(defaults);
   return { ...guidance, toxicity: guidance.toxicity.map(classOnlyToxicity) };

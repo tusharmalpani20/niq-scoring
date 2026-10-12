@@ -6,6 +6,27 @@ import { publicQuestionnaire } from "./rule-public";
 import { classOnlyToxicity, resolveReportGuidance } from "./report-guidance";
 
 describe("versioned report guidance", () => {
+  test("new rule versions include the reviewed toxicity matches", () => {
+    const first = createFinalAssessmentTemplate("First draft");
+    const second = createFinalAssessmentTemplate("Second draft");
+    const rows = first.reportGuidance!.toxicity;
+    expect(rows).toHaveLength(136);
+    expect(rows.filter(row => row.match?.mode === "assessment_answer")).toHaveLength(46);
+    expect(rows.filter(row => row.match?.mode === "weight_change")).toHaveLength(3);
+    expect(rows.filter(row => row.match?.mode === "clinician_confirmation")).toHaveLength(87);
+    expect(rows.every(row => row.match)).toBe(true);
+    expect(rows.find(row => row.id === "toxicity_row_009")?.match).toMatchObject({ mode: "assessment_answer", operator: "any" });
+    expect(rows.find(row => row.id === "toxicity_row_080")?.match).toEqual({ mode: "clinician_confirmation" });
+    expect(rows.find(row => row.id === "toxicity_row_107")?.match).toEqual({ mode: "weight_change", direction: "gain" });
+    const firstAnswer = rows.find(row => row.id === "toxicity_row_009")!.match;
+    if (firstAnswer?.mode !== "assessment_answer") throw new Error("expected a patient answer match");
+    firstAnswer.anyOf[0]!.optionId = "edited_only_in_first";
+    const secondAnswer = second.reportGuidance!.toxicity.find(row => row.id === "toxicity_row_009")?.match;
+    expect(secondAnswer?.mode).toBe("assessment_answer");
+    if (secondAnswer?.mode !== "assessment_answer") throw new Error("expected a patient answer match");
+    expect(secondAnswer.anyOf[0]?.optionId).toBe("dietary_symptoms_fatigue");
+  });
+
   test("new versions retain source provenance and use one class-wide toxicity label", () => {
     const guidance = initialReportGuidance();
     expect(guidance.nutrition.map(row => [row.riskCategoryId, row.source.location])).toEqual([

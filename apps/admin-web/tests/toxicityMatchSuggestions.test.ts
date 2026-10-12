@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createFinalAssessmentTemplate } from "@niq-scoring/contracts/final-assessment-template";
 import { validateFinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment-validation";
-import { toxicityMatchSuggestion } from "../src/rules/toxicityMatchSuggestions";
+import { toxicityMatchSuggestion } from "@niq-scoring/contracts/toxicity-match-defaults";
 
 describe("toxicity match review proposals", () => {
   test("covers each source row without assuming that clinical wording is a patient answer", () => {

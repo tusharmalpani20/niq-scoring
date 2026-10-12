@@ -91,6 +91,28 @@ describe("rule management API", () => {
     expect(saved.status).toBe(200);
     expect(((await saved.json()) as RuleRecord).definition).toMatchObject({ riskCategories: expect.arrayContaining([expect.objectContaining({ color: "#12aBcD" })]) });
   });
+  test("a new final assessment draft gets reviewed matches while duplication preserves its source", async () => {
+    const { request } = setup();
+    const created = await request("", "POST", { name: "New mapped rule", requestId: crypto.randomUUID(), template: "final_assessment" });
+    expect(created.status).toBe(201);
+    const draft = await created.json() as RuleRecord;
+    const definition = structuredClone(draft.definition) as FinalAssessmentDefinition;
+    expect(definition.reportGuidance!.toxicity.filter(row => row.match?.mode === "assessment_answer")).toHaveLength(46);
+    expect(definition.reportGuidance!.toxicity.filter(row => row.match?.mode === "weight_change")).toHaveLength(3);
+    expect(definition.reportGuidance!.toxicity.filter(row => row.match?.mode === "clinician_confirmation")).toHaveLength(87);
+    expect(draft.lifecycle).toBe("DRAFT");
+    expect(draft.clinicalUsePermitted).toBe(false);
+
+    definition.reportGuidance!.toxicity.find(row => row.id === "toxicity_row_009")!.match = { mode: "clinician_confirmation" };
+    const saved = await request(`/${draft.id}`, "PUT", { revision: draft.revision, definition });
+    expect(saved.status).toBe(200);
+    const copy = await request("", "POST", { name: "Mapped copy", requestId: crypto.randomUUID(), duplicateId: draft.id });
+    expect(copy.status).toBe(201);
+    const duplicated = await copy.json() as RuleRecord;
+    expect((duplicated.definition as FinalAssessmentDefinition).reportGuidance!.toxicity.find(row => row.id === "toxicity_row_009")?.match).toEqual({ mode: "clinician_confirmation" });
+    expect(duplicated.lifecycle).toBe("DRAFT");
+    expect(duplicated.clinicalUsePermitted).toBe(false);
+  });
   test("mutation responses include the recorded lifecycle history", async () => {
     const context = setup();
     const input = { name: "Audit response", template: "spreadsheet", requestId: crypto.randomUUID() };

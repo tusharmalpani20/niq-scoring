@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { ToxicityMatchEditor, toxicityMatchLabel } from "./ToxicityMatchEditor";
-import { toxicityMatchSuggestion } from "./toxicityMatchSuggestions";
+import { toxicityMatchSuggestion } from "@niq-scoring/contracts/toxicity-match-defaults";
 
 type Guidance = NonNullable<FinalAssessmentDefinition["reportGuidance"]>;
 type Nutrition = Guidance["nutrition"][number];

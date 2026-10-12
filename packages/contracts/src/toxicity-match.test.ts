@@ -26,6 +26,7 @@ describe("toxicity applicability contract", () => {
 
   test("keeps historical rows without a match readable", () => {
     const definition = createFinalAssessmentTemplate("Historical");
+    delete definition.reportGuidance!.toxicity[0]!.match;
     expect(definition.reportGuidance!.toxicity[0]!.match).toBeUndefined();
     expect(finalAssessmentDefinitionSchema.safeParse(definition).success).toBe(true);
   });
