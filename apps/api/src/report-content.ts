@@ -328,6 +328,10 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
         && /\b(?:potassium|magnesium)\b/i.test(sentence)))
         issues.push(`${field}:RENAL_ELECTROLYTE_FOODS_NEED_APPROVAL`);
       if (sentences.some(sentence =>
+        /\b(?:try|eat|include|choose|have|add|use|take)\b.{0,80}\b(?:banana|coconut water|potato(?:es)?|spinach|avocado)\b/i.test(sentence)
+        && !/\b(?:ask (?:your )?(?:care )?team|discuss with (?:your )?(?:care )?team|as (?:advised|directed|recommended) by|if (?:your )?(?:care )?team (?:advises|recommends|approves)|with (?:your )?(?:care )?team(?:'s)? approval)\b/i.test(sentence)))
+        issues.push(`${field}:RENAL_FOOD_EXAMPLE_NEEDS_APPROVAL`);
+      if (sentences.some(sentence =>
         (/\b(?:drink|sip|increase)\b.{0,80}\b(?:fluids?|water|ORS)\b/i.test(sentence)
           || /\b(?:take|use|try)\b.{0,80}\b(?:ORS|oral rehydration)\b/i.test(sentence)
           || /\bkeep fluids up\b/i.test(sentence))

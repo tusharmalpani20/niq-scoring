@@ -550,10 +550,18 @@ test("renal guidance blocks fixed nutrition and fluid instructions", () => {
     text: "Ask your care team whether potassium-rich foods fit your individual plan.", evidenceIds: ["rule:status:a"],
   } };
   expect(validateNarrative(checkedFoods, withStatus).issues).not.toContain("treatmentAdvice:RENAL_ELECTROLYTE_FOODS_NEED_APPROVAL");
+  const directBanana = { ...qualified, effectsAdvice: {
+    text: "For nausea, try small bland meals such as toast or banana.", evidenceIds: ["rule:toxicity:nausea"],
+  } };
+  const withToxicity = [...evidence, { id: "rule:toxicity:nausea", text: "For nausea, small bland meals such as toast or banana and ORS sips if vomiting." }];
+  expect(validateNarrative(directBanana, withToxicity).issues).toContain("effectsAdvice:RENAL_FOOD_EXAMPLE_NEEDS_APPROVAL");
+  const teamApprovedBanana = { ...qualified, effectsAdvice: {
+    text: "Ask your care team whether banana fits your kidney plan before including it.", evidenceIds: ["rule:toxicity:nausea", "rule:comorbidity:kidney"],
+  } };
+  expect(validateNarrative(teamApprovedBanana, withToxicity).issues).not.toContain("effectsAdvice:RENAL_FOOD_EXAMPLE_NEEDS_APPROVAL");
   const directOrs = { ...qualified, effectsAdvice: {
     text: "If vomiting occurs, take small sips of ORS.", evidenceIds: ["rule:toxicity:nausea"],
   } };
-  const withToxicity = [...evidence, { id: "rule:toxicity:nausea", text: "If vomiting occurs, take small sips of ORS." }];
   expect(validateNarrative(directOrs, withToxicity).issues).toContain("effectsAdvice:RENAL_FLUID_ADVICE_NEEDS_APPROVAL");
   const teamApprovedOrs = { ...qualified, effectsAdvice: {
     text: "If your care team recommends ORS, take small sips as directed.", evidenceIds: ["rule:toxicity:nausea"],
