@@ -1,6 +1,8 @@
 import postgres from "postgres";
 import { createEntityId } from "./lib/id";
 
+export const REPORT_RUN_LEASE_MS = 15 * 60 * 1000;
+
 export type ReportCall = {
   step: "writer" | "reviewer" | "revision";
   status: "SUCCEEDED" | "FAILED";
@@ -31,6 +33,8 @@ export type ReportRun = {
   status: "PROCESSING" | "READY" | "REVIEW_REQUIRED" | "FAILED";
   response: unknown | null;
   errorCode: string | null;
+  attemptId: string;
+  leaseExpiresAt: Date;
   createdAt: string;
   completedAt: string | null;
 };
@@ -40,42 +44,54 @@ export type ReportRunReservation =
   | { status: "DUPLICATE"; run: ReportRun }
   | { status: "CONFLICT" | "IN_PROGRESS" };
 
-export type NewReportRun = Omit<ReportRun, "id" | "status" | "response" | "errorCode" | "createdAt" | "completedAt">;
+export type NewReportRun = Omit<ReportRun, "id" | "status" | "response" | "errorCode" | "attemptId" | "leaseExpiresAt" | "createdAt" | "completedAt">;
 export type ReportRunSummary = Pick<ReportRun, "id" | "clientId" | "deploymentId" | "ruleVersionId" | "checksum" | "model" | "promptVersion" | "schemaVersion" | "status" | "errorCode" | "createdAt" | "completedAt"> & { calls: ReportCall[] };
 export type ReportRunPage = { items: ReportRunSummary[]; total: number; page: number; pageSize: number };
 
 export interface ReportGenerationStore {
   reserve(input: NewReportRun): Promise<ReportRunReservation>;
-  appendCall(runId: string, call: ReportCall): Promise<void>;
-  finish(runId: string, status: "READY" | "REVIEW_REQUIRED" | "FAILED", response: unknown | null, errorCode?: string): Promise<void>;
+  appendCall(runId: string, attemptId: string, call: ReportCall): Promise<boolean>;
+  finish(runId: string, attemptId: string, status: "READY" | "REVIEW_REQUIRED" | "FAILED", response: unknown | null, errorCode?: string): Promise<boolean>;
   list(input: { page: number; pageSize: number; clientId?: string }): Promise<ReportRunPage>;
 }
 
 export class MemoryReportGenerationStore implements ReportGenerationStore {
+  constructor(private readonly now = () => new Date()) {}
   runs: ReportRun[] = [];
   calls: Array<{ runId: string; call: ReportCall }> = [];
   async reserve(input: NewReportRun): Promise<ReportRunReservation> {
     const prior = this.runs.find(row => row.deploymentId === input.deploymentId && row.idempotencyKey === input.idempotencyKey);
     if (prior) {
       if (prior.fingerprint !== input.fingerprint) return { status: "CONFLICT" };
-      if (prior.status === "PROCESSING") return { status: "IN_PROGRESS" };
+      if (prior.status === "PROCESSING" && prior.leaseExpiresAt > this.now()) return { status: "IN_PROGRESS" };
       if (prior.response !== null) return { status: "DUPLICATE", run: prior };
       prior.status = "PROCESSING";
+      prior.attemptId = createEntityId();
+      prior.leaseExpiresAt = new Date(this.now().getTime() + REPORT_RUN_LEASE_MS);
       prior.errorCode = null;
-      return { status: "NEW", run: prior };
+      prior.completedAt = null;
+      return { status: "NEW", run: { ...prior } };
     }
-    const run: ReportRun = { ...input, id: createEntityId(), status: "PROCESSING", response: null, errorCode: null, createdAt: new Date().toISOString(), completedAt: null };
+    const run: ReportRun = { ...input, id: createEntityId(), status: "PROCESSING", response: null, errorCode: null,
+      attemptId: createEntityId(), leaseExpiresAt: new Date(this.now().getTime() + REPORT_RUN_LEASE_MS), createdAt: this.now().toISOString(), completedAt: null };
     this.runs.push(run);
     return { status: "NEW", run };
   }
-  async appendCall(runId: string, call: ReportCall) { this.calls.push({ runId, call }); }
-  async finish(runId: string, status: ReportRun["status"], response: unknown | null, errorCode?: string) {
+  async appendCall(runId: string, attemptId: string, call: ReportCall) {
+    const run = this.runs.find(row => row.id === runId);
+    if (!run || run.attemptId !== attemptId || run.status !== "PROCESSING" || run.leaseExpiresAt <= this.now()) return false;
+    this.calls.push({ runId, call });
+    return true;
+  }
+  async finish(runId: string, attemptId: string, status: "READY" | "REVIEW_REQUIRED" | "FAILED", response: unknown | null, errorCode?: string) {
     const run = this.runs.find(row => row.id === runId);
     if (!run) throw new Error("REPORT_RUN_NOT_FOUND");
+    if (run.attemptId !== attemptId || run.status !== "PROCESSING" || run.leaseExpiresAt <= this.now()) return false;
     run.status = status;
     run.response = response;
     run.errorCode = errorCode ?? null;
-    run.completedAt = new Date().toISOString();
+    run.completedAt = this.now().toISOString();
+    return true;
   }
   async list({ page, pageSize, clientId }: { page: number; pageSize: number; clientId?: string }): Promise<ReportRunPage> {
     const filtered = this.runs.filter(row => !clientId || row.clientId === clientId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -89,24 +105,30 @@ export class PostgresReportGenerationStore implements ReportGenerationStore {
   async reserve(input: NewReportRun): Promise<ReportRunReservation> {
     return this.database.begin(async tx => {
       await tx`select pg_advisory_xact_lock(hashtext(${`${input.deploymentId}:report:${input.idempotencyKey}`}))`;
-      const [prior] = await tx<ReportRun[]>`select id, client_id as "clientId", deployment_id as "deploymentId", assessment_reference as "assessmentReference", result_reference as "resultReference", rule_version_id as "ruleVersionId", checksum, idempotency_key as "idempotencyKey", fingerprint, model, prompt_version as "promptVersion", schema_version as "schemaVersion", status, response, error_code as "errorCode", created_at as "createdAt", completed_at as "completedAt" from report_generation_runs where deployment_id=${input.deploymentId} and idempotency_key=${input.idempotencyKey}`;
+      const [prior] = await tx<(ReportRun & { leaseActive: boolean })[]>`select id, client_id as "clientId", deployment_id as "deploymentId", assessment_reference as "assessmentReference", result_reference as "resultReference", rule_version_id as "ruleVersionId", checksum, idempotency_key as "idempotencyKey", fingerprint, model, prompt_version as "promptVersion", schema_version as "schemaVersion", status, response, error_code as "errorCode", attempt_id as "attemptId", lease_expires_at as "leaseExpiresAt", lease_expires_at > clock_timestamp() as "leaseActive", created_at as "createdAt", completed_at as "completedAt" from report_generation_runs where deployment_id=${input.deploymentId} and idempotency_key=${input.idempotencyKey}`;
       if (prior) {
         if (prior.fingerprint !== input.fingerprint) return { status: "CONFLICT" };
-        if (prior.status === "PROCESSING") return { status: "IN_PROGRESS" };
+        if (prior.status === "PROCESSING" && prior.leaseActive) return { status: "IN_PROGRESS" };
         if (prior.response !== null) return { status: "DUPLICATE", run: prior };
-        await tx`update report_generation_runs set status='PROCESSING', error_code=null, completed_at=null where id=${prior.id}`;
-        return { status: "NEW", run: { ...prior, status: "PROCESSING" as const } };
+        const attemptId = createEntityId();
+        const [updated] = await tx<Array<{ leaseExpiresAt: Date }>>`update report_generation_runs set status='PROCESSING', attempt_id=${attemptId}, lease_expires_at=clock_timestamp()+${REPORT_RUN_LEASE_MS}*interval '1 millisecond', response=null, error_code=null, completed_at=null where id=${prior.id} returning lease_expires_at as "leaseExpiresAt"`;
+        return { status: "NEW", run: { ...prior, status: "PROCESSING" as const, response: null, errorCode: null, completedAt: null, attemptId, leaseExpiresAt: updated!.leaseExpiresAt } };
       }
       const id = createEntityId();
-      await tx`insert into report_generation_runs (id,client_id,deployment_id,assessment_reference,result_reference,rule_version_id,checksum,idempotency_key,fingerprint,model,prompt_version,schema_version,status) values (${id},${input.clientId},${input.deploymentId},${input.assessmentReference},${input.resultReference},${input.ruleVersionId},${input.checksum},${input.idempotencyKey},${input.fingerprint},${input.model},${input.promptVersion},${input.schemaVersion},'PROCESSING')`;
-      return { status: "NEW", run: { ...input, id, status: "PROCESSING" as const, response: null, errorCode: null, createdAt: new Date().toISOString(), completedAt: null } };
+      const attemptId = createEntityId();
+      const [inserted] = await tx<Array<{ leaseExpiresAt: Date; createdAt: string }>>`insert into report_generation_runs (id,client_id,deployment_id,assessment_reference,result_reference,rule_version_id,checksum,idempotency_key,fingerprint,model,prompt_version,schema_version,status,attempt_id,lease_expires_at) values (${id},${input.clientId},${input.deploymentId},${input.assessmentReference},${input.resultReference},${input.ruleVersionId},${input.checksum},${input.idempotencyKey},${input.fingerprint},${input.model},${input.promptVersion},${input.schemaVersion},'PROCESSING',${attemptId},clock_timestamp()+${REPORT_RUN_LEASE_MS}*interval '1 millisecond') returning lease_expires_at as "leaseExpiresAt", created_at as "createdAt"`;
+      return { status: "NEW", run: { ...input, id, status: "PROCESSING" as const, response: null, errorCode: null, attemptId, leaseExpiresAt: inserted!.leaseExpiresAt, createdAt: inserted!.createdAt, completedAt: null } };
     });
   }
-  async appendCall(runId: string, call: ReportCall) {
-    await this.database`insert into report_generation_calls (id,run_id,step,status,model,provider,generation_id,prompt_tokens,completion_tokens,reasoning_tokens,cost_usd,latency_ms,error_code) values (${createEntityId()},${runId},${call.step},${call.status},${call.model},${call.provider},${call.generationId},${call.promptTokens},${call.completionTokens},${call.reasoningTokens},${call.costUsd},${call.latencyMs},${call.errorCode})`;
+  async appendCall(runId: string, attemptId: string, call: ReportCall) {
+    const inserted = await this.database`with current_run as (
+      select id from report_generation_runs where id=${runId} and attempt_id=${attemptId} and status='PROCESSING' and lease_expires_at>clock_timestamp() for update
+    ) insert into report_generation_calls (id,run_id,step,status,model,provider,generation_id,prompt_tokens,completion_tokens,reasoning_tokens,cost_usd,latency_ms,error_code) select ${createEntityId()},id,${call.step},${call.status},${call.model},${call.provider},${call.generationId},${call.promptTokens},${call.completionTokens},${call.reasoningTokens},${call.costUsd},${call.latencyMs},${call.errorCode} from current_run returning id`;
+    return inserted.length > 0;
   }
-  async finish(runId: string, status: ReportRun["status"], response: unknown | null, errorCode?: string) {
-    await this.database`update report_generation_runs set status=${status},response=${response === null ? null : this.database.json(response as never)},error_code=${errorCode ?? null},completed_at=now() where id=${runId} and status='PROCESSING'`;
+  async finish(runId: string, attemptId: string, status: "READY" | "REVIEW_REQUIRED" | "FAILED", response: unknown | null, errorCode?: string) {
+    const updated = await this.database`update report_generation_runs set status=${status},response=${response === null ? null : this.database.json(response as never)},error_code=${errorCode ?? null},completed_at=now() where id=${runId} and attempt_id=${attemptId} and status='PROCESSING' and lease_expires_at>clock_timestamp() returning id`;
+    return updated.length > 0;
   }
   async list({ page, pageSize, clientId }: { page: number; pageSize: number; clientId?: string }): Promise<ReportRunPage> {
     const [count] = await this.database<Array<{ total: number }>>`select count(*)::int as total from report_generation_runs where (${clientId ?? null}::text is null or client_id=${clientId ?? null})`;

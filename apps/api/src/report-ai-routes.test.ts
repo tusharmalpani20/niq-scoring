@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { createFinalAssessmentTemplate } from "@niq-scoring/contracts/final-assessment-template";
 import { createApp } from "./app";
 import { MemoryScoringStore } from "./store";
-import { MemoryReportGenerationStore } from "./report-generation-store";
+import { MemoryReportGenerationStore, REPORT_RUN_LEASE_MS } from "./report-generation-store";
 import { MemoryAdminAuthStore } from "./admin-auth-store";
 import { createEntityId } from "./lib/id";
 import { ruleChecksum } from "./rule-routes";
@@ -17,9 +17,8 @@ const usage = { model: "openai/gpt-6-luna", provider: "test-provider", generatio
 type Step = "writer" | "reviewer" | "revision";
 
 async function setup(handler: (step: Step, call: number, user: string, system: string) => unknown = step => step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative,
-  configure?: (definition: FinalAssessmentDefinition) => void) {
+  configure?: (definition: FinalAssessmentDefinition) => void, runs = new MemoryReportGenerationStore()) {
   const store = new MemoryScoringStore();
-  const runs = new MemoryReportGenerationStore();
   const definition = createFinalAssessmentTemplate("Report test");
   configure?.(definition);
   const rule = { id: createEntityId(), version: "Report test", lifecycle: "ACTIVE" as const, clinicalUsePermitted: true, definition,
@@ -33,7 +32,7 @@ async function setup(handler: (step: Step, call: number, user: string, system: s
   const token = `niq_dep_report123456.${"a".repeat(40)}`;
   store.credentials.push({ credentialId: createEntityId(), clientId: client.id, deploymentId: deployment.id, keyPrefix: "report123456", secretHash: new Bun.CryptoHasher("sha256").update(token).digest("hex") });
   let calls = 0;
-  const provider: ReportTextProvider = { complete: async ({ step, user, system }) => ({ content: handler(step, ++calls, user, system), usage }) };
+  const provider: ReportTextProvider = { complete: async ({ step, user, system }) => ({ content: await handler(step, ++calls, user, system), usage }) };
   const app = createApp({ store, authStore: new MemoryAdminAuthStore(), reportGenerationStore: runs, reportTextProvider: provider,
     region: "test", allowedOrigins: [], runtimeEnvironment: "test", provisionalScoringRequested: false, now: () => new Date("2026-01-02T00:00:00Z") });
   const call = (action: string, data: unknown) => app.request(`/v1/assessments/${action}`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(data) });
@@ -64,6 +63,33 @@ test("report content uses pinned rules, four bounded fields, idempotency, and sa
   expect(serialized).not.toContain(safePart.text);
   expect(serialized).not.toContain("writerPrompt");
   expect((await app.request("/v1/assessments/report-content", { method: "POST", body: JSON.stringify(request()) })).status).toBe(401);
+});
+
+test("an expired writer cannot publish over a retry with the same idempotency key", async () => {
+  let time = new Date("2026-01-02T00:00:00Z");
+  const runs = new MemoryReportGenerationStore(() => time);
+  let started!: () => void;
+  let release!: () => void;
+  const firstStarted = new Promise<void>(resolve => { started = resolve; });
+  const firstReleased = new Promise<void>(resolve => { release = resolve; });
+  const { call, request } = await setup(async (step, invocation) => {
+    if (step === "writer" && invocation === 1) { started(); await firstReleased; }
+    return step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative;
+  }, undefined, runs);
+  const first = call("report-content", request());
+  await firstStarted;
+  time = new Date(time.getTime() + REPORT_RUN_LEASE_MS + 1);
+  const retried = await call("report-content", request());
+  expect(retried.status).toBe(200);
+  const published = await retried.json();
+  expect(published.status).toBe("READY");
+  release();
+  const stale = await first;
+  expect(stale.status).toBe(409);
+  expect(await stale.json()).toEqual({ error: "REQUEST_IN_PROGRESS" });
+  expect(await (await call("report-content", request())).json()).toEqual(published);
+  const listing = await runs.list({ page: 1, pageSize: 10 });
+  expect(listing.items[0]?.calls).toHaveLength(2);
 });
 
 test("report content requires the completed assessment date", async () => {

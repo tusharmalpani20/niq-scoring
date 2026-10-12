@@ -255,6 +255,8 @@ export const reportGenerationRuns = pgTable("report_generation_runs", {
   status: varchar("status", { length: 30 }).notNull(),
   response: jsonb("response"),
   errorCode: varchar("error_code", { length: 80 }),
+  attemptId: varchar("attempt_id", { length: 26 }).notNull(),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
 }, table => [
