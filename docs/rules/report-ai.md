@@ -44,6 +44,9 @@ toxicities carry conditional nutrition guidance and remain separate from confirm
 toxicity interventions. Source wording that names an individual drug is withheld
 when only a class is known. The response
 does not contain the full rule definition, editable prompts, or source tables.
+When no single Products & doses rule is selected, Scoring omits the product plan
+and product exception wording from the report packet. Other matched sections can
+still be generated.
 
 The server runs one writer call, one reviewer call, and at most one targeted writer
 revision. A revised draft receives a second reviewer call. Local schema and

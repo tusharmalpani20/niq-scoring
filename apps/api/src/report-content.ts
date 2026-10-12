@@ -182,7 +182,10 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
       coMorbidities: care.coMorbidities.map(({ id, conditionId, label, guidance }) => ({ id, conditionId, label, guidance })),
       products: { status: care.products.status, plans: care.products.plans.map(({ id, stage, nutritionalStatus, products, dose, duration, items }) => ({ id, stage, nutritionalStatus, products, dose, duration, ...(items ? { items } : {}) })),
         ...(care.products.choices ? { choices: care.products.choices.map(({ id, stage, nutritionalStatus, products, dose, duration, items }) => ({ id, stage, nutritionalStatus, products, dose, duration, ...(items ? { items } : {}) })) } : {}),
-        notes: care.products.notes.map(({ id, kind, label, match, action, guidance }) => ({ id, kind, label, match, action, guidance })), ...(care.products.reason ? { reason: care.products.reason } : {}) },
+        // Exception wording is meaningful only with a selected product plan.
+        notes: care.products.status === "selected"
+          ? care.products.notes.map(({ id, kind, label, match, action, guidance }) => ({ id, kind, label, match, action, guidance }))
+          : [], ...(care.products.reason ? { reason: care.products.reason } : {}) },
     },
   };
 }

@@ -8,6 +8,7 @@ import { createEntityId } from "./lib/id";
 import { ruleChecksum } from "./rule-routes";
 import { ReportModelError, type ReportTextProvider } from "./openrouter-report-client";
 import { matchedReportPacket, reportEvidence } from "./report-content";
+import { resolveCarePlanGuidance } from "@niq-scoring/contracts/care-plan-resolver";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
 
 const safePart = { text: "The NIQ risk category needs clinician review.", evidenceIds: ["fact:niq_risk"] };
@@ -215,6 +216,32 @@ test("writer receives only the product plan after matched structured exceptions"
     notes: [{ action: { type: "remove", productName: "Nourish" } }] });
   expect(writerInputs.at(-1)).toContain("Remove Nourish from the product plan.");
   expect(writerInputs.at(-1)).toContain("Selected product plan: Invigour.");
+});
+
+test("an unresolved product plan withholds matched exception wording from the writer", async () => {
+  const writerInputs: string[] = [];
+  const { call, request, facts, rule } = await setup((step, _call, user) => {
+    if (step === "writer") writerInputs.push(user);
+    return step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative;
+  }, definition => {
+    definition.carePlanGuidance!.surgicalOverlapPolicy = "clinician_choice";
+  });
+  const matchedFacts = {
+    ...facts, treatmentStatusId: "treatment_status_under_treatment",
+    treatmentTypeIds: ["current_cancer_treatment_chemotherapy"],
+    surgicalStatusId: "cancer_surgical_status_done", surgeryDate: "2026-01-01",
+    dietPreferenceId: "vegetarian" as const,
+  };
+  const resolved = resolveCarePlanGuidance(rule.definition, {
+    ...matchedFacts, riskCategoryId: "low", asOfDate: matchedFacts.assessmentDate,
+  });
+  expect(resolved.products.notes.length).toBeGreaterThan(0);
+  const response = await call("report-content", request({ facts: matchedFacts }));
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.guidance.carePlan.products).toMatchObject({ status: "clinician_choice_required", plans: [], notes: [] });
+  expect(writerInputs.at(-1)).not.toContain("rule:exception:");
+  expect(writerInputs.at(-1)).not.toContain("Selected product plan:");
 });
 
 test("report includes only answer-matched guidance with actual reported symptom evidence", async () => {
