@@ -112,6 +112,8 @@ test("the reviewer receives independent fixed checks beyond editable wording", a
   expect((await call("report-content", request())).status).toBe(200);
   expect(systems.reviewer).toContain("independently reviewing a writer draft");
   expect(systems.reviewer).toContain("Check every claim against the cited evidence");
+  expect(systems.reviewer).toContain("does not establish kidney disease");
+  expect(systems.reviewer).toContain("early oral nutrition supplements");
   expect(systems.writer).not.toContain("independently reviewing a writer draft");
 });
 
