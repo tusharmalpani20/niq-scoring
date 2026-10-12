@@ -491,6 +491,29 @@ test("unsupported numerals trigger one revision and independent reviewer recheck
   expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.map(call => call.step)).toEqual(["writer", "reviewer", "revision", "reviewer"]);
 });
 
+test("a second targeted revision can resolve a remaining validation issue", async () => {
+  const first = { ...safeNarrative, overview: { text: "The score is 999.", evidenceIds: ["fact:niq_risk"] } };
+  const second = { ...safeNarrative, overview: { text: "The score is 888.", evidenceIds: ["fact:niq_risk"] } };
+  let revisions = 0;
+  const { call, request, getCalls } = await setup(step => step === "reviewer" ? { accepted: true, issues: [] }
+    : step === "writer" ? first : ++revisions === 1 ? second : safeNarrative);
+  const body = await (await call("report-content", request())).json();
+  expect(body.status).toBe("READY");
+  expect(body.narrative.overview).toEqual(safePart);
+  expect(getCalls()).toBe(6);
+});
+
+test("advice can cover several matched rules within its larger word budget", () => {
+  const evidence = [
+    { id: "rule:nutrition:a", text: "Nutrition support should be tailored to appetite and treatment tolerance." },
+    { id: "rule:status:b", text: "Monitor weekly intake and adjust the care plan with the treating team." },
+  ];
+  const narrative = { ...safeNarrative, nutritionAdvice: {
+    text: Array(100).fill("nutrition").join(" "), evidenceIds: ["rule:nutrition:a", "rule:status:b"],
+  } };
+  expect(validateNarrative(narrative, evidence).issues).not.toContain("nutritionAdvice:FIELD_TOO_LONG");
+});
+
 test("missing details leave unsupported passages empty without an unavailable-data placeholder", async () => {
   const omitted = { text: "", evidenceIds: [] };
   const draft = { ...safeNarrative, overview: safePart, keyFindings: omitted, actionSummary: omitted, monitoringSummary: omitted };
