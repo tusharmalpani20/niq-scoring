@@ -13,8 +13,10 @@ import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-ass
 
 const safePart = { text: "The NIQ risk category needs clinician review.", evidenceIds: ["fact:niq_risk"] };
 const omittedPart = { text: "", evidenceIds: [] as string[] };
+const defaultNutritionPart = { text: "Maintain nutrition and monitor appetite during treatment.", evidenceIds: ["rule:nutrition:nutrition_low"] };
 const safeNarrative = { overview: safePart, keyFindings: safePart, actionSummary: safePart, monitoringSummary: safePart,
-  nutritionAdvice: omittedPart, treatmentAdvice: omittedPart, conditionAdvice: omittedPart, effectsAdvice: omittedPart };
+  nutritionAdvice: defaultNutritionPart, treatmentAdvice: omittedPart, conditionAdvice: omittedPart, effectsAdvice: omittedPart };
+const noGuidanceNarrative = { ...safeNarrative, nutritionAdvice: omittedPart };
 const usage = { model: "openai/gpt-6-luna", provider: "test-provider", generationId: "gen-test", promptTokens: 120, completionTokens: 40, reasoningTokens: 5, costUsd: 0.001, latencyMs: 10 };
 type Step = "writer" | "reviewer" | "revision";
 
@@ -169,15 +171,36 @@ test("matched conditions and treatment effects cannot be silently omitted", () =
     { id: "rule:comorbidity:diabetes", text: "Diabetes: Review meal timing with the care team." },
     { id: "rule:toxicity:diarrhoea", text: "For reported diarrhoea, use the matched fluid advice and contact the team if it persists." },
   ];
-  const missing = validateNarrative(safeNarrative, evidence).issues;
+  const missing = validateNarrative(noGuidanceNarrative, evidence).issues;
   expect(missing).toContain("conditionAdvice:MISSING_MATCHED_COVERAGE");
   expect(missing).toContain("effectsAdvice:MISSING_MATCHED_COVERAGE");
-  const partial = { ...safeNarrative,
+  const partial = { ...noGuidanceNarrative,
     conditionAdvice: { text: "Review fluid and protein targets with the care team.", evidenceIds: ["rule:comorbidity:kidney"] },
     effectsAdvice: { text: "Contact the team if diarrhoea persists.", evidenceIds: ["rule:toxicity:diarrhoea"] },
   };
   expect(validateNarrative(partial, evidence).issues).toContain("conditionAdvice:MISSING_MATCHED_COVERAGE");
   expect(validateNarrative({ ...partial, conditionAdvice: { ...partial.conditionAdvice, evidenceIds: ["rule:comorbidity:kidney", "rule:comorbidity:diabetes"] } }, evidence).issues).toEqual([]);
+});
+
+test("matched nutrition and treatment advice cannot vanish from a ready report", () => {
+  const evidence = [
+    { id: "fact:niq_risk", text: "NIQ risk: High Risk; reviewed score 31" },
+    { id: "rule:nutrition:high", text: "Begin medically supervised nutrition support early." },
+    { id: "rule:status:poor", text: "Preserve lean body mass during treatment." },
+    { id: "rule:treatment:therapy", text: "Use small frequent meals to support intake." },
+    { id: "rule:class:platinum", text: "Monitor hydration during treatment." },
+    { id: "rule:product:selected", text: "Selected product plan: Invigour + Protect. Dose: 3 Invigour + 2 Protect." },
+  ];
+  const missing = validateNarrative(safeNarrative, evidence).issues;
+  expect(missing).toContain("nutritionAdvice:MISSING_MATCHED_COVERAGE");
+  expect(missing).toContain("treatmentAdvice:MISSING_MATCHED_COVERAGE");
+  const covered = { ...safeNarrative,
+    nutritionAdvice: { text: "Begin supervised support early to preserve muscle.", evidenceIds: ["rule:nutrition:high", "rule:status:poor"] },
+    treatmentAdvice: { text: "Try small frequent meals and monitor hydration.", evidenceIds: ["rule:treatment:therapy", "rule:class:platinum"] },
+    actionSummary: { text: "Take 3 Invigour and 2 Protect daily.", evidenceIds: ["rule:product:selected"] },
+  };
+  expect(validateNarrative(covered, evidence).issues).toContain("actionSummary:REPEATS_PRODUCT_PLAN");
+  expect(validateNarrative({ ...covered, actionSummary: omittedPart }, evidence).issues).toEqual([]);
 });
 
 test("weight evidence states direction and avoids inventing a time interval", () => {

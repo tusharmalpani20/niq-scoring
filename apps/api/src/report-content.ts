@@ -282,13 +282,22 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     effectsAdvice: ["rule:toxicity:"],
   };
   const issues: string[] = [];
-  // Matched condition and confirmed-effect guidance must not disappear merely
-  // because the model returned an empty field and the reviewer accepted it.
-  for (const [field, prefix] of [["conditionAdvice", "rule:comorbidity:"], ["effectsAdvice", "rule:toxicity:"]] as const) {
-    const required = evidence.filter(item => item.id.startsWith(prefix));
+  // Matched guidance must not disappear merely because the model returned an
+  // empty field and the reviewer accepted it.
+  for (const [field, prefixes] of [
+    ["nutritionAdvice", ["rule:nutrition:", "rule:status:"]],
+    ["treatmentAdvice", ["rule:treatment:", "rule:class:"]],
+    ["conditionAdvice", ["rule:comorbidity:"]],
+    ["effectsAdvice", ["rule:toxicity:"]],
+  ] as const) {
+    const required = evidence.filter(item => prefixes.some(prefix => item.id.startsWith(prefix)));
     if (required.some(item => !parsed.data[field].evidenceIds.includes(item.id)))
       issues.push(`${field}:MISSING_MATCHED_COVERAGE`);
   }
+  const productNames = evidence.filter(item => item.id.startsWith("rule:product:"))
+    .flatMap(item => /^Selected product plan: ([^.]+)\./.exec(item.text)?.[1]?.split(/\s+\+\s+/) ?? []);
+  if (productNames.some(name => name.length > 3 && new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(parsed.data.actionSummary.text)))
+    issues.push("actionSummary:REPEATS_PRODUCT_PLAN");
   for (const [field, part] of Object.entries(parsed.data)) {
     const selected = part.evidenceIds.map(id => evidenceById.get(id));
     if (selected.some(text => text === undefined)) issues.push(`${field}:UNKNOWN_EVIDENCE_ID`);
