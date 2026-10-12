@@ -327,6 +327,12 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
       if (sentences.some(sentence => /^\s*(?:include|eat|choose|add|increase)\b/i.test(sentence)
         && /\b(?:potassium|magnesium)\b/i.test(sentence)))
         issues.push(`${field}:RENAL_ELECTROLYTE_FOODS_NEED_APPROVAL`);
+      if (sentences.some(sentence =>
+        (/\b(?:drink|sip|increase)\b.{0,80}\b(?:fluids?|water|ORS)\b/i.test(sentence)
+          || /\b(?:take|use|try)\b.{0,80}\b(?:ORS|oral rehydration)\b/i.test(sentence)
+          || /\bkeep fluids up\b/i.test(sentence))
+        && !/\b(?:ask (?:your )?(?:care )?team|discuss with (?:your )?(?:care )?team|as (?:advised|directed|recommended) by|if (?:your )?(?:care )?team (?:advises|recommends|approves)|with (?:your )?(?:care )?team(?:'s)? approval)\b/i.test(sentence)))
+        issues.push(`${field}:RENAL_FLUID_ADVICE_NEEDS_APPROVAL`);
     }
   }
   const productNames = evidence.filter(item => item.id.startsWith("rule:product:"))
