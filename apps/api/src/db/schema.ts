@@ -5,6 +5,7 @@ import {
   foreignKey,
   index,
   integer,
+  numeric,
   jsonb,
   pgEnum,
   pgTable,
@@ -228,6 +229,53 @@ export const adminInvitations = pgTable("admin_invitations", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Report content is pseudonymous. Admin usage queries never select the response.
+export const reportGenerationRuns = pgTable("report_generation_runs", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  clientId: varchar("client_id", { length: 26 }).notNull().references(() => clients.id),
+  deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),
+  assessmentReference: varchar("assessment_reference", { length: 128 }).notNull(),
+  resultReference: varchar("result_reference", { length: 128 }).notNull(),
+  ruleVersionId: varchar("rule_version_id", { length: 26 }).notNull().references(() => scoringRuleVersions.id),
+  checksum: varchar("checksum", { length: 128 }).notNull(),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  fingerprint: varchar("fingerprint", { length: 128 }).notNull(),
+  model: varchar("model", { length: 80 }).notNull(),
+  promptVersion: varchar("prompt_version", { length: 128 }).notNull(),
+  schemaVersion: integer("schema_version").notNull(),
+  status: varchar("status", { length: 30 }).notNull(),
+  response: jsonb("response"),
+  errorCode: varchar("error_code", { length: 80 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, table => [
+  uniqueIndex("report_run_deployment_idempotency_uq").on(table.deploymentId, table.idempotencyKey),
+  index("report_run_client_created_idx").on(table.clientId, table.createdAt),
+  check("report_run_status_ck", sql`${table.status} in ('PROCESSING','READY','REVIEW_REQUIRED','FAILED')`),
+  foreignKey({ columns: [table.clientId, table.deploymentId], foreignColumns: [deployments.clientId, deployments.id], name: "report_run_authorized_deployment_client_fk" }),
+]);
+
+export const reportGenerationCalls = pgTable("report_generation_calls", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  runId: varchar("run_id", { length: 26 }).notNull().references(() => reportGenerationRuns.id),
+  step: varchar("step", { length: 20 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull(),
+  model: varchar("model", { length: 80 }).notNull(),
+  provider: varchar("provider", { length: 80 }),
+  generationId: varchar("generation_id", { length: 160 }),
+  promptTokens: integer("prompt_tokens"),
+  completionTokens: integer("completion_tokens"),
+  reasoningTokens: integer("reasoning_tokens"),
+  costUsd: numeric("cost_usd", { precision: 18, scale: 9 }),
+  latencyMs: integer("latency_ms").notNull(),
+  errorCode: varchar("error_code", { length: 80 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  index("report_calls_run_created_idx").on(table.runId, table.createdAt),
+  check("report_call_step_ck", sql`${table.step} in ('writer','reviewer','revision')`),
+  check("report_call_status_ck", sql`${table.status} in ('SUCCEEDED','FAILED')`),
+]);
 export const adminSessions = pgTable("admin_sessions", {
   tokenHash: varchar("token_hash", { length: 64 }).primaryKey(),
   userId: varchar("user_id", { length: 26 }).notNull().references(() => adminUsers.id),

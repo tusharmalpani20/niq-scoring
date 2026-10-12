@@ -3,6 +3,9 @@ import type { FaceScanWorkflow } from "./face-scan-workflow";
 import { installOrganizationInfoRoute } from "./organization-info";
 import { RuleStoreError } from "./rule-store";
 import { installAssessmentRoutes } from "./assessment-routes";
+import { installReportAiRoutes } from "./report-ai-routes";
+import { MemoryReportGenerationStore, type ReportGenerationStore } from "./report-generation-store";
+import type { ReportTextProvider } from "./openrouter-report-client";
 import { ruleChecksum } from "./rule-routes";
 import { installRuleRoutes } from "./rule-routes";
 import { DuplicateClientNameError } from "./lib/client-name";
@@ -42,6 +45,8 @@ export interface AppOptions {
   faceScanWebhookSecret?: string;
   readinessCheck?: () => Promise<boolean>;
   now?: () => Date;
+  reportGenerationStore?: ReportGenerationStore;
+  reportTextProvider?: ReportTextProvider;
 }
 
 async function sha256(value: string): Promise<string> {
@@ -319,6 +324,8 @@ export function createApp(options: AppOptions) {
 
   installOrganizationInfoRoute(app, options.store, authenticateDeployment, now);
   installAssessmentRoutes(app, options.store, authenticateDeployment, now, options.platformEnabled ?? true);
+  installReportAiRoutes(app, { scoringStore: options.store, runStore: options.reportGenerationStore ?? new MemoryReportGenerationStore(),
+    authenticate: authenticateDeployment, ...(options.reportTextProvider ? { provider: options.reportTextProvider } : {}), platformEnabled: options.platformEnabled ?? true, now });
 
   app.post("/v1/provisional/calculate", async (context) => {
     if (!provisionalScoringEnabled) return context.json({ error: "PROVISIONAL_SCORING_DISABLED" }, 503);

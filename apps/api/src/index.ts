@@ -6,6 +6,8 @@ import { PostgresAdminAuthStore } from "./admin-auth-store";
 import { createApp } from "./app";
 import { PostgresScoringStore } from "./postgres-store";
 import { createFaceScanAdapter } from "./face-scan";
+import { PostgresReportGenerationStore } from "./report-generation-store";
+import { OpenRouterReportClient } from "./openrouter-report-client";
 
 const environment = parseEnvironment(Bun.env);
 const database = postgres(environment.DATABASE_URL, { max: 2, idle_timeout: 10 });
@@ -23,6 +25,8 @@ const app = createApp({
   faceScanWebhookConfirmed: environment.FACE_SCAN_WEBHOOK_BEARER_CONFIRMED,
   ...(environment.FACE_SCAN_WEBHOOK_SECRET ? { faceScanWebhookSecret: environment.FACE_SCAN_WEBHOOK_SECRET } : {}),
   store: new PostgresScoringStore(database),
+  reportGenerationStore: new PostgresReportGenerationStore(database),
+  ...(environment.OPENROUTER_API_KEY ? { reportTextProvider: new OpenRouterReportClient(environment.OPENROUTER_API_KEY) } : {}),
   authStore: new PostgresAdminAuthStore(database),
   ...(environment.ADMIN_BOOTSTRAP_TOKEN ? { adminBootstrapToken: environment.ADMIN_BOOTSTRAP_TOKEN } : {}),
   allowedOrigins: environment.CORS_ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()),
@@ -42,6 +46,8 @@ const app = createApp({
           and to_regclass('public.admin_invitations') is not null
           and to_regclass('public.admin_sessions') is not null
           and to_regclass('public.admin_auth_attempts') is not null
+          and to_regclass('public.report_generation_runs') is not null
+          and to_regclass('public.report_generation_calls') is not null
           and (${!workflow} or (to_regclass('public.face_scan_workflows') is not null
             and exists(select 1 from information_schema.columns where table_schema='public' and table_name='face_scan_receipts' and column_name='receipt_ciphertext')
             and exists(select 1 from information_schema.columns where table_schema='public' and table_name='face_scan_workflows' and column_name='status_report_ciphertext'))) as "schemaReady"

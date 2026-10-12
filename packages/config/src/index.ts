@@ -28,6 +28,7 @@ const environmentSchema = z.object({
   CAREPLIX_API_SECRET: optionalSetting(z.string().min(1)),
   FACE_SCAN_WEBHOOK_SECRET: optionalSetting(z.string().min(24)),
   ENABLE_PROVISIONAL_SCORING: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  OPENROUTER_API_KEY: optionalSetting(z.string().min(1)),
 });
 
 export type Environment = z.infer<typeof environmentSchema>;
