@@ -1,8 +1,8 @@
 # Report text generation in Scoring
 
 NIQ Scoring owns rule matching and report text generation. NIQ Application sends a
-pseudonymous, structured fact packet and uses the returned text in its clinical
-review and PDF workflow. Scoring does not accept names, raw documents, face images,
+pseudonymous, structured fact packet after final clinical approval and uses the
+returned text in the automatically generated PDF. Scoring does not accept names, raw documents, face images,
 or free-form clinical notes at this endpoint.
 
 ## Configuration and deployment
@@ -53,8 +53,9 @@ revision. A revised draft receives a second reviewer call. Local schema and
 evidence checks run independently of the model reviewer. Reviewer issues receive
 at most one targeted revision. If issues remain, the affected passage is omitted
 while supported passages can still produce a `READY` result. A failed provider call
-cannot produce a `READY` result. The clinician still
-reviews and approves the final report in Application.
+cannot produce a `READY` result. Application stores the finished PDF after the one
+final clinical approval of the assessment. There is no second report approval in
+this workflow.
 
 The workflow is an explicit bounded function rather than a LangGraph dependency:
 the stages, retries, and durability are limited and visible in the Scoring store.

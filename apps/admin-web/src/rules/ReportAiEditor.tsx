@@ -42,7 +42,7 @@ export function ReportAiEditor({ definition, disabled, onChange }: Props) {
   return <section className="min-w-0 space-y-5 rounded-2xl border border-border/50 bg-card p-5 shadow-sm sm:p-6" aria-label="Report AI configuration">
     <div className="space-y-1">
       <h2 className="text-lg font-medium">Report AI</h2>
-      <p className="text-sm text-muted-foreground">Choose the wording instructions for this rule version. NIQ Scoring supplies confirmed facts and matched guidance to the writer, checks the draft, and returns text for clinician review.</p>
+      <p className="text-sm text-muted-foreground">Choose the wording instructions for this rule version. After final clinical approval in NIQ Application, Scoring matches the confirmed facts and guidance, checks the generated text, and returns supported passages for the report.</p>
     </div>
     {!config && disabled ? <p className="rounded-lg border bg-muted/30 p-4 text-sm">This version predates editable Report AI settings. It uses NIQ Scoring’s built-in baseline instructions. Duplicate the version to customise them.</p> : <fieldset disabled={disabled} className="space-y-5">
       <label className="flex items-start gap-3 rounded-lg border p-4 text-sm">
@@ -67,11 +67,11 @@ export function ReportAiEditor({ definition, disabled, onChange }: Props) {
       </label>
       <label className="block space-y-1.5 text-sm" htmlFor="report-ai-reviewer-prompt">
         <span className="font-medium">Reviewer instructions</span>
-        <span className="block text-muted-foreground">Tell the automated reviewer what clarity or wording problems to flag before a clinician sees the draft.</span>
+        <span className="block text-muted-foreground">Tell the automated reviewer what clarity or wording problems to flag before the report is finalized.</span>
         <Textarea id="report-ai-reviewer-prompt" rows={6} maxLength={4000} value={config?.reviewerPrompt ?? initialReportAiConfig().reviewerPrompt} onChange={event => change({ reviewerPrompt: event.target.value })} />
         {(config?.reviewerPrompt.trim().length ?? 0) < 10 && <span role="alert" className="block text-xs text-destructive">Enter at least 10 characters.</span>}
       </label>
-      <p className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">Safety checks, evidence limits, and report layout are fixed in NIQ Scoring. A clinician must approve the finished report in NIQ Application.</p>
+      <p className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">Safety checks and evidence limits are fixed in NIQ Scoring. Final clinical approval in NIQ Application starts automatic report and PDF generation.</p>
     </fieldset>}
   </section>;
 }
