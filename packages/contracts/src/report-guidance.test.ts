@@ -3,10 +3,10 @@ import { createFinalAssessmentTemplate } from "./final-assessment-template";
 import { validateFinalAssessmentDefinition } from "./final-assessment-validation";
 import { initialReportGuidance } from "./report-guidance-template";
 import { publicQuestionnaire } from "./rule-public";
-import { resolveReportGuidance } from "./report-guidance";
+import { classOnlyToxicity, resolveReportGuidance } from "./report-guidance";
 
 describe("versioned report guidance", () => {
-  test("new versions retain every CSV row with stable provenance and repaired symbols", () => {
+  test("new versions retain source provenance and use one class-wide toxicity label", () => {
     const guidance = initialReportGuidance();
     expect(guidance.nutrition.map(row => [row.riskCategoryId, row.source.location])).toEqual([
       ["high", "row 2"], ["moderate", "row 3"], ["low", "row 4"],
@@ -16,10 +16,30 @@ describe("versioned report guidance", () => {
     expect(new Set(guidance.toxicity.map(row => row.classId)).size).toBe(16);
     expect(guidance.nutrition[0]?.clinicalActions).toContain("≥75%");
     expect(guidance.toxicity[0]?.nutritionalInterventions).toContain("→ contact the oncologist");
-    expect(guidance.toxicity.find(row => row.id === "toxicity_row_033")?.requiresDrugConfirmation).toBe(true);
-    expect(guidance.toxicity.find(row => row.id === "toxicity_row_097")?.requiresDrugConfirmation).toBe(false);
-    expect(guidance.toxicity.filter(row => row.requiresDrugConfirmation)).toHaveLength(40);
-    expect(guidance.toxicity.filter(row => row.requiresDrugConfirmation).every(row => row.classLevelToxicity && row.classLevelInterventions)).toBe(true);
+    expect(guidance.toxicity.find(row => row.id === "toxicity_row_006")?.expectedToxicity).toBe("Diarrhea");
+    expect(guidance.toxicity.find(row => row.id === "toxicity_row_007")?.expectedToxicity).toBe("Fluid retention");
+    expect(guidance.toxicity.some(row => row.requiresDrugConfirmation || row.classLevelToxicity || row.classLevelInterventions)).toBe(false);
+  });
+
+  test("older saved rows still resolve to their class-wide wording", () => {
+    const original = initialReportGuidance().toxicity.find(row => row.id === "toxicity_row_006")!;
+    const legacy = { ...original, expectedToxicity: "Diarrhea (docetaxel, cabazitaxel)", requiresDrugConfirmation: true,
+      classLevelToxicity: "Diarrhea", classLevelInterventions: original.nutritionalInterventions };
+    const visible = classOnlyToxicity(legacy);
+    expect(visible.expectedToxicity).toBe("Diarrhea");
+    expect(visible.requiresDrugConfirmation).toBe(false);
+    expect(visible.classLevelToxicity).toBeUndefined();
+    const missingAlternative = { ...legacy, classLevelToxicity: undefined, classLevelInterventions: undefined };
+    expect(classOnlyToxicity(missingAlternative).expectedToxicity).toBe("Diarrhea");
+    expect(classOnlyToxicity({ ...missingAlternative, nutritionalInterventions: "Custom clinical wording" }).requiresDrugConfirmation).toBe(true);
+    const definition = createFinalAssessmentTemplate("Older draft");
+    definition.reportGuidance!.toxicity = definition.reportGuidance!.toxicity.map(row =>
+      row.id === missingAlternative.id ? missingAlternative : row);
+    const matched = resolveReportGuidance(definition, {
+      riskCategoryId: "low", treatmentTypeIds: ["current_cancer_treatment_chemotherapy"],
+      drugClassIds: ["taxanes"], confirmedToxicityIds: [missingAlternative.id],
+    });
+    expect(matched.toxicity.find(row => row.id === missingAlternative.id)?.expectedToxicity).toBe("Diarrhea");
   });
 
   test("defaults are independent and private guidance is absent from the questionnaire", () => {
@@ -54,7 +74,7 @@ describe("versioned report guidance", () => {
     expect(resolveReportGuidance(definition, facts).toxicity.find(rule => rule.id === "toxicity_row_033")?.nutritionalInterventions).not.toContain("oxaliplatin");
     expect(resolveReportGuidance(definition, facts).toxicity.find(rule => rule.id === "toxicity_row_032")?.expectedToxicity).toBe("Nephrotoxicity");
     expect(resolveReportGuidance(definition, { ...facts, confirmedToxicityIds: [] }).possibleToxicities.map(rule => rule.id)).toContain("toxicity_row_030");
-    expect(JSON.stringify(resolveReportGuidance(definition, { ...facts, confirmedToxicityIds: [] }).possibleToxicities)).not.toContain("nutritionalInterventions");
+    expect(resolveReportGuidance(definition, { ...facts, confirmedToxicityIds: [] }).possibleToxicities.find(rule => rule.id === "toxicity_row_033")?.nutritionalInterventions).not.toContain("oxaliplatin");
     expect(resolveReportGuidance(definition, facts).possibleToxicities.map(rule => rule.id)).toContain("toxicity_row_033");
     expect(resolveReportGuidance(definition, { ...facts, drugClassIds: ["other", "platinum_agents"] }).possibleToxicities).toEqual([]);
     expect(resolveReportGuidance(definition, { ...facts, confirmedToxicityIds: [] }).toxicity).toEqual([]);

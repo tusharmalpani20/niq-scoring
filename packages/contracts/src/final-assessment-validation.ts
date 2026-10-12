@@ -1,4 +1,4 @@
-import { finalAssessmentDefinitionSchema, type FinalAssessmentDefinition, type FinalAssessmentField } from "./final-assessment";
+import { TOXICITY_NON_SYMPTOM_OPTION_IDS, TOXICITY_SYMPTOM_FIELD_IDS, finalAssessmentDefinitionSchema, type FinalAssessmentDefinition, type FinalAssessmentField } from "./final-assessment";
 import { createFinalAssessmentTemplate, createLegacyFinalAssessmentTemplate } from "./final-assessment-template";
 import type { DefinitionIssue } from "./rule-definition";
 import { cancerTypeIds } from "./cancer-type-ids";
@@ -121,6 +121,7 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
     });
   }
   if (definition.reportGuidance) {
+    const assessmentFields = new Map(definition.sections.flatMap(section => section.fields).map(field => [field.id, field]));
     const configuredClasses = new Set(definition.drugClassConfig?.classes.map(item => item.id) ?? []);
     const treatments = new Set(definition.sections.flatMap(section => section.fields)
       .filter(field => field.id === "current_cancer_treatment" && "options" in field)
@@ -141,6 +142,32 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
       const path = `reportGuidance.toxicity.${index}`;
       if (ids.has(rule.id)) add(`${path}.id`, "DUPLICATE_GUIDANCE_ID", "Report guidance IDs must be unique.");
       ids.add(rule.id);
+      if (rule.match?.mode === "assessment_answer") {
+        const seenPairs = new Set<string>();
+        const selectedSingleAnswers = new Map<string, string>();
+        rule.match.anyOf.forEach((answer, answerIndex) => {
+          const answerPath = `${path}.match.anyOf.${answerIndex}`;
+          const pair = JSON.stringify([answer.fieldId, answer.optionId]);
+          if (seenPairs.has(pair)) add(answerPath, "DUPLICATE_MATCH_ANSWER", "Use each assessment field and answer only once in this match.");
+          seenPairs.add(pair);
+          const field = assessmentFields.get(answer.fieldId);
+          if (!field) add(`${answerPath}.fieldId`, "UNKNOWN_MATCH_FIELD", "Select an assessment field in this rule version.");
+          else if (!TOXICITY_SYMPTOM_FIELD_IDS.some(id => id === field.id)) add(`${answerPath}.fieldId`, "UNSUPPORTED_MATCH_FIELD", "Choose a patient-reported symptom field.");
+          else if (!("options" in field)) add(`${answerPath}.fieldId`, "UNSELECTABLE_MATCH_FIELD", "This assessment field has no selectable answers.");
+          else if (!field.options.some(option => option.id === answer.optionId)) add(`${answerPath}.optionId`, "UNKNOWN_MATCH_OPTION", "Select an answer belonging to this assessment field.");
+          else if (TOXICITY_NON_SYMPTOM_OPTION_IDS.some(id => id === answer.optionId)) add(`${answerPath}.optionId`, "NON_SYMPTOM_MATCH_OPTION", "Choose an answer that reports a symptom.");
+          if (rule.match?.mode === "assessment_answer" && rule.match.operator === "all" && field?.kind === "select") {
+            const previous = selectedSingleAnswers.get(field.id);
+            if (previous && previous !== answer.optionId) add(`${answerPath}.optionId`, "IMPOSSIBLE_ALL_MATCH", "A single-choice field cannot have two answers at once.");
+            selectedSingleAnswers.set(field.id, answer.optionId);
+          }
+        });
+      }
+      if (rule.match?.mode === "weight_change") {
+        const weight = assessmentFields.get("weight_loss");
+        if (weight?.kind !== "calculated" || weight.inputIds[0] !== "previous_weight_kg" || weight.inputIds[1] !== "current_weight_kg")
+          add(`${path}.match`, "WEIGHT_CHANGE_UNAVAILABLE", "Weight change requires the configured previous and current weight inputs.");
+      }
       if (!rule.enabled) return;
       if (Boolean(rule.classLevelToxicity) !== Boolean(rule.classLevelInterventions)) add(path, "INCOMPLETE_CLASS_LEVEL_GUIDANCE", "Class-level toxicity and intervention must be configured together.");
       if ((rule.classLevelToxicity || rule.classLevelInterventions) && !rule.requiresDrugConfirmation) add(path, "UNNECESSARY_CLASS_LEVEL_GUIDANCE", "Class-level alternatives require named drug confirmation on the source wording.");

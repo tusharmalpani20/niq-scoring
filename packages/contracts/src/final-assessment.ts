@@ -1,6 +1,7 @@
 import { faceScanScoringConfigSchema } from "./face-scan-scoring";
 import { stressScoringConfigSchema } from "./stress-scoring";
 import { carePlanGuidanceSchema } from "./care-plan-guidance";
+import { reportAiConfigSchema } from "./report-ai";
 import { z } from "zod";
 import { answerValueSchema, answersSchema, optionSchema, rangeSchema, ruleIdSchema, sourceSchema } from "./rule-definition";
 
@@ -128,6 +129,23 @@ export const drugClassConfigSchema = z.object({
 }).strict();
 
 /** Versioned source guidance for report composition. Toxicities describe possibilities. */
+export const TOXICITY_SYMPTOM_FIELD_IDS = ["gastrointestinal_symptoms", "dietary_symptoms", "appetite_status"] as const;
+export const TOXICITY_NON_SYMPTOM_OPTION_IDS = ["dietary_symptoms_no_problem", "appetite_status_normal"] as const;
+
+export const toxicityMatchSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("assessment_answer"),
+    // `anyOf` is retained for saved versions. `operator` defaults to "any";
+    // "all" requires every listed answer. References are version-validated.
+    anyOf: z.array(z.object({ fieldId: ruleIdSchema, optionId: ruleIdSchema }).strict()).min(1).max(50),
+    operator: z.enum(["any", "all"]).optional(),
+  }).strict(),
+  // Uses the two measured weights, not the score band that combines gain and
+  // no change. A weight direction is an observation, never a drug diagnosis.
+  z.object({ mode: z.literal("weight_change"), direction: z.enum(["gain", "loss"]) }).strict(),
+  z.object({ mode: z.literal("clinician_confirmation") }).strict(),
+]);
+
 export const reportGuidanceSchema = z.object({
   nutrition: z.array(z.object({
     id: ruleIdSchema, label, riskCategoryId: ruleIdSchema.nullable(),
@@ -140,6 +158,9 @@ export const reportGuidanceSchema = z.object({
     expectedToxicity: label, nutritionalInterventions: z.string().trim().min(1).max(8000),
     // Optional class-level wording when the source row also names an individual drug.
     classLevelToxicity: label.optional(), classLevelInterventions: z.string().trim().min(1).max(8000).optional(),
+    // Absent on historical rows: an unmapped row needs review and is never
+    // evidence of a patient-confirmed effect.
+    match: toxicityMatchSchema.optional(),
     enabled: z.boolean(), requiresDrugConfirmation: z.boolean(), source: sourceSchema,
   }).strict()).max(500),
 }).strict();
@@ -161,6 +182,8 @@ export const finalAssessmentDefinitionSchema = z.object({
   reportGuidance: reportGuidanceSchema.optional(),
   // Later guidance layers are optional so pinned historical versions keep their meaning.
   carePlanGuidance: carePlanGuidanceSchema.optional(),
+  // Historical approved versions remain readable without AI configuration.
+  reportAi: reportAiConfigSchema.optional(),
   riskCategories: z.array(finalRiskCategorySchema).min(1).max(20),
   provisional: z.union([z.object({
     status: z.literal(FINAL_ASSESSMENT_PROVISIONAL_STATUS),

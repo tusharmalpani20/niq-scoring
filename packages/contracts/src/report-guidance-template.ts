@@ -1,5 +1,6 @@
 import workbookDefaults from "./report-guidance-defaults.json" with { type: "json" };
 import { reportGuidanceSchema, type FinalAssessmentDefinition } from "./final-assessment";
+import { classOnlyToxicity } from "./report-guidance";
 
 type ReportGuidance = NonNullable<FinalAssessmentDefinition["reportGuidance"]>;
 
@@ -9,5 +10,6 @@ const defaults: ReportGuidance = reportGuidanceSchema.parse(workbookDefaults);
 
 /** Return independent editable rows for each new rule version or explicit import. */
 export function initialReportGuidance(): ReportGuidance {
-  return structuredClone(defaults);
+  const guidance = structuredClone(defaults);
+  return { ...guidance, toxicity: guidance.toxicity.map(classOnlyToxicity) };
 }

@@ -16,6 +16,7 @@
     "./drug-class-template": "./src/drug-class-template.ts",
     "./report-guidance-template": "./src/report-guidance-template.ts",
     "./report-guidance": "./src/report-guidance.ts",
+    "./report-ai": "./src/report-ai.ts",
     "./care-plan-guidance": "./src/care-plan-guidance.ts",
     "./care-plan-resolver": "./src/care-plan-resolver.ts",
     "./guidance-presentation": "./src/guidance-presentation.ts",

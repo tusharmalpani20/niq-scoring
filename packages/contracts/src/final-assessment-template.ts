@@ -4,6 +4,7 @@ import { finalAssessmentDefinitionSchema, type FinalAssessmentDefinition } from 
 import { initialDrugClassConfig } from "./drug-class-template";
 import { initialReportGuidance } from "./report-guidance-template";
 import { initialCarePlanGuidance } from "./care-plan-guidance";
+import { initialReportAiConfig } from "./report-ai";
 
 const document = "Final NIQ Assessment Form_with section_field_details.xlsx";
 const source = (location: string, note = "") => ({ document, location, note });
@@ -87,6 +88,7 @@ export function createLegacyFinalAssessmentTemplate(name: string): FinalAssessme
     provisional: { status: "DEVELOPMENT_PLACEHOLDER", clinicalUsePermitted: false, notice: "Temporary thresholds — awaiting confirmation. Internal draft evaluation only; blocked from clinical approval and use." },
     interventions: { status: "NOT_APPLICABLE", note: "Interventions are not finalized for the final assessment profile." },
     drugClassConfig: initialDrugClassConfig(),
+    reportAi: initialReportAiConfig(),
     samples: [],
   });
 }
