@@ -31,6 +31,12 @@ date. The reviewed score must equal
 the referenced Scoring result. Risk, treatment, drug class, co-morbidity, toxicity,
 and observation IDs are checked against the pinned rule and allowlists.
 
+Application is the trusted source for the remaining clinical facts in this release.
+It derives them from the completed submission and reviewed score, then sends only
+the allowlisted fields. Scoring does not retain a second assessment-answer snapshot
+and therefore cannot independently compare those facts with the original answers.
+Any other integration using a deployment credential must uphold the same boundary.
+
 Scoring resolves only matched guidance. The response contains four short narrative
 fields with evidence IDs, resolved guidance, result and rule provenance, model,
 prompt/schema versions, run ID, status, and issue codes. Possible treatment
