@@ -220,6 +220,18 @@ test("writer receives the matched cart quantities and descriptions", async () =>
   expect(writerInputs.at(-1)).toContain("Nourish: 2 per day; description: After meals");
 });
 
+test("writer and reviewer receive the patient's diet preference", async () => {
+  const prompts: Record<string, { user: string; system: string }> = {};
+  const { call, request, facts } = await setup((step, _call, user, system) => {
+    prompts[step] = { user, system };
+    return step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative;
+  });
+  expect((await call("report-content", request({ facts: { ...facts, dietPreferenceId: "jain" } }))).status).toBe(200);
+  expect(prompts.writer?.user).toContain('"id":"fact:diet_preference","text":"Reported diet preference: Jain"');
+  expect(prompts.writer?.system).toContain("omit incompatible examples");
+  expect(prompts.reviewer?.system).toContain("food suggestions that conflict with a reported diet preference");
+});
+
 test("writer receives the sheet's Surgical scoop quantity without a made-up daily frequency", async () => {
   const writerInputs: string[] = [];
   const { call, request, facts } = await setup((step, _call, user) => {

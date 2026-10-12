@@ -199,6 +199,10 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
 export type ReportEvidence = { id: string; text: string };
 export function reportEvidence(definition: FinalAssessmentDefinition, facts: ReportContentRequest["facts"], classification: { id: string; label: string }, packet: ReturnType<typeof matchedReportPacket>): ReportEvidence[] {
   const evidence: ReportEvidence[] = [{ id: "fact:niq_risk", text: `NIQ risk: ${classification.label}; reviewed score ${facts.reviewedScore}` }];
+  if (facts.dietPreferenceId) {
+    const dietNames = { vegetarian: "Vegetarian", non_vegetarian: "Non-vegetarian", eggetarian: "Eggetarian", jain: "Jain" };
+    evidence.push({ id: "fact:diet_preference", text: `Reported diet preference: ${dietNames[facts.dietPreferenceId]}` });
+  }
   for (const row of facts.observations) {
     const [label, unit] = observationLabels[row.id];
     evidence.push({ id: `fact:${row.id}`, text: `${label}: ${row.value}${unit ? ` ${unit}` : ""}${row.measuredAt ? ` on ${row.measuredAt}` : ""}` });
