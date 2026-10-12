@@ -29,7 +29,7 @@ export class OpenRouterReportClient implements ReportTextProvider {
             model: REPORT_AI_MODEL,
             // Eight evidence-linked passages need room for the full JSON response.
             max_tokens: input.step === "reviewer" ? 1400 : 3500,
-            reasoning: { effort: input.step === "reviewer" ? "low" : "medium" },
+            reasoning: { effort: "low" },
             provider: { only: ["azure"], allow_fallbacks: false, require_parameters: true, data_collection: "deny", zdr: true },
             response_format: { type: "json_schema", json_schema: { name: `niq_report_${input.step}`, strict: true, schema: input.schema } },
             messages: [{ role: "system", content: input.system }, { role: "user", content: input.user }],
@@ -66,7 +66,16 @@ export class OpenRouterReportClient implements ReportTextProvider {
           latencyMs: Math.round(performance.now() - started),
         } };
       } catch (error) {
-        if (error instanceof ReportModelError) throw error;
+        if (error instanceof ReportModelError) {
+          // The provider occasionally returns a successful response with no
+          // usable content. Retry that transient failure, but still fail closed.
+          if ((error.code === "MODEL_INVALID_RESPONSE" || error.code === "MODEL_INVALID_JSON") && attempt < 2) {
+            lastCode = error.code;
+            await Bun.sleep(250 * 2 ** attempt);
+            continue;
+          }
+          throw error;
+        }
         lastCode = error instanceof DOMException && error.name === "TimeoutError" ? "MODEL_TIMEOUT" : "MODEL_UNAVAILABLE";
         if (attempt < 2) { await Bun.sleep(250 * 2 ** attempt); continue; }
       }
