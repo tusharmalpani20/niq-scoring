@@ -14,6 +14,7 @@ import {
   Building2,
   Server,
   Layers3,
+  ChartNoAxesCombined,
   LogOut,
   CircleUserRound,
   ChevronDown,
@@ -26,6 +27,7 @@ import { OverviewGreeting } from "./OverviewGreeting";
 import { AdminDashboard } from "./AdminDashboard";
 import { ClientDetail } from "./ClientDetail";
 import { DeploymentDetail } from "./DeploymentDetail";
+import { ReportAiUsage } from "./ReportAiUsage";
 import { Button } from "./components/ui/button";
 import { ErrorNotice } from "./shared";
 import { clientUrl, deploymentUrl, resolveClient, resolveDeployment } from "./record-urls";
@@ -58,6 +60,12 @@ const pages = [
     label: "Rules",
     icon: Layers3,
     description: "Review scoring rule packages and their status.",
+  },
+  {
+    path: "report-ai-usage",
+    label: "AI usage",
+    icon: ChartNoAxesCombined,
+    description: "View report text generation runs and model usage.",
   },
 ];
 const router = createBrowserRouter([{ path: "*", element: <Console /> }]);
@@ -250,6 +258,8 @@ function Console() {
             <AdminDashboard />
           ) : page.path === "users" ? (
             <Users currentUser={user} />
+          ) : page.path === "report-ai-usage" ? (
+            <ReportAiUsage />
           ) : clientId ? <ClientDetail key={clientId} clientId={clientId} /> : data && deploymentId ? <DeploymentDetail key={deploymentId} data={data} deploymentId={deploymentId} refresh={refresh} /> : ["clients", "deployments", "versions"].includes(page.path) ? (
             <Operations
               key={page.path}
