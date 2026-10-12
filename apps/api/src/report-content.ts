@@ -68,7 +68,8 @@ export const reportToxicityOptionsRequestSchema = z.object({
   drugClassIds: ids,
 }).strict();
 
-const narrativePart = z.object({ text: z.string().trim().min(1).max(1200), evidenceIds: z.array(z.string().min(1).max(120)).min(1).max(20) }).strict();
+const narrativePart = z.object({ text: z.string().trim().max(1200), evidenceIds: z.array(z.string().min(1).max(120)).max(20) })
+  .strict().refine(part => Boolean(part.text) === (part.evidenceIds.length > 0), "A passage needs evidence; an omitted passage needs neither text nor evidence");
 export const narrativeSchema = z.object({
   overview: narrativePart,
   keyFindings: narrativePart,
@@ -225,10 +226,18 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
         ? `Selected product plan: ${row.products}. Dosage and preparation: ${details}. Duration: ${row.duration}.`
         : `Selected product plan: ${row.products}. Dose: ${row.dose}. Duration: ${row.duration}.` });
     }
-  } else if (packet.carePlan.products.status === "facts_required" || packet.carePlan.products.status === "clinician_choice_required") {
-    evidence.push({ id: "fact:product_plan_unresolved", text: `No product plan is selected. ${packet.carePlan.products.reason ?? "Clinician review is required."}` });
   }
   return evidence;
+}
+
+export const narrativeFieldNames = ["overview", "keyFindings", "actionSummary", "monitoringSummary"] as const;
+
+/** Remove only passages the final checks could not support, retaining reviewed sections. */
+export function omitNarrativeFields(value: unknown, fields: ReadonlySet<string>): ReportNarrative | null {
+  const parsed = narrativeSchema.safeParse(value);
+  if (!parsed.success) return null;
+  return Object.fromEntries(narrativeFieldNames.map(field => [field,
+    fields.has(field) ? { text: "", evidenceIds: [] } : parsed.data[field]])) as ReportNarrative;
 }
 
 /** Local checks do not replace clinical review, but reject malformed and ungrounded numerals. */
@@ -243,6 +252,7 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     const sourceNumbers = new Set(selected.flatMap(text => text?.match(/\d+(?:\.\d+)?/g) ?? []));
     if ((part.text.match(/\d+(?:\.\d+)?/g) ?? []).some(number => !sourceNumbers.has(number))) issues.push(`${field}:UNSUPPORTED_NUMBER`);
     if (/\b(?:diagnosed with|has developed|is experiencing)\b/i.test(part.text) && part.evidenceIds.some(id => id.startsWith("possible:"))) issues.push(`${field}:POSSIBLE_EFFECT_AS_CONFIRMED`);
+    if (/[;—\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(part.text)) issues.push(`${field}:REPORT_STYLE`);
   }
   return { narrative: issues.length ? null : parsed.data, issues };
 }

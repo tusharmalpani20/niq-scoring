@@ -277,6 +277,23 @@ test("unsupported numerals trigger one revision and independent reviewer recheck
   expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.map(call => call.step)).toEqual(["writer", "reviewer", "revision", "reviewer"]);
 });
 
+test("missing details leave unsupported passages empty without an unavailable-data placeholder", async () => {
+  const omitted = { text: "", evidenceIds: [] };
+  const draft = { overview: safePart, keyFindings: omitted, actionSummary: omitted, monitoringSummary: omitted };
+  const prompts: string[] = [];
+  const { call, request, getCalls } = await setup((step, _call, user) => {
+    prompts.push(user);
+    return step === "reviewer" ? { accepted: true, issues: [] } : draft;
+  });
+  const body = await (await call("report-content", request())).json();
+  expect(body.status).toBe("READY");
+  expect(body.narrative).toEqual(draft);
+  expect(body.omittedNarrativeFields).toEqual([]);
+  expect(prompts[0]).toContain('text "" and evidenceIds []');
+  expect(prompts[0]).not.toContain("No product plan is selected");
+  expect(getCalls()).toBe(2);
+});
+
 test("reviewed score must equal the completed result even with a fresh idempotency key", async () => {
   const { call, request, facts, runs } = await setup();
   const response = await call("report-content", request({ idempotencyKey: "new-report-key", facts: { ...facts, reviewedScore: 13 } }));
@@ -298,13 +315,38 @@ test("reviewer issues cause one targeted revision even if accepted flag is incon
   expect(getCalls()).toBe(4);
 });
 
-test("unresolved reviewer issues remain visible and require clinical review", async () => {
+test("a repeatedly rejected passage is omitted after one revision while supported passages remain", async () => {
   const { call, request, getCalls } = await setup(step => step === "reviewer"
     ? { accepted: true, issues: [{ field: "overview", code: "UNSUPPORTED_CLAIM", evidenceIds: ["fact:niq_risk"] }] }
     : safeNarrative);
   const body = await (await call("report-content", request())).json();
-  expect(body.status).toBe("REVIEW_REQUIRED");
-  expect(body.issues).toContain("overview:UNSUPPORTED_CLAIM");
+  expect(body.status).toBe("READY");
+  expect(body.issues).toEqual([]);
+  expect(body.omittedNarrativeFields).toEqual(["overview"]);
+  expect(body.narrative.overview).toEqual({ text: "", evidenceIds: [] });
+  expect(body.narrative.keyFindings).toEqual(safePart);
+  expect(getCalls()).toBe(4);
+});
+
+test("a still-unsupported number is omitted even if the reviewer accepts it", async () => {
+  const bad = { ...safeNarrative, actionSummary: { text: "Take 999 servings.", evidenceIds: ["fact:niq_risk"] } };
+  const { call, request, getCalls } = await setup(step => step === "reviewer" ? { accepted: true, issues: [] } : bad);
+  const body = await (await call("report-content", request())).json();
+  expect(body.status).toBe("READY");
+  expect(body.omittedNarrativeFields).toEqual(["actionSummary"]);
+  expect(body.narrative.actionSummary).toEqual({ text: "", evidenceIds: [] });
+  expect(body.narrative.overview).toEqual(safePart);
+  expect(getCalls()).toBe(4);
+});
+
+test("report text with forbidden punctuation or emoji is omitted after one failed revision", async () => {
+  const styled = { ...safeNarrative, overview: { text: "Review risk; monitor intake — today 🩺", evidenceIds: ["fact:niq_risk"] } };
+  const { call, request, getCalls } = await setup(step => step === "reviewer" ? { accepted: true, issues: [] } : styled);
+  const body = await (await call("report-content", request())).json();
+  expect(body.status).toBe("READY");
+  expect(body.omittedNarrativeFields).toEqual(["overview"]);
+  expect(body.narrative.overview).toEqual({ text: "", evidenceIds: [] });
+  expect(body.narrative.keyFindings).toEqual(safePart);
   expect(getCalls()).toBe(4);
 });
 
