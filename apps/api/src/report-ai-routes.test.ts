@@ -162,6 +162,33 @@ test("care plan passages require matching rule evidence and copied guidance is r
   expect(validateNarrative(copied, evidence).issues).toContain("nutritionAdvice:COPIED_GUIDANCE");
 });
 
+test("HbA1c wording is excluded from every report narrative field", () => {
+  const evidence = [
+    { id: "fact:niq_risk", text: "NIQ risk: High Risk; reviewed score 27" },
+    { id: "rule:comorbidity:row1", text: "Review body composition, HbA1c, and lipids." },
+  ];
+  for (const term of ["HbA1c", "A1c", "glycated haemoglobin", "glycated hemoglobin"]) {
+    const candidate = { ...safeNarrative, conditionAdvice: { text: `Review ${term} with the care team.`, evidenceIds: ["rule:comorbidity:row1"] } };
+    expect(validateNarrative(candidate, evidence).issues).toContain("conditionAdvice:EXCLUDED_REPORT_TERM");
+  }
+});
+
+test("an excluded term is removed through report revision before publication", async () => {
+  const unsafe = { ...safeNarrative, monitoringSummary: { text: "Review HbA1c during treatment.", evidenceIds: ["fact:niq_risk"] } };
+  const prompts: string[] = [];
+  const { call, request, getCalls } = await setup((step, _call, _user, system) => {
+    prompts.push(system);
+    return step === "reviewer" ? { accepted: true, issues: [] } : step === "writer" ? unsafe : safeNarrative;
+  });
+  const response = await call("report-content", request());
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.status).toBe("READY");
+  expect(JSON.stringify(body.narrative)).not.toMatch(/hba1c|\ba1c\b/i);
+  expect(getCalls()).toBe(4);
+  expect(prompts.every(system => system.includes("Do not mention HbA1c"))).toBe(true);
+});
+
 test("Other returns only generic nutrition guidance, never class toxicity or product plans", async () => {
   const { call, request, facts } = await setup();
   const response = await call("report-content", request({ facts: { ...facts, drugClassIds: ["other"] } }));
