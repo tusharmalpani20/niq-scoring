@@ -492,14 +492,14 @@ test("unsupported numerals trigger one revision and independent reviewer recheck
 });
 
 test("a second targeted revision can resolve a remaining validation issue", async () => {
-  const first = { ...safeNarrative, overview: { text: "The score is 999.", evidenceIds: ["fact:niq_risk"] } };
-  const second = { ...safeNarrative, overview: { text: "The score is 888.", evidenceIds: ["fact:niq_risk"] } };
+  const first = { ...safeNarrative, nutritionAdvice: { text: "Take 999 servings.", evidenceIds: ["rule:nutrition:nutrition_low"] } };
+  const second = { ...safeNarrative, nutritionAdvice: { text: "Take 888 servings.", evidenceIds: ["rule:nutrition:nutrition_low"] } };
   let revisions = 0;
   const { call, request, getCalls } = await setup(step => step === "reviewer" ? { accepted: true, issues: [] }
-    : step === "writer" ? first : ++revisions === 1 ? second : safeNarrative);
+    : step === "writer" ? first : ++revisions === 1 ? second : defaultNutritionPart);
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
-  expect(body.narrative.overview).toEqual(safePart);
+  expect(body.narrative.nutritionAdvice).toEqual(defaultNutritionPart);
   expect(getCalls()).toBe(6);
 });
 
