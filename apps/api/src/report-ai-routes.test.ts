@@ -7,7 +7,7 @@ import { MemoryAdminAuthStore } from "./admin-auth-store";
 import { createEntityId } from "./lib/id";
 import { ruleChecksum } from "./rule-routes";
 import { ReportModelError, type ReportTextProvider } from "./openrouter-report-client";
-import { matchedReportPacket, reportEvidence, validateNarrative } from "./report-content";
+import { matchedReportPacket, normalizeNarrativePunctuation, reportEvidence, validateNarrative } from "./report-content";
 import { resolveCarePlanGuidance } from "@niq-scoring/contracts/care-plan-resolver";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
 
@@ -514,6 +514,17 @@ test("advice can cover several matched rules within its larger word budget", () 
   expect(validateNarrative(narrative, evidence).issues).not.toContain("nutritionAdvice:FIELD_TOO_LONG");
 });
 
+test("treatment guidance can cover several matched rules without clipping its advice", () => {
+  const evidence = [{ id: "rule:treatment:a", text: "Discuss treatment nutrition with the care team." }];
+  const narrative = { ...safeNarrative, treatmentAdvice: {
+    text: Array(145).fill("care").join(" "), evidenceIds: ["rule:treatment:a"],
+  } };
+  expect(validateNarrative(narrative, evidence).issues).not.toContain("treatmentAdvice:FIELD_TOO_LONG");
+  expect(validateNarrative({ ...narrative, treatmentAdvice: {
+    ...narrative.treatmentAdvice, text: Array(161).fill("care").join(" "),
+  } }, evidence).issues).toContain("treatmentAdvice:FIELD_TOO_LONG");
+});
+
 test("renal guidance blocks fixed nutrition and fluid instructions", () => {
   const evidence = [
     { id: "rule:nutrition:a", text: "Energy 25–30 kcal/kg/day and protein 1.2–1.5 g/kg/day." },
@@ -592,15 +603,15 @@ test("a still-unsupported number is omitted even if the reviewer accepts it", as
   expect(getCalls()).toBe(4);
 });
 
-test("report text with forbidden punctuation or emoji is omitted after one failed revision", async () => {
+test("model punctuation and emoji are cleaned before independent clinical review", async () => {
   const styled = { ...safeNarrative, overview: { text: "Review risk; monitor intake — today 🩺", evidenceIds: ["fact:niq_risk"] } };
   const { call, request, getCalls } = await setup(step => step === "reviewer" ? { accepted: true, issues: [] } : styled);
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
-  expect(body.omittedNarrativeFields).toEqual(["overview"]);
-  expect(body.narrative.overview).toEqual({ text: "", evidenceIds: [] });
-  expect(body.narrative.keyFindings).toEqual(safePart);
-  expect(getCalls()).toBe(4);
+  expect(body.omittedNarrativeFields).toEqual([]);
+  expect(body.narrative.overview).toEqual({ text: "Review risk. Monitor intake, today", evidenceIds: ["fact:niq_risk"] });
+  expect(getCalls()).toBe(2);
+  expect(validateNarrative(normalizeNarrativePunctuation(styled), [{ id: "fact:niq_risk", text: "Review risk and monitor intake." }]).issues).not.toContain("overview:REPORT_STYLE");
 });
 
 test("caller supplied observation labels never enter model context", async () => {

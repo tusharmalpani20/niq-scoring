@@ -28,8 +28,8 @@ export class OpenRouterReportClient implements ReportTextProvider {
           body: JSON.stringify({
             model: REPORT_AI_MODEL,
             // Eight evidence-linked passages need room for the full JSON response.
-            max_tokens: input.step === "reviewer" ? 1400 : 2600,
-            reasoning: { effort: "low" },
+            max_tokens: input.step === "reviewer" ? 1400 : 3500,
+            reasoning: { effort: input.step === "reviewer" ? "low" : "medium" },
             provider: { only: ["azure"], allow_fallbacks: false, require_parameters: true, data_collection: "deny", zdr: true },
             response_format: { type: "json_schema", json_schema: { name: `niq_report_${input.step}`, strict: true, schema: input.schema } },
             messages: [{ role: "system", content: input.system }, { role: "user", content: input.user }],

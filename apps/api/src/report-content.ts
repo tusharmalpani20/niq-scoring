@@ -83,6 +83,23 @@ export const narrativeSchema = z.object({
   effectsAdvice: narrativePart,
 }).strict();
 export type ReportNarrative = z.infer<typeof narrativeSchema>;
+
+/** Remove harmless model formatting before clinical validation and review. */
+export function normalizeNarrativePunctuation(value: unknown): unknown {
+  const parsed = narrativeSchema.safeParse(value);
+  if (!parsed.success) return value;
+  return Object.fromEntries(narrativeFieldNames.map(field => {
+    const part = parsed.data[field];
+    const text = part.text
+      .replace(/;\s*([\p{L}])/gu, (_match, next: string) => `. ${next.toLocaleUpperCase()}`)
+      .replace(/;/gu, ".")
+      .replace(/\s*—\s*/gu, ", ")
+      .replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}]/gu, "")
+      .replace(/\s+/gu, " ")
+      .trim();
+    return [field, { text, evidenceIds: part.evidenceIds }];
+  })) as ReportNarrative;
+}
 export const reviewSchema = z.object({
   accepted: z.boolean(),
   issues: z.array(z.object({ field: z.enum(narrativeFieldNames), code: z.enum(["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"]), evidenceIds: z.array(z.string()).max(10) }).strict()).max(10),
@@ -323,7 +340,7 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
       issues.push(`${field}:COPIED_GUIDANCE`);
     const sourceNumbers = new Set(selected.flatMap(text => text?.match(/\d+(?:\.\d+)?/g) ?? []));
     if ((part.text.match(/\d+(?:\.\d+)?/g) ?? []).some(number => !sourceNumbers.has(number))) issues.push(`${field}:UNSUPPORTED_NUMBER`);
-    const maxWords = /Advice$/u.test(field) ? 120 : 80;
+    const maxWords = field === "treatmentAdvice" ? 160 : /Advice$/u.test(field) ? 120 : 80;
     if (part.text.trim().split(/\s+/u).length > maxWords) issues.push(`${field}:FIELD_TOO_LONG`);
     if (/\b(?:hba1c|h1bac|hb\s*a1c|a1c|glycated\s+ha?emoglobin)\b/i.test(part.text)) issues.push(`${field}:EXCLUDED_REPORT_TERM`);
     if (/\b(?:diagnosed with|has developed|is experiencing)\b/i.test(part.text) && part.evidenceIds.some(id => id.startsWith("possible:"))) issues.push(`${field}:POSSIBLE_EFFECT_AS_CONFIRMED`);
