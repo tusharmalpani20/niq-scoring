@@ -36,6 +36,7 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
       dietPreferenceId: z.enum(["vegetarian", "non_vegetarian", "eggetarian", "jain"]).optional(),
       treatmentStatusId: z.string().optional(), surgicalStatusId: z.string().optional(),
       surgeryDate: calendarDate.optional(), plannedSurgeryDate: calendarDate.optional(), plannedTreatmentStartDate: calendarDate.optional(),
+      assessmentDate: calendarDate.optional(),
       productStageChoice: z.enum(["surgical", "treatment_stage"]).optional(),
     }).strict().safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
@@ -95,11 +96,15 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
         plannedSurgeryDate: parsed.data.plannedSurgeryDate ?? null,
         plannedTreatmentStartDate: parsed.data.plannedTreatmentStartDate ?? null,
         productStageChoice: parsed.data.productStageChoice ?? null,
-        asOfDate: now().toISOString().slice(0, 10),
+        asOfDate: parsed.data.assessmentDate ?? now().toISOString().slice(0, 10),
       });
       return c.json({ assessmentReference: binding.assessmentReference, bindingId: binding.id,
         ruleVersionId: rule.id, checksum: binding.checksum, classification: { id: classification.id, label: classification.label },
-        guidance: { ...matched, carePlan } });
+        guidance: { ...matched,
+          // A possible effect is a label for clinical consideration, not patient-specific advice.
+          possibleToxicities: matched.possibleToxicities.map(({ id, classId, treatmentTypeId, expectedToxicity }) =>
+            ({ id, classId, treatmentTypeId, expectedToxicity })),
+          carePlan } });
     } catch (cause) {
       if (cause instanceof BindingError) return c.json({ error: cause.code }, cause.code === "ASSESSMENT_NOT_FOUND" ? 404 : 409);
       throw cause;
