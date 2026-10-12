@@ -327,7 +327,7 @@ export function createApp(options: AppOptions) {
   installOrganizationInfoRoute(app, options.store, authenticateDeployment, now);
   installAssessmentRoutes(app, options.store, authenticateDeployment, now, options.platformEnabled ?? true);
   installReportAiRoutes(app, { scoringStore: options.store, runStore: options.reportGenerationStore ?? new MemoryReportGenerationStore(),
-    authenticate: authenticateDeployment, ...(options.reportTextProvider ? { provider: options.reportTextProvider } : {}), platformEnabled: options.platformEnabled ?? true, now });
+    authenticate: authenticateDeployment, ...(options.reportTextProvider ? { provider: options.reportTextProvider } : {}), platformEnabled: options.platformEnabled ?? true });
 
   app.post("/v1/provisional/calculate", async (context) => {
     if (!provisionalScoringEnabled) return context.json({ error: "PROVISIONAL_SCORING_DISABLED" }, 503);

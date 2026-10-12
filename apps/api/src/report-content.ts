@@ -48,7 +48,7 @@ export const reportContentRequestSchema = z.object({
     surgeryDate: calendarDate.optional(),
     plannedSurgeryDate: calendarDate.optional(),
     plannedTreatmentStartDate: calendarDate.optional(),
-    assessmentDate: calendarDate.optional(),
+    assessmentDate: calendarDate,
     productStageChoice: z.enum(["surgical", "treatment_stage"]).optional(),
     observations: z.array(z.object({
       id: observationId,
@@ -194,12 +194,12 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
     const [label, unit] = observationLabels[row.id];
     evidence.push({ id: `fact:${row.id}`, text: `${label}: ${row.value}${unit ? ` ${unit}` : ""}${row.measuredAt ? ` on ${row.measuredAt}` : ""}` });
   }
-  for (const row of packet.nutritionInterventions) evidence.push({ id: `rule:${row.id}`, text: `${row.label}. ${row.coreStrategy}. ${row.clinicalActions}` });
-  for (const row of packet.classGuidance) evidence.push({ id: `rule:class_${row.id}`, text: `${row.label}: ${row.guidance}` });
+  for (const row of packet.nutritionInterventions) evidence.push({ id: `rule:nutrition:${row.id}`, text: `${row.label}. ${row.coreStrategy}. ${row.clinicalActions}` });
+  for (const row of packet.classGuidance) evidence.push({ id: `rule:class:${row.id}`, text: `${row.label}: ${row.guidance}` });
   // Source titles can combine effects. Separate observed facts from the
   // guidance text so the model cannot use the title as symptom evidence.
   for (const row of packet.toxicityInterventions) {
-    evidence.push({ id: `rule:${row.id}`, text: `Nutrition guidance for a matched treatment effect: ${row.nutritionalInterventions}` });
+    evidence.push({ id: `rule:toxicity:${row.id}`, text: `Nutrition guidance for a matched treatment effect: ${row.nutritionalInterventions}` });
     const source = definition.reportGuidance?.toxicity.find(item => item.id === row.id);
     if (source?.match?.mode === "clinician_confirmation") {
       evidence.push({ id: `fact:clinician_toxicity_${row.id}`, text: `Clinician confirmed treatment effect: ${row.expectedToxicity}` });
@@ -211,10 +211,10 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
         evidence.push({ id: `fact:assessment_${row.id}_${index}`, text: `Patient reported ${label}` });
     }
   }
-  for (const row of packet.carePlan.statusModifiers) evidence.push({ id: `rule:${row.id}`, text: `${row.riskEmphasis}. ${row.actions}` });
-  for (const row of packet.carePlan.treatmentGuidance) evidence.push({ id: `rule:${row.id}`, text: row.guidance });
-  for (const row of packet.carePlan.coMorbidities) evidence.push({ id: `rule:${row.id}`, text: `${row.label}: ${row.guidance}` });
-  for (const row of packet.carePlan.products.notes) evidence.push({ id: `rule:${row.id}`,
+  for (const row of packet.carePlan.statusModifiers) evidence.push({ id: `rule:status:${row.id}`, text: `${row.riskEmphasis}. ${row.actions}` });
+  for (const row of packet.carePlan.treatmentGuidance) evidence.push({ id: `rule:treatment:${row.id}`, text: row.guidance });
+  for (const row of packet.carePlan.coMorbidities) evidence.push({ id: `rule:comorbidity:${row.id}`, text: `${row.label}: ${row.guidance}` });
+  for (const row of packet.carePlan.products.notes) evidence.push({ id: `rule:exception:${row.id}`,
     text: `${row.label}: ${row.action ? productExceptionActionText(row.action) : row.guidance}${row.action && row.guidance ? ` Explanation: ${row.guidance}` : ""}` });
   if (packet.carePlan.products.status === "selected") {
     for (const row of packet.carePlan.products.plans) {
@@ -222,7 +222,7 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
         : item.productName === "Liss WH" && item.description === "leveled scoops in 150ml water"
           ? `${item.quantityPerDay} ${item.description}`
           : `${item.quantityPerDay} per day${item.description ? `; description: ${item.description}` : ""}`}`).join(". ");
-      evidence.push({ id: `rule:${row.id}`, text: details
+      evidence.push({ id: `rule:product:${row.id}`, text: details
         ? `Selected product plan: ${row.products}. Dosage and preparation: ${details}. Duration: ${row.duration}.`
         : `Selected product plan: ${row.products}. Dose: ${row.dose}. Duration: ${row.duration}.` });
     }
@@ -251,6 +251,7 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     if (selected.some(text => text === undefined)) issues.push(`${field}:UNKNOWN_EVIDENCE_ID`);
     const sourceNumbers = new Set(selected.flatMap(text => text?.match(/\d+(?:\.\d+)?/g) ?? []));
     if ((part.text.match(/\d+(?:\.\d+)?/g) ?? []).some(number => !sourceNumbers.has(number))) issues.push(`${field}:UNSUPPORTED_NUMBER`);
+    if (part.text.trim().split(/\s+/u).length > 80) issues.push(`${field}:FIELD_TOO_LONG`);
     if (/\b(?:diagnosed with|has developed|is experiencing)\b/i.test(part.text) && part.evidenceIds.some(id => id.startsWith("possible:"))) issues.push(`${field}:POSSIBLE_EFFECT_AS_CONFIRMED`);
     if (/[;—\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(part.text)) issues.push(`${field}:REPORT_STYLE`);
   }

@@ -26,7 +26,8 @@ or free-form clinical notes at this endpoint.
 
 `POST /v1/assessments/report-content` requires the deployment bearer credential.
 It accepts the pinned assessment reference, a completed Scoring result reference,
-an idempotency key, and reviewed structured facts. The reviewed score must equal
+an idempotency key, and reviewed structured facts with the completed assessment
+date. The reviewed score must equal
 the referenced Scoring result. Risk, treatment, drug class, co-morbidity, toxicity,
 and observation IDs are checked against the pinned rule and allowlists.
 
@@ -40,8 +41,10 @@ does not contain the full rule definition, editable prompts, or source tables.
 
 The server runs one writer call, one reviewer call, and at most one targeted writer
 revision. A revised draft receives a second reviewer call. Local schema and
-evidence checks run independently of the model reviewer. Failed provider calls and
-unresolved review issues cannot produce a `READY` result. The clinician still
+evidence checks run independently of the model reviewer. Reviewer issues receive
+at most one targeted revision. If issues remain, the affected passage is omitted
+while supported passages can still produce a `READY` result. A failed provider call
+cannot produce a `READY` result. The clinician still
 reviews and approves the final report in Application.
 
 The workflow is an explicit bounded function rather than a LangGraph dependency:

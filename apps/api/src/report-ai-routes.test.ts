@@ -7,6 +7,7 @@ import { MemoryAdminAuthStore } from "./admin-auth-store";
 import { createEntityId } from "./lib/id";
 import { ruleChecksum } from "./rule-routes";
 import { ReportModelError, type ReportTextProvider } from "./openrouter-report-client";
+import { matchedReportPacket, reportEvidence } from "./report-content";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
 
 const safePart = { text: "The NIQ risk category needs clinician review.", evidenceIds: ["fact:niq_risk"] };
@@ -38,7 +39,7 @@ async function setup(handler: (step: Step, call: number, user: string, system: s
   await call("start", { assessmentReference: "report-assessment" });
   const reviewed = await (await call("classify-reviewed", { assessmentReference: "report-assessment", idempotencyKey: "reviewed-result-1", score: 12 })).json();
   const resultReference = reviewed.result.resultReference as string;
-  const facts = { reviewedScore: 12, reviewedRiskCategoryId: "low", treatmentTypeIds: [], drugClassIds: [], confirmedToxicityIds: [], observations: [{ id: "current_weight_kg", label: "Current weight", value: "68.4", unit: "kg" }] };
+  const facts = { reviewedScore: 12, reviewedRiskCategoryId: "low", treatmentTypeIds: [], drugClassIds: [], confirmedToxicityIds: [], assessmentDate: "2026-01-02", observations: [{ id: "current_weight_kg", label: "Current weight", value: "68.4", unit: "kg" }] };
   const request = (overrides: Record<string, unknown> = {}) => ({ assessmentReference: "report-assessment", resultReference, idempotencyKey: "report-run-1", facts, ...overrides });
   return { app, call, store, runs, rule, request, facts, getCalls: () => calls };
 }
@@ -62,6 +63,57 @@ test("report content uses pinned rules, four bounded fields, idempotency, and sa
   expect(serialized).not.toContain(safePart.text);
   expect(serialized).not.toContain("writerPrompt");
   expect((await app.request("/v1/assessments/report-content", { method: "POST", body: JSON.stringify(request()) })).status).toBe(401);
+});
+
+test("report content requires the completed assessment date", async () => {
+  const { call, request, facts, getCalls } = await setup();
+  const { assessmentDate: _date, ...undated } = facts;
+  expect((await call("report-content", request({ facts: undated }))).status).toBe(400);
+  expect(getCalls()).toBe(0);
+});
+
+test("the reviewer receives independent fixed checks beyond editable wording", async () => {
+  const systems: Record<string, string> = {};
+  const { call, request } = await setup((step, _call, _user, system) => {
+    systems[step] = system;
+    return step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative;
+  });
+  expect((await call("report-content", request())).status).toBe(200);
+  expect(systems.reviewer).toContain("independently reviewing a writer draft");
+  expect(systems.reviewer).toContain("Check every claim against the cited evidence");
+  expect(systems.writer).not.toContain("independently reviewing a writer draft");
+});
+
+test("rule evidence IDs remain distinct when different rule groups reuse an ID", () => {
+  const definition = createFinalAssessmentTemplate("Duplicate source IDs");
+  const product = definition.carePlanGuidance!.products.plans[0]!;
+  const facts = {
+    reviewedScore: 12, reviewedRiskCategoryId: "low", treatmentTypeIds: [], drugClassIds: [], confirmedToxicityIds: [],
+    assessmentDate: "2026-01-12", treatmentStatusId: "treatment_status_newly_diagnosed", cancerTypeId: "cancer_1",
+    plannedTreatmentStartDate: "2026-01-20", observations: [],
+  };
+  const initiallyMatched = matchedReportPacket(definition, facts, "low", facts.assessmentDate);
+  const matchedNutritionId = initiallyMatched.nutritionInterventions[0]!.id;
+  definition.reportGuidance!.nutrition.find(row => row.id === matchedNutritionId)!.id = product.id;
+  const packet = matchedReportPacket(definition, facts, "low", facts.assessmentDate);
+  const evidence = reportEvidence(definition, facts, { id: "low", label: "Low Risk" }, packet);
+  expect(packet.nutritionInterventions.length).toBeGreaterThan(0);
+  expect(packet.carePlan.products.plans.length).toBeGreaterThan(0);
+  expect(new Set(evidence.map(item => item.id)).size).toBe(evidence.length);
+  expect(evidence.some(item => item.id === `rule:nutrition:${product.id}`)).toBe(true);
+  expect(evidence.some(item => item.id === `rule:product:${product.id}`)).toBe(true);
+});
+
+test("a passage over the promised word limit is omitted after one failed revision", async () => {
+  const lengthy = { ...safeNarrative, overview: { text: Array(81).fill("review").join(" "), evidenceIds: ["fact:niq_risk"] } };
+  const { call, request, getCalls } = await setup(step => step === "reviewer" ? { accepted: true, issues: [] } : lengthy);
+  const response = await call("report-content", request());
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.status).toBe("READY");
+  expect(body.narrative.overview).toEqual({ text: "", evidenceIds: [] });
+  expect(body.omittedNarrativeFields).toContain("overview");
+  expect(getCalls()).toBe(4);
 });
 
 test("Other returns only generic nutrition guidance, never class toxicity or product plans", async () => {
