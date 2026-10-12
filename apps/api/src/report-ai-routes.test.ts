@@ -162,6 +162,34 @@ test("care plan passages require matching rule evidence and copied guidance is r
   expect(validateNarrative(copied, evidence).issues).toContain("nutritionAdvice:COPIED_GUIDANCE");
 });
 
+test("matched conditions and treatment effects cannot be silently omitted", () => {
+  const evidence = [
+    { id: "fact:niq_risk", text: "NIQ risk: High Risk; reviewed score 27" },
+    { id: "rule:comorbidity:kidney", text: "Kidney disease: Individualize fluid and protein targets according to renal function." },
+    { id: "rule:comorbidity:diabetes", text: "Diabetes: Review meal timing with the care team." },
+    { id: "rule:toxicity:diarrhoea", text: "For reported diarrhoea, use the matched fluid advice and contact the team if it persists." },
+  ];
+  const missing = validateNarrative(safeNarrative, evidence).issues;
+  expect(missing).toContain("conditionAdvice:MISSING_MATCHED_COVERAGE");
+  expect(missing).toContain("effectsAdvice:MISSING_MATCHED_COVERAGE");
+  const partial = { ...safeNarrative,
+    conditionAdvice: { text: "Review fluid and protein targets with the care team.", evidenceIds: ["rule:comorbidity:kidney"] },
+    effectsAdvice: { text: "Contact the team if diarrhoea persists.", evidenceIds: ["rule:toxicity:diarrhoea"] },
+  };
+  expect(validateNarrative(partial, evidence).issues).toContain("conditionAdvice:MISSING_MATCHED_COVERAGE");
+  expect(validateNarrative({ ...partial, conditionAdvice: { ...partial.conditionAdvice, evidenceIds: ["rule:comorbidity:kidney", "rule:comorbidity:diabetes"] } }, evidence).issues).toEqual([]);
+});
+
+test("weight evidence states direction and avoids inventing a time interval", () => {
+  const definition = createFinalAssessmentTemplate("Weight direction");
+  const facts = { reviewedScore: 12, treatmentTypeIds: [], drugClassIds: [], confirmedToxicityIds: [],
+    assessmentDate: "2026-01-12", assessmentAnswers: { previous_weight_kg: 67, current_weight_kg: 63 }, observations: [] };
+  const packet = matchedReportPacket(definition, facts, "low", facts.assessmentDate);
+  const evidence = reportEvidence(definition, facts, { id: "low", label: "Low Risk" }, packet);
+  expect(evidence.find(row => row.id === "fact:weight_direction")?.text).toContain("Recorded weight loss: 67 kg previously and 63 kg currently (6%).");
+  expect(evidence.find(row => row.id === "fact:weight_direction")?.text).toContain("interval between measurements was not supplied");
+});
+
 test("HbA1c wording is excluded from every report narrative field", () => {
   const evidence = [
     { id: "fact:niq_risk", text: "NIQ risk: High Risk; reviewed score 27" },

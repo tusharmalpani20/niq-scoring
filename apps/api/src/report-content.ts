@@ -199,6 +199,12 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
 export type ReportEvidence = { id: string; text: string };
 export function reportEvidence(definition: FinalAssessmentDefinition, facts: ReportContentRequest["facts"], classification: { id: string; label: string }, packet: ReturnType<typeof matchedReportPacket>): ReportEvidence[] {
   const evidence: ReportEvidence[] = [{ id: "fact:niq_risk", text: `NIQ risk: ${classification.label}; reviewed score ${facts.reviewedScore}` }];
+  const { previous_weight_kg: previousWeight, current_weight_kg: currentWeight } = facts.assessmentAnswers ?? {};
+  if (previousWeight !== undefined && currentWeight !== undefined) {
+    const direction = previousWeight > currentWeight ? "loss" : previousWeight < currentWeight ? "gain" : "no change";
+    const percentage = Math.round(Math.abs(previousWeight - currentWeight) / previousWeight * 1000) / 10;
+    evidence.push({ id: "fact:weight_direction", text: `Recorded weight ${direction}: ${previousWeight} kg previously and ${currentWeight} kg currently (${percentage}%). The interval between measurements was not supplied.` });
+  }
   if (facts.dietPreferenceId) {
     const dietNames = { vegetarian: "Vegetarian", non_vegetarian: "Non-vegetarian", eggetarian: "Eggetarian", jain: "Jain (no eggs, fish, or meat)" };
     evidence.push({ id: "fact:diet_preference", text: `Reported diet preference: ${dietNames[facts.dietPreferenceId]}` });
@@ -276,6 +282,13 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     effectsAdvice: ["rule:toxicity:"],
   };
   const issues: string[] = [];
+  // Matched condition and confirmed-effect guidance must not disappear merely
+  // because the model returned an empty field and the reviewer accepted it.
+  for (const [field, prefix] of [["conditionAdvice", "rule:comorbidity:"], ["effectsAdvice", "rule:toxicity:"]] as const) {
+    const required = evidence.filter(item => item.id.startsWith(prefix));
+    if (required.some(item => !parsed.data[field].evidenceIds.includes(item.id)))
+      issues.push(`${field}:MISSING_MATCHED_COVERAGE`);
+  }
   for (const [field, part] of Object.entries(parsed.data)) {
     const selected = part.evidenceIds.map(id => evidenceById.get(id));
     if (selected.some(text => text === undefined)) issues.push(`${field}:UNKNOWN_EVIDENCE_ID`);
