@@ -579,6 +579,18 @@ test("oral intake targets refer to nutrition needs rather than previous intake",
   expect(validateNarrative(needs, evidence).issues).not.toContain("nutritionAdvice:INTAKE_DENOMINATOR_UNCLEAR");
 });
 
+test("the higher sodium allowance does not inherit the lower allowance's salt equivalence", () => {
+  const evidence = [{ id: "rule:comorbidity:hypertension", text: "Under 2 g sodium is about 5 g salt. For malnourished patients, use under 2.3 g sodium daily." }];
+  const conflated = { ...safeNarrative, conditionAdvice: {
+    text: "Keep sodium below 2.3 g daily, about 5 g of salt.", evidenceIds: ["rule:comorbidity:hypertension"],
+  } };
+  const accurate = { ...safeNarrative, conditionAdvice: {
+    text: "Keep sodium below 2.3 g daily without reducing food intake.", evidenceIds: ["rule:comorbidity:hypertension"],
+  } };
+  expect(validateNarrative(conflated, evidence).issues).toContain("conditionAdvice:SODIUM_SALT_EQUIVALENCE_MISMATCH");
+  expect(validateNarrative(accurate, evidence).issues).not.toContain("conditionAdvice:SODIUM_SALT_EQUIVALENCE_MISMATCH");
+});
+
 test("missing details leave unsupported passages empty without an unavailable-data placeholder", async () => {
   const omitted = { text: "", evidenceIds: [] };
   const draft = { ...safeNarrative, overview: safePart, keyFindings: omitted, actionSummary: omitted, monitoringSummary: omitted };
