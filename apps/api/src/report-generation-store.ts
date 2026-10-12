@@ -49,7 +49,8 @@ export type ReportRunSummary = Pick<ReportRun, "id" | "clientId" | "deploymentId
 export type ReportRunPage = { items: ReportRunSummary[]; total: number; page: number; pageSize: number };
 
 export interface ReportGenerationStore {
-  reserve(input: NewReportRun): Promise<ReportRunReservation>;
+  // A matching v1 fingerprint permits an in-flight run to finish across the v2 rollout.
+  reserve(input: NewReportRun, legacyFingerprint?: string): Promise<ReportRunReservation>;
   appendCall(runId: string, attemptId: string, call: ReportCall): Promise<boolean>;
   finish(runId: string, attemptId: string, status: "READY" | "REVIEW_REQUIRED" | "FAILED", response: unknown | null, errorCode?: string): Promise<boolean>;
   list(input: { page: number; pageSize: number; clientId?: string }): Promise<ReportRunPage>;
@@ -59,12 +60,14 @@ export class MemoryReportGenerationStore implements ReportGenerationStore {
   constructor(private readonly now = () => new Date()) {}
   runs: ReportRun[] = [];
   calls: Array<{ runId: string; call: ReportCall }> = [];
-  async reserve(input: NewReportRun): Promise<ReportRunReservation> {
+  async reserve(input: NewReportRun, legacyFingerprint?: string): Promise<ReportRunReservation> {
     const prior = this.runs.find(row => row.deploymentId === input.deploymentId && row.idempotencyKey === input.idempotencyKey);
     if (prior) {
-      if (prior.fingerprint !== input.fingerprint) return { status: "CONFLICT" };
+      const legacy = prior.schemaVersion === 1 && prior.fingerprint === legacyFingerprint;
+      if (prior.fingerprint !== input.fingerprint && !legacy) return { status: "CONFLICT" };
       if (prior.status === "PROCESSING" && prior.leaseExpiresAt > this.now()) return { status: "IN_PROGRESS" };
       if (prior.response !== null) return { status: "DUPLICATE", run: prior };
+      if (legacy) Object.assign(prior, { fingerprint: input.fingerprint, promptVersion: input.promptVersion, schemaVersion: input.schemaVersion });
       prior.status = "PROCESSING";
       prior.attemptId = createEntityId();
       prior.leaseExpiresAt = new Date(this.now().getTime() + REPORT_RUN_LEASE_MS);
@@ -102,17 +105,19 @@ export class MemoryReportGenerationStore implements ReportGenerationStore {
 
 export class PostgresReportGenerationStore implements ReportGenerationStore {
   constructor(private readonly database: ReturnType<typeof postgres>) {}
-  async reserve(input: NewReportRun): Promise<ReportRunReservation> {
+  async reserve(input: NewReportRun, legacyFingerprint?: string): Promise<ReportRunReservation> {
     return this.database.begin(async tx => {
       await tx`select pg_advisory_xact_lock(hashtext(${`${input.deploymentId}:report:${input.idempotencyKey}`}))`;
       const [prior] = await tx<(ReportRun & { leaseActive: boolean })[]>`select id, client_id as "clientId", deployment_id as "deploymentId", assessment_reference as "assessmentReference", result_reference as "resultReference", rule_version_id as "ruleVersionId", checksum, idempotency_key as "idempotencyKey", fingerprint, model, prompt_version as "promptVersion", schema_version as "schemaVersion", status, response, error_code as "errorCode", attempt_id as "attemptId", lease_expires_at as "leaseExpiresAt", lease_expires_at > clock_timestamp() as "leaseActive", created_at as "createdAt", completed_at as "completedAt" from report_generation_runs where deployment_id=${input.deploymentId} and idempotency_key=${input.idempotencyKey}`;
       if (prior) {
-        if (prior.fingerprint !== input.fingerprint) return { status: "CONFLICT" };
+        const legacy = prior.schemaVersion === 1 && prior.fingerprint === legacyFingerprint;
+        if (prior.fingerprint !== input.fingerprint && !legacy) return { status: "CONFLICT" };
         if (prior.status === "PROCESSING" && prior.leaseActive) return { status: "IN_PROGRESS" };
         if (prior.response !== null) return { status: "DUPLICATE", run: prior };
         const attemptId = createEntityId();
-        const [updated] = await tx<Array<{ leaseExpiresAt: Date }>>`update report_generation_runs set status='PROCESSING', attempt_id=${attemptId}, lease_expires_at=clock_timestamp()+${REPORT_RUN_LEASE_MS}*interval '1 millisecond', response=null, error_code=null, completed_at=null where id=${prior.id} returning lease_expires_at as "leaseExpiresAt"`;
-        return { status: "NEW", run: { ...prior, status: "PROCESSING" as const, response: null, errorCode: null, completedAt: null, attemptId, leaseExpiresAt: updated!.leaseExpiresAt } };
+        const [updated] = await tx<Array<{ leaseExpiresAt: Date }>>`update report_generation_runs set status='PROCESSING', attempt_id=${attemptId}, lease_expires_at=clock_timestamp()+${REPORT_RUN_LEASE_MS}*interval '1 millisecond', response=null, error_code=null, completed_at=null, fingerprint=${input.fingerprint}, prompt_version=${input.promptVersion}, schema_version=${input.schemaVersion} where id=${prior.id} returning lease_expires_at as "leaseExpiresAt"`;
+        return { status: "NEW", run: { ...prior, fingerprint: input.fingerprint, promptVersion: input.promptVersion, schemaVersion: input.schemaVersion,
+          status: "PROCESSING" as const, response: null, errorCode: null, completedAt: null, attemptId, leaseExpiresAt: updated!.leaseExpiresAt } };
       }
       const id = createEntityId();
       const attemptId = createEntityId();

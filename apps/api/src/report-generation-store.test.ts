@@ -47,3 +47,34 @@ test("a run whose lease expired cannot complete before it is reclaimed", async (
   expect(await store.finish(reservation.run.id, reservation.run.attemptId, "READY", { stale: true })).toBe(false);
   expect((await store.reserve(input)).status).toBe("NEW");
 });
+
+test("a pending v1 run can resume with the v2 prompt without losing idempotency", async () => {
+  let time = new Date("2026-01-02T00:00:00Z");
+  const store = new MemoryReportGenerationStore(() => time);
+  const prior = await store.reserve({ ...input, fingerprint: "v1-fingerprint", promptVersion: "baseline-v1" });
+  if (prior.status !== "NEW") throw new Error("Expected v1 reservation");
+  const originalAttemptId = prior.run.attemptId;
+  const v2 = { ...input, fingerprint: "v2-fingerprint", promptVersion: "baseline-v2", schemaVersion: 2 };
+  expect(await store.reserve(v2, "v1-fingerprint")).toEqual({ status: "IN_PROGRESS" });
+  time = new Date(time.getTime() + REPORT_RUN_LEASE_MS + 1);
+  expect(await store.reserve(v2, "wrong-fingerprint")).toEqual({ status: "CONFLICT" });
+  const resumed = await store.reserve(v2, "v1-fingerprint");
+  expect(resumed.status).toBe("NEW");
+  if (resumed.status !== "NEW") throw new Error("Expected v2 reservation");
+  expect(resumed.run.id).toBe(prior.run.id);
+  expect(resumed.run).toMatchObject({ fingerprint: "v2-fingerprint", promptVersion: "baseline-v2", schemaVersion: 2 });
+  expect(await store.finish(prior.run.id, originalAttemptId, "READY", { stale: true })).toBe(false);
+  expect(await store.finish(resumed.run.id, resumed.run.attemptId, "READY", { schemaVersion: 2 })).toBe(true);
+  expect((await store.reserve(v2)).status).toBe("DUPLICATE");
+});
+
+test("a completed v1 response remains available to an identical v2 retry", async () => {
+  const store = new MemoryReportGenerationStore();
+  const prior = await store.reserve({ ...input, fingerprint: "v1-fingerprint", promptVersion: "baseline-v1" });
+  if (prior.status !== "NEW") throw new Error("Expected v1 reservation");
+  const response = { schemaVersion: 1, narrative: { overview: "previous result" } };
+  expect(await store.finish(prior.run.id, prior.run.attemptId, "READY", response)).toBe(true);
+  const retry = await store.reserve({ ...input, fingerprint: "v2-fingerprint", promptVersion: "baseline-v2", schemaVersion: 2 }, "v1-fingerprint");
+  expect(retry.status).toBe("DUPLICATE");
+  if (retry.status === "DUPLICATE") expect(retry.run.response).toEqual(response);
+});

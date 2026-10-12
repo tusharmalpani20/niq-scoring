@@ -7,12 +7,14 @@ import { MemoryAdminAuthStore } from "./admin-auth-store";
 import { createEntityId } from "./lib/id";
 import { ruleChecksum } from "./rule-routes";
 import { ReportModelError, type ReportTextProvider } from "./openrouter-report-client";
-import { matchedReportPacket, reportEvidence } from "./report-content";
+import { matchedReportPacket, reportEvidence, validateNarrative } from "./report-content";
 import { resolveCarePlanGuidance } from "@niq-scoring/contracts/care-plan-resolver";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
 
 const safePart = { text: "The NIQ risk category needs clinician review.", evidenceIds: ["fact:niq_risk"] };
-const safeNarrative = { overview: safePart, keyFindings: safePart, actionSummary: safePart, monitoringSummary: safePart };
+const omittedPart = { text: "", evidenceIds: [] as string[] };
+const safeNarrative = { overview: safePart, keyFindings: safePart, actionSummary: safePart, monitoringSummary: safePart,
+  nutritionAdvice: omittedPart, treatmentAdvice: omittedPart, conditionAdvice: omittedPart, effectsAdvice: omittedPart };
 const usage = { model: "openai/gpt-6-luna", provider: "test-provider", generationId: "gen-test", promptTokens: 120, completionTokens: 40, reasoningTokens: 5, costUsd: 0.001, latencyMs: 10 };
 type Step = "writer" | "reviewer" | "revision";
 
@@ -44,7 +46,7 @@ async function setup(handler: (step: Step, call: number, user: string, system: s
   return { app, call, store, runs, rule, request, facts, getCalls: () => calls };
 }
 
-test("report content uses pinned rules, four bounded fields, idempotency, and sanitized admin usage", async () => {
+test("report content uses pinned rules, eight bounded fields, idempotency, and sanitized admin usage", async () => {
   const { app, call, runs, request, rule, getCalls } = await setup();
   const response = await call("report-content", request());
   expect(response.status).toBe(200);
@@ -141,6 +143,23 @@ test("a passage over the promised word limit is omitted after one failed revisio
   expect(body.narrative.overview).toEqual({ text: "", evidenceIds: [] });
   expect(body.omittedNarrativeFields).toContain("overview");
   expect(getCalls()).toBe(4);
+});
+
+test("care plan passages require matching rule evidence and copied guidance is rejected", () => {
+  const evidence = [
+    { id: "fact:niq_risk", text: "NIQ risk: High Risk; reviewed score 27" },
+    { id: "rule:nutrition:row1", text: "Begin nutrition support early and monitor weight and intake each week. Adjust the plan based on treatment tolerance." },
+    { id: "rule:comorbidity:row2", text: "Hypertension: Check and record blood pressure at home during treatment." },
+  ];
+  const good = { ...safeNarrative,
+    nutritionAdvice: { text: "Start nutrition support early. Review weight and intake weekly as treatment continues.", evidenceIds: ["rule:nutrition:row1"] },
+    conditionAdvice: { text: "Record blood pressure at home during treatment.", evidenceIds: ["rule:comorbidity:row2"] },
+  };
+  expect(validateNarrative(good, evidence).issues).toEqual([]);
+  const unsupported = { ...good, conditionAdvice: { ...good.conditionAdvice, evidenceIds: ["fact:niq_risk"] } };
+  expect(validateNarrative(unsupported, evidence).issues).toContain("conditionAdvice:MISSING_MATCHED_GUIDANCE");
+  const copied = { ...good, nutritionAdvice: { text: evidence[1]!.text, evidenceIds: ["rule:nutrition:row1"] } };
+  expect(validateNarrative(copied, evidence).issues).toContain("nutritionAdvice:COPIED_GUIDANCE");
 });
 
 test("Other returns only generic nutrition guidance, never class toxicity or product plans", async () => {
@@ -384,7 +403,7 @@ test("unsupported numerals trigger one revision and independent reviewer recheck
 
 test("missing details leave unsupported passages empty without an unavailable-data placeholder", async () => {
   const omitted = { text: "", evidenceIds: [] };
-  const draft = { overview: safePart, keyFindings: omitted, actionSummary: omitted, monitoringSummary: omitted };
+  const draft = { ...safeNarrative, overview: safePart, keyFindings: omitted, actionSummary: omitted, monitoringSummary: omitted };
   const prompts: string[] = [];
   const { call, request, getCalls } = await setup((step, _call, user) => {
     prompts.push(user);

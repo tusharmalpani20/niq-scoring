@@ -70,27 +70,33 @@ export const reportToxicityOptionsRequestSchema = z.object({
 
 const narrativePart = z.object({ text: z.string().trim().max(1200), evidenceIds: z.array(z.string().min(1).max(120)).max(20) })
   .strict().refine(part => Boolean(part.text) === (part.evidenceIds.length > 0), "A passage needs evidence; an omitted passage needs neither text nor evidence");
+export const narrativeFieldNames = ["overview", "keyFindings", "actionSummary", "monitoringSummary",
+  "nutritionAdvice", "treatmentAdvice", "conditionAdvice", "effectsAdvice"] as const;
 export const narrativeSchema = z.object({
   overview: narrativePart,
   keyFindings: narrativePart,
   actionSummary: narrativePart,
   monitoringSummary: narrativePart,
+  nutritionAdvice: narrativePart,
+  treatmentAdvice: narrativePart,
+  conditionAdvice: narrativePart,
+  effectsAdvice: narrativePart,
 }).strict();
 export type ReportNarrative = z.infer<typeof narrativeSchema>;
 export const reviewSchema = z.object({
   accepted: z.boolean(),
-  issues: z.array(z.object({ field: z.enum(["overview", "keyFindings", "actionSummary", "monitoringSummary"]), code: z.enum(["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"]), evidenceIds: z.array(z.string()).max(10) }).strict()).max(10),
+  issues: z.array(z.object({ field: z.enum(narrativeFieldNames), code: z.enum(["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"]), evidenceIds: z.array(z.string()).max(10) }).strict()).max(10),
 }).strict();
 
 const narrativeJsonSchema = {
   type: "object", additionalProperties: false,
-  required: ["overview", "keyFindings", "actionSummary", "monitoringSummary"],
-  properties: Object.fromEntries(["overview", "keyFindings", "actionSummary", "monitoringSummary"].map(key => [key, { type: "object", additionalProperties: false, required: ["text", "evidenceIds"], properties: { text: { type: "string" }, evidenceIds: { type: "array", items: { type: "string" } } } }])),
+  required: narrativeFieldNames,
+  properties: Object.fromEntries(narrativeFieldNames.map(key => [key, { type: "object", additionalProperties: false, required: ["text", "evidenceIds"], properties: { text: { type: "string" }, evidenceIds: { type: "array", items: { type: "string" } } } }])),
 };
 export const writerJsonSchema = narrativeJsonSchema;
 export const reviewerJsonSchema = {
   type: "object", additionalProperties: false, required: ["accepted", "issues"],
-  properties: { accepted: { type: "boolean" }, issues: { type: "array", items: { type: "object", additionalProperties: false, required: ["field", "code", "evidenceIds"], properties: { field: { type: "string", enum: ["overview", "keyFindings", "actionSummary", "monitoringSummary"] }, code: { type: "string", enum: ["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"] }, evidenceIds: { type: "array", items: { type: "string" } } } } } },
+  properties: { accepted: { type: "boolean" }, issues: { type: "array", items: { type: "object", additionalProperties: false, required: ["field", "code", "evidenceIds"], properties: { field: { type: "string", enum: narrativeFieldNames }, code: { type: "string", enum: ["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"] }, evidenceIds: { type: "array", items: { type: "string" } } } } } },
 };
 
 export function validateReportFacts(definition: FinalAssessmentDefinition, facts: ReportContentRequest["facts"]): boolean {
@@ -233,8 +239,6 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
   return evidence;
 }
 
-export const narrativeFieldNames = ["overview", "keyFindings", "actionSummary", "monitoringSummary"] as const;
-
 /** Remove only passages the final checks could not support, retaining reviewed sections. */
 export function omitNarrativeFields(value: unknown, fields: ReadonlySet<string>): ReportNarrative | null {
   const parsed = narrativeSchema.safeParse(value);
@@ -243,15 +247,40 @@ export function omitNarrativeFields(value: unknown, fields: ReadonlySet<string>)
     fields.has(field) ? { text: "", evidenceIds: [] } : parsed.data[field]])) as ReportNarrative;
 }
 
+function copiesGuidance(text: string, sources: string[]): boolean {
+  const words = (value: string) => value.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const passage = words(text);
+  if (passage.length < 8) return false;
+  const span = Math.min(14, passage.length);
+  return sources.some(source => {
+    const sourceText = words(source).join(" ");
+    for (let index = 0; index <= passage.length - span; index++)
+      if (sourceText.includes(passage.slice(index, index + span).join(" "))) return true;
+    return false;
+  });
+}
+
 /** Local checks do not replace clinical review, but reject malformed and ungrounded numerals. */
 export function validateNarrative(value: unknown, evidence: ReportEvidence[]): { narrative: ReportNarrative | null; issues: string[] } {
   const parsed = narrativeSchema.safeParse(value);
   if (!parsed.success) return { narrative: null, issues: ["INVALID_NARRATIVE_SCHEMA"] };
   const evidenceById = new Map(evidence.map(item => [item.id, item.text]));
+  const requiredGuidance: Partial<Record<keyof ReportNarrative, readonly string[]>> = {
+    nutritionAdvice: ["rule:nutrition:", "rule:status:"],
+    treatmentAdvice: ["rule:treatment:", "rule:class:", "rule:exception:"],
+    conditionAdvice: ["rule:comorbidity:"],
+    effectsAdvice: ["rule:toxicity:"],
+  };
   const issues: string[] = [];
   for (const [field, part] of Object.entries(parsed.data)) {
     const selected = part.evidenceIds.map(id => evidenceById.get(id));
     if (selected.some(text => text === undefined)) issues.push(`${field}:UNKNOWN_EVIDENCE_ID`);
+    const prefixes = requiredGuidance[field as keyof ReportNarrative];
+    if (part.text && prefixes && !part.evidenceIds.some(id => prefixes.some(prefix => id.startsWith(prefix))))
+      issues.push(`${field}:MISSING_MATCHED_GUIDANCE`);
+    if (part.text && prefixes && copiesGuidance(part.text, part.evidenceIds.filter(id => id.startsWith("rule:"))
+      .map(id => evidenceById.get(id)).filter((source): source is string => Boolean(source))))
+      issues.push(`${field}:COPIED_GUIDANCE`);
     const sourceNumbers = new Set(selected.flatMap(text => text?.match(/\d+(?:\.\d+)?/g) ?? []));
     if ((part.text.match(/\d+(?:\.\d+)?/g) ?? []).some(number => !sourceNumbers.has(number))) issues.push(`${field}:UNSUPPORTED_NUMBER`);
     if (part.text.trim().split(/\s+/u).length > 80) issues.push(`${field}:FIELD_TOO_LONG`);
