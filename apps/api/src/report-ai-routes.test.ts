@@ -579,6 +579,21 @@ test("reviewer issues cause one targeted revision even if accepted flag is incon
   expect(getCalls()).toBe(4);
 });
 
+test("reviewer claim explanations reach the repair prompt", async () => {
+  let reviewed = 0;
+  let repairPrompt = "";
+  const { call, request } = await setup((step, _call, user) => {
+    if (step === "reviewer") return ++reviewed === 1
+      ? { accepted: false, issues: [{ field: "overview", code: "UNSUPPORTED_CLAIM", evidenceIds: ["fact:niq_risk"],
+        reason: "The draft claims a diagnosis that the score does not establish." }] }
+      : { accepted: true, issues: [] };
+    if (step === "revision") repairPrompt = user;
+    return safeNarrative;
+  });
+  expect((await (await call("report-content", request())).json()).status).toBe("READY");
+  expect(repairPrompt).toContain("The draft claims a diagnosis that the score does not establish.");
+});
+
 test("a repeatedly rejected passage is omitted after one revision while supported passages remain", async () => {
   const { call, request, getCalls } = await setup(step => step === "reviewer"
     ? { accepted: true, issues: [{ field: "overview", code: "UNSUPPORTED_CLAIM", evidenceIds: ["fact:niq_risk"] }] }

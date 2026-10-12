@@ -102,7 +102,7 @@ export function normalizeNarrativePunctuation(value: unknown): unknown {
 }
 export const reviewSchema = z.object({
   accepted: z.boolean(),
-  issues: z.array(z.object({ field: z.enum(narrativeFieldNames), code: z.enum(["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"]), evidenceIds: z.array(z.string()).max(10) }).strict()).max(10),
+  issues: z.array(z.object({ field: z.enum(narrativeFieldNames), code: z.enum(["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"]), evidenceIds: z.array(z.string()).max(10), reason: z.string().trim().min(1).max(320).optional() }).strict()).max(10),
 }).strict();
 
 const narrativeJsonSchema = {
@@ -113,7 +113,7 @@ const narrativeJsonSchema = {
 export const writerJsonSchema = narrativeJsonSchema;
 export const reviewerJsonSchema = {
   type: "object", additionalProperties: false, required: ["accepted", "issues"],
-  properties: { accepted: { type: "boolean" }, issues: { type: "array", items: { type: "object", additionalProperties: false, required: ["field", "code", "evidenceIds"], properties: { field: { type: "string", enum: narrativeFieldNames }, code: { type: "string", enum: ["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"] }, evidenceIds: { type: "array", items: { type: "string" } } } } } },
+  properties: { accepted: { type: "boolean" }, issues: { type: "array", items: { type: "object", additionalProperties: false, required: ["field", "code", "evidenceIds", "reason"], properties: { field: { type: "string", enum: narrativeFieldNames }, code: { type: "string", enum: ["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"] }, evidenceIds: { type: "array", items: { type: "string" } }, reason: { type: "string", maxLength: 320 } } } } },
 };
 
 export function validateReportFacts(definition: FinalAssessmentDefinition, facts: ReportContentRequest["facts"]): boolean {
