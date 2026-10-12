@@ -12,7 +12,7 @@ export async function recordAdminMutation(
   sql: postgres.TransactionSql,
   audit: AdminMutationAudit | undefined,
   action: string,
-  resourceType: "CLIENT" | "DEPLOYMENT" | "ACTIVATION_TOKEN" | "DEPLOYMENT_CREDENTIAL",
+  resourceType: "CLIENT" | "DEPLOYMENT" | "ACTIVATION_TOKEN" | "DEPLOYMENT_CREDENTIAL" | "PRODUCT",
   resourceId: string,
   metadata: Record<string, unknown> = {},
 ) {

@@ -35,6 +35,14 @@ export const clients = pgTable("clients", {
   ...timestamps,
 }, table => [uniqueIndex("clients_name_uq").on(sql`lower(btrim(${table.name}))`)]);
 
+// Product names are shared across rule versions. Definitions retain their own
+// names as snapshots, so catalog edits cannot change historical guidance.
+export const products = pgTable("products", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  name: varchar("name", { length: 120 }).notNull(),
+  ...timestamps,
+}, table => [uniqueIndex("products_name_uq").on(sql`lower(btrim(${table.name}))`)]);
+
 export const deployments = pgTable("deployments", {
   id: varchar("id", { length: 26 }).primaryKey(),
   clientId: varchar("client_id", { length: 26 }).notNull().references(() => clients.id),

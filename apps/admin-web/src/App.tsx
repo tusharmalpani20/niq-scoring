@@ -14,6 +14,7 @@ import {
   Building2,
   Server,
   Layers3,
+  Package,
   ChartNoAxesCombined,
   LogOut,
   CircleUserRound,
@@ -28,6 +29,7 @@ import { AdminDashboard } from "./AdminDashboard";
 import { ClientDetail } from "./ClientDetail";
 import { DeploymentDetail } from "./DeploymentDetail";
 import { ReportAiUsage } from "./ReportAiUsage";
+import { Products } from "./Products";
 import { Button } from "./components/ui/button";
 import { ErrorNotice } from "./shared";
 import { clientUrl, deploymentUrl, resolveClient, resolveDeployment } from "./record-urls";
@@ -54,6 +56,12 @@ const pages = [
     label: "Deployments",
     icon: Server,
     description: "Connect and activate NIQ application installations.",
+  },
+  {
+    path: "products",
+    label: "Products",
+    icon: Package,
+    description: "Manage product names shared by rule versions.",
   },
   {
     path: "versions",
@@ -260,6 +268,8 @@ function Console() {
             <Users currentUser={user} />
           ) : page.path === "report-ai-usage" ? (
             <ReportAiUsage />
+          ) : page.path === "products" ? (
+            <Products />
           ) : clientId ? <ClientDetail key={clientId} clientId={clientId} /> : data && deploymentId ? <DeploymentDetail key={deploymentId} data={data} deploymentId={deploymentId} refresh={refresh} /> : ["clients", "deployments", "versions"].includes(page.path) ? (
             <Operations
               key={page.path}

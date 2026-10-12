@@ -8,6 +8,7 @@ import { MemoryReportGenerationStore, type ReportGenerationStore } from "./repor
 import type { ReportTextProvider } from "./openrouter-report-client";
 import { ruleChecksum } from "./rule-routes";
 import { installRuleRoutes } from "./rule-routes";
+import { installProductRoutes } from "./product-routes";
 import { DuplicateClientNameError } from "./lib/client-name";
 import { installRecordDeletion } from "./record-deletion";
 import { encryptActivationToken, decryptActivationToken } from "./lib/activation-secret";
@@ -78,6 +79,7 @@ export function createApp(options: AppOptions) {
   installAdminAuth(app, { ...options, authStore: options.authStore });
   installRecordDeletion(app, options.store);
   installRuleRoutes(app, options.store.rules, now);
+  installProductRoutes(app, options.store.products);
 
   const authenticateDeployment = async (context: Context): Promise<DeploymentIdentity | null> => {
     const credential = context.req.header("authorization")?.replace(/^Bearer /, "");

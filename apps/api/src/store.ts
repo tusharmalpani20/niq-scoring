@@ -23,6 +23,7 @@ import { dashboardSummary, pageDashboardClients, type DashboardClientPage } from
 import type { AdminMutationAudit } from "./admin-mutation-audit";
 import { clampPage, pageResult, type ListPage } from "./list-page";
 import { deploymentDisplayLabel } from "./deployment-display-label";
+import { MemoryProductCatalog, type ProductCatalog } from "./product-catalog";
 
 export type StoredActivationToken = { id: string; tokenHash: string; tokenCiphertext: string; expiresAt: Date | null };
 export type TokenRecord = { id: string; expiresAt: Date | null; createdAt: Date; usedAt: Date | null; revokedAt: Date | null; canCopy: boolean; credentialStatus: "Active" | "Revoked" | "Expired" | null };
@@ -50,6 +51,7 @@ export interface ScoringStore {
   organizationInfo(identity: DeploymentIdentity, now: Date): Promise<OrganizationInfo>;
   bindAssessment(input: BindingInput): Promise<BoundAssessment>;
   rules: RuleStore;
+  products: ProductCatalog;
   deletionStatus(kind: RecordKind, id: string): Promise<DeletionStatus>;
   deleteUnused(kind: RecordKind, id: string, audit?: AdminMutationAudit): Promise<DeletionStatus>;
   overview(): Promise<{ clients: Client[]; deployments: Deployment[]; entitlements: Array<EntitlementInput & { deploymentId: string }>; assignments: VersionAssignment[]; versions: Array<{ id: string; version: string; lifecycle: string; clinicalUsePermitted: boolean; isDefault?: boolean }> }>;
@@ -97,6 +99,7 @@ export class MemoryScoringStore implements ScoringStore {
   }
   bindings: AssessmentBinding[] = [];
   rules = new MemoryRuleStore(id => this.bindings.some(b => b.ruleVersionId === id) || this.assignments.some(a => a.mode === "PINNED" && a.scoringRuleVersionId === id));
+  products = new MemoryProductCatalog();
   async deletionStatus(kind: RecordKind, id: string) { return memoryDeletion(this, kind, id); }
   async deleteUnused(kind: RecordKind, id: string, audit?: AdminMutationAudit) { return memoryDeletion(this, kind, id, true, audit); }
   clients: Client[] = [];

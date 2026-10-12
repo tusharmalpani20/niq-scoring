@@ -169,6 +169,13 @@
       "when": 1791787179338,
       "tag": "0023_curvy_crystal",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791807207888,
+      "tag": "0024_sturdy_terror",
+      "breakpoints": true
     }
   ]
 }

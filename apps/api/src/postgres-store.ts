@@ -20,6 +20,7 @@ import type { Deployment, DeploymentCreateRequest, PriorDeploymentCreate, Deploy
 import type { ClientListRow, DeploymentListFilters, DeploymentListRow } from "./store";
 import { clampPage, pageResult, type ListPage } from "./list-page";
 import { deploymentDisplayLabel } from "./deployment-display-label";
+import { PostgresProductCatalog } from "./product-catalog";
 
 type Database = ReturnType<typeof postgres>;
 
@@ -38,7 +39,11 @@ export class PostgresScoringStore implements ScoringStore {
   async deletionStatus(kind: RecordKind, id: string) { return postgresDeletion(this.database, kind, id); }
   async deleteUnused(kind: RecordKind, id: string, audit?: AdminMutationAudit) { return postgresDeletion(this.database, kind, id, true, audit); }
   readonly rules: PostgresRuleStore;
-  constructor(private readonly database: Database) { this.rules = new PostgresRuleStore(database); }
+  readonly products: PostgresProductCatalog;
+  constructor(private readonly database: Database) {
+    this.rules = new PostgresRuleStore(database);
+    this.products = new PostgresProductCatalog(database);
+  }
 
   async overview() {
     const [clients, deployments, entitlements, assignments, versions] = await Promise.all([
