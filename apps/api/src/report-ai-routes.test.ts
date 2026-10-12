@@ -541,6 +541,15 @@ test("renal guidance blocks fixed nutrition and fluid instructions", () => {
   expect(validateNarrative(misleading, evidence).issues).toContain("nutritionAdvice:RENAL_TARGET_NEEDS_QUALIFICATION");
   const qualified = { ...base, nutritionAdvice: { text: "The guidance lists 25–30 kcal/kg/day as a general range. Ask your care team to individualise your energy and fluid targets.", evidenceIds: ["rule:nutrition:a", "rule:comorbidity:kidney"] } };
   expect(validateNarrative(qualified, evidence).issues).not.toContain("nutritionAdvice:RENAL_TARGET_NEEDS_QUALIFICATION");
+  const withStatus = [...evidence, { id: "rule:status:a", text: "Potassium-rich foods may be relevant, depending on the patient's kidney plan." }];
+  const directFoods = { ...qualified, treatmentAdvice: {
+    text: "Include potassium-rich foods such as banana, as appropriate to your plan.", evidenceIds: ["rule:status:a"],
+  } };
+  expect(validateNarrative(directFoods, withStatus).issues).toContain("treatmentAdvice:RENAL_ELECTROLYTE_FOODS_NEED_APPROVAL");
+  const checkedFoods = { ...qualified, treatmentAdvice: {
+    text: "Ask your care team whether potassium-rich foods fit your individual plan.", evidenceIds: ["rule:status:a"],
+  } };
+  expect(validateNarrative(checkedFoods, withStatus).issues).not.toContain("treatmentAdvice:RENAL_ELECTROLYTE_FOODS_NEED_APPROVAL");
 });
 
 test("missing details leave unsupported passages empty without an unavailable-data placeholder", async () => {

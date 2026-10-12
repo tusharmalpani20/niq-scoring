@@ -322,6 +322,12 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
           !/\b(?:individuali[sz]|as advised|care team|clinician|doctor)\b/i.test(sentence)))
         issues.push(`${field}:RENAL_TARGET_NEEDS_QUALIFICATION`);
     }
+    for (const field of ["nutritionAdvice", "treatmentAdvice", "conditionAdvice", "effectsAdvice"] as const) {
+      const sentences = parsed.data[field].text.split(/(?<=[.!?])\s+/u);
+      if (sentences.some(sentence => /^\s*(?:include|eat|choose|add|increase)\b/i.test(sentence)
+        && /\b(?:potassium|magnesium)\b/i.test(sentence)))
+        issues.push(`${field}:RENAL_ELECTROLYTE_FOODS_NEED_APPROVAL`);
+    }
   }
   const productNames = evidence.filter(item => item.id.startsWith("rule:product:"))
     .flatMap(item => /^Selected product plan: ([^.]+)\./.exec(item.text)?.[1]?.split(/\s+\+\s+/) ?? []);
