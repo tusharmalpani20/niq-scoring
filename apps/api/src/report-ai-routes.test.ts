@@ -227,7 +227,7 @@ test("writer and reviewer receive the patient's diet preference", async () => {
     return step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative;
   });
   expect((await call("report-content", request({ facts: { ...facts, dietPreferenceId: "jain" } }))).status).toBe(200);
-  expect(prompts.writer?.user).toContain('"id":"fact:diet_preference","text":"Reported diet preference: Jain"');
+  expect(prompts.writer?.user).toContain('"id":"fact:diet_preference","text":"Reported diet preference: Jain (no eggs, fish, or meat)"');
   expect(prompts.writer?.system).toContain("omit incompatible examples");
   expect(prompts.reviewer?.system).toContain("food suggestions that conflict with a reported diet preference");
 });
