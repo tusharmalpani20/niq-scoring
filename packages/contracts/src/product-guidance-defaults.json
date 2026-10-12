@@ -7,6 +7,7 @@
       "products": "Invigour + Nourish",
       "dose": "1 Invigour + 1 Nourish",
       "duration": "15 days before treatment",
+      "durationAmount": 15,
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
@@ -21,6 +22,7 @@
       "products": "Invigour + Nourish",
       "dose": "1 Invigour + 2 Nourish",
       "duration": "15 days before treatment",
+      "durationAmount": 15,
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
@@ -35,6 +37,7 @@
       "products": "Invigour + Nourish",
       "dose": "2 Invigour + 2 Nourish",
       "duration": "15 days before treatment",
+      "durationAmount": 15,
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
@@ -48,7 +51,8 @@
       "nutritionalStatus": "well_nourished",
       "products": "Invigour + Protect",
       "dose": "1 Invigour + 1 Protect",
-      "duration": "Minimum 3 months during treatment",
+      "duration": "Minimum 90 days during treatment",
+      "durationAmount": 90,
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
@@ -62,7 +66,8 @@
       "nutritionalStatus": "moderately_nourished",
       "products": "Invigour + Protect",
       "dose": "1 Invigour + 2 Protect",
-      "duration": "Minimum 3 months during treatment",
+      "duration": "Minimum 90 days during treatment",
+      "durationAmount": 90,
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
@@ -76,7 +81,8 @@
       "nutritionalStatus": "severely_malnourished",
       "products": "Invigour + Protect",
       "dose": "3 Invigour + 2 Protect",
-      "duration": "Minimum 3 months during treatment",
+      "duration": "Minimum 90 days during treatment",
+      "durationAmount": 90,
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
@@ -90,7 +96,8 @@
       "nutritionalStatus": "well_nourished",
       "products": "Invigour + Recover",
       "dose": "1 Invigour + 1 Recover",
-      "duration": "12 month or more",
+      "duration": "365 days or more after treatment",
+      "durationAmount": 365,
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
@@ -104,7 +111,8 @@
       "nutritionalStatus": "moderately_nourished",
       "products": "Invigour + Recover",
       "dose": "1 Invigour + 2 Recover",
-      "duration": "12 month or more",
+      "duration": "365 days or more after treatment",
+      "durationAmount": 365,
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
@@ -118,7 +126,8 @@
       "nutritionalStatus": "severely_malnourished",
       "products": "Invigour + Recover",
       "dose": "2 Invigour + 2 Recover",
-      "duration": "12 month or more",
+      "duration": "365 days or more after treatment",
+      "durationAmount": 365,
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
@@ -131,8 +140,11 @@
       "stage": "surgical",
       "nutritionalStatus": "well_nourished",
       "products": "Liss WH",
+      "productNames": ["Liss WH"],
+      "items": [{ "productName": "Liss WH", "quantityPerDay": 1, "description": "leveled scoops in 150ml water" }],
       "dose": "1 leveled scoops in 150ml water",
       "duration": "30days post surgery",
+      "durationAmount": 30,
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
@@ -145,8 +157,11 @@
       "stage": "surgical",
       "nutritionalStatus": "moderately_nourished",
       "products": "Liss WH",
+      "productNames": ["Liss WH"],
+      "items": [{ "productName": "Liss WH", "quantityPerDay": 2, "description": "leveled scoops in 150ml water" }],
       "dose": "2 leveled scoops in 150ml water",
       "duration": "30days post surgery",
+      "durationAmount": 30,
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
@@ -159,8 +174,14 @@
       "stage": "surgical",
       "nutritionalStatus": "severely_malnourished",
       "products": "Invigour + Liss WH",
+      "productNames": ["Invigour", "Liss WH"],
+      "items": [
+        { "productName": "Invigour", "quantityPerDay": 1 },
+        { "productName": "Liss WH", "quantityPerDay": 2, "description": "leveled scoops in 150ml water" }
+      ],
       "dose": "1 Invigour + 2 leveled scoops in 150ml water",
       "duration": "30days post surgery",
+      "durationAmount": 30,
       "enabled": true,
       "source": {
         "document": "NIQ - Product & interventions sheet.ods",
@@ -240,6 +261,8 @@
     {
       "id": "pancreatic_nourish_exclusion",
       "kind": "pancreatic_nourish_exclusion",
+      "match": { "fieldId": "cancer_type", "optionId": "cancer_6" },
+      "action": { "type": "remove", "productName": "Nourish" },
       "label": "Pancreatic cancer",
       "guidance": "Do not recommend Es Fortitude Nourish for a patient with pancreatic cancer.",
       "sourceText": "No Es Fortitude Nourish to be mapped for Pancreatic cancer patient",
@@ -253,6 +276,8 @@
     {
       "id": "liver_nourish_once_daily",
       "kind": "liver_nourish_once_daily",
+      "match": { "fieldId": "cancer_type", "optionId": "cancer_5" },
+      "action": { "type": "limit", "productName": "Nourish", "maxQuantityPerDay": 1 },
       "label": "Liver cancer",
       "guidance": "For a patient with liver cancer, Nourish is limited to once daily.",
       "sourceText": "Es Fortitide Nourish: Liver cancer - Nourish only once a day",
@@ -266,6 +291,8 @@
     {
       "id": "surgery_done_liss",
       "kind": "surgery_done_liss",
+      "match": { "fieldId": "cancer_surgical_status", "optionId": "cancer_surgical_status_done", "withinDays": 7 },
+      "action": { "type": "use_plan", "stage": "surgical" },
       "label": "Recent surgery",
       "guidance": "After surgery, use the Surgical product plan for the selected nutritional status. The severely malnourished plan also includes Invigour.",
       "sourceText": "Logic for Surgical - Surgery just done then add Liss WH - If patient score is Mild - Only LIss WH, Moderate- Only Liss WH & if the score is High - Add Invigour once a day & Liss WH [Time: 1 week time]",
@@ -279,6 +306,8 @@
     {
       "id": "surgery_planned_liss",
       "kind": "surgery_planned_liss",
+      "match": { "fieldId": "cancer_surgical_status", "optionId": "cancer_surgical_status_planned", "withinDays": 7 },
+      "action": { "type": "delay", "productName": "Liss WH", "until": "planned_surgery" },
       "label": "Planned surgery",
       "guidance": "If surgery is planned within a week, begin Liss WH only after surgery. Do not consume Liss WH before surgery.",
       "sourceText": "If surgery is planned in a weeks time or next 2-3 days then in report we can give to start with Liss WH and mention to start post surgery, DO NOT CONSUME BEFORE SURGERY",
@@ -292,6 +321,8 @@
     {
       "id": "vegetarian_liss_substitution",
       "kind": "vegetarian_liss_substitution",
+      "match": { "fieldId": "diet_preference", "optionId": "vegetarian" },
+      "action": { "type": "replace", "productName": "Liss WH", "replacementProductName": "Invigour", "matchSourceQuantity": true },
       "label": "Vegetarian diet",
       "guidance": "For a vegetarian patient, avoid Liss WH and use Invigour instead.",
       "sourceText": "If patient is vegetarian the avoid mapping Liss WH that time only Invigour",
@@ -300,6 +331,21 @@
         "document": "NIQ - Product & interventions sheet.ods",
         "location": "Product_mapping_!A23:C23",
         "note": "Report-ready wording; retain the source for review."
+      }
+    },
+    {
+      "id": "jain_liss_substitution",
+      "kind": "jain_liss_substitution",
+      "match": { "fieldId": "diet_preference", "optionId": "jain" },
+      "action": { "type": "replace", "productName": "Liss WH", "replacementProductName": "Invigour", "matchSourceQuantity": true },
+      "label": "Jain diet",
+      "guidance": "For a Jain patient, avoid Liss WH and use Invigour instead.",
+      "sourceText": "The rule owner confirmed that Jain diet uses the same product guidance as Vegetarian diet.",
+      "enabled": true,
+      "source": {
+        "document": "Rule owner direction",
+        "location": "Product exceptions / Jain diet",
+        "note": "Product guidance confirmed by the rule owner. A replacement dose is not specified."
       }
     }
   ]

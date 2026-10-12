@@ -23,6 +23,7 @@ import { SimpleRiskEditor, FaceScanEditor, StressEditor } from "./ScoreRangeEdit
 import { DrugClassEditor } from "./DrugClassEditor";
 import { ReportGuidanceEditor } from "./ReportGuidanceEditor";
 import { initialCarePlanGuidance } from "@niq-scoring/contracts/care-plan-guidance";
+import { normalizeProductPlan } from "@niq-scoring/contracts/product-guidance";
 import { CarePlanGuidanceEditor } from "./CarePlanGuidanceEditor";
 import { ReportAiEditor } from "./ReportAiEditor";
 import { initialReportAiConfig } from "@niq-scoring/contracts/report-ai";
@@ -48,8 +49,11 @@ function parse(value: unknown) {
 
 function editableDefinition(record: RuleDetail) {
   const definition = parse(record.definition);
-  return definition && ["DRAFT", "VALIDATED"].includes(record.lifecycle)
-    ? withDefaultRiskCategoryColors({ ...definition, stressScoring: definition.stressScoring ?? structuredClone(DEFAULT_STRESS_SCORING_CONFIG), carePlanGuidance: definition.carePlanGuidance ?? initialCarePlanGuidance(), reportAi: definition.reportAi ?? initialReportAiConfig() }) : definition;
+  if (!definition || !["DRAFT", "VALIDATED"].includes(record.lifecycle)) return definition;
+  const carePlanGuidance = definition.carePlanGuidance ?? initialCarePlanGuidance();
+  return withDefaultRiskCategoryColors({ ...definition, stressScoring: definition.stressScoring ?? structuredClone(DEFAULT_STRESS_SCORING_CONFIG),
+    carePlanGuidance: { ...carePlanGuidance, products: { ...carePlanGuidance.products,
+      plans: carePlanGuidance.products.plans.map(normalizeProductPlan) } }, reportAi: definition.reportAi ?? initialReportAiConfig() });
 }
 
 function scoreSummary(field: FinalField) {

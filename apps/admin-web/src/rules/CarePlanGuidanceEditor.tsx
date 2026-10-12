@@ -1,8 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
 import { RADIOTHERAPY_TREATMENT_ID, type CarePlanGuidance, type NutritionalStatus } from "@niq-scoring/contracts/care-plan-guidance";
 import { guidancePresentationText } from "@niq-scoring/contracts/guidance-presentation";
+import { defaultProductExceptionAction, productDurationDays, productDurationText, productPlanItems, productPlanSnapshot } from "@niq-scoring/contracts/product-guidance";
+import { ProductPlanCart } from "./ProductPlanCart";
+import { ProductExceptionEditor, conflictingException, exceptionMatch, exceptionOptions, exceptionPreview, validateException } from "./ProductExceptionEditor";
+import { request, message } from "../api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
@@ -30,9 +34,6 @@ const stages: Products["plans"][number]["stage"][] = ["pre_conditioning", "durin
 const stageLabels: Record<Products["plans"][number]["stage"], string> = {
   pre_conditioning: "Before treatment", during_treatment: "During treatment", post_treatment: "After treatment", surgical: "After surgery",
 };
-const noteKinds: Products["notes"][number]["kind"][] = [
-  "pancreatic_nourish_exclusion", "liver_nourish_once_daily", "surgery_done_liss", "surgery_planned_liss", "vegetarian_liss_substitution",
-];
 const source = { document: "Manual entry", location: "Rules editor", note: "" };
 const id = (kind: Section) => `${kind}_${crypto.randomUUID().replaceAll("-", "")}`;
 const statusOptions = (value: NutritionalStatus, change: (next: NutritionalStatus) => void) =>
@@ -49,12 +50,25 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
   const [error, setError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
   const [deleting, setDeleting] = useState<{ kind: Exclude<Section, "mapping">; id: string } | null>(null);
+  const [catalog, setCatalog] = useState<Array<{ id: string; name: string }>>([]);
+  const [catalogError, setCatalogError] = useState("");
+  const [catalogRetry, setCatalogRetry] = useState(0);
+  useEffect(() => {
+    if (section !== "plans" && section !== "notes") return;
+    let current = true;
+    setCatalogError("");
+    void request<{ products: Array<{ id: string; name: string }> }>("/admin/products")
+      .then(result => { if (current) setCatalog(result.products); })
+      .catch(cause => { if (current) setCatalogError(message(cause)); });
+    return () => { current = false; };
+  }, [section, catalogRetry]);
   const classes = definition.drugClassConfig?.classes.filter(item => item.id !== "other") ?? [];
   const fields = definition.sections.flatMap(item => item.fields);
   const options = (fieldId: string) => fields.filter(field => field.id === fieldId && "options" in field)
     .flatMap(field => "options" in field ? field.options : []);
   const treatments = options("current_cancer_treatment");
   const conditions = options("co_morbidities");
+  const surgeryOptions = options("cancer_surgical_status");
   const lookup = (items: Array<{ id: string; label: string }>, key: string) => items.find(item => item.id === key)?.label ?? key;
   const update = (next: CarePlanGuidance) => onChange({ ...definition, carePlanGuidance: next });
   const rows = guidance ? section === "statusModifiers" ? guidance.oncology.statusModifiers
@@ -88,9 +102,19 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
       : kind === "radiotherapy" ? { id: id(kind), treatmentTypeId: treatments.find(row => row.id !== RADIOTHERAPY_TREATMENT_ID)?.id ?? treatments[0]?.id ?? "", nutritionalStatus: "well_nourished", guidance: "", enabled: true, source }
       : kind === "plans" ? { id: id(kind), stage: "pre_conditioning", nutritionalStatus: "well_nourished", products: "", dose: "", duration: "", enabled: true, source }
       : kind === "comorbidities" ? { id: id(kind), conditionId: conditions[0]?.id ?? "", label: "", guidance: "", sourceText: "Manual entry", enabled: true, source }
-      : { id: id(kind), kind: noteKinds[0]!, label: "", guidance: "", sourceText: "Manual entry", enabled: true, source };
+      : { id: id(kind), kind: "custom", match: { fieldId: "cancer_type", optionId: "" }, label: "", guidance: "", sourceText: "Manual entry", enabled: true, source };
     const copy = structuredClone(item ?? newItem);
     if (kind === "radiotherapy") (copy as Oncology["radiotherapy"][number]).treatmentTypeId ??= RADIOTHERAPY_TREATMENT_ID;
+    if (kind === "plans") {
+      const plan = copy as Products["plans"][number];
+      plan.durationAmount = productDurationDays(plan) ?? undefined;
+    }
+    if (kind === "notes") {
+      const row = copy as Products["notes"][number];
+      row.match = exceptionMatch(row);
+      row.action ??= defaultProductExceptionAction(row.kind) ?? undefined;
+      if (item) row.label ||= exceptionOptions(row.match.fieldId, surgeryOptions).find(option => option.id === row.match?.optionId)?.label ?? "";
+    }
     if ("guidance" in copy) copy.guidance = guidancePresentationText(copy.guidance);
     const entry = { kind, item: copy, isNew: !item } as Entry;
     setEditing(entry); setOriginal(structuredClone(entry)); setError("");
@@ -104,9 +128,18 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
     const fieldsToCheck = editing.kind === "statusModifiers" ? ["classId", "treatmentTypeId", "riskEmphasis", "actions"]
       : editing.kind === "radiotherapy" ? ["treatmentTypeId", "guidance"]
       : editing.kind === "plans" ? ["products", "dose", "duration"]
-      : ["label", "guidance"];
+      : editing.kind === "notes" ? ["label"] : ["label", "guidance"];
     if (fieldsToCheck.some(key => !String((item as unknown as Record<string, unknown>)[key] ?? "").trim())) {
       setError("Complete all fields before saving this rule."); return;
+    }
+    if (editing.kind === "plans" && (!Number.isInteger(editing.item.durationAmount) || !editing.item.durationAmount || editing.item.durationAmount < 1 || editing.item.durationAmount > 3650)) {
+      setError("Enter a whole number of days for the duration."); return;
+    }
+    const planItems = editing.kind === "plans" ? productPlanItems(editing.item) : [];
+    if (editing.kind === "plans" && (!planItems.length || planItems.some(row =>
+      row.quantityPerDay === undefined || !Number.isInteger(row.quantityPerDay) || row.quantityPerDay < 1 || row.quantityPerDay > 100
+      || (row.description?.length ?? 0) > 500))) {
+      setError("Enter a quantity from 1 to 100 for every product and keep descriptions under 500 characters."); return;
     }
     if (editing.kind === "statusModifiers" && (!classes.some(row => row.id === editing.item.classId) || !treatments.some(row => row.id === editing.item.treatmentTypeId))) {
       setError("Choose a configured drug class and treatment."); return;
@@ -116,6 +149,12 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
     }
     if (editing.kind === "comorbidities" && !conditions.some(row => row.id === editing.item.conditionId)) {
       setError("Choose a configured co-morbidity."); return;
+    }
+    if (editing.kind === "notes") {
+      const problem = validateException(editing.item, catalog, surgeryOptions);
+      if (problem) { setError(problem); return; }
+      const conflict = conflictingException(editing.item, guidance?.products.notes ?? []);
+      if (conflict) { setError(`Conflicts with “${conflict.label}”: both rules change the same product for this assessment answer.`); return; }
     }
     changeRow(editing.kind, editing.item, editing.isNew);
     close();
@@ -141,7 +180,21 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
     if ("conditionId" in row) return lookup(conditions, row.conditionId);
     return row.label;
   };
-  const detail = (row: Row) => "riskEmphasis" in row ? row.riskEmphasis : "products" in row ? `${row.products} · ${row.dose}` : guidancePresentationText(row.guidance);
+  const detail = (row: Row) => {
+    if ("riskEmphasis" in row) return row.riskEmphasis;
+    if ("products" in row) {
+      const selected = productPlanItems(row);
+      if (!selected.length) return row.dose;
+      // Names come from the shared Products list when available; quantities stay in this rule.
+      const catalogItems = selected.map(item => ({ ...item,
+        productName: catalog.find(product => product.name.toLocaleLowerCase() === item.productName.toLocaleLowerCase())?.name ?? item.productName }));
+      return catalogItems.map(item => `${item.quantityPerDay === undefined ? "" : `${item.quantityPerDay} `}${item.productName}${item.description ? ` (${item.description})` : ""}`).join(" + ");
+    }
+    if ("kind" in row) {
+      return `${exceptionPreview(row, surgeryOptions)}${row.guidance.trim() ? ` ${guidancePresentationText(row.guidance)}` : ""}`;
+    }
+    return guidancePresentationText(row.guidance);
+  };
   return <section className="min-w-0 space-y-5 rounded-2xl bg-card p-4 shadow-sm sm:p-6" aria-label="Care plan rules">
     <div><h2 className="text-lg font-medium">Care plan rules</h2><p className="mt-1 text-sm text-muted-foreground">These saved rules determine which guidance is available to a report for this version.</p></div>
     <nav className="flex flex-wrap gap-2 border-b pb-3" aria-label="Care plan sections">{tabs.map(([key, label]) => <Button key={key} type="button" variant={section === key ? "default" : "outline"} onClick={() => { setSection(key); setQuery(""); }}>{label}{key !== "mapping" && <span className="ml-1 opacity-75">{counts[key]}</span>}</Button>)}</nav>
@@ -168,9 +221,19 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
     <Dialog open={editing !== null} onOpenChange={open => { if (!open) requestClose(); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>{editing?.isNew ? "Add" : "Edit"} {editing ? tabs.find(([key]) => key === editing.kind)?.[1].toLowerCase() : "rule"}</DialogTitle><DialogDescription>Configure the guidance used by this rule version.</DialogDescription></DialogHeader>{editing && <div className="space-y-4">
       {editing.kind === "statusModifiers" && <><div className="grid gap-3 sm:grid-cols-2"><Field label="Drug class"><NativeSelect value={editing.item.classId} onChange={event => patch({ classId: event.target.value })}>{classes.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</NativeSelect></Field><Field label="Treatment"><NativeSelect value={editing.item.treatmentTypeId} onChange={event => patch({ treatmentTypeId: event.target.value })}>{treatments.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</NativeSelect></Field></div><Field label="Nutritional status">{statusOptions(editing.item.nutritionalStatus, value => patch({ nutritionalStatus: value }))}</Field><Field label="Risk emphasis"><Textarea rows={3} value={editing.item.riskEmphasis} onChange={event => patch({ riskEmphasis: event.target.value })} /></Field><Field label="Added actions"><Textarea rows={8} value={editing.item.actions} onChange={event => patch({ actions: event.target.value })} /></Field></>}
       {editing.kind === "radiotherapy" && <><Field label="Treatment type"><NativeSelect value={editing.item.treatmentTypeId ?? RADIOTHERAPY_TREATMENT_ID} onChange={event => patch({ treatmentTypeId: event.target.value })}>{treatments.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</NativeSelect></Field><Field label="Nutritional status">{statusOptions(editing.item.nutritionalStatus, value => patch({ nutritionalStatus: value }))}</Field><Field label="Nutrition guidance"><Textarea rows={10} value={editing.item.guidance} onChange={event => patch({ guidance: event.target.value })} /></Field></>}
-      {editing.kind === "plans" && <><div className="grid gap-3 sm:grid-cols-2"><Field label="Treatment stage"><NativeSelect value={editing.item.stage} onChange={event => patch({ stage: event.target.value as Products["plans"][number]["stage"] })}>{stages.map(item => <option key={item} value={item}>{stageLabels[item]}</option>)}</NativeSelect></Field><Field label="Nutritional status">{statusOptions(editing.item.nutritionalStatus, value => patch({ nutritionalStatus: value }))}</Field></div><Field label="Products"><Input value={editing.item.products} onChange={event => patch({ products: event.target.value })} /></Field><Field label="Dose"><Input value={editing.item.dose} onChange={event => patch({ dose: event.target.value })} /></Field><Field label="Duration"><Input value={editing.item.duration} onChange={event => patch({ duration: event.target.value })} /></Field></>}
+      {editing.kind === "plans" && <><div className="grid gap-3 sm:grid-cols-2"><Field label="Treatment stage"><NativeSelect value={editing.item.stage} onChange={event => { const stage = event.target.value as Products["plans"][number]["stage"]; patch({ stage, duration: editing.item.durationAmount ? productDurationText(stage, editing.item.durationAmount) : "" }); }}>{stages.map(item => <option key={item} value={item}>{stageLabels[item]}</option>)}</NativeSelect></Field><Field label="Nutritional status">{statusOptions(editing.item.nutritionalStatus, value => patch({ nutritionalStatus: value }))}</Field></div><ProductPlanCart key={editing.item.id} plan={editing.item} catalog={catalog} catalogError={catalogError} onRetry={() => setCatalogRetry(value => value + 1)} onChange={items => patch(items.length ? productPlanSnapshot(items) : { items: undefined, productNames: undefined, products: "", dose: "" })} /><Field label="Duration (days)"><Input type="number" min={1} max={3650} step={1} value={editing.item.durationAmount ?? ""} onChange={event => { const amount = event.target.value === "" ? undefined : Number(event.target.value); patch({ durationAmount: amount, duration: amount ? productDurationText(editing.item.stage, amount) : "" }); }} /></Field><p className="text-xs text-muted-foreground">{editing.item.stage === "pre_conditioning" ? "Count back from the planned treatment date in the assessment." : editing.item.stage === "surgical" ? "Count from the recorded surgery date." : "This is the recommended duration; no extra date is needed."}</p></>}
       {editing.kind === "comorbidities" && <><Field label="Co-morbidity"><NativeSelect value={editing.item.conditionId} onChange={event => patch({ conditionId: event.target.value })}>{conditions.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</NativeSelect></Field><Field label="Name"><Input value={editing.item.label} onChange={event => patch({ label: event.target.value })} /></Field><Field label="Diet guidance"><Textarea rows={10} value={editing.item.guidance} onChange={event => patch({ guidance: event.target.value })} /></Field></>}
-      {editing.kind === "notes" && <><Field label="Exception"><NativeSelect value={editing.item.kind} onChange={event => patch({ kind: event.target.value as Products["notes"][number]["kind"] })}>{noteKinds.map(item => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}</NativeSelect></Field><Field label="Name"><Input value={editing.item.label} onChange={event => patch({ label: event.target.value })} /></Field><Field label="Guidance"><Textarea rows={5} value={editing.item.guidance} onChange={event => patch({ guidance: event.target.value })} /></Field></>}
+      {editing.kind === "notes" && <ProductExceptionEditor
+        row={editing.item}
+        catalog={catalog}
+        catalogError={catalogError}
+        onRetry={() => setCatalogRetry(value => value + 1)}
+        surgeryOptions={surgeryOptions}
+        others={guidance.products.notes}
+        isNew={editing.isNew}
+        onChange={item => setEditing({ ...editing, item })}
+      />}
+
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={editing.item.enabled} onChange={event => patch({ enabled: event.target.checked })} />Enabled for this rule version</label>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     </div>}<DialogFooter><Button type="button" variant="outline" onClick={requestClose}>Cancel</Button><Button type="button" onClick={save}>Save rule</Button></DialogFooter></DialogContent></Dialog>

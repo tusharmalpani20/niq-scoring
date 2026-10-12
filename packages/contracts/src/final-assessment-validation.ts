@@ -3,6 +3,7 @@ import { createFinalAssessmentTemplate, createLegacyFinalAssessmentTemplate } fr
 import type { DefinitionIssue } from "./rule-definition";
 import { cancerTypeIds } from "./cancer-type-ids";
 import { RADIOTHERAPY_TREATMENT_ID } from "./care-plan-guidance";
+import { defaultProductExceptionAction, defaultProductNoteMatch, productPlanItems, productPlanSnapshot } from "./product-guidance";
 
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
@@ -228,6 +229,22 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
     carePlan.products.plans.forEach((row, index) => {
       const path = `carePlanGuidance.products.plans.${index}`;
       unique(row.id, path);
+      if (row.productNames && (new Set(row.productNames.map(name => name.toLocaleLowerCase())).size !== row.productNames.length || row.products !== row.productNames.join(" + "))) {
+        add(`${path}.productNames`, "INVALID_PRODUCT_SELECTION", "Selected product names must be unique and match the saved plan text.");
+      }
+      const selectedItems = productPlanItems(row);
+      if (!selectedItems.length || selectedItems.some(item => item.quantityPerDay === undefined)) {
+        add(`${path}.items`, "MISSING_PRODUCT_QUANTITY", "Each selected product needs a quantity.");
+      }
+      if (row.items) {
+        const snapshot = productPlanSnapshot(row.items);
+        if (new Set(row.items.map(item => item.productName.toLocaleLowerCase())).size !== row.items.length) {
+          add(`${path}.items`, "DUPLICATE_PRODUCT_ITEM", "Each product may appear only once in a plan.");
+        }
+        if (!row.productNames || stable(row.productNames) !== stable(snapshot.productNames) || row.products !== snapshot.products || row.dose !== snapshot.dose) {
+          add(`${path}.items`, "INVALID_PRODUCT_SNAPSHOT", "Product names and doses must match the saved product quantities.");
+        }
+      }
       if (!row.enabled) return;
       const key = JSON.stringify([row.stage, row.nutritionalStatus]);
       if (productKeys.has(key)) add(path, "DUPLICATE_PRODUCT_PLAN", "Only one active product plan may match a stage and nutrition status.");
@@ -242,13 +259,40 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
       if (conditions.has(row.conditionId)) add(path, "DUPLICATE_CO_MORBIDITY_GUIDANCE", "Only one active guidance row may match a co-morbidity.");
       conditions.add(row.conditionId);
     });
-    const noteKinds = new Set<string>();
+    const noteTargets = new Set<string>();
     carePlan.products.notes.forEach((row, index) => {
       const path = `carePlanGuidance.products.notes.${index}`;
       unique(row.id, path);
       if (!row.enabled) return;
-      if (noteKinds.has(row.kind)) add(path, "DUPLICATE_PRODUCT_NOTE", "Only one active product note may have this condition.");
-      noteKinds.add(row.kind);
+      const match = row.match ?? (row.kind === "custom" ? null : defaultProductNoteMatch(row.kind));
+      if (!match) {
+        add(`${path}.match`, "MISSING_PRODUCT_NOTE_MATCH", "Choose an assessment answer for this exception.");
+        return;
+      }
+      if (match.fieldId === "cancer_type" && !cancerTypeIds.includes(match.optionId as typeof cancerTypeIds[number])) add(`${path}.match.optionId`, "UNKNOWN_CANCER_TYPE", "Choose a cancer type from the assessment.");
+      if (match.fieldId === "diet_preference" && !["vegetarian", "non_vegetarian", "jain", "eggetarian"].includes(match.optionId)) add(`${path}.match.optionId`, "UNKNOWN_DIET_PREFERENCE", "Choose a diet preference from the assessment.");
+      if (match.fieldId === "cancer_surgical_status" && !["cancer_surgical_status_done", "cancer_surgical_status_planned"].includes(match.optionId)) add(`${path}.match.optionId`, "INVALID_SURGERY_STATUS", "Choose Surgery Done or Planned for a dated exception.");
+      if (match.fieldId === "cancer_surgical_status" && match.withinDays === undefined) add(`${path}.match.withinDays`, "MISSING_SURGERY_WINDOW", "Set the number of days after or before surgery.");
+      if (match.fieldId !== "cancer_surgical_status" && match.withinDays !== undefined) add(`${path}.match.withinDays`, "UNEXPECTED_SURGERY_WINDOW", "Only surgery conditions use a day window.");
+      const action = row.action ?? defaultProductExceptionAction(row.kind);
+      if (!action) {
+        add(`${path}.action`, "MISSING_PRODUCT_ACTION", "Choose what this exception does to a product or plan.");
+        return;
+      }
+      if (action.type === "delay" && (match.fieldId !== "cancer_surgical_status" || match.optionId !== "cancer_surgical_status_planned"))
+        add(`${path}.action`, "INVALID_DELAY_CONDITION", "Delay until surgery requires a planned surgery condition.");
+      if (action.type === "replace" && action.productName.toLocaleLowerCase() === action.replacementProductName.toLocaleLowerCase())
+        add(`${path}.action`, "INVALID_REPLACEMENT", "Choose a different replacement product.");
+      // Distinct products may share a patient condition; two actions on the
+      // same product under that condition would have an ambiguous order.
+      const targets = action.type === "use_plan" ? ["plan"]
+        : action.type === "replace" ? [action.productName, action.replacementProductName]
+          : [action.productName];
+      for (const target of targets) {
+        const key = JSON.stringify([match.fieldId, match.optionId, target.toLocaleLowerCase()]);
+        if (noteTargets.has(key)) add(path, "DUPLICATE_PRODUCT_NOTE_MATCH", "Another enabled exception changes this product for the same assessment answer.");
+        noteTargets.add(key);
+      }
     });
   }
   if (definition.provisional.status === "CLIENT_CONFIRMED") {

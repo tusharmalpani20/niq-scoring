@@ -7,8 +7,9 @@ import type { RuleDetail } from "../src/rules/rule-api";
 
 export async function mockFinalConsole(page: Page) {
   let record: RuleDetail & { definition: FinalAssessmentDefinition } | null = null;
+  const products = ["Invigour", "Nourish", "Protect", "Recover", "Liss WH"].map((name, index) => ({ id: `product-${index}`, name, createdAt: "2026-09-19T00:00:00.000Z", updatedAt: "2026-09-19T00:00:00.000Z" }));
   const aliases = new Set<string>();
-  const state = { createError: "", saveError: "", transitionError: "", transitionIssues: [] as Array<{ message: string }>, getRecord: () => record };
+  const state = { createError: "", saveError: "", transitionError: "", transitionIssues: [] as Array<{ message: string }>, getRecord: () => record, getProducts: () => products };
   function audit(action: string) {
     if (!record) return;
     record.audit = [...(record.audit ?? []), { id: `event-${record.revision}-${action}`, actor: "synthetic-admin", actorName: "Browser QA", action, at: `2026-09-19T10:${String(record.revision).padStart(2, "0")}:00.000Z`, revision: record.revision, checksum: record.packageChecksum }];
@@ -20,6 +21,22 @@ export async function mockFinalConsole(page: Page) {
     if (path === "/api/auth/status") return json({ setupRequired: false });
     if (path === "/api/auth/session") return json({ user: { id: "synthetic-admin", displayName: "Browser QA", enabled: true } });
     if (path === "/api/admin/overview") return json({ clients: [], deployments: [], assignments: [], entitlements: [], versions: [] });
+    if (path === "/api/admin/products") {
+      if (request.method() === "GET") return json({ products: [...products].sort((a, b) => a.name.localeCompare(b.name)) });
+      if (request.method() === "POST") {
+        const name = String(request.postDataJSON().name).trim();
+        if (products.some(item => item.name.toLowerCase() === name.toLowerCase())) return json({ error: "PRODUCT_NAME_EXISTS" }, 409);
+        const product = { id: `product-${products.length}`, name, createdAt: "2026-09-19T00:00:00.000Z", updatedAt: "2026-09-19T00:00:00.000Z" };
+        products.push(product);
+        return json(product, 201);
+      }
+    }
+    if (path.startsWith("/api/admin/products/")) {
+      const product = products.find(item => item.id === path.slice("/api/admin/products/".length));
+      if (!product) return json({ error: "PRODUCT_NOT_FOUND" }, 404);
+      if (request.method() === "PUT") { product.name = String(request.postDataJSON().name).trim(); return json(product); }
+      if (request.method() === "DELETE") { products.splice(products.indexOf(product), 1); return json({ deleted: true }); }
+    }
     if (path.startsWith("/api/admin/rules/by-name/") && request.method() === "GET") {
       const name = decodeURIComponent(path.slice("/api/admin/rules/by-name/".length)).trim().toLowerCase();
       return record && (name === record.version.trim().toLowerCase() || aliases.has(name)) ? json(record) : json({ error: "RULE_NOT_FOUND" }, 404);
