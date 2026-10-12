@@ -316,6 +316,8 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   if (renalTargetsIndividualized) {
     for (const field of ["nutritionAdvice", "treatmentAdvice"] as const) {
       const sentences = parsed.data[field].text.split(/(?<=[.!?])\s+/u);
+      if (sentences.some(sentence => /\b\d+(?:[.\u2013\u2014-]\d+)?\s*(?:kcal\/kg(?:\/day)?|g(?:\s+protein)?\/kg(?:\/day)?)\b/i.test(sentence)))
+        issues.push(`${field}:RENAL_FIXED_TARGET_NEEDS_TEAM`);
       if (sentences.some(sentence =>
         /\b(?:aim for|consume|drink|keep fluids up|increase fluids?)\b/i.test(sentence) && /\b(?:\d+(?:\.\d+)?|fluids?)\b/i.test(sentence) ||
         /\btarget\b/i.test(sentence) && /\d/u.test(sentence) &&
@@ -359,6 +361,7 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     const maxWords = field === "treatmentAdvice" ? 160 : /Advice$/u.test(field) ? 120 : 80;
     if (part.text.trim().split(/\s+/u).length > maxWords) issues.push(`${field}:FIELD_TOO_LONG`);
     if (/\b(?:hba1c|h1bac|hb\s*a1c|a1c|glycated\s+ha?emoglobin)\b/i.test(part.text)) issues.push(`${field}:EXCLUDED_REPORT_TERM`);
+    if (/\b75%\s+of\s+(?:your\s+)?(?:usual|previous|normal)\s+(?:oral\s+)?intake\b/i.test(part.text)) issues.push(`${field}:INTAKE_DENOMINATOR_UNCLEAR`);
     if (/\b(?:diagnosed with|has developed|is experiencing)\b/i.test(part.text) && part.evidenceIds.some(id => id.startsWith("possible:"))) issues.push(`${field}:POSSIBLE_EFFECT_AS_CONFIRMED`);
     if (/[;—\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(part.text)) issues.push(`${field}:REPORT_STYLE`);
   }

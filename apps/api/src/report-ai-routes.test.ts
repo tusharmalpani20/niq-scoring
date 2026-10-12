@@ -539,7 +539,9 @@ test("renal guidance blocks fixed nutrition and fluid instructions", () => {
   expect(validateNarrative(fixed, evidence).issues).toContain("nutritionAdvice:RENAL_TARGET_NEEDS_QUALIFICATION");
   const misleading = { ...base, nutritionAdvice: { text: "Aim for 25–30 kcal/kg/day and 1.2–1.5 g protein/kg/day, with your care team setting individual targets.", evidenceIds: ["rule:nutrition:a", "rule:comorbidity:kidney"] } };
   expect(validateNarrative(misleading, evidence).issues).toContain("nutritionAdvice:RENAL_TARGET_NEEDS_QUALIFICATION");
-  const qualified = { ...base, nutritionAdvice: { text: "The guidance lists 25–30 kcal/kg/day as a general range. Ask your care team to individualise your energy and fluid targets.", evidenceIds: ["rule:nutrition:a", "rule:comorbidity:kidney"] } };
+  const generalRange = { ...base, nutritionAdvice: { text: "The guidance lists 25–30 kcal/kg/day as a general range. Ask your care team to individualise your energy and fluid targets.", evidenceIds: ["rule:nutrition:a", "rule:comorbidity:kidney"] } };
+  expect(validateNarrative(generalRange, evidence).issues).toContain("nutritionAdvice:RENAL_FIXED_TARGET_NEEDS_TEAM");
+  const qualified = { ...base, nutritionAdvice: { text: "Ask your care team to individualise your energy, protein, and fluid targets.", evidenceIds: ["rule:nutrition:a", "rule:comorbidity:kidney"] } };
   expect(validateNarrative(qualified, evidence).issues).not.toContain("nutritionAdvice:RENAL_TARGET_NEEDS_QUALIFICATION");
   const withStatus = [...evidence, { id: "rule:status:a", text: "Potassium-rich foods may be relevant, depending on the patient's kidney plan." }];
   const directFoods = { ...qualified, treatmentAdvice: {
@@ -567,6 +569,14 @@ test("renal guidance blocks fixed nutrition and fluid instructions", () => {
     text: "If your care team recommends ORS, take small sips as directed.", evidenceIds: ["rule:toxicity:nausea"],
   } };
   expect(validateNarrative(teamApprovedOrs, withToxicity).issues).not.toContain("effectsAdvice:RENAL_FLUID_ADVICE_NEEDS_APPROVAL");
+});
+
+test("oral intake targets refer to nutrition needs rather than previous intake", () => {
+  const evidence = [{ id: "rule:nutrition:a", text: "Maintain oral intake at least 75% of requirements." }];
+  const usual = { ...safeNarrative, nutritionAdvice: { text: "Try to eat at least 75% of your usual oral intake.", evidenceIds: ["rule:nutrition:a"] } };
+  const needs = { ...safeNarrative, nutritionAdvice: { text: "Try to meet at least 75% of your nutrition needs by mouth.", evidenceIds: ["rule:nutrition:a"] } };
+  expect(validateNarrative(usual, evidence).issues).toContain("nutritionAdvice:INTAKE_DENOMINATOR_UNCLEAR");
+  expect(validateNarrative(needs, evidence).issues).not.toContain("nutritionAdvice:INTAKE_DENOMINATOR_UNCLEAR");
 });
 
 test("missing details leave unsupported passages empty without an unavailable-data placeholder", async () => {
