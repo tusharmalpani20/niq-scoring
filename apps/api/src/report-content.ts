@@ -276,8 +276,8 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   if (!parsed.success) return { narrative: null, issues: ["INVALID_NARRATIVE_SCHEMA"] };
   const evidenceById = new Map(evidence.map(item => [item.id, item.text]));
   const requiredGuidance: Partial<Record<keyof ReportNarrative, readonly string[]>> = {
-    nutritionAdvice: ["rule:nutrition:", "rule:status:"],
-    treatmentAdvice: ["rule:treatment:", "rule:class:", "rule:exception:"],
+    nutritionAdvice: ["rule:nutrition:"],
+    treatmentAdvice: ["rule:status:", "rule:treatment:", "rule:class:", "rule:exception:"],
     conditionAdvice: ["rule:comorbidity:"],
     effectsAdvice: ["rule:toxicity:"],
   };
@@ -285,14 +285,26 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   // Matched guidance must not disappear merely because the model returned an
   // empty field and the reviewer accepted it.
   for (const [field, prefixes] of [
-    ["nutritionAdvice", ["rule:nutrition:", "rule:status:"]],
-    ["treatmentAdvice", ["rule:treatment:", "rule:class:"]],
+    ["nutritionAdvice", ["rule:nutrition:"]],
+    ["treatmentAdvice", ["rule:status:", "rule:treatment:", "rule:class:"]],
     ["conditionAdvice", ["rule:comorbidity:"]],
     ["effectsAdvice", ["rule:toxicity:"]],
   ] as const) {
     const required = evidence.filter(item => prefixes.some(prefix => item.id.startsWith(prefix)));
     if (required.some(item => !parsed.data[field].evidenceIds.includes(item.id)))
       issues.push(`${field}:MISSING_MATCHED_COVERAGE`);
+  }
+  const renalTargetsIndividualized = evidence.some(item => item.id.startsWith("rule:comorbidity:") &&
+    /\b(?:kidney|renal)\b/i.test(item.text) && /\bindividuali[sz]/i.test(item.text));
+  if (renalTargetsIndividualized) {
+    for (const field of ["nutritionAdvice", "treatmentAdvice"] as const) {
+      const sentences = parsed.data[field].text.split(/(?<=[.!?])\s+/u);
+      if (sentences.some(sentence =>
+        /\b(?:aim for|consume|drink|keep fluids up|increase fluids?)\b/i.test(sentence) && /\b(?:\d+(?:\.\d+)?|fluids?)\b/i.test(sentence) ||
+        /\btarget\b/i.test(sentence) && /\d/u.test(sentence) &&
+          !/\b(?:individuali[sz]|as advised|care team|clinician|doctor)\b/i.test(sentence)))
+        issues.push(`${field}:RENAL_TARGET_NEEDS_QUALIFICATION`);
+    }
   }
   const productNames = evidence.filter(item => item.id.startsWith("rule:product:"))
     .flatMap(item => /^Selected product plan: ([^.]+)\./.exec(item.text)?.[1]?.split(/\s+\+\s+/) ?? []);

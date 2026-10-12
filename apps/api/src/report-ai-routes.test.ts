@@ -195,8 +195,8 @@ test("matched nutrition and treatment advice cannot vanish from a ready report",
   expect(missing).toContain("nutritionAdvice:MISSING_MATCHED_COVERAGE");
   expect(missing).toContain("treatmentAdvice:MISSING_MATCHED_COVERAGE");
   const covered = { ...safeNarrative,
-    nutritionAdvice: { text: "Begin supervised support early to preserve muscle.", evidenceIds: ["rule:nutrition:high", "rule:status:poor"] },
-    treatmentAdvice: { text: "Try small frequent meals and monitor hydration.", evidenceIds: ["rule:treatment:therapy", "rule:class:platinum"] },
+    nutritionAdvice: { text: "Begin supervised support early to preserve muscle.", evidenceIds: ["rule:nutrition:high"] },
+    treatmentAdvice: { text: "Preserve muscle with small frequent meals and monitor hydration.", evidenceIds: ["rule:status:poor", "rule:treatment:therapy", "rule:class:platinum"] },
     actionSummary: { text: "Take 3 Invigour and 2 Protect daily.", evidenceIds: ["rule:product:selected"] },
   };
   expect(validateNarrative(covered, evidence).issues).toContain("actionSummary:REPEATS_PRODUCT_PLAN");
@@ -506,12 +506,28 @@ test("a second targeted revision can resolve a remaining validation issue", asyn
 test("advice can cover several matched rules within its larger word budget", () => {
   const evidence = [
     { id: "rule:nutrition:a", text: "Nutrition support should be tailored to appetite and treatment tolerance." },
-    { id: "rule:status:b", text: "Monitor weekly intake and adjust the care plan with the treating team." },
+    { id: "rule:nutrition:b", text: "Monitor weekly intake and adjust the care plan with the treating team." },
   ];
   const narrative = { ...safeNarrative, nutritionAdvice: {
-    text: Array(100).fill("nutrition").join(" "), evidenceIds: ["rule:nutrition:a", "rule:status:b"],
+    text: Array(100).fill("nutrition").join(" "), evidenceIds: ["rule:nutrition:a", "rule:nutrition:b"],
   } };
   expect(validateNarrative(narrative, evidence).issues).not.toContain("nutritionAdvice:FIELD_TOO_LONG");
+});
+
+test("renal guidance blocks fixed nutrition and fluid instructions", () => {
+  const evidence = [
+    { id: "rule:nutrition:a", text: "Energy 25–30 kcal/kg/day and protein 1.2–1.5 g/kg/day." },
+    { id: "rule:comorbidity:kidney", text: "Kidney disease: individualise nutrition targets and fluid needs with the care team." },
+  ];
+  const base = { ...safeNarrative,
+    conditionAdvice: { text: "Discuss kidney targets with the care team.", evidenceIds: ["rule:comorbidity:kidney"] },
+  };
+  const fixed = { ...base, nutritionAdvice: { text: "Aim for 25–30 kcal/kg/day. Keep fluids up with water.", evidenceIds: ["rule:nutrition:a"] } };
+  expect(validateNarrative(fixed, evidence).issues).toContain("nutritionAdvice:RENAL_TARGET_NEEDS_QUALIFICATION");
+  const misleading = { ...base, nutritionAdvice: { text: "Aim for 25–30 kcal/kg/day and 1.2–1.5 g protein/kg/day, with your care team setting individual targets.", evidenceIds: ["rule:nutrition:a", "rule:comorbidity:kidney"] } };
+  expect(validateNarrative(misleading, evidence).issues).toContain("nutritionAdvice:RENAL_TARGET_NEEDS_QUALIFICATION");
+  const qualified = { ...base, nutritionAdvice: { text: "The guidance lists 25–30 kcal/kg/day as a general range. Ask your care team to individualise your energy and fluid targets.", evidenceIds: ["rule:nutrition:a", "rule:comorbidity:kidney"] } };
+  expect(validateNarrative(qualified, evidence).issues).not.toContain("nutritionAdvice:RENAL_TARGET_NEEDS_QUALIFICATION");
 });
 
 test("missing details leave unsupported passages empty without an unavailable-data placeholder", async () => {
