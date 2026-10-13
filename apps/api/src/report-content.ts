@@ -1,9 +1,10 @@
 import { z } from "zod";
-import type { FinalAssessmentAnswers, FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
-import { classOnlyToxicity, matchesToxicityAssessmentAnswers, resolveReportGuidance } from "@niq-scoring/contracts/report-guidance";
+import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
+import { classOnlyToxicity, resolveReportGuidance } from "@niq-scoring/contracts/report-guidance";
 import { resolveCarePlanGuidance } from "@niq-scoring/contracts/care-plan-resolver";
-import { productExceptionActionText } from "@niq-scoring/contracts/product-guidance";
+import { productExceptionActionText, productIdentityName, productPlanItems } from "@niq-scoring/contracts/product-guidance";
 import { cancerTypeIds } from "@niq-scoring/contracts/cancer-type-ids";
+import type { Product } from "./product-catalog";
 
 const id = z.string().regex(/^[a-z][a-z0-9_]{0,79}$/);
 const ids = z.array(id).max(500);
@@ -68,15 +69,18 @@ export const reportToxicityOptionsRequestSchema = z.object({
   drugClassIds: ids,
 }).strict();
 
-const narrativePart = z.object({ text: z.string().trim().max(1200), evidenceIds: z.array(z.string().min(1).max(120)).max(20) })
+// The writer may exceed its final word budget before a focused repair. Keep
+// intermediate prose parseable so the repair loop can shorten it safely.
+const narrativePart = z.object({ text: z.string().trim().max(4000), evidenceIds: z.array(z.string().min(1).max(120)).max(20) })
   .strict().refine(part => Boolean(part.text) === (part.evidenceIds.length > 0), "A passage needs evidence; an omitted passage needs neither text nor evidence");
-export const narrativeFieldNames = ["overview", "keyFindings", "actionSummary", "monitoringSummary",
+export const narrativeFieldNames = ["overview", "keyFindings", "actionSummary", "monitoringSummary", "overallSummary",
   "nutritionAdvice", "treatmentAdvice", "conditionAdvice", "effectsAdvice"] as const;
 export const narrativeSchema = z.object({
   overview: narrativePart,
   keyFindings: narrativePart,
   actionSummary: narrativePart,
   monitoringSummary: narrativePart,
+  overallSummary: narrativePart,
   nutritionAdvice: narrativePart,
   treatmentAdvice: narrativePart,
   conditionAdvice: narrativePart,
@@ -166,36 +170,27 @@ export function eligibleClinicianToxicityOptions(definition: FinalAssessmentDefi
     });
 }
 
-function matchedToxicityIds(definition: FinalAssessmentDefinition, facts: ReportContentRequest["facts"]): string[] {
-  const answers = Object.fromEntries(Object.entries(facts.assessmentAnswers ?? {}).filter(([, value]) => value !== undefined)) as FinalAssessmentAnswers;
-  const automatic = (definition.reportGuidance?.toxicity ?? []).filter(row => row.enabled && row.match
-    && row.match.mode !== "clinician_confirmation" && facts.drugClassIds.includes(row.classId)
-    && facts.treatmentTypeIds.includes(row.treatmentTypeId) && !classOnlyToxicity(row).requiresDrugConfirmation
-    && matchesToxicityAssessmentAnswers(row.match, answers)).map(row => row.id);
-  return [...new Set([...automatic, ...facts.confirmedToxicityIds])];
-}
-
-function matchedAnswerLabels(definition: FinalAssessmentDefinition, facts: ReportContentRequest["facts"], rowId: string): string[] {
-  const match = definition.reportGuidance?.toxicity.find(row => row.id === rowId)?.match;
-  if (match?.mode !== "assessment_answer") return [];
-  return match.anyOf.flatMap(({ fieldId, optionId }) => {
-    const answer = (facts.assessmentAnswers as Record<string, string | string[] | number | undefined> | undefined)?.[fieldId];
-    if (answer !== optionId && (!Array.isArray(answer) || !answer.includes(optionId))) return [];
-    const field = definition.sections.flatMap(section => section.fields).find(item => item.id === fieldId);
-    if (!field || !("options" in field)) return [];
-    const label = field.options.find(option => option.id === optionId)?.label;
-    return label ? [label] : [];
-  });
-}
-
-export function matchedReportPacket(definition: FinalAssessmentDefinition, facts: ReportContentRequest["facts"], riskCategoryId: string, asOfDate: string) {
-  const report = resolveReportGuidance(definition, { riskCategoryId, treatmentTypeIds: facts.treatmentTypeIds, drugClassIds: facts.drugClassIds, confirmedToxicityIds: matchedToxicityIds(definition, facts) });
+export function matchedReportPacket(definition: FinalAssessmentDefinition, facts: ReportContentRequest["facts"], riskCategoryId: string, asOfDate: string, catalog: Product[] = []) {
+  // All class-and-treatment matches are conditional candidate guidance. A
+  // questionnaire symptom or historical row match never promotes one to a
+  // mandatory treatment-effect rule.
+  const report = resolveReportGuidance(definition, { riskCategoryId, treatmentTypeIds: facts.treatmentTypeIds, drugClassIds: facts.drugClassIds, confirmedToxicityIds: [] });
   const care = resolveCarePlanGuidance(definition, { riskCategoryId, treatmentTypeIds: facts.treatmentTypeIds, drugClassIds: facts.drugClassIds, coMorbidityIds: facts.coMorbidityIds ?? [], cancerTypeId: facts.cancerTypeId ?? null, dietPreferenceId: facts.dietPreferenceId ?? null, treatmentStatusId: facts.treatmentStatusId ?? null, surgicalStatusId: facts.surgicalStatusId ?? null, surgeryDate: facts.surgeryDate ?? null, plannedSurgeryDate: facts.plannedSurgeryDate ?? null, plannedTreatmentStartDate: facts.plannedTreatmentStartDate ?? null, productStageChoice: facts.productStageChoice ?? null, asOfDate });
+  const selectedNames = new Set(care.products.plans.flatMap(plan => (plan.items?.map(item => item.productName)
+    ?? plan.productNames ?? plan.products.split(" + ").map(name => name.trim())).map(productIdentityName)));
+  const productDetails = care.products.status === "selected" ? catalog.filter(product =>
+    [product.name, ...product.aliases].some(name => selectedNames.has(productIdentityName(name))))
+    .map(({ id, name, description, aliases }) => ({ id, name, description, aliases })) : [];
+  const publicPlan = (plan: (typeof care.products.plans)[number]) => {
+    const { id, stage, nutritionalStatus, products, dose, duration, durationAmount } = plan;
+    const items = productPlanItems(plan);
+    return { id, stage, nutritionalStatus, products, dose, duration,
+      ...(durationAmount ? { durationAmount } : {}), ...(items.length ? { items } : {}) };
+  };
   return {
     nutritionInterventions: report.nutrition.map(({ id, label, coreStrategy, clinicalActions }) => ({ id, label, coreStrategy, clinicalActions })),
-    toxicityInterventions: report.toxicity.map(({ id, classId, treatmentTypeId, expectedToxicity, nutritionalInterventions }) => ({ id, classId, treatmentTypeId, expectedToxicity, nutritionalInterventions,
-      matchSource: definition.reportGuidance?.toxicity.find(row => row.id === id)?.match?.mode ?? "unknown",
-      matchedAnswerLabels: matchedAnswerLabels(definition, facts, id) })),
+    toxicityInterventions: report.toxicity.map(({ id, classId, treatmentTypeId, expectedToxicity, nutritionalInterventions }) =>
+      ({ id, classId, treatmentTypeId, expectedToxicity, nutritionalInterventions })),
     // Give the report agent every enabled intervention for the selected
     // treatment and drug class. These are options, not observed symptoms.
     possibleToxicities: report.possibleToxicities.map(({ id, classId, treatmentTypeId, nutritionalInterventions, requiresDrugConfirmation }) =>
@@ -206,8 +201,8 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
       statusModifiers: care.statusModifiers.map(({ id, classId, treatmentTypeId, nutritionalStatus, riskEmphasis, actions }) => ({ id, classId, treatmentTypeId, nutritionalStatus, riskEmphasis, actions })),
       treatmentGuidance: care.treatmentGuidance.map(({ id, treatmentTypeId, nutritionalStatus, guidance }) => ({ id, treatmentTypeId, nutritionalStatus, guidance })),
       coMorbidities: care.coMorbidities.map(({ id, conditionId, label, guidance }) => ({ id, conditionId, label, guidance })),
-      products: { status: care.products.status, plans: care.products.plans.map(({ id, stage, nutritionalStatus, products, dose, duration, items }) => ({ id, stage, nutritionalStatus, products, dose, duration, ...(items ? { items } : {}) })),
-        ...(care.products.choices ? { choices: care.products.choices.map(({ id, stage, nutritionalStatus, products, dose, duration, items }) => ({ id, stage, nutritionalStatus, products, dose, duration, ...(items ? { items } : {}) })) } : {}),
+      products: { status: care.products.status, catalog: productDetails, plans: care.products.plans.map(publicPlan),
+        ...(care.products.choices ? { choices: care.products.choices.map(publicPlan) } : {}),
         // Exception wording is meaningful only with a selected product plan.
         notes: care.products.status === "selected"
           ? care.products.notes.map(({ id, kind, label, match, action, guidance }) => ({ id, kind, label, match, action, guidance }))
@@ -219,6 +214,33 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
 export type ReportEvidence = { id: string; text: string };
 export function reportEvidence(definition: FinalAssessmentDefinition, facts: ReportContentRequest["facts"], classification: { id: string; label: string }, packet: ReturnType<typeof matchedReportPacket>): ReportEvidence[] {
   const evidence: ReportEvidence[] = [{ id: "fact:niq_risk", text: `NIQ risk: ${classification.label}; reviewed score ${facts.reviewedScore}` }];
+  const optionLabel = (fieldId: string, optionId: string) => {
+    const field = definition.sections.flatMap(section => section.fields).find(item => item.id === fieldId);
+    return field && "options" in field ? field.options.find(option => option.id === optionId)?.label : undefined;
+  };
+  if (facts.treatmentStatusId) {
+    const label = optionLabel("treatment_status", facts.treatmentStatusId);
+    if (label) evidence.push({ id: "fact:treatment_status", text: `Recorded treatment status: ${label}.` });
+  }
+  for (const treatmentId of facts.treatmentTypeIds) {
+    const label = optionLabel("current_cancer_treatment", treatmentId);
+    if (label) evidence.push({ id: `fact:treatment_type_${treatmentId}`, text: `Recorded current cancer treatment: ${label}.` });
+  }
+  for (const fieldId of ["gastrointestinal_symptoms", "dietary_symptoms", "appetite_status"] as const) {
+    const answer = facts.assessmentAnswers?.[fieldId];
+    const selected = typeof answer === "string" ? [answer] : answer ?? [];
+    const field = definition.sections.flatMap(section => section.fields).find(item => item.id === fieldId);
+    if (!field || !("options" in field)) continue;
+    for (const optionId of selected) {
+      const label = field.options.find(option => option.id === optionId)?.label;
+      if (label) evidence.push({ id: `fact:assessment_${fieldId}_${optionId}`, text: `Assessment records ${field.label}: ${label}. This does not establish a treatment cause.` });
+    }
+  }
+  for (const rowId of new Set(facts.confirmedToxicityIds)) {
+    const row = definition.reportGuidance?.toxicity.find(item => item.id === rowId);
+    if (row) evidence.push({ id: `fact:clinician_toxicity_${rowId}`,
+      text: `Clinician explicitly confirmed ${classOnlyToxicity(row).expectedToxicity}. This confirmation does not select or require a guidance row.` });
+  }
   const { previous_weight_kg: previousWeight, current_weight_kg: currentWeight } = facts.assessmentAnswers ?? {};
   if (previousWeight !== undefined && currentWeight !== undefined) {
     const direction = previousWeight > currentWeight ? "loss" : previousWeight < currentWeight ? "gain" : "no change";
@@ -239,32 +261,27 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
     id: `possible:toxicity:${row.id}`,
     text: `Candidate guidance for the selected treatment and drug class. This is not evidence that the patient has an effect.${row.requiresDrugConfirmation ? " Named-drug confirmation is required before applying this drug-specific advice." : ""} ${row.nutritionalInterventions}`,
   });
-  // Source titles can combine effects. Separate observed facts from the
-  // guidance text so the model cannot use the title as symptom evidence.
-  for (const row of packet.toxicityInterventions) {
+  for (const row of packet.toxicityInterventions)
     evidence.push({ id: `rule:toxicity:${row.id}`, text: `Nutrition guidance for a matched treatment effect: ${row.nutritionalInterventions}` });
-    const source = definition.reportGuidance?.toxicity.find(item => item.id === row.id);
-    if (source?.match?.mode === "clinician_confirmation") {
-      evidence.push({ id: `fact:clinician_toxicity_${row.id}`, text: `Clinician confirmed treatment effect: ${row.expectedToxicity}` });
-    } else if (source?.match?.mode === "weight_change") {
-      const { previous_weight_kg: previous, current_weight_kg: current } = facts.assessmentAnswers ?? {};
-      evidence.push({ id: `fact:weight_change_${row.id}`, text: `Recorded weight ${source.match.direction}: ${previous} kg previously and ${current} kg currently` });
-    } else if (source?.match?.mode === "assessment_answer") {
-      for (const [index, label] of matchedAnswerLabels(definition, facts, row.id).entries())
-        evidence.push({ id: `fact:assessment_${row.id}_${index}`, text: `Patient reported ${label}` });
-    }
-  }
   for (const row of packet.carePlan.statusModifiers) evidence.push({ id: `rule:status:${row.id}`, text: `${row.riskEmphasis}. ${row.actions}` });
   for (const row of packet.carePlan.treatmentGuidance) evidence.push({ id: `rule:treatment:${row.id}`, text: row.guidance });
   for (const row of packet.carePlan.coMorbidities) evidence.push({ id: `rule:comorbidity:${row.id}`, text: `${row.label}: ${row.guidance}` });
   for (const row of packet.carePlan.products.notes) evidence.push({ id: `rule:exception:${row.id}`,
     text: `${row.label}: ${row.action ? productExceptionActionText(row.action) : row.guidance}${row.action && row.guidance ? ` Explanation: ${row.guidance}` : ""}` });
+  for (const product of packet.carePlan.products.catalog) if (product.description)
+    evidence.push({ id: `catalog:product:${product.id}`, text: `${product.name}: ${product.description}. Product description only; dose and timing come from the selected plan.` });
   if (packet.carePlan.products.status === "selected") {
     for (const row of packet.carePlan.products.plans) {
-      const details = row.items?.map(item => `${item.productName}: ${item.quantityPerDay === undefined ? item.description
-        : item.productName === "Liss WH" && item.description === "leveled scoops in 150ml water"
-          ? `${item.quantityPerDay} ${item.description}`
-          : `${item.quantityPerDay} per day${item.description ? `; description: ${item.description}` : ""}`}`).join(". ");
+      const details = row.items?.map(item => `${item.productName}: ${[
+        item.quantityPerDay === undefined ? item.description : item.unit ? `${item.quantityPerDay} ${item.unit} per day`
+          : item.productName === "Liss WH" && item.description === "leveled scoops in 150ml water"
+            ? `${item.quantityPerDay} ${item.description}` : `${item.quantityPerDay} per day`,
+        item.timesPerDay ? item.timesPerDay === 1 ? "taken once per day" : `taken ${item.timesPerDay} times per day` : undefined,
+        item.preparation ? `prepare: ${item.preparation}` : item.description && item.quantityPerDay !== undefined
+          && !(item.productName === "Liss WH" && item.description === "leveled scoops in 150ml water") ? `description: ${item.description}` : undefined,
+        item.mealTiming ? `meal timing: ${item.mealTiming}` : undefined,
+        item.rationale ? `approved reason: ${item.rationale}` : undefined,
+      ].filter(Boolean).join("; ")}`).join(". ");
       evidence.push({ id: `rule:product:${row.id}`, text: details
         ? `Selected product plan: ${row.products}. Dosage and preparation: ${details}. Duration: ${row.duration}.`
         : `Selected product plan: ${row.products}. Dose: ${row.dose}. Duration: ${row.duration}.` });
@@ -285,9 +302,14 @@ function copiesGuidance(text: string, sources: string[]): boolean {
   const words = (value: string) => value.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
   const passage = words(text);
   if (passage.length < 8) return false;
-  const span = Math.min(14, passage.length);
   return sources.some(source => {
-    const sourceText = words(source).join(" ");
+    const sourceWords = words(source);
+    const sourceText = sourceWords.join(" ");
+    const passageText = passage.join(" ");
+    // A complete short rule or a sustained passage is copying. A short
+    // clinical phrase shared with a longer rule can still be the clearest wording.
+    if (sourceWords.length >= 8 && sourceWords.length <= passage.length + 2 && passageText.includes(sourceText)) return true;
+    const span = 25;
     for (let index = 0; index <= passage.length - span; index++)
       if (sourceText.includes(passage.slice(index, index + span).join(" "))) return true;
     return false;
@@ -297,15 +319,23 @@ function copiesGuidance(text: string, sources: string[]): boolean {
 /** Local checks do not replace clinical review, but reject malformed and ungrounded numerals. */
 export function validateNarrative(value: unknown, evidence: ReportEvidence[]): { narrative: ReportNarrative | null; issues: string[] } {
   const parsed = narrativeSchema.safeParse(value);
-  if (!parsed.success) return { narrative: null, issues: ["INVALID_NARRATIVE_SCHEMA"] };
+  if (!parsed.success) return { narrative: null, issues: [
+    "INVALID_NARRATIVE_SCHEMA",
+    // Keep only the field and validation code. The model's medical prose must
+    // not enter operational diagnostics, but a field path makes repair possible.
+    ...parsed.error.issues.slice(0, 5).map(issue =>
+      `INVALID_NARRATIVE_SCHEMA:${issue.path.join(".") || "root"}:${issue.code}`),
+  ] };
   const evidenceById = new Map(evidence.map(item => [item.id, item.text]));
   const requiredGuidance: Partial<Record<keyof ReportNarrative, readonly string[]>> = {
     nutritionAdvice: ["rule:nutrition:"],
     treatmentAdvice: ["rule:status:", "rule:treatment:", "rule:class:", "rule:exception:", "possible:toxicity:"],
     conditionAdvice: ["rule:comorbidity:"],
-    effectsAdvice: ["rule:toxicity:"],
+    effectsAdvice: ["rule:toxicity:", "possible:toxicity:", "rule:status:", "rule:treatment:"],
   };
   const issues: string[] = [];
+  if (evidenceById.has("fact:niq_risk") && !parsed.data.overallSummary.text)
+    issues.push("overallSummary:MISSING_SUMMARY");
   // Matched guidance must not disappear merely because the model returned an
   // empty field and the reviewer accepted it.
   for (const [field, prefixes] of [
@@ -354,12 +384,25 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(sentence) &&
     /\b(?:\d+|product|supplement|serving|dose|take|daily|per day)\b/i.test(sentence))))
     issues.push("actionSummary:REPEATS_PRODUCT_PLAN");
+  // The closing page should make sense on its own and cannot point to content
+  // elsewhere in the report. Such references are especially confusing in a PDF.
+  if (/\b(?:above|below|aforementioned|listed)\b/i.test(parsed.data.overallSummary.text))
+    issues.push("overallSummary:POSITIONAL_REFERENCE");
   for (const [field, part] of Object.entries(parsed.data)) {
     const selected = part.evidenceIds.map(id => evidenceById.get(id));
     if (selected.some(text => text === undefined)) issues.push(`${field}:UNKNOWN_EVIDENCE_ID`);
     if (part.evidenceIds.some(id => id.startsWith("possible:toxicity:") &&
       evidenceById.get(id)?.includes("Named-drug confirmation is required")))
       issues.push(`${field}:DRUG_SPECIFIC_CANDIDATE_UNVERIFIED`);
+    if (field === "effectsAdvice" && part.evidenceIds.some(id => id.startsWith("possible:toxicity:"))
+      && !part.evidenceIds.some(id => id.startsWith("fact:assessment_") || id.startsWith("fact:clinician_toxicity_")))
+      issues.push(`${field}:CANDIDATE_NEEDS_REPORTED_EFFECT`);
+    if (field === "effectsAdvice" && part.evidenceIds.some(id => id.startsWith("rule:status:"))
+      && !part.evidenceIds.some(id => id.startsWith("fact:assessment_") || id.startsWith("fact:clinician_toxicity_")))
+      issues.push(`${field}:STATUS_GUIDANCE_NEEDS_REPORTED_EFFECT`);
+    if (field === "effectsAdvice" && part.evidenceIds.some(id => id.startsWith("rule:treatment:"))
+      && !part.evidenceIds.some(id => id.startsWith("fact:assessment_") || id.startsWith("fact:clinician_toxicity_")))
+      issues.push(`${field}:TREATMENT_GUIDANCE_NEEDS_REPORTED_EFFECT`);
     const prefixes = requiredGuidance[field as keyof ReportNarrative];
     if (part.text && prefixes && !part.evidenceIds.some(id => prefixes.some(prefix => id.startsWith(prefix))))
       issues.push(`${field}:MISSING_MATCHED_GUIDANCE`);
@@ -368,8 +411,6 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
       issues.push(`${field}:COPIED_GUIDANCE`);
     const sourceNumbers = new Set(selected.flatMap(text => text?.match(/\d+(?:\.\d+)?/g) ?? []));
     if ((part.text.match(/\d+(?:\.\d+)?/g) ?? []).some(number => !sourceNumbers.has(number))) issues.push(`${field}:UNSUPPORTED_NUMBER`);
-    const maxWords = field === "treatmentAdvice" ? 160 : /Advice$/u.test(field) ? 120 : 80;
-    if (part.text.trim().split(/\s+/u).length > maxWords) issues.push(`${field}:FIELD_TOO_LONG`);
     if (/\b(?:hba1c|h1bac|hb\s*a1c|a1c|glycated\s+ha?emoglobin)\b/i.test(part.text)) issues.push(`${field}:EXCLUDED_REPORT_TERM`);
     if (/\b75%\s+of\s+(?:your\s+)?(?:usual|previous|normal)\s+(?:oral\s+)?intake\b/i.test(part.text)) issues.push(`${field}:INTAKE_DENOMINATOR_UNCLEAR`);
     if (/\b2\.3\s*g\b.{0,100}\b5\s*g\s+(?:of\s+)?salt\b|\b5\s*g\s+(?:of\s+)?salt\b.{0,100}\b2\.3\s*g\b/i.test(part.text))

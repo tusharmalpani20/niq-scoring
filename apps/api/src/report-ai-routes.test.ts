@@ -14,7 +14,7 @@ import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-ass
 const safePart = { text: "The NIQ risk category needs clinician review.", evidenceIds: ["fact:niq_risk"] };
 const omittedPart = { text: "", evidenceIds: [] as string[] };
 const defaultNutritionPart = { text: "Maintain nutrition and monitor appetite during treatment.", evidenceIds: ["rule:nutrition:nutrition_low"] };
-const safeNarrative = { overview: safePart, keyFindings: safePart, actionSummary: safePart, monitoringSummary: safePart,
+const safeNarrative = { overview: safePart, keyFindings: safePart, actionSummary: safePart, monitoringSummary: safePart, overallSummary: safePart,
   nutritionAdvice: defaultNutritionPart, treatmentAdvice: omittedPart, conditionAdvice: omittedPart, effectsAdvice: omittedPart };
 const noGuidanceNarrative = { ...safeNarrative, nutritionAdvice: omittedPart };
 const usage = { model: "openai/gpt-6-luna", provider: "test-provider", generationId: "gen-test", promptTokens: 120, completionTokens: 40, reasoningTokens: 5, costUsd: 0.001, latencyMs: 10 };
@@ -48,7 +48,7 @@ async function setup(handler: (step: Step, call: number, user: string, system: s
   return { app, call, store, runs, rule, request, facts, getCalls: () => calls };
 }
 
-test("report content uses pinned rules, eight bounded fields, idempotency, and sanitized admin usage", async () => {
+test("report content uses pinned rules, nine bounded fields, idempotency, and sanitized admin usage", async () => {
   const { app, call, runs, request, rule, getCalls } = await setup();
   const response = await call("report-content", request());
   expect(response.status).toBe(200);
@@ -114,6 +114,9 @@ test("the reviewer receives independent fixed checks beyond editable wording", a
   expect(systems.reviewer).toContain("Check every claim against the cited evidence");
   expect(systems.reviewer).toContain("does not establish kidney disease");
   expect(systems.reviewer).toContain("early oral nutrition supplements");
+  expect(systems.reviewer).toContain("brief, self-contained synthesis of the supported status");
+  expect(systems.reviewer).toContain("When matched kidney disease is present, also flag direct fluid or ORS");
+  expect(systems.writer).toContain("matched treatment-status or treatment guidance");
   expect(systems.writer).not.toContain("independently reviewing a writer draft");
 });
 
@@ -137,16 +140,16 @@ test("rule evidence IDs remain distinct when different rule groups reuse an ID",
   expect(evidence.some(item => item.id === `rule:product:${product.id}`)).toBe(true);
 });
 
-test("a passage over the promised word limit is omitted after one failed revision", async () => {
+test("a passage beyond the writing guide remains available for review", async () => {
   const lengthy = { ...safeNarrative, overview: { text: Array(81).fill("review").join(" "), evidenceIds: ["fact:niq_risk"] } };
   const { call, request, getCalls } = await setup(step => step === "reviewer" ? { accepted: true, issues: [] } : lengthy);
   const response = await call("report-content", request());
   expect(response.status).toBe(200);
   const body = await response.json();
   expect(body.status).toBe("READY");
-  expect(body.narrative.overview).toEqual({ text: "", evidenceIds: [] });
-  expect(body.omittedNarrativeFields).toContain("overview");
-  expect(getCalls()).toBe(4);
+  expect(body.narrative.overview).toEqual(lengthy.overview);
+  expect(body.omittedNarrativeFields).not.toContain("overview");
+  expect(getCalls()).toBe(2);
 });
 
 test("care plan passages require matching rule evidence and copied guidance is rejected", () => {
@@ -164,6 +167,10 @@ test("care plan passages require matching rule evidence and copied guidance is r
   expect(validateNarrative(unsupported, evidence).issues).toContain("conditionAdvice:MISSING_MATCHED_GUIDANCE");
   const copied = { ...good, nutritionAdvice: { text: evidence[1]!.text, evidenceIds: ["rule:nutrition:row1"] } };
   expect(validateNarrative(copied, evidence).issues).toContain("nutritionAdvice:COPIED_GUIDANCE");
+  const longerRule = `${evidence[1]!.text} ${Array(30).fill("Continue discussing the plan with your care team").join(". ")}`;
+  const sharedShortPhrase = longerRule.split(/\s+/u).slice(0, 14).join(" ");
+  expect(validateNarrative({ ...good, nutritionAdvice: { text: sharedShortPhrase, evidenceIds: ["rule:nutrition:row1"] } },
+    [{ ...evidence[1]!, text: longerRule }]).issues).not.toContain("nutritionAdvice:COPIED_GUIDANCE");
 });
 
 test("matched conditions and treatment effects cannot be silently omitted", () => {
@@ -182,6 +189,42 @@ test("matched conditions and treatment effects cannot be silently omitted", () =
   };
   expect(validateNarrative(partial, evidence).issues).toContain("conditionAdvice:MISSING_MATCHED_COVERAGE");
   expect(validateNarrative({ ...partial, conditionAdvice: { ...partial.conditionAdvice, evidenceIds: ["rule:comorbidity:kidney", "rule:comorbidity:diabetes"] } }, evidence).issues).toEqual([]);
+});
+
+test("reported effects can use matched treatment-status guidance without a drug class", () => {
+  const evidence = [
+    { id: "fact:niq_risk", text: "NIQ risk: High Risk; reviewed score 27" },
+    { id: "fact:assessment_symptoms_mouth_sores", text: "Assessment records symptoms: mouth sores. This does not establish a treatment cause." },
+    { id: "rule:status:radiation", text: "Radiation status guidance: soft moist foods can help with mouth sores. Review swallowing difficulty with the team." },
+  ];
+  const narrative = { ...noGuidanceNarrative,
+    treatmentAdvice: { text: "Review nutrition during radiation with your care team.", evidenceIds: ["rule:status:radiation"] },
+    effectsAdvice: { text: "For your reported mouth sores, try soft, moist foods.", evidenceIds: ["rule:status:radiation", "fact:assessment_symptoms_mouth_sores"] },
+  };
+  expect(validateNarrative(narrative, evidence).issues).toEqual([]);
+  expect(validateNarrative({ ...narrative, effectsAdvice: { ...narrative.effectsAdvice, evidenceIds: ["rule:status:radiation"] } }, evidence).issues)
+    .toContain("effectsAdvice:STATUS_GUIDANCE_NEEDS_REPORTED_EFFECT");
+});
+
+test("reported radiation symptoms can use matched treatment guidance without treating it as a symptom fact", () => {
+  const evidence = [
+    { id: "fact:niq_risk", text: "NIQ risk: High Risk; reviewed score 27" },
+    { id: "fact:assessment_gastrointestinal_symptoms_dysphagia", text: "Assessment records dysphagia. This does not establish a treatment cause." },
+    { id: "fact:assessment_gastrointestinal_symptoms_mouth_ulcers", text: "Assessment records mouth ulcers. This does not establish a treatment cause." },
+    { id: "rule:treatment:radiotherapy_severely_malnourished", text: "For dysphagia, review swallowing safety with the team before changing food texture or fluid consistency. For mouth ulcers, consider soft moist foods." },
+  ];
+  const narrative = { ...noGuidanceNarrative,
+    treatmentAdvice: { text: "Review nutrition during radiotherapy with your care team.", evidenceIds: ["rule:treatment:radiotherapy_severely_malnourished"] },
+    effectsAdvice: { text: "For reported swallowing difficulty, review swallowing safety with your care team before changing texture. Soft moist foods may ease reported mouth ulcers.",
+      evidenceIds: ["rule:treatment:radiotherapy_severely_malnourished", "fact:assessment_gastrointestinal_symptoms_dysphagia", "fact:assessment_gastrointestinal_symptoms_mouth_ulcers"] },
+  };
+  expect(validateNarrative(narrative, evidence).issues).toEqual([]);
+  expect(validateNarrative({ ...narrative, effectsAdvice: { ...narrative.effectsAdvice,
+    evidenceIds: ["rule:treatment:radiotherapy_severely_malnourished"] } }, evidence).issues)
+    .toContain("effectsAdvice:TREATMENT_GUIDANCE_NEEDS_REPORTED_EFFECT");
+  expect(validateNarrative({ ...narrative, effectsAdvice: { ...narrative.effectsAdvice,
+    evidenceIds: ["fact:assessment_gastrointestinal_symptoms_dysphagia"] } }, evidence).issues)
+    .toContain("effectsAdvice:MISSING_MATCHED_GUIDANCE");
 });
 
 test("matched nutrition and treatment advice cannot vanish from a ready report", () => {
@@ -213,6 +256,47 @@ test("weight evidence states direction and avoids inventing a time interval", ()
   const evidence = reportEvidence(definition, facts, { id: "low", label: "Low Risk" }, packet);
   expect(evidence.find(row => row.id === "fact:weight_direction")?.text).toContain("Recorded weight loss: 67 kg previously and 63 kg currently (6%).");
   expect(evidence.find(row => row.id === "fact:weight_direction")?.text).toContain("interval between measurements was not supplied");
+});
+
+test("the closing summary can cite recorded treatment context", () => {
+  const definition = createFinalAssessmentTemplate("Summary facts");
+  const facts = { reviewedScore: 23, treatmentTypeIds: ["current_cancer_treatment_chemotherapy"], drugClassIds: [], confirmedToxicityIds: [],
+    assessmentDate: "2026-10-13", cancerTypeId: "cancer_6", treatmentStatusId: "treatment_status_newly_diagnosed", observations: [] };
+  const packet = matchedReportPacket(definition, facts, "moderate", facts.assessmentDate);
+  const evidence = reportEvidence(definition, facts, { id: "moderate", label: "Moderate Risk" }, packet);
+  expect(evidence.find(item => item.id === "fact:treatment_status")?.text).toContain("Newly Diagnosed");
+  expect(evidence.find(item => item.id === "fact:treatment_type_current_cancer_treatment_chemotherapy")?.text).toContain("Chemotherapy");
+  const summary = { ...noGuidanceNarrative, overallSummary: {
+    text: "This assessment records moderate nutrition risk and current chemotherapy.",
+    evidenceIds: ["fact:niq_risk", "fact:treatment_type_current_cancer_treatment_chemotherapy"],
+  } };
+  expect(validateNarrative(summary, evidence).issues).not.toContain("overallSummary:UNKNOWN_EVIDENCE_ID");
+  for (const text of ["Follow the advice below.", "Watch for the listed warning signs."]) {
+    expect(validateNarrative({ ...summary, overallSummary: { ...summary.overallSummary, text } }, evidence).issues)
+      .toContain("overallSummary:POSITIONAL_REFERENCE");
+  }
+});
+
+test("a missing closing summary is repaired before a report is ready", async () => {
+  const missing = { ...safeNarrative, overallSummary: omittedPart };
+  const { call, request } = await setup((step, _call, user) => {
+    if (step === "reviewer") return { accepted: true, issues: [] };
+    if (step === "revision" && user.includes("Repair only overallSummary")) return safePart;
+    return missing;
+  });
+  const response = await call("report-content", request());
+  const body = await response.json();
+  expect(body.status).toBe("READY");
+  expect(body.narrative.overallSummary).toEqual(safePart);
+});
+
+test("an unrepairable closing summary keeps the report in clinical review", async () => {
+  const missing = { ...safeNarrative, overallSummary: omittedPart };
+  const { call, request } = await setup(step => step === "reviewer" ? { accepted: true, issues: [] } : missing);
+  const response = await call("report-content", request());
+  const body = await response.json();
+  expect(body.status).toBe("REVIEW_REQUIRED");
+  expect(body.issues).toContain("overallSummary:MISSING_SUMMARY");
 });
 
 test("HbA1c wording is excluded from every report narrative field", () => {
@@ -273,7 +357,7 @@ test("product windows use the completed assessment date rather than report gener
     status: "selected",
     plans: [{ stage: "pre_conditioning", duration: "15 days before treatment (2026-10-05 to 2026-10-20)" }],
   });
-  expect(writerInputs.at(-1)).toContain("Selected product plan: Invigour + Nourish. Dose: 1 Invigour + 1 Nourish.");
+  expect(writerInputs.at(-1)).toContain("Selected product plan: Invigour + Nourish. Dosage and preparation: Invigour: 1 per day. Nourish: 1 per day.");
 });
 
 test("writer receives the matched cart quantities and descriptions", async () => {
@@ -283,7 +367,9 @@ test("writer receives the matched cart quantities and descriptions", async () =>
     return step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative;
   }, definition => {
     const plan = definition.carePlanGuidance!.products.plans.find(row => row.id === "product_pre_conditioning_well_nourished")!;
-    plan.items = [{ productName: "Invigour", quantityPerDay: 1 }, { productName: "Nourish", quantityPerDay: 2, description: "After meals" }];
+    plan.items = [{ productName: "Invigour", quantityPerDay: 1, unit: "sachet", timesPerDay: 1,
+      preparation: "Mix in water", mealTiming: "After breakfast", rationale: "Nutrition support" },
+    { productName: "Nourish", quantityPerDay: 2, description: "After meals" }];
     plan.productNames = ["Invigour", "Nourish"];
     plan.dose = "1 Invigour + 2 Nourish (After meals)";
   });
@@ -294,10 +380,31 @@ test("writer receives the matched cart quantities and descriptions", async () =>
   expect(response.status).toBe(200);
   const body = await response.json();
   expect(body.guidance.carePlan.products.plans[0].items).toEqual([
-    { productName: "Invigour", quantityPerDay: 1 },
+    { productName: "Invigour", quantityPerDay: 1, unit: "sachet", timesPerDay: 1,
+      preparation: "Mix in water", mealTiming: "After breakfast", rationale: "Nutrition support" },
     { productName: "Nourish", quantityPerDay: 2, description: "After meals" },
   ]);
+  expect(body.guidance.carePlan.products.plans[0].durationAmount).toBe(15);
+  expect(writerInputs.at(-1)).toContain("Invigour: 1 sachet per day; taken once per day; prepare: Mix in water; meal timing: After breakfast; approved reason: Nutrition support");
   expect(writerInputs.at(-1)).toContain("Nourish: 2 per day; description: After meals");
+});
+
+test("a selected product includes its verified catalogue description, while dose stays with the rule", async () => {
+  const prompts: string[] = [];
+  const { call, request, facts, store } = await setup((step, _call, user) => {
+    if (step === "writer") prompts.push(user);
+    return step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative;
+  });
+  const old = (await store.products.list()).find(product => product.name === "Invigour")!;
+  await store.products.update(old.id, { name: "Es Invigour", description: "Nutrition support described in the supplied report", aliases: ["Invigour"] });
+  const response = await call("report-content", request({ facts: { ...facts, assessmentDate: "2026-10-12",
+    treatmentStatusId: "treatment_status_newly_diagnosed", plannedTreatmentStartDate: "2026-10-20", cancerTypeId: "cancer_1" } }));
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.guidance.carePlan.products.catalog).toContainEqual({ id: old.id, name: "Es Invigour", description: "Nutrition support described in the supplied report", aliases: ["Invigour"] });
+  expect(body.guidance.carePlan.products.plans[0].items[0].productName).toBe("Invigour");
+  expect(prompts.at(-1)).toContain(`catalog:product:${old.id}`);
+  expect(prompts.at(-1)).toContain("Product description only; dose and timing come from the selected plan.");
 });
 
 test("writer and reviewer receive the patient's diet preference", async () => {
@@ -408,12 +515,10 @@ test("all treatment and class candidates reach the agent while reported effects 
   const matched = await (await call("report-content", request({ idempotencyKey: "report-run-2", facts: { ...selected,
     assessmentAnswers: { dietary_symptoms: ["dietary_symptoms_diarrhoea", "dietary_symptoms_fatigue"] } } }))).json();
   expect(matched.guidance.possibleToxicities.map((item: { id: string }) => item.id)).toEqual(candidateIds);
-  expect(matched.guidance.toxicityInterventions.map((item: { id: string }) => item.id)).toEqual(["toxicity_row_006", "toxicity_row_009"]);
-  expect(matched.guidance.toxicityInterventions[0]).toMatchObject({ expectedToxicity: "Diarrhea", matchSource: "assessment_answer", matchedAnswerLabels: ["Diarrhoea"] });
-  expect(matched.guidance.toxicityInterventions[1]).toMatchObject({ matchSource: "assessment_answer", matchedAnswerLabels: ["Fatigue"] });
+  expect(matched.guidance.toxicityInterventions).toEqual([]);
   expect(JSON.stringify(matched.guidance)).not.toContain("docetaxel");
-  expect(writerInputs.at(-1)).toContain("Patient reported Fatigue");
-  expect(writerInputs.at(-1)).not.toContain("Patient reported Reduced");
+  expect(writerInputs.at(-1)).toContain("Fatigue. This does not establish a treatment cause.");
+  expect(writerInputs.at(-1)).not.toContain("Reduced. This does not establish a treatment cause.");
   expect(writerInputs.at(-1)).not.toContain("Nutrition guidance source topic: Fatigue / reduced appetite");
   expect(safetyInstructions.at(-1)).toContain("the title does not prove all of those terms occurred");
 });
@@ -465,8 +570,12 @@ test("clinician options are filtered to the pinned treatment and class and requi
   expect(getCalls()).toBe(0);
 });
 
-test("only clinician-confirmation rows accept explicit selections, and duplicate selections do not duplicate guidance", async () => {
-  const { call, request, facts, getCalls } = await setup(undefined, definition => {
+test("explicit clinician confirmations remain separate facts and never select mandatory guidance", async () => {
+  const prompts: string[] = [];
+  const { call, request, facts, getCalls } = await setup((step, _call, user) => {
+    if (step === "writer") prompts.push(user);
+    return step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative;
+  }, definition => {
     definition.reportGuidance!.toxicity.find(row => row.id === "toxicity_row_006")!.match = { mode: "assessment_answer", anyOf: [{ fieldId: "dietary_symptoms", optionId: "dietary_symptoms_diarrhoea" }] };
     definition.reportGuidance!.toxicity.find(row => row.id === "toxicity_row_007")!.match = { mode: "clinician_confirmation" };
   });
@@ -478,11 +587,13 @@ test("only clinician-confirmation rows accept explicit selections, and duplicate
     confirmedToxicityIds: ["toxicity_row_007", "toxicity_row_007"], assessmentAnswers: { dietary_symptoms: ["dietary_symptoms_diarrhoea"] } } }));
   expect(response.status).toBe(200);
   const body = await response.json();
-  expect(body.guidance.toxicityInterventions.map((item: { id: string }) => item.id)).toEqual(["toxicity_row_006", "toxicity_row_007"]);
-  expect(body.guidance.toxicityInterventions[1]).toMatchObject({ matchSource: "clinician_confirmation", matchedAnswerLabels: [] });
+  expect(body.guidance.toxicityInterventions).toEqual([]);
+  expect(prompts.at(-1)).toContain("fact:clinician_toxicity_toxicity_row_007");
+  expect(prompts.at(-1)?.match(/fact:clinician_toxicity_toxicity_row_007/g)).toHaveLength(1);
+  expect(body.guidance.possibleToxicities.some((item: { id: string }) => item.id === "toxicity_row_006")).toBe(true);
 });
 
-test("pinned answer options are validated and positive weight gain selects only matching treatment guidance", async () => {
+test("pinned answer options are validated and weight direction stays separate from candidate guidance", async () => {
   const prompts: string[] = [];
   const { call, request, facts, getCalls } = await setup((step, _call, user) => {
     if (step === "writer") prompts.push(user);
@@ -500,8 +611,8 @@ test("pinned answer options are validated and positive weight gain selects only 
   expect(getCalls()).toBe(0);
   const gain = await (await call("report-content", request({ facts: { ...selected,
     assessmentAnswers: { previous_weight_kg: 68, current_weight_kg: 70 } } }))).json();
-  expect(gain.guidance.toxicityInterventions.map((item: { id: string }) => item.id)).toEqual(["toxicity_row_107"]);
-  expect(gain.guidance.toxicityInterventions[0].matchSource).toBe("weight_change");
+  expect(gain.guidance.toxicityInterventions).toEqual([]);
+  expect(gain.guidance.possibleToxicities.some((item: { id: string }) => item.id === "toxicity_row_107")).toBe(true);
   expect(prompts.at(-1)).toContain("Recorded weight gain: 68 kg previously and 70 kg currently");
   const unchanged = await (await call("report-content", request({ idempotencyKey: "unchanged-weight", facts: { ...selected,
     assessmentAnswers: { previous_weight_kg: 70, current_weight_kg: 70 } } }))).json();
@@ -541,6 +652,16 @@ test("advice can cover several matched rules within its larger word budget", () 
   expect(validateNarrative(narrative, evidence).issues).not.toContain("nutritionAdvice:FIELD_TOO_LONG");
 });
 
+test("word counts guide writing without rejecting a supported longer passage", () => {
+  const text = Array(190).fill("condition").join(" ");
+  expect(text.length).toBeGreaterThan(1200);
+  const issues = validateNarrative({ ...safeNarrative, conditionAdvice: {
+    text, evidenceIds: ["rule:comorbidity:a"],
+  } }, [{ id: "rule:comorbidity:a", text: "Discuss condition guidance with the care team." }]).issues;
+  expect(issues).not.toContain("conditionAdvice:FIELD_TOO_LONG");
+  expect(issues).not.toContain("INVALID_NARRATIVE_SCHEMA");
+});
+
 test("treatment guidance can cover several matched rules without clipping its advice", () => {
   const evidence = [{ id: "rule:treatment:a", text: "Discuss treatment nutrition with the care team." }];
   const narrative = { ...safeNarrative, treatmentAdvice: {
@@ -549,7 +670,7 @@ test("treatment guidance can cover several matched rules without clipping its ad
   expect(validateNarrative(narrative, evidence).issues).not.toContain("treatmentAdvice:FIELD_TOO_LONG");
   expect(validateNarrative({ ...narrative, treatmentAdvice: {
     ...narrative.treatmentAdvice, text: Array(161).fill("care").join(" "),
-  } }, evidence).issues).toContain("treatmentAdvice:FIELD_TOO_LONG");
+  } }, evidence).issues).not.toContain("treatmentAdvice:FIELD_TOO_LONG");
 });
 
 test("renal guidance blocks fixed nutrition and fluid instructions", () => {

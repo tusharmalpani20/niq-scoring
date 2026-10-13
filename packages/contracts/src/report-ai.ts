@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const REPORT_AI_MODEL = "openai/gpt-6-luna" as const;
-export const REPORT_AI_SCHEMA_VERSION = 2 as const;
+export const REPORT_AI_SCHEMA_VERSION = 3 as const;
 
 /** Editable wording belongs to a rule version. Safety and evidence rules stay in server code. */
 export const reportAiConfigSchema = z.object({
