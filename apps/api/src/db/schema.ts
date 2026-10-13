@@ -40,6 +40,8 @@ export const clients = pgTable("clients", {
 export const products = pgTable("products", {
   id: varchar("id", { length: 26 }).primaryKey(),
   name: varchar("name", { length: 120 }).notNull(),
+  description: text("description"),
+  aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
   ...timestamps,
 }, table => [uniqueIndex("products_name_uq").on(sql`lower(btrim(${table.name}))`)]);
 

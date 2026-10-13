@@ -4,7 +4,11 @@ import { ulidSchema } from "@niq-scoring/contracts";
 import { adminMutationAudit } from "./admin-mutation-audit";
 import { ProductCatalogError, type ProductCatalog } from "./product-catalog";
 
-const bodySchema = z.object({ name: z.string().trim().min(1).max(120) }).strict();
+const bodySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(2000).nullable().optional(),
+  aliases: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
+}).strict();
 
 export function installProductRoutes(app: Hono, products: ProductCatalog) {
   const guard = (handler: (context: Context) => Promise<Response>) => async (context: Context) => {
@@ -18,13 +22,17 @@ export function installProductRoutes(app: Hono, products: ProductCatalog) {
   app.post("/admin/products", guard(async context => {
     const parsed = bodySchema.safeParse(await context.req.json().catch(() => null));
     if (!parsed.success) return context.json({ error: "INVALID_REQUEST", issues: parsed.error.issues }, 400);
-    return context.json(await products.create(parsed.data.name, adminMutationAudit(context)), 201);
+    return context.json(await products.create({ name: parsed.data.name, description: parsed.data.description ?? null, aliases: parsed.data.aliases ?? [] }, adminMutationAudit(context)), 201);
   }));
   app.put("/admin/products/:id", guard(async context => {
     const id = ulidSchema.safeParse(context.req.param("id"));
     const parsed = bodySchema.safeParse(await context.req.json().catch(() => null));
     if (!id.success || !parsed.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    return context.json(await products.rename(id.data, parsed.data.name, adminMutationAudit(context)));
+    const existing = (await products.list()).find(row => row.id === id.data);
+    if (!existing) return context.json({ error: "PRODUCT_NOT_FOUND" }, 404);
+    return context.json(await products.update(id.data, { name: parsed.data.name,
+      description: parsed.data.description === undefined ? existing.description : parsed.data.description,
+      aliases: parsed.data.aliases ?? existing.aliases }, adminMutationAudit(context)));
   }));
   app.delete("/admin/products/:id", guard(async context => {
     const id = ulidSchema.safeParse(context.req.param("id"));

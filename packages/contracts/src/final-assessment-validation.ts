@@ -3,7 +3,7 @@ import { createFinalAssessmentTemplate, createLegacyFinalAssessmentTemplate } fr
 import type { DefinitionIssue } from "./rule-definition";
 import { cancerTypeIds } from "./cancer-type-ids";
 import { RADIOTHERAPY_TREATMENT_ID } from "./care-plan-guidance";
-import { defaultProductExceptionAction, defaultProductNoteMatch, productPlanItems, productPlanSnapshot } from "./product-guidance";
+import { defaultProductExceptionAction, defaultProductNoteMatch, productIdentityName, productPlanItems, productPlanSnapshot } from "./product-guidance";
 
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
@@ -238,7 +238,7 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
       }
       if (row.items) {
         const snapshot = productPlanSnapshot(row.items);
-        if (new Set(row.items.map(item => item.productName.toLocaleLowerCase())).size !== row.items.length) {
+        if (new Set(row.items.map(item => productIdentityName(item.productName))).size !== row.items.length) {
           add(`${path}.items`, "DUPLICATE_PRODUCT_ITEM", "Each product may appear only once in a plan.");
         }
         if (!row.productNames || stable(row.productNames) !== stable(snapshot.productNames) || row.products !== snapshot.products || row.dose !== snapshot.dose) {

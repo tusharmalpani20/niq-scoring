@@ -1,7 +1,7 @@
 import type { FinalAssessmentDefinition } from "./final-assessment";
 import { RADIOTHERAPY_TREATMENT_ID, type CarePlanGuidance, type NutritionalStatus } from "./care-plan-guidance";
 import { guidancePresentationText } from "./guidance-presentation";
-import { defaultProductExceptionAction, defaultProductNoteMatch, productDurationDays, productPlanItems, productPlanSnapshot, type ProductExceptionAction } from "./product-guidance";
+import { defaultProductExceptionAction, defaultProductNoteMatch, productDurationDays, productIdentityName, productPlanItems, productPlanSnapshot, type ProductExceptionAction } from "./product-guidance";
 
 type StatusModifier = CarePlanGuidance["oncology"]["statusModifiers"][number];
 type TreatmentGuidance = CarePlanGuidance["oncology"]["radiotherapy"][number] & { treatmentTypeId: string };
@@ -96,10 +96,10 @@ function reportCoMorbidity(row: CoMorbidity): PublicCoMorbidity {
 }
 
 function planContainsProduct(plan: ProductPlan, name: string) {
-  if (plan.items) return plan.items.some(item => item.productName.toLocaleLowerCase() === name.toLocaleLowerCase());
-  if (plan.productNames) return plan.productNames.some(product => product.toLocaleLowerCase() === name.toLocaleLowerCase());
+  if (plan.items) return plan.items.some(item => productIdentityName(item.productName) === productIdentityName(name));
+  if (plan.productNames) return plan.productNames.some(product => productIdentityName(product) === productIdentityName(name));
   // Historical versions only saved a display string.
-  return plan.products.split(" + ").some(product => product.trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+  return plan.products.split(" + ").some(product => productIdentityName(product) === productIdentityName(name));
 }
 
 function noteAction(row: ProductNote): ProductExceptionAction | null {
@@ -108,8 +108,8 @@ function noteAction(row: ProductNote): ProductExceptionAction | null {
 
 function actionTargets(action: ProductExceptionAction): string[] {
   return action.type === "use_plan" ? ["plan"]
-    : action.type === "replace" ? [action.productName, action.replacementProductName].map(name => name.toLocaleLowerCase())
-      : [action.productName.toLocaleLowerCase()];
+    : action.type === "replace" ? [action.productName, action.replacementProductName].map(productIdentityName)
+      : [productIdentityName(action.productName)];
 }
 
 /** Assemble guidance from the pinned rule version using explicit, confirmed facts. */
@@ -221,7 +221,7 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
     !selectedNotes.some(row => {
       const action = noteAction(row);
       return action && ["replace", "remove", "delay"].includes(action.type)
-        && "productName" in action && action.productName.toLocaleLowerCase() === "liss wh";
+        && "productName" in action && productIdentityName(action.productName) === "liss wh";
     })) {
     return unresolved("No Liss WH dose is confirmed for this diet preference; a clinician must choose an appropriate plan.");
   }
@@ -239,15 +239,15 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
   for (const row of selectedNotes) {
     const action = noteAction(row);
     if (!action || action.type === "use_plan") continue;
-    const source = action.productName.toLocaleLowerCase();
+    const source = productIdentityName(action.productName);
     const hasSource = planContainsProduct(selected, action.productName);
     if (action.type !== "recommend" && !hasSource) continue;
     if (action.type === "replace" && !action.matchSourceQuantity && action.replacementQuantityPerDay === undefined)
       return unresolved(`${row.label} requires ${action.replacementProductName} instead of ${action.productName}, but no replacement quantity is specified.`);
     if (!items.length) return unresolved(`The ${selected.stage} plan has no structured daily quantities to adjust for ${row.label}.`);
-    const index = items.findIndex(item => item.productName.toLocaleLowerCase() === source);
+    const index = items.findIndex(item => productIdentityName(item.productName) === source);
     if (action.type === "remove" || action.type === "delay") {
-      items = items.filter(item => item.productName.toLocaleLowerCase() !== source);
+      items = items.filter(item => productIdentityName(item.productName) !== source);
       if (!items.length) return unresolved(`${row.label} removes the only product in this plan; a clinician must choose another plan.`);
       adjusted = true;
     } else if (action.type === "limit") {
@@ -261,8 +261,8 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
     } else if (action.type === "replace") {
       const replacementQuantity = action.matchSourceQuantity ? items[index]?.quantityPerDay : action.replacementQuantityPerDay;
       if (replacementQuantity === undefined) return unresolved(`${row.label} needs a known daily quantity for ${action.productName} before it can be replaced.`);
-      items = items.filter(item => item.productName.toLocaleLowerCase() !== source);
-      const destination = items.findIndex(item => item.productName.toLocaleLowerCase() === action.replacementProductName.toLocaleLowerCase());
+      items = items.filter(item => productIdentityName(item.productName) !== source);
+      const destination = items.findIndex(item => productIdentityName(item.productName) === productIdentityName(action.replacementProductName));
       const replacement = { productName: action.replacementProductName, quantityPerDay: replacementQuantity,
         ...(action.description ? { description: action.description } : {}) };
       if (destination >= 0) items[destination] = replacement;

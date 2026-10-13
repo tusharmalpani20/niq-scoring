@@ -53,4 +53,14 @@ describe("shared product catalog", () => {
     expect((await request("/invalid", "PUT", { name: "Okay" })).status).toBe(400);
     expect((await app.request("/admin/products", { method: "POST", headers: { ...headers, origin: "https://other.example" }, body: JSON.stringify({ name: "Okay" }) })).status).toBe(403);
   });
+
+  test("stores a verified catalogue description and historical name without changing the product ID", async () => {
+    const { request } = setup();
+    const invigour = (await (await request()).json() as { products: Array<{ id: string; name: string }> }).products.find(row => row.name === "Invigour")!;
+    const changed = await request(`/${invigour.id}`, "PUT", { name: "Es Invigour", description: "Nutrition support described in the supplied report.", aliases: ["Invigour"] });
+    expect(changed.status).toBe(200);
+    expect(await changed.json()).toMatchObject({ id: invigour.id, name: "Es Invigour", description: "Nutrition support described in the supplied report.", aliases: ["Invigour"] });
+    expect((await request("", "POST", { name: "Invigour" })).status).toBe(409);
+    expect((await request(`/${invigour.id}`, "PUT", { name: "Es Invigour", aliases: ["Protect"] })).status).toBe(409);
+  });
 });

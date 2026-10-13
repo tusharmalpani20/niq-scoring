@@ -94,6 +94,20 @@ describe("care plan guidance from the versioned workbooks", () => {
     expect(validateFinalAssessmentDefinition(rule).map(issue => issue.code)).toContain("INVALID_PRODUCT_SELECTION");
   });
 
+  test("full PDF names and workbook shorthands remain one product identity", () => {
+    const rule = definition();
+    const plan = rule.carePlanGuidance!.products.plans.find(row => row.stage === "during_treatment" && row.nutritionalStatus === "moderately_nourished")!;
+    plan.items = [{ productName: "Es Invigour", quantityPerDay: 1 }, { productName: "Es Fortitude Protect", quantityPerDay: 2 }];
+    plan.productNames = plan.items.map(item => item.productName);
+    plan.products = plan.productNames.join(" + ");
+    plan.dose = "1 Es Invigour + 2 Es Fortitude Protect";
+    expect(validateFinalAssessmentDefinition(rule)).toEqual([]);
+    const result = resolveCarePlanGuidance(rule, { ...base, treatmentStatusId: "treatment_status_under_treatment" });
+    expect(result.products.plans[0]?.items).toEqual(plan.items);
+    plan.items.push({ productName: "Protect", quantityPerDay: 1 });
+    expect(validateFinalAssessmentDefinition(rule).map(issue => issue.code)).toContain("DUPLICATE_PRODUCT_ITEM");
+  });
+
   test("validates the cart against saved product and dose snapshots", () => {
     const rule = definition();
     const plan = rule.carePlanGuidance!.products.plans[0]!;

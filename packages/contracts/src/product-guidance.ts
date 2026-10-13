@@ -51,6 +51,14 @@ const productNameSchema = z.string().trim().min(1).max(120);
 const dailyQuantitySchema = z.number().int().min(1).max(100);
 const productDescriptionSchema = z.string().trim().min(1).max(500);
 
+/** Source workbook shorthands and PDF names identify the same two products. */
+export function productIdentityName(name: string): string {
+  const normalized = name.trim().toLocaleLowerCase();
+  if (normalized === "es invigour") return "invigour";
+  if (normalized === "es fortitude protect") return "protect";
+  return normalized;
+}
+
 /** The exact product change made when an exception matches an assessment. */
 export const productExceptionActionSchema = z.discriminatedUnion("type", [
   z.object({
@@ -122,6 +130,12 @@ export const productPlanItemSchema = z.object({
   quantityPerDay: dailyQuantitySchema.optional(),
   /** Preparation or serving detail for this plan, not a shared product attribute. */
   description: productDescriptionSchema.optional(),
+  /** Regimen instructions belong to the versioned rule, not the product catalogue. */
+  unit: z.string().trim().min(1).max(40).optional(),
+  timesPerDay: dailyQuantitySchema.optional(),
+  preparation: productDescriptionSchema.optional(),
+  mealTiming: productDescriptionSchema.optional(),
+  rationale: productDescriptionSchema.optional(),
 }).strict().refine(item => item.quantityPerDay !== undefined || item.description !== undefined, {
   message: "Provide a daily quantity or dosage/preparation description",
 });

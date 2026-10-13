@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { initialProductGuidance, productGuidanceSchema } from "./product-guidance-template";
-import { defaultProductExceptionAction, normalizeProductDuration, normalizeProductPlan, productDurationDays, productPlanItems, productPlanSnapshot } from "./product-guidance";
+import { defaultProductExceptionAction, normalizeProductDuration, normalizeProductPlan, productDurationDays, productIdentityName, productPlanItems, productPlanSnapshot } from "./product-guidance";
 
 describe("product workbook defaults", () => {
   test("covers every stage and nutritional-status combination once", () => {
@@ -54,6 +54,20 @@ describe("product workbook defaults", () => {
       .toBe("1 Liss WH (2 leveled scoops in 150ml water)");
     expect(productPlanSnapshot([{ productName: "Liss WH", quantityPerDay: 2, description: "leveled scoops in 150ml water" }]).dose)
       .toBe("2 leveled scoops in 150ml water");
+  });
+
+  test("keeps rule-specific schedule fields through a plan snapshot", () => {
+    const plan = initialProductGuidance().plans.find(row => row.stage === "during_treatment" && row.nutritionalStatus === "moderately_nourished")!;
+    const items = [{ productName: "Es Invigour", quantityPerDay: 1, unit: "sachet", timesPerDay: 1,
+      preparation: "Mix in water and consume immediately", mealTiming: "After breakfast", rationale: "Nutrition support during treatment" },
+    { productName: "Es Fortitude Protect", quantityPerDay: 2, unit: "sachets" }];
+    const snapshot = productPlanSnapshot(items);
+    const versioned = { ...plan, ...snapshot };
+    expect(productGuidanceSchema.safeParse({ ...initialProductGuidance(), plans: [versioned] }).success).toBe(true);
+    expect(productPlanItems(versioned)).toEqual(items);
+    expect(versioned.durationAmount).toBe(90);
+    expect(productIdentityName("Es Invigour")).toBe(productIdentityName("Invigour"));
+    expect(productIdentityName("Es Fortitude Protect")).toBe(productIdentityName("Protect"));
   });
 
   test("stores each workbook Surgical scoop count in the quantity field", () => {

@@ -7,7 +7,7 @@ import type { RuleDetail } from "../src/rules/rule-api";
 
 export async function mockFinalConsole(page: Page) {
   let record: RuleDetail & { definition: FinalAssessmentDefinition } | null = null;
-  const products = ["Invigour", "Nourish", "Protect", "Recover", "Liss WH"].map((name, index) => ({ id: `product-${index}`, name, createdAt: "2026-09-19T00:00:00.000Z", updatedAt: "2026-09-19T00:00:00.000Z" }));
+  const products = ["Invigour", "Nourish", "Protect", "Recover", "Liss WH"].map((name, index) => ({ id: `product-${index}`, name, description: null as string | null, aliases: [] as string[], createdAt: "2026-09-19T00:00:00.000Z", updatedAt: "2026-09-19T00:00:00.000Z" }));
   const aliases = new Set<string>();
   const state = { createError: "", saveError: "", transitionError: "", transitionIssues: [] as Array<{ message: string }>, getRecord: () => record, getProducts: () => products };
   function audit(action: string) {
@@ -26,7 +26,7 @@ export async function mockFinalConsole(page: Page) {
       if (request.method() === "POST") {
         const name = String(request.postDataJSON().name).trim();
         if (products.some(item => item.name.toLowerCase() === name.toLowerCase())) return json({ error: "PRODUCT_NAME_EXISTS" }, 409);
-        const product = { id: `product-${products.length}`, name, createdAt: "2026-09-19T00:00:00.000Z", updatedAt: "2026-09-19T00:00:00.000Z" };
+        const product = { id: `product-${products.length}`, name, description: request.postDataJSON().description ?? null, aliases: request.postDataJSON().aliases ?? [], createdAt: "2026-09-19T00:00:00.000Z", updatedAt: "2026-09-19T00:00:00.000Z" };
         products.push(product);
         return json(product, 201);
       }
@@ -34,7 +34,7 @@ export async function mockFinalConsole(page: Page) {
     if (path.startsWith("/api/admin/products/")) {
       const product = products.find(item => item.id === path.slice("/api/admin/products/".length));
       if (!product) return json({ error: "PRODUCT_NOT_FOUND" }, 404);
-      if (request.method() === "PUT") { product.name = String(request.postDataJSON().name).trim(); return json(product); }
+      if (request.method() === "PUT") { product.name = String(request.postDataJSON().name).trim(); product.description = request.postDataJSON().description ?? null; product.aliases = request.postDataJSON().aliases ?? []; return json(product); }
       if (request.method() === "DELETE") { products.splice(products.indexOf(product), 1); return json({ deleted: true }); }
     }
     if (path.startsWith("/api/admin/rules/by-name/") && request.method() === "GET") {

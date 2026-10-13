@@ -50,14 +50,14 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
   const [error, setError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
   const [deleting, setDeleting] = useState<{ kind: Exclude<Section, "mapping">; id: string } | null>(null);
-  const [catalog, setCatalog] = useState<Array<{ id: string; name: string }>>([]);
+  const [catalog, setCatalog] = useState<Array<{ id: string; name: string; aliases: string[] }>>([]);
   const [catalogError, setCatalogError] = useState("");
   const [catalogRetry, setCatalogRetry] = useState(0);
   useEffect(() => {
     if (section !== "plans" && section !== "notes") return;
     let current = true;
     setCatalogError("");
-    void request<{ products: Array<{ id: string; name: string }> }>("/admin/products")
+    void request<{ products: Array<{ id: string; name: string; aliases: string[] }> }>("/admin/products")
       .then(result => { if (current) setCatalog(result.products); })
       .catch(cause => { if (current) setCatalogError(message(cause)); });
     return () => { current = false; };
