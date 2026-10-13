@@ -193,8 +193,9 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
       ({ id, classId, treatmentTypeId, expectedToxicity, nutritionalInterventions })),
     // Give the report agent every enabled intervention for the selected
     // treatment and drug class. These are options, not observed symptoms.
-    possibleToxicities: report.possibleToxicities.map(({ id, classId, treatmentTypeId, nutritionalInterventions, requiresDrugConfirmation }) =>
-      ({ id, classId, treatmentTypeId, nutritionalInterventions, requiresDrugConfirmation })),
+    possibleToxicities: report.possibleToxicities.filter(row => !row.requiresDrugConfirmation)
+      .map(({ id, classId, treatmentTypeId, nutritionalInterventions, requiresDrugConfirmation }) =>
+        ({ id, classId, treatmentTypeId, nutritionalInterventions, requiresDrugConfirmation })),
     classGuidance: report.classGuidance,
     carePlan: {
       nutritionalStatus: care.nutritionalStatus,
@@ -224,7 +225,11 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
   }
   for (const treatmentId of facts.treatmentTypeIds) {
     const label = optionLabel("current_cancer_treatment", treatmentId);
-    if (label) evidence.push({ id: `fact:treatment_type_${treatmentId}`, text: `Recorded current cancer treatment: ${label}.` });
+    if (label) evidence.push({ id: `fact:treatment_type_${treatmentId}`,
+      text: `${facts.plannedTreatmentStartDate && facts.plannedTreatmentStartDate > facts.assessmentDate ? "Recorded planned cancer treatment modality" : "Recorded current cancer treatment"}: ${label}.` });
+  }
+  if (facts.plannedTreatmentStartDate && facts.plannedTreatmentStartDate > facts.assessmentDate) {
+    evidence.push({ id: "fact:planned_treatment_start", text: `Treatment is planned to start on ${facts.plannedTreatmentStartDate}. This date is after the assessment date ${facts.assessmentDate}, so treatment is not confirmed as already underway.` });
   }
   for (const fieldId of ["gastrointestinal_symptoms", "dietary_symptoms", "appetite_status"] as const) {
     const answer = facts.assessmentAnswers?.[fieldId];
@@ -257,10 +262,16 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
   }
   for (const row of packet.nutritionInterventions) evidence.push({ id: `rule:nutrition:${row.id}`, text: `${row.label}. ${row.coreStrategy}. ${row.clinicalActions}` });
   for (const row of packet.classGuidance) evidence.push({ id: `rule:class:${row.id}`, text: `${row.label}: ${row.guidance}` });
-  for (const row of packet.possibleToxicities) evidence.push({
+  for (const row of packet.possibleToxicities) {
+    // An unresolved named-drug row is not available to patient-facing generation.
+    if (row.requiresDrugConfirmation) continue;
+    const source = definition.reportGuidance?.toxicity.find(item => item.id === row.id);
+    const effect = source ? classOnlyToxicity(source).expectedToxicity : row.id;
+    evidence.push({
     id: `possible:toxicity:${row.id}`,
-    text: `Candidate guidance for the selected treatment and drug class. This is not evidence that the patient has an effect.${row.requiresDrugConfirmation ? " Named-drug confirmation is required before applying this drug-specific advice." : ""} ${row.nutritionalInterventions}`,
-  });
+    text: `Conditional class-and-treatment candidate: ${effect}. This is a possible effect, not a patient symptom or treatment causation. Source guidance: ${row.nutritionalInterventions}`,
+    });
+  }
   for (const row of packet.toxicityInterventions)
     evidence.push({ id: `rule:toxicity:${row.id}`, text: `Nutrition guidance for a matched treatment effect: ${row.nutritionalInterventions}` });
   for (const row of packet.carePlan.statusModifiers) evidence.push({ id: `rule:status:${row.id}`, text: `${row.riskEmphasis}. ${row.actions}` });
@@ -348,6 +359,10 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     if (required.some(item => !parsed.data[field].evidenceIds.includes(item.id)))
       issues.push(`${field}:MISSING_MATCHED_COVERAGE`);
   }
+  const classCandidates = evidence.filter(item => item.id.startsWith("possible:toxicity:")
+    && !item.text.includes("Named-drug confirmation is required"));
+  if (classCandidates.some(item => !parsed.data.treatmentAdvice.evidenceIds.includes(item.id)))
+    issues.push("treatmentAdvice:MISSING_CANDIDATE_COVERAGE");
   const renalTargetsIndividualized = evidence.some(item => item.id.startsWith("rule:comorbidity:") &&
     /\b(?:kidney|renal)\b/i.test(item.text) && /\bindividuali[sz]/i.test(item.text));
   if (renalTargetsIndividualized) {
@@ -416,6 +431,8 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     if (/\b2\.3\s*g\b.{0,100}\b5\s*g\s+(?:of\s+)?salt\b|\b5\s*g\s+(?:of\s+)?salt\b.{0,100}\b2\.3\s*g\b/i.test(part.text))
       issues.push(`${field}:SODIUM_SALT_EQUIVALENCE_MISMATCH`);
     if (/\b(?:diagnosed with|has developed|is experiencing)\b/i.test(part.text) && part.evidenceIds.some(id => id.startsWith("possible:"))) issues.push(`${field}:POSSIBLE_EFFECT_AS_CONFIRMED`);
+    if (evidenceById.has("fact:planned_treatment_start") && /\b(?:receiving|undergoing|currently on)\s+(?:chemotherapy|radiation|radiotherapy|immunotherapy|targeted therapy|hormonal therapy|treatment)\b/i.test(part.text))
+      issues.push(`${field}:PLANNED_TREATMENT_AS_CURRENT`);
     if (/[;—\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(part.text)) issues.push(`${field}:REPORT_STYLE`);
   }
   return { narrative: issues.length ? null : parsed.data, issues };

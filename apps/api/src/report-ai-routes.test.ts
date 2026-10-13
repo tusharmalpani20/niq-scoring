@@ -355,8 +355,10 @@ test("product windows use the completed assessment date rather than report gener
   const body = await response.json();
   expect(body.guidance.carePlan.products).toMatchObject({
     status: "selected",
-    plans: [{ stage: "pre_conditioning", duration: "15 days before treatment (2026-10-05 to 2026-10-20)" }],
+    plans: [{ stage: "pre_conditioning", duration: "15 days before treatment (2026-10-05 to 2026-10-19; treatment planned 2026-10-20)" }],
   });
+  expect(writerInputs.at(-1)).toContain("fact:planned_treatment_start");
+  expect(writerInputs.at(-1)).toContain("not confirmed as already underway");
   expect(writerInputs.at(-1)).toContain("Selected product plan: Invigour + Nourish. Dosage and preparation: Invigour: 1 per day. Nourish: 1 per day.");
 });
 
@@ -508,9 +510,11 @@ test("all treatment and class candidates reach the agent while reported effects 
   expect(candidateIds).toContain("toxicity_row_002");
   expect(candidateIds).toContain("toxicity_row_006");
   expect(candidateIds).toContain("toxicity_row_009");
+  expect(none.guidance.possibleToxicities.every((item: { requiresDrugConfirmation: boolean }) => !item.requiresDrugConfirmation)).toBe(true);
   expect(none.guidance.possibleToxicities[0]).not.toHaveProperty("expectedToxicity");
   expect(none.guidance.toxicityInterventions).toEqual([]);
   expect(writerInputs[0]).toContain("possible:toxicity:toxicity_row_002");
+  for (const id of candidateIds) expect(writerInputs[0]).toContain(`possible:toxicity:${id}`);
   expect(writerInputs[0]).not.toContain("Patient reported Diarrhoea");
   const matched = await (await call("report-content", request({ idempotencyKey: "report-run-2", facts: { ...selected,
     assessmentAnswers: { dietary_symptoms: ["dietary_symptoms_diarrhoea", "dietary_symptoms_fatigue"] } } }))).json();
@@ -523,21 +527,41 @@ test("all treatment and class candidates reach the agent while reported effects 
   expect(safetyInstructions.at(-1)).toContain("the title does not prove all of those terms occurred");
 });
 
-test("candidate guidance is optional and drug-specific advice needs verification", () => {
+test("class candidate coverage stays conditional and named-drug candidates are rejected", () => {
   const evidence = [
     { id: "fact:niq_risk", text: "NIQ risk: Low Risk; reviewed score 12" },
     { id: "possible:toxicity:general", text: "Candidate guidance for the selected treatment and drug class. This is not evidence that the patient has an effect. Choose soft foods if mouth discomfort occurs." },
+    { id: "possible:toxicity:second", text: "Conditional class-and-treatment candidate: taste changes. This is a possible effect, not a patient symptom or treatment causation." },
     { id: "possible:toxicity:drug", text: "Candidate guidance for the selected treatment and drug class. This is not evidence that the patient has an effect. Named-drug confirmation is required before applying this drug-specific advice. Avoid grapefruit during treatment." },
   ];
-  expect(validateNarrative(noGuidanceNarrative, evidence).issues).toEqual([]);
+  expect(validateNarrative(noGuidanceNarrative, evidence).issues).toContain("treatmentAdvice:MISSING_CANDIDATE_COVERAGE");
   const conditional = { ...noGuidanceNarrative, treatmentAdvice: {
-    text: "If mouth discomfort occurs, choose soft foods.", evidenceIds: ["possible:toxicity:general"],
+    text: "Possible mouth discomfort may occur. If it does, choose soft foods.", evidenceIds: ["possible:toxicity:general"],
   } };
-  expect(validateNarrative(conditional, evidence).issues).toEqual([]);
+  expect(validateNarrative(conditional, evidence).issues).toContain("treatmentAdvice:MISSING_CANDIDATE_COVERAGE");
+  const covered = { ...conditional, treatmentAdvice: {
+    text: "Possible mouth discomfort and taste changes may occur.", evidenceIds: ["possible:toxicity:general", "possible:toxicity:second"],
+  } };
+  expect(validateNarrative(covered, evidence).issues).toEqual([]);
   const drugSpecific = { ...noGuidanceNarrative, treatmentAdvice: {
     text: "Avoid grapefruit during treatment.", evidenceIds: ["possible:toxicity:drug"],
   } };
   expect(validateNarrative(drugSpecific, evidence).issues).toContain("treatmentAdvice:DRUG_SPECIFIC_CANDIDATE_UNVERIFIED");
+});
+
+test("future planned treatment is distinguished from treatment already underway", () => {
+  const evidence = [
+    { id: "fact:niq_risk", text: "NIQ risk: Low Risk; reviewed score 12" },
+    { id: "fact:planned_treatment_start", text: "Treatment is planned to start on 20 Oct 2026. This date is after the assessment date 12 Oct 2026, so treatment is not confirmed as already underway." },
+  ];
+  const narrative = { ...safeNarrative, overview: {
+    text: "The patient is receiving chemotherapy.", evidenceIds: ["fact:planned_treatment_start"],
+  } };
+  expect(validateNarrative(narrative, evidence).issues).toContain("overview:PLANNED_TREATMENT_AS_CURRENT");
+  const planned = { ...narrative, overview: {
+    text: "Treatment is planned to start on 20 Oct 2026.", evidenceIds: ["fact:planned_treatment_start"],
+  } };
+  expect(validateNarrative(planned, evidence).issues).not.toContain("overview:PLANNED_TREATMENT_AS_CURRENT");
 });
 
 test("clinician options are filtered to the pinned treatment and class and require a completed result", async () => {
