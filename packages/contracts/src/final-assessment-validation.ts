@@ -175,8 +175,8 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
       if (rule.classId === "other") add(`${path}.classId`, "OTHER_MUST_BE_GENERIC", "Other cannot have toxicity interventions.");
       if (!configuredClasses.has(rule.classId)) add(`${path}.classId`, "UNKNOWN_DRUG_CLASS", "Toxicity guidance refers to a missing drug class.");
       if (!treatments.has(rule.treatmentTypeId)) add(`${path}.treatmentTypeId`, "UNKNOWN_TREATMENT", "Toxicity guidance refers to a missing treatment type.");
-      const key = JSON.stringify([rule.classId, rule.treatmentTypeId, rule.expectedToxicity.trim().toLowerCase()]);
-      if (toxicityKeys.has(key)) add(path, "DUPLICATE_TOXICITY_GUIDANCE", "An active toxicity entry already exists for this class, treatment and toxicity.");
+      const key = JSON.stringify([rule.classId, rule.treatmentTypeId, rule.nutritionalInterventions.trim().toLowerCase()]);
+      if (toxicityKeys.has(key)) add(path, "DUPLICATE_TOXICITY_GUIDANCE", "An active intervention already exists for this class and treatment.");
       toxicityKeys.add(key);
     });
   }

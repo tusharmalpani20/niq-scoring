@@ -381,13 +381,14 @@ test("an unresolved product plan withholds matched exception wording from the wr
   expect(writerInputs.at(-1)).not.toContain("Selected product plan:");
 });
 
-test("report includes only answer-matched guidance with actual reported symptom evidence", async () => {
+test("all treatment and class candidates reach the agent while reported effects remain separate", async () => {
   const writerInputs: string[] = [];
   const safetyInstructions: string[] = [];
   const { call, request, facts } = await setup((step, _call, user, system) => {
     if (step === "writer") { writerInputs.push(user); safetyInstructions.push(system); }
     return step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative;
   }, definition => {
+    definition.reportGuidance!.toxicity.find(row => row.id === "toxicity_row_002")!.match = undefined;
     definition.reportGuidance!.toxicity.find(row => row.id === "toxicity_row_006")!.match = { mode: "assessment_answer", anyOf: [{ fieldId: "dietary_symptoms", optionId: "dietary_symptoms_diarrhoea" }] };
     definition.reportGuidance!.toxicity.find(row => row.id === "toxicity_row_009")!.match = { mode: "assessment_answer", anyOf: [
       { fieldId: "dietary_symptoms", optionId: "dietary_symptoms_fatigue" },
@@ -396,10 +397,17 @@ test("report includes only answer-matched guidance with actual reported symptom 
   });
   const selected = { ...facts, drugClassIds: ["taxanes"], treatmentTypeIds: ["current_cancer_treatment_chemotherapy"] };
   const none = await (await call("report-content", request({ facts: selected }))).json();
-  expect(none.guidance.possibleToxicities).toEqual([]);
+  const candidateIds = none.guidance.possibleToxicities.map((item: { id: string }) => item.id);
+  expect(candidateIds).toContain("toxicity_row_002");
+  expect(candidateIds).toContain("toxicity_row_006");
+  expect(candidateIds).toContain("toxicity_row_009");
+  expect(none.guidance.possibleToxicities[0]).not.toHaveProperty("expectedToxicity");
   expect(none.guidance.toxicityInterventions).toEqual([]);
+  expect(writerInputs[0]).toContain("possible:toxicity:toxicity_row_002");
+  expect(writerInputs[0]).not.toContain("Patient reported Diarrhoea");
   const matched = await (await call("report-content", request({ idempotencyKey: "report-run-2", facts: { ...selected,
     assessmentAnswers: { dietary_symptoms: ["dietary_symptoms_diarrhoea", "dietary_symptoms_fatigue"] } } }))).json();
+  expect(matched.guidance.possibleToxicities.map((item: { id: string }) => item.id)).toEqual(candidateIds);
   expect(matched.guidance.toxicityInterventions.map((item: { id: string }) => item.id)).toEqual(["toxicity_row_006", "toxicity_row_009"]);
   expect(matched.guidance.toxicityInterventions[0]).toMatchObject({ expectedToxicity: "Diarrhea", matchSource: "assessment_answer", matchedAnswerLabels: ["Diarrhoea"] });
   expect(matched.guidance.toxicityInterventions[1]).toMatchObject({ matchSource: "assessment_answer", matchedAnswerLabels: ["Fatigue"] });
@@ -408,6 +416,23 @@ test("report includes only answer-matched guidance with actual reported symptom 
   expect(writerInputs.at(-1)).not.toContain("Patient reported Reduced");
   expect(writerInputs.at(-1)).not.toContain("Nutrition guidance source topic: Fatigue / reduced appetite");
   expect(safetyInstructions.at(-1)).toContain("the title does not prove all of those terms occurred");
+});
+
+test("candidate guidance is optional and drug-specific advice needs verification", () => {
+  const evidence = [
+    { id: "fact:niq_risk", text: "NIQ risk: Low Risk; reviewed score 12" },
+    { id: "possible:toxicity:general", text: "Candidate guidance for the selected treatment and drug class. This is not evidence that the patient has an effect. Choose soft foods if mouth discomfort occurs." },
+    { id: "possible:toxicity:drug", text: "Candidate guidance for the selected treatment and drug class. This is not evidence that the patient has an effect. Named-drug confirmation is required before applying this drug-specific advice. Avoid grapefruit during treatment." },
+  ];
+  expect(validateNarrative(noGuidanceNarrative, evidence).issues).toEqual([]);
+  const conditional = { ...noGuidanceNarrative, treatmentAdvice: {
+    text: "If mouth discomfort occurs, choose soft foods.", evidenceIds: ["possible:toxicity:general"],
+  } };
+  expect(validateNarrative(conditional, evidence).issues).toEqual([]);
+  const drugSpecific = { ...noGuidanceNarrative, treatmentAdvice: {
+    text: "Avoid grapefruit during treatment.", evidenceIds: ["possible:toxicity:drug"],
+  } };
+  expect(validateNarrative(drugSpecific, evidence).issues).toContain("treatmentAdvice:DRUG_SPECIFIC_CANDIDATE_UNVERIFIED");
 });
 
 test("clinician options are filtered to the pinned treatment and class and require a completed result", async () => {

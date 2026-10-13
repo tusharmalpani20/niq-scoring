@@ -68,15 +68,14 @@ export function resolveReportGuidance(definition: FinalAssessmentDefinition, fac
   if (facts.drugClassIds.includes("other")) return { nutrition, classGuidance: [], possibleToxicities: [], toxicity: [] };
   const treatments = new Set(facts.treatmentTypeIds);
   const confirmed = new Set(facts.confirmedToxicityIds);
-  const eligibleToxicities = guidance.toxicity.filter(rule => rule.enabled
+  const classMatches = guidance.toxicity.filter(rule => rule.enabled
     && selectedClasses.has(rule.classId)
-    && treatments.has(rule.treatmentTypeId)
-    && !classOnlyToxicity(rule).requiresDrugConfirmation);
-  // Older rule versions may retain drug-specific source text. Only the reviewed
-  // class wording enters a report packet.
-  const safeToxicities = eligibleToxicities.map(classOnlyToxicity);
-  const possibleToxicities = safeToxicities.map(({ id, classId, treatmentTypeId, expectedToxicity, nutritionalInterventions, requiresDrugConfirmation, source }) =>
+    && treatments.has(rule.treatmentTypeId));
+  // Every class/treatment row is a candidate. Drug-specific source wording is
+  // retained as conditional reference only when no class-level alternative exists.
+  const candidates = classMatches.map(classOnlyToxicity);
+  const possibleToxicities = candidates.map(({ id, classId, treatmentTypeId, expectedToxicity, nutritionalInterventions, requiresDrugConfirmation, source }) =>
     ({ id, classId, treatmentTypeId, expectedToxicity, nutritionalInterventions, requiresDrugConfirmation, source }));
-  const toxicity = safeToxicities.filter(rule => confirmed.has(rule.id));
+  const toxicity = candidates.filter(rule => confirmed.has(rule.id) && !rule.requiresDrugConfirmation);
   return { nutrition, classGuidance, possibleToxicities, toxicity };
 }

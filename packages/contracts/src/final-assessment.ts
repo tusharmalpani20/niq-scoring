@@ -155,7 +155,9 @@ export const reportGuidanceSchema = z.object({
   }).strict()).max(30),
   toxicity: z.array(z.object({
     id: ruleIdSchema, classId: ruleIdSchema, treatmentTypeId: ruleIdSchema,
-    expectedToxicity: label, nutritionalInterventions: z.string().trim().min(1).max(8000),
+    // Historical topic labels remain readable, but selecting guidance no longer
+    // depends on a predicted toxicity. New rows may leave this blank.
+    expectedToxicity: z.string().trim().max(200).default(""), nutritionalInterventions: z.string().trim().min(1).max(8000),
     // Optional class-level wording when the source row also names an individual drug.
     classLevelToxicity: label.optional(), classLevelInterventions: z.string().trim().min(1).max(8000).optional(),
     // Absent on historical rows: an unmapped row needs review and is never

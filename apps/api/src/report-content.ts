@@ -196,7 +196,10 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
     toxicityInterventions: report.toxicity.map(({ id, classId, treatmentTypeId, expectedToxicity, nutritionalInterventions }) => ({ id, classId, treatmentTypeId, expectedToxicity, nutritionalInterventions,
       matchSource: definition.reportGuidance?.toxicity.find(row => row.id === id)?.match?.mode ?? "unknown",
       matchedAnswerLabels: matchedAnswerLabels(definition, facts, id) })),
-    possibleToxicities: [],
+    // Give the report agent every enabled intervention for the selected
+    // treatment and drug class. These are options, not observed symptoms.
+    possibleToxicities: report.possibleToxicities.map(({ id, classId, treatmentTypeId, nutritionalInterventions, requiresDrugConfirmation }) =>
+      ({ id, classId, treatmentTypeId, nutritionalInterventions, requiresDrugConfirmation })),
     classGuidance: report.classGuidance,
     carePlan: {
       nutritionalStatus: care.nutritionalStatus,
@@ -232,6 +235,10 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
   }
   for (const row of packet.nutritionInterventions) evidence.push({ id: `rule:nutrition:${row.id}`, text: `${row.label}. ${row.coreStrategy}. ${row.clinicalActions}` });
   for (const row of packet.classGuidance) evidence.push({ id: `rule:class:${row.id}`, text: `${row.label}: ${row.guidance}` });
+  for (const row of packet.possibleToxicities) evidence.push({
+    id: `possible:toxicity:${row.id}`,
+    text: `Candidate guidance for the selected treatment and drug class. This is not evidence that the patient has an effect.${row.requiresDrugConfirmation ? " Named-drug confirmation is required before applying this drug-specific advice." : ""} ${row.nutritionalInterventions}`,
+  });
   // Source titles can combine effects. Separate observed facts from the
   // guidance text so the model cannot use the title as symptom evidence.
   for (const row of packet.toxicityInterventions) {
@@ -294,7 +301,7 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   const evidenceById = new Map(evidence.map(item => [item.id, item.text]));
   const requiredGuidance: Partial<Record<keyof ReportNarrative, readonly string[]>> = {
     nutritionAdvice: ["rule:nutrition:"],
-    treatmentAdvice: ["rule:status:", "rule:treatment:", "rule:class:", "rule:exception:"],
+    treatmentAdvice: ["rule:status:", "rule:treatment:", "rule:class:", "rule:exception:", "possible:toxicity:"],
     conditionAdvice: ["rule:comorbidity:"],
     effectsAdvice: ["rule:toxicity:"],
   };
@@ -350,10 +357,13 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   for (const [field, part] of Object.entries(parsed.data)) {
     const selected = part.evidenceIds.map(id => evidenceById.get(id));
     if (selected.some(text => text === undefined)) issues.push(`${field}:UNKNOWN_EVIDENCE_ID`);
+    if (part.evidenceIds.some(id => id.startsWith("possible:toxicity:") &&
+      evidenceById.get(id)?.includes("Named-drug confirmation is required")))
+      issues.push(`${field}:DRUG_SPECIFIC_CANDIDATE_UNVERIFIED`);
     const prefixes = requiredGuidance[field as keyof ReportNarrative];
     if (part.text && prefixes && !part.evidenceIds.some(id => prefixes.some(prefix => id.startsWith(prefix))))
       issues.push(`${field}:MISSING_MATCHED_GUIDANCE`);
-    if (part.text && prefixes && copiesGuidance(part.text, part.evidenceIds.filter(id => id.startsWith("rule:"))
+    if (part.text && prefixes && copiesGuidance(part.text, part.evidenceIds.filter(id => id.startsWith("rule:") || id.startsWith("possible:"))
       .map(id => evidenceById.get(id)).filter((source): source is string => Boolean(source))))
       issues.push(`${field}:COPIED_GUIDANCE`);
     const sourceNumbers = new Set(selected.flatMap(text => text?.match(/\d+(?:\.\d+)?/g) ?? []));
