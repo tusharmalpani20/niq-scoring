@@ -84,6 +84,19 @@ describe("versioned report guidance", () => {
     expect(codes).toContain("DUPLICATE_GUIDANCE_ID");
   });
 
+  test("a class and treatment intervention needs no predicted toxicity or symptom match", () => {
+    const definition = createFinalAssessmentTemplate("Class guidance");
+    const original = definition.reportGuidance!.toxicity[0]!;
+    definition.reportGuidance!.toxicity.push({ ...original, id: "class_treatment_advice",
+      expectedToxicity: "", match: undefined,
+      nutritionalInterventions: "Discuss a food and fluid plan with the care team during treatment." });
+    expect(validateFinalAssessmentDefinition(definition)).toEqual([]);
+    const resolved = resolveReportGuidance(definition, { riskCategoryId: "low",
+      drugClassIds: [original.classId], treatmentTypeIds: [original.treatmentTypeId], confirmedToxicityIds: [] });
+    expect(resolved.possibleToxicities.some(row => row.id === "class_treatment_advice")).toBe(true);
+    expect(resolved.toxicity).toEqual([]);
+  });
+
   test("only confirmed toxicities enter guidance, and class-only reports exclude drug-specific wording", () => {
     const definition = createFinalAssessmentTemplate("A");
     const facts = {
