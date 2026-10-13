@@ -355,7 +355,7 @@ test("product windows use the completed assessment date rather than report gener
   const body = await response.json();
   expect(body.guidance.carePlan.products).toMatchObject({
     status: "selected",
-    plans: [{ stage: "pre_conditioning", duration: "15 days before treatment (2026-10-05 to 2026-10-19; treatment planned 2026-10-20)" }],
+    plans: [{ stage: "pre_conditioning", duration: "15 days before treatment (2026-10-05 to 2026-10-19, with treatment planned for 2026-10-20)" }],
   });
   expect(writerInputs.at(-1)).toContain("fact:planned_treatment_start");
   expect(writerInputs.at(-1)).toContain("not confirmed as already underway");
