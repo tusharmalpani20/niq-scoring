@@ -149,11 +149,11 @@ describe("care plan guidance from the versioned workbooks", () => {
     const pre = rule.carePlanGuidance!.products.plans.find(row => row.stage === "pre_conditioning" && row.nutritionalStatus === "moderately_nourished")!;
     expect(pre.durationAmount).toBe(15);
     const preFacts: CarePlanFacts = { ...base, treatmentStatusId: "treatment_status_newly_diagnosed", plannedTreatmentStartDate: "2026-10-20", cancerTypeId: "cancer_1" };
-    expect(resolveCarePlanGuidance(rule, preFacts).products.plans[0]?.duration).toBe("15 days before treatment (2026-10-05 to 2026-10-20)");
+    expect(resolveCarePlanGuidance(rule, preFacts).products.plans[0]?.duration).toBe("15 days before treatment (2026-10-05 to 2026-10-19; treatment planned 2026-10-20)");
     pre.durationAmount = 8;
     expect(resolveCarePlanGuidance(rule, preFacts).products.plans).toEqual([]);
     expect(resolveCarePlanGuidance(rule, { ...preFacts, asOfDate: "2026-10-12" }).products.plans[0]?.duration)
-      .toBe("8 days before treatment (2026-10-12 to 2026-10-20)");
+      .toBe("8 days before treatment (2026-10-12 to 2026-10-19; treatment planned 2026-10-20)");
 
     const surgical = rule.carePlanGuidance!.products.plans.find(row => row.stage === "surgical" && row.nutritionalStatus === "moderately_nourished")!;
     surgical.durationAmount = 5;
@@ -294,7 +294,7 @@ describe("care plan guidance from the versioned workbooks", () => {
       plannedTreatmentStartDate: "2026-10-20", cancerTypeId: "cancer_7" };
     expect(validateFinalAssessmentDefinition(rule)).toEqual([]);
     expect(resolveCarePlanGuidance(rule, facts).products.plans[0]).toMatchObject({
-      dose: "1 Invigour + 3 Nourish", duration: "15 days before treatment (2026-10-05 to 2026-10-20)",
+      dose: "1 Invigour + 3 Nourish", duration: "15 days before treatment (2026-10-05 to 2026-10-19; treatment planned 2026-10-20)",
     });
     notes.pop();
     notes.push({ ...custom, action: { type: "replace", productName: "Nourish", replacementProductName: "Protect", replacementQuantityPerDay: 2 } });

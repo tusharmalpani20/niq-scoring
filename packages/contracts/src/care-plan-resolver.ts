@@ -73,7 +73,10 @@ function reportPlan(plan: ProductPlan, facts: CarePlanFacts): ProductPlan {
   if (amount === null) return plan;
   if (plan.stage === "pre_conditioning" && facts.plannedTreatmentStartDate) {
     const firstDay = addDays(facts.plannedTreatmentStartDate, -amount);
-    return { ...plan, duration: `${amount} days before treatment${firstDay ? ` (${firstDay} to ${facts.plannedTreatmentStartDate})` : ""}` };
+    // The treatment day is outside a pre-treatment course. Showing it as the
+    // end of the range made a 15-day course look like 16 inclusive dates.
+    const lastDay = addDays(facts.plannedTreatmentStartDate, -1);
+    return { ...plan, duration: `${amount} days before treatment${firstDay && lastDay ? ` (${firstDay} to ${lastDay}; treatment planned ${facts.plannedTreatmentStartDate})` : ""}` };
   }
   if (plan.stage === "surgical" && facts.surgeryDate) {
     const lastDay = addDays(facts.surgeryDate, amount);
