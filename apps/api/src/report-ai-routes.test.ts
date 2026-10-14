@@ -19,7 +19,7 @@ const safeNarrative = { overview: safePart, keyFindings: safePart, actionSummary
   nutritionAdvice: defaultNutritionPart, treatmentAdvice: omittedPart, conditionAdvice: omittedPart, effectsAdvice: omittedPart };
 const noGuidanceNarrative = { ...safeNarrative, nutritionAdvice: omittedPart };
 const usage = { model: "openai/gpt-6-luna", provider: "test-provider", generationId: "gen-test", promptTokens: 120, completionTokens: 40, reasoningTokens: 5, costUsd: 0.001, latencyMs: 10 };
-type Step = "writer" | "reviewer" | "revision" | "highlighter";
+type Step = "writer" | "reviewer" | "revision" | "coverage" | "highlighter";
 const plainPart = (part: { text: string; evidenceIds: string[] }) => ({ ...part, text: part.text.replaceAll("**", "") });
 
 function fixtureHighlights(user: string) {
@@ -52,9 +52,14 @@ function fixtureHighlights(user: string) {
   }));
 }
 
+function fixtureCoverage(user: string) {
+  const rows = JSON.parse(user.split("Source rows: ")[1]!.split("\nReport fields: ")[0]!) as Array<{ id: string }>;
+  return { rows: rows.map(row => ({ evidenceId: row.id, covered: true, missing: [] })) };
+}
+
 async function setup(handler: (step: Step, call: number, user: string, system: string) => unknown = step => step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative,
   configure?: (definition: FinalAssessmentDefinition) => void, runs = new MemoryReportGenerationStore(),
-  highlighter?: (user: string) => unknown) {
+  highlighter?: (user: string) => unknown, coverageAuditor?: (user: string) => unknown) {
   const store = new MemoryScoringStore();
   const definition = createFinalAssessmentTemplate("Report test");
   configure?.(definition);
@@ -70,7 +75,8 @@ async function setup(handler: (step: Step, call: number, user: string, system: s
   store.credentials.push({ credentialId: createEntityId(), clientId: client.id, deploymentId: deployment.id, keyPrefix: "report123456", secretHash: new Bun.CryptoHasher("sha256").update(token).digest("hex") });
   let calls = 0;
   const provider: ReportTextProvider = { complete: async ({ step, user, system }) => ({
-    content: step === "highlighter"
+    content: step === "coverage" ? coverageAuditor?.(user) ?? fixtureCoverage(user)
+      : step === "highlighter"
       ? highlighter?.(user) ?? fixtureHighlights(user)
       : await handler(step, ++calls, user, system), usage,
   }) };
@@ -98,7 +104,7 @@ test("report content uses pinned rules, nine bounded fields, idempotency, and sa
   expect(getCalls()).toBe(2);
   expect((await call("report-content", request({ facts: { ...request().facts, reviewedScore: 13 } }))).status).toBe(409);
   const listing = await runs.list({ page: 1, pageSize: 20 });
-  expect(listing.items[0]?.calls.map(call => call.step)).toEqual(["writer", "reviewer", "highlighter"]);
+  expect(listing.items[0]?.calls.map(call => call.step)).toEqual(["writer", "reviewer", "coverage", "highlighter"]);
   const serialized = JSON.stringify(listing);
   expect(serialized).not.toContain("Current weight");
   expect(serialized).not.toContain("68.4");
@@ -121,7 +127,40 @@ test("a separate post-review pass adds only exact emphasis to approved prose", a
   expect(body.narrative.overview.text).toBe("The **NIQ risk category needs clinician review**.");
   expect(body.narrative.nutritionAdvice.text).toBe("**Maintain nutrition and monitor appetite** during treatment.");
   expect(body.narrative.overview.evidenceIds).toEqual(safePart.evidenceIds);
-  expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.map(call => call.step)).toEqual(["writer", "reviewer", "highlighter"]);
+  expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.map(call => call.step)).toEqual(["writer", "reviewer", "coverage", "highlighter"]);
+});
+
+test("missing meaning from a matched nutrition row blocks publication", async () => {
+  const { call, request, runs } = await setup(undefined, undefined, undefined, undefined, user => {
+    const result = fixtureCoverage(user);
+    return { rows: result.rows.map(row => ({ ...row, covered: false,
+      missing: ["The source's oral supplement escalation is missing."] })) };
+  });
+  const body = await (await call("report-content", request())).json();
+  expect(body.status).toBe("REVIEW_REQUIRED");
+  expect(body.issues).toContain("nutritionAdvice:MISSING_SOURCE_CONTENT");
+  expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.some(call => call.step === "highlighter")).toBe(false);
+});
+
+test("the coverage audit can request a focused repair and recheck it", async () => {
+  let audited = 0;
+  const { call, request, runs } = await setup((step, _call, user) =>
+    step === "reviewer" ? { accepted: true, issues: [] }
+      : step === "revision" && user.includes("An independent audit found missing meaning")
+        ? { text: "Discuss an oral nutrition supplement with your care team if intake falls.",
+          evidenceIds: ["rule:nutrition:nutrition_low"] }
+        : safeNarrative, undefined, undefined, undefined, user => {
+    const result = fixtureCoverage(user);
+    return ++audited === 1
+      ? { rows: result.rows.map(row => ({ ...row, covered: false, missing: ["Discuss an oral supplement if intake falls."] })) }
+      : result;
+  });
+  const body = await (await call("report-content", request())).json();
+  expect(body.status).toBe("READY");
+  expect(body.narrative.nutritionAdvice.text).toContain("oral nutrition supplement");
+  expect(audited).toBe(2);
+  expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.map(call => call.step))
+    .toEqual(["writer", "reviewer", "coverage", "revision", "reviewer", "coverage", "highlighter"]);
 });
 
 test("invalid highlight suggestions trigger targeted repair before publication", async () => {
@@ -172,7 +211,7 @@ test("an expired writer cannot publish over a retry with the same idempotency ke
   expect(await stale.json()).toEqual({ error: "REQUEST_IN_PROGRESS" });
   expect(await (await call("report-content", request())).json()).toEqual(published);
   const listing = await runs.list({ page: 1, pageSize: 10 });
-  expect(listing.items[0]?.calls).toHaveLength(3);
+  expect(listing.items[0]?.calls).toHaveLength(4);
 });
 
 test("report content requires the completed assessment date", async () => {
@@ -756,7 +795,7 @@ test("unsupported numerals trigger one revision and independent reviewer recheck
   expect(body.status).toBe("READY");
   expect(body.narrative.overview.text).not.toContain("999");
   expect(getCalls()).toBe(4);
-  expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.map(call => call.step)).toEqual(["writer", "reviewer", "revision", "reviewer", "highlighter"]);
+  expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.map(call => call.step)).toEqual(["writer", "reviewer", "revision", "reviewer", "coverage", "highlighter"]);
 });
 
 test("a second targeted revision can resolve a remaining validation issue", async () => {
