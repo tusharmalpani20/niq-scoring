@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { narrativeFieldNames, type ReportNarrative } from "./report-content";
 
-const phraseSchema = z.array(z.string().min(1).max(240)).max(5);
+const phraseSchema = z.array(z.string().min(1).max(180)).max(3);
 export const highlightSchema = z.object(Object.fromEntries(narrativeFieldNames.map(field => [field, phraseSchema])) as Record<(typeof narrativeFieldNames)[number], typeof phraseSchema>).strict();
 export const highlightJsonSchema = {
   type: "object", additionalProperties: false, required: narrativeFieldNames,
-  properties: Object.fromEntries(narrativeFieldNames.map(field => [field, { type: "array", maxItems: 5, items: { type: "string", maxLength: 240 } }])),
+  properties: Object.fromEntries(narrativeFieldNames.map(field => [field, { type: "array", maxItems: 3, items: { type: "string", maxLength: 180 } }])),
 };
 
 export function plainNarrative(narrative: ReportNarrative): ReportNarrative {
@@ -31,9 +31,8 @@ export function applyNarrativeHighlights(narrative: ReportNarrative, proposed: u
       const start = text.indexOf(phrase);
       const end = start + phrase.length;
       const words = phrase.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? [];
-      const invalid = start < 0 || text.indexOf(phrase, end) !== -1 || words.length < 3 || words.length > 25
+      const invalid = start < 0 || text.indexOf(phrase, end) !== -1 || words.length < 3 || words.length > 15
         || !/[\p{L}]/u.test(phrase) || /^[\s\p{P}\p{S}]/u.test(phrase) || /[\s\p{P}\p{S}]$/u.test(phrase)
-        || /^if\b/i.test(phrase) && !/\b(contact|call|tell|discuss|ask|seek|notify|check|take|choose|monitor|follow|record|avoid|use|keep)\b/i.test(phrase)
         || start > 0 && /[\p{L}\p{N}]/u.test(text[start - 1]!)
         || end < text.length && /[\p{L}\p{N}]/u.test(text[end]!)
         || ranges.some(range => start < range.end && end > range.start);
