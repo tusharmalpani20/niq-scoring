@@ -37,3 +37,12 @@ test("a transient empty model response is retried without accepting missing cont
   expect(attempts).toBe(2);
   expect(response.content).toEqual({ accepted: true, issues: [] });
 });
+
+
+test("a provider spend limit stops generation with a fixed payment code", async () => {
+  const request = (async (_url: URL | RequestInfo, _init?: RequestInit) =>
+    Response.json({ error: { message: "Account has reached its spend limit" } }, { status: 402 })) as typeof fetch;
+  const client = new OpenRouterReportClient("test-secret", "https://openrouter.ai/api/v1", request);
+  await expect(client.complete({ step: "writer", system: "fixed safety", user: "data", schema: { type: "object" } }))
+    .rejects.toMatchObject({ code: "MODEL_PAYMENT_REQUIRED" });
+});

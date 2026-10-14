@@ -339,7 +339,8 @@ export function installReportAiRoutes(app: Hono, options: {
       } catch (error) {
         if (error instanceof ReportAttemptLost) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
         if (!await runStore.finish(runId, attemptId, "FAILED", null, error instanceof ReportModelError ? error.code : "REPORT_GENERATION_FAILED")) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
-        return c.json({ error: error instanceof ReportModelError ? error.code : "REPORT_GENERATION_FAILED", runId }, 503);
+        return c.json({ error: error instanceof ReportModelError ? error.code : "REPORT_GENERATION_FAILED", runId },
+          error instanceof ReportModelError && error.code === "MODEL_PAYMENT_REQUIRED" ? 402 : 503);
       }
     } catch (cause) {
       if (cause instanceof BindingError) return c.json({ error: cause.code }, cause.code === "ASSESSMENT_NOT_FOUND" ? 404 : 409);

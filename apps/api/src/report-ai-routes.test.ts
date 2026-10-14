@@ -1011,6 +1011,14 @@ test("caller supplied observation labels never enter model context", async () =>
   expect(prompts.join(" ")).toContain("Current weight: 68.4 kg");
 });
 
+test("provider payment limit fails closed without automatic retry status", async () => {
+  const { call, request, runs } = await setup(() => { throw new ReportModelError("MODEL_PAYMENT_REQUIRED"); });
+  const response = await call("report-content", request());
+  expect(response.status).toBe(402);
+  expect(await response.json()).toMatchObject({ error: "MODEL_PAYMENT_REQUIRED" });
+  expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.status).toBe("FAILED");
+});
+
 test("provider failure fails closed and records no prompts or clinical content in admin usage", async () => {
   const { call, request, runs } = await setup(() => { throw new ReportModelError("MODEL_UNAVAILABLE"); });
   const response = await call("report-content", request());

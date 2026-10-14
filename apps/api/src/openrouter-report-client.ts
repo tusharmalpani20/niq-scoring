@@ -44,14 +44,17 @@ export class OpenRouterReportClient implements ReportTextProvider {
             ? await response.json().catch(() => null) : null;
           const detail = providerError && typeof providerError === "object" && "error" in providerError
             ? (providerError as { error?: unknown }).error : null;
+          const providerCode = detail && typeof detail === "object" && typeof (detail as { code?: unknown }).code === "string"
+            ? (detail as { code: string }).code : "";
+          const safeProviderCode = /^[a-z][a-z0-9_-]{0,39}$/i.test(providerCode) ? providerCode.toUpperCase() : "";
           const category = detail && typeof detail === "object"
             ? String((detail as { code?: unknown; message?: unknown }).code ?? "") + " " +
               String((detail as { message?: unknown }).message ?? "") : "";
-          lastCode = response.status === 429 ? "MODEL_RATE_LIMITED" : response.status >= 500 ? "MODEL_UNAVAILABLE"
+          lastCode = response.status === 402 ? "MODEL_PAYMENT_REQUIRED" : response.status === 429 ? "MODEL_RATE_LIMITED" : response.status >= 500 ? "MODEL_UNAVAILABLE"
             : /context.{0,20}(?:length|window)|too many tokens|token limit/i.test(category) ? "MODEL_CONTEXT_LIMIT"
             : /content.filter|content.policy|safety|moderation/i.test(category) ? "MODEL_CONTENT_FILTER"
             : /response.format|json.schema|unsupported.parameter/i.test(category) ? "MODEL_INVALID_PARAMETERS"
-            : "MODEL_REQUEST_REJECTED";
+            : safeProviderCode ? `MODEL_REQUEST_REJECTED_${safeProviderCode}` : `MODEL_HTTP_${response.status}`;
           if ((response.status === 429 || response.status >= 500) && attempt < 2) { await Bun.sleep(250 * 2 ** attempt); continue; }
           throw new ReportModelError(lastCode);
         }
