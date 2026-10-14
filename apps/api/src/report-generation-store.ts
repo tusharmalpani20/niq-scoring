@@ -4,12 +4,14 @@ import { createEntityId } from "./lib/id";
 export const REPORT_RUN_LEASE_MS = 15 * 60 * 1000;
 
 export type ReportCall = {
-  step: "writer" | "reviewer" | "revision" | "coverage" | "summarizer" | "highlighter";
+  step: "manager" | "writer" | "reviewer" | "revision" | "coverage" | "summarizer" | "highlighter";
   status: "SUCCEEDED" | "FAILED";
   model: string;
   provider: string | null;
   generationId: string | null;
   promptTokens: number | null;
+  cachedInputTokens?: number | null;
+  reasoningEffort?: "medium" | "default" | null;
   completionTokens: number | null;
   reasoningTokens: number | null;
   costUsd: number | null;
@@ -69,6 +71,7 @@ export class MemoryReportGenerationStore implements ReportGenerationStore {
       if (prior.status === "PROCESSING" && prior.leaseExpiresAt > this.now()) return { status: "IN_PROGRESS" };
       if (prior.response !== null) return { status: "DUPLICATE", run: prior };
       if (legacy) Object.assign(prior, { fingerprint: input.fingerprint, promptVersion: input.promptVersion, schemaVersion: input.schemaVersion });
+      prior.model = input.model;
       prior.status = "PROCESSING";
       prior.attemptId = createEntityId();
       prior.leaseExpiresAt = new Date(this.now().getTime() + REPORT_RUN_LEASE_MS);
@@ -122,8 +125,8 @@ export class PostgresReportGenerationStore implements ReportGenerationStore {
         if (prior.status === "PROCESSING" && prior.leaseActive) return { status: "IN_PROGRESS" };
         if (prior.response !== null) return { status: "DUPLICATE", run: prior };
         const attemptId = createEntityId();
-        const [updated] = await tx<Array<{ leaseExpiresAt: Date }>>`update report_generation_runs set status='PROCESSING', attempt_id=${attemptId}, lease_expires_at=clock_timestamp()+${REPORT_RUN_LEASE_MS}*interval '1 millisecond', response=null, error_code=null, completed_at=null, fingerprint=${input.fingerprint}, prompt_version=${input.promptVersion}, schema_version=${input.schemaVersion} where id=${prior.id} returning lease_expires_at as "leaseExpiresAt"`;
-        return { status: "NEW", run: { ...prior, fingerprint: input.fingerprint, promptVersion: input.promptVersion, schemaVersion: input.schemaVersion,
+        const [updated] = await tx<Array<{ leaseExpiresAt: Date }>>`update report_generation_runs set model=${input.model}, status='PROCESSING', attempt_id=${attemptId}, lease_expires_at=clock_timestamp()+${REPORT_RUN_LEASE_MS}*interval '1 millisecond', response=null, error_code=null, completed_at=null, fingerprint=${input.fingerprint}, prompt_version=${input.promptVersion}, schema_version=${input.schemaVersion} where id=${prior.id} returning lease_expires_at as "leaseExpiresAt"`;
+        return { status: "NEW", run: { ...prior, model: input.model, fingerprint: input.fingerprint, promptVersion: input.promptVersion, schemaVersion: input.schemaVersion,
           status: "PROCESSING" as const, response: null, errorCode: null, completedAt: null, attemptId, leaseExpiresAt: updated!.leaseExpiresAt } };
       }
       const id = createEntityId();
@@ -135,7 +138,7 @@ export class PostgresReportGenerationStore implements ReportGenerationStore {
   async appendCall(runId: string, attemptId: string, call: ReportCall) {
     const inserted = await this.database`with current_run as (
       select id from report_generation_runs where id=${runId} and attempt_id=${attemptId} and status='PROCESSING' and lease_expires_at>clock_timestamp() for update
-    ) insert into report_generation_calls (id,run_id,step,status,model,provider,generation_id,prompt_tokens,completion_tokens,reasoning_tokens,cost_usd,latency_ms,error_code) select ${createEntityId()},id,${call.step},${call.status},${call.model},${call.provider},${call.generationId},${call.promptTokens},${call.completionTokens},${call.reasoningTokens},${call.costUsd},${call.latencyMs},${call.errorCode} from current_run returning id`;
+    ) insert into report_generation_calls (id,run_id,step,status,model,provider,generation_id,prompt_tokens,cached_input_tokens,reasoning_effort,completion_tokens,reasoning_tokens,cost_usd,latency_ms,error_code) select ${createEntityId()},id,${call.step},${call.status},${call.model},${call.provider},${call.generationId},${call.promptTokens},${call.cachedInputTokens ?? null},${call.reasoningEffort ?? null},${call.completionTokens},${call.reasoningTokens},${call.costUsd},${call.latencyMs},${call.errorCode} from current_run returning id`;
     return inserted.length > 0;
   }
   async renew(runId: string, attemptId: string) {
@@ -151,7 +154,7 @@ export class PostgresReportGenerationStore implements ReportGenerationStore {
     const [count] = await this.database<Array<{ total: number }>>`select count(*)::int as total from report_generation_runs where (${clientId ?? null}::text is null or client_id=${clientId ?? null})`;
     const rows = await this.database<Array<Omit<ReportRunSummary, "calls">>>`select id,client_id as "clientId",deployment_id as "deploymentId",rule_version_id as "ruleVersionId",checksum,model,prompt_version as "promptVersion",schema_version as "schemaVersion",status,error_code as "errorCode",created_at as "createdAt",completed_at as "completedAt" from report_generation_runs where (${clientId ?? null}::text is null or client_id=${clientId ?? null}) order by created_at desc,id desc limit ${pageSize} offset ${(page - 1) * pageSize}`;
     const items = await Promise.all(rows.map(async row => {
-      const calls = await this.database<ReportCall[]>`select step,status,model,provider,generation_id as "generationId",prompt_tokens as "promptTokens",completion_tokens as "completionTokens",reasoning_tokens as "reasoningTokens",cost_usd::float8 as "costUsd",latency_ms as "latencyMs",error_code as "errorCode" from report_generation_calls where run_id=${row.id} order by created_at,id`;
+      const calls = await this.database<ReportCall[]>`select step,status,model,provider,generation_id as "generationId",prompt_tokens as "promptTokens",cached_input_tokens as "cachedInputTokens",reasoning_effort as "reasoningEffort",completion_tokens as "completionTokens",reasoning_tokens as "reasoningTokens",cost_usd::float8 as "costUsd",latency_ms as "latencyMs",error_code as "errorCode" from report_generation_calls where run_id=${row.id} order by created_at,id`;
       return { ...row, response: null, calls: [...calls] };
     }));
     return { items, total: count?.total ?? 0, page, pageSize };

@@ -30,12 +30,25 @@ const environmentSchema = z.object({
   ENABLE_PROVISIONAL_SCORING: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   OPENROUTER_API_KEY: optionalSetting(z.string().min(1)),
   REPORT_AI_PROVIDER_ENABLED: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
+  REPORT_AI_PROVIDER: z.enum(["openrouter", "codex_proxy"]).default("openrouter"),
+  CODEX_PROXY_BASE_URL: z.string().url().default("http://127.0.0.1:4190"),
+  CODEX_PROXY_TOKEN: optionalSetting(z.string().min(32)),
+  CODEX_PROXY_MANAGER_MODEL: z.literal("gpt-6.1-sol").default("gpt-6.1-sol"),
+  CODEX_PROXY_WORKER_MODEL: z.literal("gpt-6-luna").default("gpt-6-luna"),
 });
 
 export type Environment = z.infer<typeof environmentSchema>;
 
 export function parseEnvironment(values: Record<string, string | undefined>): Environment {
   const result = environmentSchema.parse(values);
+  if (result.REPORT_AI_PROVIDER === "codex_proxy") {
+    const url = new URL(result.CODEX_PROXY_BASE_URL);
+    if (result.NODE_ENV !== "development" || url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)
+      || url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) {
+      throw new Error("Codex proxy is restricted to development with a local HTTP origin");
+    }
+    if (result.REPORT_AI_PROVIDER_ENABLED && !result.CODEX_PROXY_TOKEN) throw new Error("Codex proxy requires a shared token");
+  }
   if (result.FACE_SCAN_ENABLED && (!result.CAREPLIX_CONTRACT_CONFIRMED || result.FACE_SCAN_PROVIDER !== "careplix" || !result.CAREPLIX_API_BASE_URL || !result.CAREPLIX_API_KEY || !result.CAREPLIX_API_SECRET || !result.FACE_SCAN_ENCRYPTION_KEY || !result.CAREPLIX_ACCOUNT_REFERENCE)) throw new Error("Face scan enablement requires confirmed provider contract and complete server configuration");
   if (result.FACE_SCAN_WEBHOOK_BEARER_CONFIRMED && (!result.FACE_SCAN_WEBHOOK_SECRET || !result.FACE_SCAN_ENCRYPTION_KEY || !result.CAREPLIX_ACCOUNT_REFERENCE)) throw new Error("Confirmed webhook requires separate bearer secret, encryption key and account identity");
   return result;

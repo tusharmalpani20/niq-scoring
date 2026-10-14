@@ -204,6 +204,20 @@
       "when": 1791950000000,
       "tag": "0028_report_content_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791960000000,
+      "tag": "0029_report_cached_input_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791999320636,
+      "tag": "0030_report_manager_calls",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,7 @@ import { createFaceScanAdapter } from "./face-scan";
 import { PostgresReportGenerationStore } from "./report-generation-store";
 import { PostgresReportContentJobStore } from "./report-content-job-store";
 import { OpenRouterReportClient } from "./openrouter-report-client";
+import { CodexProxyReportClient } from "./codex-proxy-report-client";
 
 const environment = parseEnvironment(Bun.env);
 const database = postgres(environment.DATABASE_URL, { max: 2, idle_timeout: 10 });
@@ -30,8 +31,11 @@ const app = createApp({
   reportGenerationStore: new PostgresReportGenerationStore(database),
   reportContentJobStore: new PostgresReportContentJobStore(database),
   onReportJobTick: tick => { reportJobTick = tick; },
-  ...(environment.REPORT_AI_PROVIDER_ENABLED && environment.OPENROUTER_API_KEY
-    ? { reportTextProvider: new OpenRouterReportClient(environment.OPENROUTER_API_KEY) } : {}),
+  ...(environment.REPORT_AI_PROVIDER_ENABLED
+    ? environment.REPORT_AI_PROVIDER === "codex_proxy"
+      ? { reportTextProvider: new CodexProxyReportClient(environment.CODEX_PROXY_BASE_URL, environment.CODEX_PROXY_TOKEN!, environment.CODEX_PROXY_MANAGER_MODEL, environment.CODEX_PROXY_WORKER_MODEL) }
+      : environment.OPENROUTER_API_KEY ? { reportTextProvider: new OpenRouterReportClient(environment.OPENROUTER_API_KEY) } : {}
+    : {}),
   authStore: new PostgresAdminAuthStore(database),
   ...(environment.ADMIN_BOOTSTRAP_TOKEN ? { adminBootstrapToken: environment.ADMIN_BOOTSTRAP_TOKEN } : {}),
   allowedOrigins: environment.CORS_ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()),
@@ -53,6 +57,8 @@ const app = createApp({
           and to_regclass('public.admin_auth_attempts') is not null
           and to_regclass('public.report_generation_runs') is not null
           and to_regclass('public.report_generation_calls') is not null
+          and exists(select 1 from information_schema.columns where table_schema='public' and table_name='report_generation_calls' and column_name='cached_input_tokens')
+          and exists(select 1 from information_schema.columns where table_schema='public' and table_name='report_generation_calls' and column_name='reasoning_effort')
           and to_regclass('public.report_content_jobs') is not null
           and exists(select 1 from information_schema.columns where table_schema='public' and table_name='report_generation_runs' and column_name='attempt_id')
           and exists(select 1 from information_schema.columns where table_schema='public' and table_name='report_generation_runs' and column_name='lease_expires_at')

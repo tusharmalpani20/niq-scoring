@@ -277,6 +277,8 @@ export const reportGenerationCalls = pgTable("report_generation_calls", {
   provider: varchar("provider", { length: 80 }),
   generationId: varchar("generation_id", { length: 160 }),
   promptTokens: integer("prompt_tokens"),
+  cachedInputTokens: integer("cached_input_tokens"),
+  reasoningEffort: varchar("reasoning_effort", { length: 20 }),
   completionTokens: integer("completion_tokens"),
   reasoningTokens: integer("reasoning_tokens"),
   costUsd: numeric("cost_usd", { precision: 18, scale: 9 }),
@@ -285,7 +287,7 @@ export const reportGenerationCalls = pgTable("report_generation_calls", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, table => [
   index("report_calls_run_created_idx").on(table.runId, table.createdAt),
-  check("report_call_step_ck", sql`${table.step} in ('writer','reviewer','revision','highlighter')`),
+  check("report_call_step_ck", sql`${table.step} in ('manager','writer','reviewer','revision','coverage','summarizer','highlighter')`),
   check("report_call_status_ck", sql`${table.status} in ('SUCCEEDED','FAILED')`),
 ]);
 export const adminSessions = pgTable("admin_sessions", {

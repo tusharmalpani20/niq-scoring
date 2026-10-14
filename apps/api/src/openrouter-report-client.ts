@@ -2,43 +2,65 @@ import { REPORT_AI_MODEL } from "@niq-scoring/contracts/report-ai";
 import type { ReportCall } from "./report-generation-store";
 
 export type ReportStep = ReportCall["step"];
+export type ReasoningEffort = "medium" | "default" | null;
 export const REPORT_AI_ACTIVE_MODEL = REPORT_AI_MODEL;
-export type ModelCompletion = { content: unknown; usage: Omit<ReportCall, "step" | "status" | "errorCode"> };
+export const REPORT_AI_MANAGER_MODEL = "openai/gpt-6.1-sol";
+export const REPORT_AI_WORKER_MODEL = "openai/gpt-6-luna";
+const modelForStep = (step: ReportStep) => step === "manager" ? REPORT_AI_MANAGER_MODEL : REPORT_AI_WORKER_MODEL;
+export type ModelCompletion = { content: unknown; usage: Omit<ReportCall, "step" | "status" | "errorCode"> & { reasoningEffort?: ReasoningEffort } };
 export interface ReportTextProvider {
+  readonly model?: string;
+  readonly provider?: string;
+  modelForStep?(step: ReportStep): string;
   complete(input: { step: ReportStep; system: string; user: string; schema: Record<string, unknown> }): Promise<ModelCompletion>;
 }
 
 export class ReportModelError extends Error {
-  constructor(public readonly code: string) { super(code); }
+  constructor(public readonly code: string, public readonly usage?: ModelCompletion["usage"]) { super(code); }
 }
 
 const finiteNumber = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 
 /** OpenRouter is called only from Scoring. The credential and raw prompt are never logged. */
 export class OpenRouterReportClient implements ReportTextProvider {
+  readonly model = REPORT_AI_MANAGER_MODEL;
+  readonly provider = "Azure";
+  modelForStep = modelForStep;
   constructor(private readonly apiKey: string, private readonly baseUrl = "https://openrouter.ai/api/v1", private readonly request = fetch) {}
 
   async complete(input: { step: ReportStep; system: string; user: string; schema: Record<string, unknown> }): Promise<ModelCompletion> {
+    const requestModel = modelForStep(input.step);
+    let reasoningEffort: Exclude<ReasoningEffort, null> = "medium";
     let lastCode = "MODEL_UNAVAILABLE";
     for (let attempt = 0; attempt < 3; attempt++) {
       const started = performance.now();
       try {
-        const response = await this.request(`${this.baseUrl}/chat/completions`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: REPORT_AI_ACTIVE_MODEL,
+        const requestBody = {
+            model: requestModel,
             // Eight evidence-linked passages need room for the full JSON response.
             max_tokens: input.step === "reviewer" ? 1400 : input.step === "highlighter" ? 1700
               : input.step === "coverage" ? 3600 : input.step === "summarizer" ? 5000 : 6000,
-            reasoning: { effort: "low" },
+            ...(reasoningEffort === "medium" ? { reasoning: { effort: "medium" } } : {}),
             provider: { only: ["azure"], allow_fallbacks: false, require_parameters: true, data_collection: "deny", zdr: true },
             response_format: { type: "json_schema", json_schema: { name: `niq_report_${input.step}`, strict: true, schema: input.schema } },
             messages: [{ role: "system", content: input.system }, { role: "user", content: input.user }],
             usage: { include: true },
-          }),
-          signal: AbortSignal.timeout(45_000),
-        });
+          };
+        const requestOptions = {
+          method: "POST",
+          headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(120_000),
+        };
+        let response = await this.request(`${this.baseUrl}/chat/completions`, { ...requestOptions, body: JSON.stringify(requestBody) });
+        if (response.status === 400 || response.status === 422) {
+          const detail = await response.clone().json().catch(() => null) as any;
+          const errorText = `${detail?.error?.code ?? ""} ${detail?.error?.message ?? ""}`;
+          if (/unsupported|unknown|invalid/i.test(errorText) && /reasoning|effort/i.test(errorText)) {
+            reasoningEffort = "default";
+            const { reasoning: _reasoning, ...fallbackBody } = requestBody;
+            response = await this.request(`${this.baseUrl}/chat/completions`, { ...requestOptions, body: JSON.stringify(fallbackBody) });
+          }
+        }
         if (!response.ok) {
           // Record only a fixed category; provider error bodies can contain prompt text.
           const providerError: unknown = response.status >= 400 && response.status < 500
@@ -72,13 +94,16 @@ export class OpenRouterReportClient implements ReportTextProvider {
         try { content = JSON.parse(message.content); } catch { throw new ReportModelError("MODEL_INVALID_JSON"); }
         const usage = record.usage && typeof record.usage === "object" ? record.usage as Record<string, unknown> : {};
         const details = usage.completion_tokens_details && typeof usage.completion_tokens_details === "object" ? usage.completion_tokens_details as Record<string, unknown> : {};
+        const promptDetails = usage.prompt_tokens_details && typeof usage.prompt_tokens_details === "object" ? usage.prompt_tokens_details as Record<string, unknown> : {};
         return { content, usage: {
-          model: REPORT_AI_ACTIVE_MODEL,
+          model: typeof record.model === "string" ? record.model : requestModel,
           provider: typeof record.provider === "string" ? record.provider : null,
           generationId: typeof record.id === "string" ? record.id : null,
           promptTokens: finiteNumber(usage.prompt_tokens),
+          cachedInputTokens: finiteNumber(promptDetails.cached_tokens),
           completionTokens: finiteNumber(usage.completion_tokens),
           reasoningTokens: finiteNumber(details.reasoning_tokens),
+          reasoningEffort,
           costUsd: finiteNumber(usage.cost),
           latencyMs: Math.round(performance.now() - started),
         } };
