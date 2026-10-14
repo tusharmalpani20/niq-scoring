@@ -7,7 +7,7 @@ import { BindingError } from "./assessment-binding";
 import { ruleChecksum } from "./rule-routes";
 import type { DeploymentIdentity, ScoringStore } from "./store";
 import type { ReportGenerationStore, ReportCall } from "./report-generation-store";
-import { ReportModelError, type ReportTextProvider, type ReportStep } from "./openrouter-report-client";
+import { REPORT_AI_ACTIVE_MODEL, ReportModelError, type ReportTextProvider, type ReportStep } from "./openrouter-report-client";
 import { assessNarrativeHighlights, completeNarrativeHighlights, highlightJsonSchema, plainNarrative } from "./report-highlights";
 import { assessCoverage, assessInterventionSummaries, assessInterventionSummaryCoverage, coverageJsonSchema, interventionSummaryJsonSchema, requiredCoverageSources, type InterventionSummary } from "./report-coverage";
 import { eligibleClinicianToxicityOptions, matchedReportPacket, narrativeFieldNames, narrativeSchema, normalizeNarrativePunctuation, omitNarrativeFields, reportContentRequestSchema, reportEvidence, reportToxicityOptionsRequestSchema, reviewSchema, reviewerJsonSchema, validateNarrative, validateReportFacts, validateReportSelection, writerJsonSchema, type ReportNarrative } from "./report-content";
@@ -126,7 +126,7 @@ export function installReportAiRoutes(app: Hono, options: {
         checksum: binding.checksum, promptVersion: legacyPromptVersion, facts: input.facts });
       const reservation = await runStore.reserve({ clientId: identity.clientId, deploymentId: identity.deploymentId, assessmentReference: binding.assessmentReference,
         resultReference: input.resultReference, ruleVersionId: rule.id, checksum: binding.checksum, idempotencyKey: input.idempotencyKey,
-        fingerprint, model: REPORT_AI_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION }, legacyFingerprint);
+        fingerprint, model: REPORT_AI_ACTIVE_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION }, legacyFingerprint);
       if (reservation.status === "CONFLICT") return c.json({ error: "IDEMPOTENCY_CONFLICT" }, 409);
       if (reservation.status === "IN_PROGRESS") return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
       if (reservation.status === "DUPLICATE") return c.json(reservation.run.response as never);
@@ -142,7 +142,7 @@ export function installReportAiRoutes(app: Hono, options: {
           return completion.content;
         } catch (error) {
           if (error instanceof ReportAttemptLost) throw error;
-          if (!await runStore.appendCall(runId, attemptId, { step, status: "FAILED", model: REPORT_AI_MODEL, provider: null, generationId: null,
+          if (!await runStore.appendCall(runId, attemptId, { step, status: "FAILED", model: REPORT_AI_ACTIVE_MODEL, provider: null, generationId: null,
             promptTokens: null, completionTokens: null, reasoningTokens: null, costUsd: null, latencyMs: Math.round(performance.now() - started),
             errorCode: error instanceof ReportModelError ? error.code : "MODEL_UNAVAILABLE" })) throw new ReportAttemptLost();
           throw error;
@@ -331,7 +331,7 @@ export function installReportAiRoutes(app: Hono, options: {
         }
         const response = { runId, status, assessmentReference: binding.assessmentReference, resultReference: input.resultReference,
           ruleVersionId: rule.id, checksum: binding.checksum, classification: { id: classification.id, label: classification.label },
-          model: REPORT_AI_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION,
+          model: REPORT_AI_ACTIVE_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION,
           guidance: { ...guidance, possibleToxicities: guidance.possibleToxicities.map(row => ({ ...row, summary: status === "READY" ? interventionSummaries.find(item => item.evidenceId === `possible:toxicity:${row.id}`)?.text ?? "" : "" })) }, narrative: approvedNarrative, issues,
           omittedNarrativeFields: finalCheck?.narrative ? [...omitted] : [] };
         if (!await runStore.finish(runId, attemptId, status, response)) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);

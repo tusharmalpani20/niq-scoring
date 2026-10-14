@@ -2,6 +2,9 @@ import { REPORT_AI_MODEL } from "@niq-scoring/contracts/report-ai";
 import type { ReportCall } from "./report-generation-store";
 
 export type ReportStep = ReportCall["step"];
+// The temporary free route is only active in the local synthetic-demo environment.
+export const REPORT_AI_ACTIVE_MODEL = Bun.env.NODE_ENV === "production"
+  ? REPORT_AI_MODEL : "dots-studio/dots-3-note-preview:free";
 export type ModelCompletion = { content: unknown; usage: Omit<ReportCall, "step" | "status" | "errorCode"> };
 export interface ReportTextProvider {
   complete(input: { step: ReportStep; system: string; user: string; schema: Record<string, unknown> }): Promise<ModelCompletion>;
@@ -26,12 +29,14 @@ export class OpenRouterReportClient implements ReportTextProvider {
           method: "POST",
           headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: REPORT_AI_MODEL,
+            model: REPORT_AI_ACTIVE_MODEL,
             // Eight evidence-linked passages need room for the full JSON response.
             max_tokens: input.step === "reviewer" ? 1400 : input.step === "highlighter" ? 1700
               : input.step === "coverage" ? 3600 : input.step === "summarizer" ? 5000 : 6000,
-            reasoning: { effort: "low" },
-            provider: { only: ["azure"], allow_fallbacks: false, require_parameters: true, data_collection: "deny", zdr: true },
+            reasoning: REPORT_AI_ACTIVE_MODEL.endsWith(":free") ? { enabled: false } : { effort: "low" },
+            provider: REPORT_AI_ACTIVE_MODEL.endsWith(":free")
+              ? { only: ["AtlasCloud"], allow_fallbacks: false, require_parameters: true }
+              : { only: ["azure"], allow_fallbacks: false, require_parameters: true, data_collection: "deny", zdr: true },
             response_format: { type: "json_schema", json_schema: { name: `niq_report_${input.step}`, strict: true, schema: input.schema } },
             messages: [{ role: "system", content: input.system }, { role: "user", content: input.user }],
             usage: { include: true },
@@ -61,7 +66,8 @@ export class OpenRouterReportClient implements ReportTextProvider {
         const body: unknown = await response.json();
         if (!body || typeof body !== "object") throw new ReportModelError("MODEL_INVALID_RESPONSE");
         const record = body as Record<string, unknown>;
-        if (typeof record.provider === "string" && !/^azure(?:$|[-_\s(])/i.test(record.provider)) {
+        const expectedProvider = REPORT_AI_ACTIVE_MODEL.endsWith(":free") ? "AtlasCloud" : "azure";
+        if (typeof record.provider === "string" && record.provider.toLowerCase() !== expectedProvider.toLowerCase()) {
           throw new ReportModelError("MODEL_PROVIDER_MISMATCH");
         }
         const first = Array.isArray(record.choices) ? record.choices[0] as Record<string, unknown> | undefined : undefined;
@@ -72,7 +78,7 @@ export class OpenRouterReportClient implements ReportTextProvider {
         const usage = record.usage && typeof record.usage === "object" ? record.usage as Record<string, unknown> : {};
         const details = usage.completion_tokens_details && typeof usage.completion_tokens_details === "object" ? usage.completion_tokens_details as Record<string, unknown> : {};
         return { content, usage: {
-          model: REPORT_AI_MODEL,
+          model: REPORT_AI_ACTIVE_MODEL,
           provider: typeof record.provider === "string" ? record.provider : null,
           generationId: typeof record.id === "string" ? record.id : null,
           promptTokens: finiteNumber(usage.prompt_tokens),
