@@ -27,9 +27,14 @@ export function plainNarrative(narrative: ReportNarrative): ReportNarrative {
 
 const sentenceSegmenter = new Intl.Segmenter("en", { granularity: "sentence" });
 const actionVerb = /\b(?:aim|ask|avoid|call|check|choose|contact|discuss|follow|keep|maintain|monitor|record|report|seek|separate|share|take|tell|track|use)\b/i;
+const interpretationCue = /\b(?:affect|change|changed|changes|concern|decline|decrease|decreased|help|important|increase|increased|maintain|monitor|prevent|priorities|priority|review|support|worsen|worsening)\b/i;
+const numericMeaningCue = /\b(?:affect|concern|decline|help|important|maintain|monitor|prevent|priorities|priority|review|support|worsen|worsening)\b/i;
 
 function requiredHighlights(field: (typeof narrativeFieldNames)[number], text: string): number {
   if (!text.trim()) return 0;
+  // Interpretation is rendered from overview and keyFindings together.
+  // A factual overview needs no forced bold when keyFindings carries the takeaway.
+  if (field === "overview") return 0;
   if (field === "conditionAdvice" && text.length > 500) return 3;
   if ((field === "treatmentAdvice" || field === "effectsAdvice" || field === "overallSummary") && text.length > 400) return 2;
   return 1;
@@ -57,12 +62,15 @@ export function assessNarrativeHighlights(narrative: ReportNarrative, proposed: 
       const end = start + phrase.length;
       const words = phrase.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? [];
       const sameSentence = sentences.some(sentence => start >= sentence.start && end <= sentence.end);
+      const interpretationField = field === "overview" || field === "keyFindings" || field === "overallSummary";
       const validPhrase = start >= 0 && text.indexOf(phrase, end) === -1
         && words.length >= 3 && words.length <= 15 && sameSentence
         && !/^[\s\p{P}\p{S}]/u.test(phrase) && !/[\s\p{P}\p{S}]$/u.test(phrase)
         && !(start > 0 && /[\p{L}\p{N}]/u.test(text[start - 1]!))
         && !(end < text.length && /[\p{L}\p{N}]/u.test(text[end]!))
         && !ranges.some(range => start < range.end && end > range.start)
+        && (!interpretationField || kind !== "finding" || interpretationCue.test(phrase))
+        && (!interpretationField || kind !== "finding" || !/\d/.test(phrase) || numericMeaningCue.test(phrase))
         && (kind === "finding" || actionVerb.test(phrase))
         && (!/^if\b/i.test(phrase) || actionVerb.test(phrase));
       if (!validPhrase) { fieldIssues.push("INVALID_SPAN_OR_ACTION"); continue; }

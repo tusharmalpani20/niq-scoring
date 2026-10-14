@@ -49,3 +49,14 @@ test("long clinical sections need several distinct takeaways", () => {
   expect(result.accepted).toBe(false);
   expect(result.issues.conditionAdvice).toContain("INSUFFICIENT_COVERAGE");
 });
+
+test("a factual overview stays unbolded while the interpretation carries the takeaway", () => {
+  const factual = structuredClone(narrative);
+  factual.overview.text = "The documented diagnosis is pancreatic cancer. Nutrition risk is moderate.";
+  expect(assessNarrativeHighlights(factual, { ...selections, overview: [] }).accepted).toBe(true);
+  const result = assessNarrativeHighlights(factual, { ...selections, overview: [
+    { phrase: "The documented diagnosis is pancreatic cancer", kind: "finding" },
+  ] });
+  expect(result.accepted).toBe(false);
+  expect(result.issues.overview).toContain("INVALID_SPAN_OR_ACTION");
+});

@@ -132,7 +132,7 @@ test("invalid highlight suggestions trigger targeted repair before publication",
   });
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
-  expect(body.narrative.overview.text).toContain("**");
+  expect(body.narrative.nutritionAdvice.text).toContain("**");
   expect(attempts).toBe(2);
 });
 
