@@ -117,7 +117,7 @@ test("the reviewer receives independent fixed checks beyond editable wording", a
   expect(systems.reviewer).toContain("concise, self-contained synthesis of the supported diagnosis and treatment context");
   expect(systems.reviewer).toContain("When matched kidney disease is present, also flag direct fluid or ORS");
   expect(systems.writer).toContain("matched treatment-status or treatment guidance");
-    expect(systems.writer).toContain("let a reader skim the core meaning of an actionable sentence");
+    expect(systems.writer).toContain("Each phrase should let a reader grasp the related sentence at a glance");
   expect(systems.writer).not.toContain("independently reviewing a writer draft");
 });
 
