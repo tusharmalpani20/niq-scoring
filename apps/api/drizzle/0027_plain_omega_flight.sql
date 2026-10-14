@@ -1,0 +1,2 @@
+ALTER TABLE "report_generation_calls" DROP CONSTRAINT "report_call_step_ck";--> statement-breakpoint
+ALTER TABLE "report_generation_calls" ADD CONSTRAINT "report_call_step_ck" CHECK ("report_generation_calls"."step" in ('writer','reviewer','revision','highlighter'));

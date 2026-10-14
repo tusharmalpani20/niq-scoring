@@ -20,7 +20,6 @@ test("highlight pass rejects rewritten, duplicated, overlapping and missing sele
   for (const invalid of [
     { ...selections, nutritionAdvice: ["start an oral supplement"] },
     { ...selections, nutritionAdvice: ["discuss an oral supplement with your care team", "an oral supplement with your care team"] },
-    { ...selections, nutritionAdvice: [] },
     { ...selections, effectsAdvice: ["discuss an oral supplement with your care team"] },
     { ...selections, nutritionAdvice: ["oral supplement"] },
   ]) expect(applyNarrativeHighlights(narrative, invalid)).toBeNull();

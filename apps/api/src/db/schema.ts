@@ -285,7 +285,7 @@ export const reportGenerationCalls = pgTable("report_generation_calls", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, table => [
   index("report_calls_run_created_idx").on(table.runId, table.createdAt),
-  check("report_call_step_ck", sql`${table.step} in ('writer','reviewer','revision')`),
+  check("report_call_step_ck", sql`${table.step} in ('writer','reviewer','revision','highlighter')`),
   check("report_call_status_ck", sql`${table.status} in ('SUCCEEDED','FAILED')`),
 ]);
 export const adminSessions = pgTable("admin_sessions", {

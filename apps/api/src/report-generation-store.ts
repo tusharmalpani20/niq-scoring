@@ -4,7 +4,7 @@ import { createEntityId } from "./lib/id";
 export const REPORT_RUN_LEASE_MS = 15 * 60 * 1000;
 
 export type ReportCall = {
-  step: "writer" | "reviewer" | "revision";
+  step: "writer" | "reviewer" | "revision" | "highlighter";
   status: "SUCCEEDED" | "FAILED";
   model: string;
   provider: string | null;

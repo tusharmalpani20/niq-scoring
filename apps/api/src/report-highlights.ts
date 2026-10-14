@@ -22,7 +22,7 @@ export function applyNarrativeHighlights(narrative: ReportNarrative, proposed: u
   for (const field of narrativeFieldNames) {
     const text = result[field].text;
     const phrases = parsed.data[field];
-    if (Boolean(text.trim()) !== Boolean(phrases.length)) return null;
+    if (!text.trim() && phrases.length) return null;
     const ranges: Array<{ start: number; end: number }> = [];
     for (const phrase of phrases) {
       const start = text.indexOf(phrase);
