@@ -25,3 +25,11 @@ test("highlight pass rejects rewritten, duplicated, overlapping and missing sele
     { ...selections, nutritionAdvice: ["If intake falls"] },
   ]) expect(applyNarrativeHighlights(narrative, invalid)).toBeNull();
 });
+
+test("invalid phrases can be dropped without losing valid emphasis or changing prose", () => {
+  const selectionsWithMistake = { ...selections, nutritionAdvice: ["If intake falls", "discuss an oral supplement with your care team"] };
+  expect(applyNarrativeHighlights(narrative, selectionsWithMistake)).toBeNull();
+  const marked = applyNarrativeHighlights(narrative, selectionsWithMistake, true);
+  expect(marked?.nutritionAdvice.text).toBe("If intake falls, **discuss an oral supplement with your care team**.");
+  expect(plainNarrative(marked!)).toEqual(narrative);
+});

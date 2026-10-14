@@ -15,25 +15,32 @@ export function plainNarrative(narrative: ReportNarrative): ReportNarrative {
 }
 
 /** The model may only choose exact, unique phrases in already reviewed prose. */
-export function applyNarrativeHighlights(narrative: ReportNarrative, proposed: unknown): ReportNarrative | null {
+export function applyNarrativeHighlights(narrative: ReportNarrative, proposed: unknown, skipInvalid = false): ReportNarrative | null {
   const parsed = highlightSchema.safeParse(proposed);
-  if (!parsed.success) return null;
+  if (!parsed.success) return skipInvalid ? plainNarrative(narrative) : null;
   const result = plainNarrative(narrative);
   for (const field of narrativeFieldNames) {
     const text = result[field].text;
     const phrases = parsed.data[field];
-    if (!text.trim() && phrases.length) return null;
+    if (!text.trim() && phrases.length) {
+      if (skipInvalid) continue;
+      return null;
+    }
     const ranges: Array<{ start: number; end: number }> = [];
     for (const phrase of phrases) {
       const start = text.indexOf(phrase);
       const end = start + phrase.length;
       const words = phrase.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? [];
-      if (start < 0 || text.indexOf(phrase, end) !== -1 || words.length < 3 || words.length > 25
+      const invalid = start < 0 || text.indexOf(phrase, end) !== -1 || words.length < 3 || words.length > 25
         || !/[\p{L}]/u.test(phrase) || /^[\s\p{P}\p{S}]/u.test(phrase) || /[\s\p{P}\p{S}]$/u.test(phrase)
         || /^if\b/i.test(phrase) && !/\b(contact|call|tell|discuss|ask|seek|notify|check|take|choose|monitor|follow|record|avoid|use|keep)\b/i.test(phrase)
         || start > 0 && /[\p{L}\p{N}]/u.test(text[start - 1]!)
         || end < text.length && /[\p{L}\p{N}]/u.test(text[end]!)
-        || ranges.some(range => start < range.end && end > range.start)) return null;
+        || ranges.some(range => start < range.end && end > range.start);
+      if (invalid) {
+        if (skipInvalid) continue;
+        return null;
+      }
       ranges.push({ start, end });
     }
     let marked = text;

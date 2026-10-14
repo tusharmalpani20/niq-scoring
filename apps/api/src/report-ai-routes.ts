@@ -116,7 +116,7 @@ export function installReportAiRoutes(app: Hono, options: {
       const guidance = matchedReportPacket(definition, input.facts, classification.id, input.facts.assessmentDate, await scoringStore.products.list());
       const evidence = reportEvidence(definition, input.facts, { id: classification.id, label: classification.label }, guidance);
       if (evidence.length > 500 || JSON.stringify(evidence).length > 80_000) return c.json({ error: "REPORT_CONTEXT_TOO_LARGE" }, 422);
-      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema3-prompt42` : "baseline-v42";
+      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema3-prompt43` : "baseline-v43";
       const legacyPromptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}` : "baseline-v1";
       const fingerprint = ruleChecksum({ endpoint: "report-content", assessmentReference: binding.assessmentReference, resultReference: input.resultReference,
         checksum: binding.checksum, promptVersion, facts: input.facts });
@@ -243,7 +243,8 @@ export function installReportAiRoutes(app: Hono, options: {
             const proposed = await invoke("highlighter", system, `Select meaningful phrases from this approved narrative. Return one JSON object with an array for every field. Approved narrative: ${source}`, highlightJsonSchema);
             const marked = applyNarrativeHighlights(plain, proposed);
             if (marked) { approvedNarrative = marked; break; }
-            if (attempt === 1) throw new ReportModelError("INVALID_HIGHLIGHT_SELECTION");
+            // Formatting is optional; a bad selection must not invalidate clinically reviewed prose.
+            if (attempt === 1) approvedNarrative = applyNarrativeHighlights(plain, proposed, true)!;
           }
         }
         const response = { runId, status, assessmentReference: binding.assessmentReference, resultReference: input.resultReference,

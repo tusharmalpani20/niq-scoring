@@ -91,6 +91,18 @@ test("a separate post-review pass adds only exact emphasis to approved prose", a
   expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.map(call => call.step)).toEqual(["writer", "reviewer", "highlighter"]);
 });
 
+test("invalid highlight suggestions do not discard clinically approved prose", async () => {
+  let attempts = 0;
+  const { call, request } = await setup(undefined, undefined, undefined, () => {
+    attempts++;
+    return { overview: ["start an unsupported treatment"] };
+  });
+  const body = await (await call("report-content", request())).json();
+  expect(body.status).toBe("READY");
+  expect(body.narrative).toEqual(safeNarrative);
+  expect(attempts).toBe(2);
+});
+
 test("an expired writer cannot publish over a retry with the same idempotency key", async () => {
   let time = new Date("2026-01-02T00:00:00Z");
   const runs = new MemoryReportGenerationStore(() => time);
