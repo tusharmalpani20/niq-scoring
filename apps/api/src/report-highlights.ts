@@ -1,12 +1,23 @@
 import { z } from "zod";
 import { narrativeFieldNames, type ReportNarrative } from "./report-content";
 
-const phraseSchema = z.array(z.string().min(1).max(180)).max(3);
-export const highlightSchema = z.object(Object.fromEntries(narrativeFieldNames.map(field => [field, phraseSchema])) as Record<(typeof narrativeFieldNames)[number], typeof phraseSchema>).strict();
-export const highlightJsonSchema = {
-  type: "object", additionalProperties: false, required: narrativeFieldNames,
-  properties: Object.fromEntries(narrativeFieldNames.map(field => [field, { type: "array", maxItems: 3, items: { type: "string", maxLength: 180 } }])),
-};
+const selectionSchema = z.object({
+  phrase: z.string().min(1).max(180),
+  kind: z.enum(["finding", "action", "warning"]),
+}).strict();
+const selectionsSchema = z.array(selectionSchema).max(3);
+export const highlightSchema = z.object(Object.fromEntries(narrativeFieldNames.map(field => [field, selectionsSchema])) as Record<(typeof narrativeFieldNames)[number], typeof selectionsSchema>).strict();
+export type HighlightSelections = z.infer<typeof highlightSchema>;
+
+export function highlightJsonSchema(fields: readonly string[] = narrativeFieldNames) {
+  return {
+    type: "object", additionalProperties: false, required: fields,
+    properties: Object.fromEntries(fields.map(field => [field, {
+      type: "array", maxItems: 3, items: { type: "object", additionalProperties: false,
+        required: ["phrase", "kind"], properties: { phrase: { type: "string", maxLength: 180 }, kind: { type: "string", enum: ["finding", "action", "warning"] } } },
+    }])),
+  };
+}
 
 export function plainNarrative(narrative: ReportNarrative): ReportNarrative {
   return Object.fromEntries(narrativeFieldNames.map(field => [field, {
@@ -14,38 +25,60 @@ export function plainNarrative(narrative: ReportNarrative): ReportNarrative {
   }])) as ReportNarrative;
 }
 
-/** The model may only choose exact, unique phrases in already reviewed prose. */
-export function applyNarrativeHighlights(narrative: ReportNarrative, proposed: unknown, skipInvalid = false): ReportNarrative | null {
+const sentenceSegmenter = new Intl.Segmenter("en", { granularity: "sentence" });
+const actionVerb = /\b(?:aim|ask|avoid|call|check|choose|contact|discuss|follow|keep|maintain|monitor|record|report|seek|separate|share|take|tell|track|use)\b/i;
+
+function requiredHighlights(field: (typeof narrativeFieldNames)[number], text: string): number {
+  if (!text.trim()) return 0;
+  if (field === "conditionAdvice" && text.length > 500) return 3;
+  if ((field === "treatmentAdvice" || field === "effectsAdvice" || field === "overallSummary") && text.length > 400) return 2;
+  return 1;
+}
+
+/** The model supplies only selections; this checks exact spans and editorial coverage. */
+export function assessNarrativeHighlights(narrative: ReportNarrative, proposed: unknown) {
+  const plain = plainNarrative(narrative);
   const parsed = highlightSchema.safeParse(proposed);
-  if (!parsed.success) return skipInvalid ? plainNarrative(narrative) : null;
-  const result = plainNarrative(narrative);
+  const selected = parsed.success ? parsed.data : null;
+  const marked = structuredClone(plain);
+  const issues: Partial<Record<(typeof narrativeFieldNames)[number], string[]>> = {};
+  const valid = {} as HighlightSelections;
+
   for (const field of narrativeFieldNames) {
-    const text = result[field].text;
-    const phrases = parsed.data[field];
-    if (!text.trim() && phrases.length) {
-      if (skipInvalid) continue;
-      return null;
-    }
+    const text = plain[field].text;
+    const choices = selected?.[field] ?? [];
+    const fieldIssues: string[] = [];
     const ranges: Array<{ start: number; end: number }> = [];
-    for (const phrase of phrases) {
+    const accepted: typeof choices = [];
+    const sentences = Array.from(sentenceSegmenter.segment(text), item => ({ start: item.index, end: item.index + item.segment.length }));
+    for (const choice of choices) {
+      const { phrase, kind } = choice;
       const start = text.indexOf(phrase);
       const end = start + phrase.length;
       const words = phrase.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? [];
-      const invalid = start < 0 || text.indexOf(phrase, end) !== -1 || words.length < 3 || words.length > 15
-        || !/[\p{L}]/u.test(phrase) || /^[\s\p{P}\p{S}]/u.test(phrase) || /[\s\p{P}\p{S}]$/u.test(phrase)
-        || start > 0 && /[\p{L}\p{N}]/u.test(text[start - 1]!)
-        || end < text.length && /[\p{L}\p{N}]/u.test(text[end]!)
-        || ranges.some(range => start < range.end && end > range.start);
-      if (invalid) {
-        if (skipInvalid) continue;
-        return null;
-      }
+      const sameSentence = sentences.some(sentence => start >= sentence.start && end <= sentence.end);
+      const validPhrase = start >= 0 && text.indexOf(phrase, end) === -1
+        && words.length >= 3 && words.length <= 15 && sameSentence
+        && !/^[\s\p{P}\p{S}]/u.test(phrase) && !/[\s\p{P}\p{S}]$/u.test(phrase)
+        && !(start > 0 && /[\p{L}\p{N}]/u.test(text[start - 1]!))
+        && !(end < text.length && /[\p{L}\p{N}]/u.test(text[end]!))
+        && !ranges.some(range => start < range.end && end > range.start)
+        && (kind === "finding" || actionVerb.test(phrase))
+        && (!/^if\b/i.test(phrase) || actionVerb.test(phrase));
+      if (!validPhrase) { fieldIssues.push("INVALID_SPAN_OR_ACTION"); continue; }
+      accepted.push(choice);
       ranges.push({ start, end });
     }
-    let marked = text;
+    if (accepted.length < requiredHighlights(field, text)) fieldIssues.push("INSUFFICIENT_COVERAGE");
+    if (["nutritionAdvice", "treatmentAdvice", "conditionAdvice", "effectsAdvice", "actionSummary", "monitoringSummary"].includes(field)
+      && actionVerb.test(text) && !accepted.some(choice => choice.kind === "action" || choice.kind === "warning"))
+      fieldIssues.push("NO_ACTION_HIGHLIGHT");
+    valid[field] = accepted;
+    let result = text;
     for (const { start, end } of ranges.sort((a, b) => b.start - a.start))
-      marked = `${marked.slice(0, start)}**${marked.slice(start, end)}**${marked.slice(end)}`;
-    result[field] = { ...result[field], text: marked };
+      result = `${result.slice(0, start)}**${result.slice(start, end)}**${result.slice(end)}`;
+    marked[field] = { ...marked[field], text: result };
+    if (fieldIssues.length) issues[field] = fieldIssues;
   }
-  return result;
+  return { marked, valid, issues, accepted: Object.keys(issues).length === 0 };
 }

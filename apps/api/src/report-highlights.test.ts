@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { applyNarrativeHighlights, plainNarrative } from "./report-highlights";
+import { assessNarrativeHighlights, plainNarrative } from "./report-highlights";
 import { narrativeFieldNames, type ReportNarrative } from "./report-content";
 
 const narrative = Object.fromEntries(narrativeFieldNames.map(field => [field, {
@@ -7,28 +7,45 @@ const narrative = Object.fromEntries(narrativeFieldNames.map(field => [field, {
   evidenceIds: ["supported"],
 }])) as ReportNarrative;
 const selections = Object.fromEntries(narrativeFieldNames.map(field => [field,
-  field === "effectsAdvice" ? [] : ["discuss an oral supplement with your care team"],
+  field === "effectsAdvice" ? [] : [{ phrase: "discuss an oral supplement with your care team", kind: "action" }],
 ]));
 
 test("highlight pass marks reviewed phrases without changing any words or evidence", () => {
-  const marked = applyNarrativeHighlights(narrative, selections);
-  expect(marked?.nutritionAdvice.text).toBe("If intake falls, **discuss an oral supplement with your care team**.");
-  expect(plainNarrative(marked!)).toEqual(narrative);
+  const result = assessNarrativeHighlights(narrative, selections);
+  expect(result.accepted).toBe(true);
+  expect(result.marked.nutritionAdvice.text).toBe("If intake falls, **discuss an oral supplement with your care team**.");
+  expect(plainNarrative(result.marked)).toEqual(narrative);
 });
 
-test("highlight pass rejects rewritten, duplicated, overlapping and missing selections", () => {
+test("highlight pass rejects rewritten, overlapping, incomplete and empty selections", () => {
   for (const invalid of [
-    { ...selections, nutritionAdvice: ["start an oral supplement"] },
-    { ...selections, nutritionAdvice: ["discuss an oral supplement with your care team", "an oral supplement with your care team"] },
-    { ...selections, effectsAdvice: ["discuss an oral supplement with your care team"] },
-    { ...selections, nutritionAdvice: ["oral supplement"] },
-  ]) expect(applyNarrativeHighlights(narrative, invalid)).toBeNull();
+    { ...selections, nutritionAdvice: [{ phrase: "start an oral supplement", kind: "action" }] },
+    { ...selections, nutritionAdvice: [
+      { phrase: "discuss an oral supplement with your care team", kind: "action" },
+      { phrase: "an oral supplement with your care team", kind: "action" },
+    ] },
+    { ...selections, nutritionAdvice: [{ phrase: "If intake falls", kind: "action" }] },
+    { ...selections, nutritionAdvice: [{ phrase: "oral supplement with your care team", kind: "action" }] },
+    { ...selections, nutritionAdvice: [] },
+    { ...selections, effectsAdvice: [{ phrase: "discuss an oral supplement with your care team", kind: "action" }] },
+  ]) expect(assessNarrativeHighlights(narrative, invalid).accepted).toBe(false);
 });
 
-test("invalid phrases can be dropped without losing valid emphasis or changing prose", () => {
-  const selectionsWithMistake = { ...selections, nutritionAdvice: ["start an oral supplement", "discuss an oral supplement with your care team"] };
-  expect(applyNarrativeHighlights(narrative, selectionsWithMistake)).toBeNull();
-  const marked = applyNarrativeHighlights(narrative, selectionsWithMistake, true);
-  expect(marked?.nutritionAdvice.text).toBe("If intake falls, **discuss an oral supplement with your care team**.");
-  expect(plainNarrative(marked!)).toEqual(narrative);
+test("quality assessment keeps valid choices available for targeted repair", () => {
+  const result = assessNarrativeHighlights(narrative, { ...selections, nutritionAdvice: [
+    { phrase: "start an oral supplement", kind: "action" },
+    { phrase: "discuss an oral supplement with your care team", kind: "action" },
+  ] });
+  expect(result.accepted).toBe(false);
+  expect(result.issues.nutritionAdvice).toContain("INVALID_SPAN_OR_ACTION");
+  expect(result.valid.nutritionAdvice).toEqual([{ phrase: "discuss an oral supplement with your care team", kind: "action" }]);
+  expect(plainNarrative(result.marked)).toEqual(narrative);
+});
+
+test("long clinical sections need several distinct takeaways", () => {
+  const lengthy = structuredClone(narrative);
+  lengthy.conditionAdvice.text = "For diabetes, contact your doctor for persistent high glucose. For hypertension, record blood pressure at home. For thyroid medicine, check your TSH after a dose change. ".repeat(4);
+  const result = assessNarrativeHighlights(lengthy, selections);
+  expect(result.accepted).toBe(false);
+  expect(result.issues.conditionAdvice).toContain("INSUFFICIENT_COVERAGE");
 });

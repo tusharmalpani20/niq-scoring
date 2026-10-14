@@ -7,6 +7,7 @@ import { MemoryAdminAuthStore } from "./admin-auth-store";
 import { createEntityId } from "./lib/id";
 import { ruleChecksum } from "./rule-routes";
 import { ReportModelError, type ReportTextProvider } from "./openrouter-report-client";
+import { plainNarrative } from "./report-highlights";
 import { matchedReportPacket, normalizeNarrativePunctuation, reportEvidence, validateNarrative } from "./report-content";
 import { resolveCarePlanGuidance } from "@niq-scoring/contracts/care-plan-resolver";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
@@ -19,6 +20,37 @@ const safeNarrative = { overview: safePart, keyFindings: safePart, actionSummary
 const noGuidanceNarrative = { ...safeNarrative, nutritionAdvice: omittedPart };
 const usage = { model: "openai/gpt-6-luna", provider: "test-provider", generationId: "gen-test", promptTokens: 120, completionTokens: 40, reasoningTokens: 5, costUsd: 0.001, latencyMs: 10 };
 type Step = "writer" | "reviewer" | "revision" | "highlighter";
+const plainPart = (part: { text: string; evidenceIds: string[] }) => ({ ...part, text: part.text.replaceAll("**", "") });
+
+function fixtureHighlights(user: string) {
+  const approved = user.includes("Approved narrative: ")
+    ? JSON.parse(user.split("Approved narrative: ")[1]!) as Record<string, string>
+    : Object.fromEntries(Object.entries((JSON.parse(user.slice(user.indexOf("{"))) as { fields: Record<string, { text: string }> }).fields)
+      .map(([field, value]) => [field, value.text]));
+  return Object.fromEntries(Object.entries(approved).map(([field, text]) => {
+    const actionVerb = /\b(?:aim|ask|avoid|call|check|choose|contact|discuss|follow|keep|maintain|monitor|record|report|seek|separate|share|take|tell|track|use)\b/i;
+    const sentences = Array.from(new Intl.Segmenter("en", { granularity: "sentence" }).segment(text), item => item.segment);
+    const choices: Array<{ phrase: string; kind: "finding" | "action" }> = [];
+    for (const sentence of sentences) {
+      const words = Array.from(sentence.matchAll(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu));
+      if (words.length < 3) continue;
+      const actionStart = words.findIndex(word => actionVerb.test(word[0]));
+      const starts = [...new Set([...(actionStart >= 0 ? [actionStart] : []), ...words.map((_, index) => index)])];
+      for (const start of starts) {
+        if (start > words.length - 3) continue;
+        const last = Math.min(start + 7, words.length) - 1;
+        const phrase = sentence.slice(words[start]!.index, words[last]!.index + words[last]![0].length);
+        if (text.indexOf(phrase) === text.lastIndexOf(phrase)
+          && !choices.some(choice => sentence.includes(choice.phrase) && phrase.includes(choice.phrase))) {
+          choices.push({ phrase, kind: actionVerb.test(phrase) ? "action" : "finding" });
+          break;
+        }
+      }
+      if (choices.length === 3) break;
+    }
+    return [field, choices];
+  }));
+}
 
 async function setup(handler: (step: Step, call: number, user: string, system: string) => unknown = step => step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative,
   configure?: (definition: FinalAssessmentDefinition) => void, runs = new MemoryReportGenerationStore(),
@@ -39,7 +71,7 @@ async function setup(handler: (step: Step, call: number, user: string, system: s
   let calls = 0;
   const provider: ReportTextProvider = { complete: async ({ step, user, system }) => ({
     content: step === "highlighter"
-      ? highlighter?.(user) ?? Object.fromEntries(["overview", "keyFindings", "actionSummary", "monitoringSummary", "overallSummary", "nutritionAdvice", "treatmentAdvice", "conditionAdvice", "effectsAdvice"].map(field => [field, []]))
+      ? highlighter?.(user) ?? fixtureHighlights(user)
       : await handler(step, ++calls, user, system), usage,
   }) };
   const app = createApp({ store, authStore: new MemoryAdminAuthStore(), reportGenerationStore: runs, reportTextProvider: provider,
@@ -59,7 +91,8 @@ test("report content uses pinned rules, nine bounded fields, idempotency, and sa
   expect(response.status).toBe(200);
   const body = await response.json();
   expect(body).toMatchObject({ status: "READY", ruleVersionId: rule.id, checksum: rule.packageChecksum,
-    model: "openai/gpt-6-luna", narrative: safeNarrative });
+    model: "openai/gpt-6-luna" });
+  expect(plainNarrative(body.narrative)).toEqual(safeNarrative);
   expect(getCalls()).toBe(2);
   expect(await (await call("report-content", request())).json()).toEqual(body);
   expect(getCalls()).toBe(2);
@@ -80,7 +113,7 @@ test("a separate post-review pass adds only exact emphasis to approved prose", a
     const approved = JSON.parse(user.split("Approved narrative: ")[1]!) as Record<string, string>;
     expect(approved.overview).toBe(safePart.text);
     return Object.fromEntries(fields.map(field => [field, approved[field]
-      ? [field === "nutritionAdvice" ? "Maintain nutrition and monitor appetite" : "NIQ risk category needs clinician review"] : []]));
+      ? [{ phrase: field === "nutritionAdvice" ? "Maintain nutrition and monitor appetite" : "NIQ risk category needs clinician review", kind: field === "nutritionAdvice" ? "action" : "finding" }] : []]));
   });
   const response = await call("report-content", request());
   expect(response.status).toBe(200);
@@ -91,16 +124,28 @@ test("a separate post-review pass adds only exact emphasis to approved prose", a
   expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.map(call => call.step)).toEqual(["writer", "reviewer", "highlighter"]);
 });
 
-test("invalid highlight suggestions do not discard clinically approved prose", async () => {
+test("invalid highlight suggestions trigger targeted repair before publication", async () => {
   let attempts = 0;
-  const { call, request } = await setup(undefined, undefined, undefined, () => {
+  const { call, request } = await setup(undefined, undefined, undefined, user => {
     attempts++;
-    return { overview: ["start an unsupported treatment"] };
+    return attempts === 1 ? { overview: [{ phrase: "start an unsupported treatment", kind: "action" }] } : fixtureHighlights(user);
   });
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
-  expect(body.narrative).toEqual(safeNarrative);
+  expect(body.narrative.overview.text).toContain("**");
   expect(attempts).toBe(2);
+});
+
+test("an unrepairable highlight pass cannot publish a sparse report", async () => {
+  let attempts = 0;
+  const { call, request } = await setup(undefined, undefined, undefined, () => {
+    attempts++;
+    return {};
+  });
+  const body = await (await call("report-content", request())).json();
+  expect(body.status).toBe("REVIEW_REQUIRED");
+  expect(body.issues.some((issue: string) => issue.startsWith("HIGHLIGHT_QUALITY:"))).toBe(true);
+  expect(attempts).toBe(3);
 });
 
 test("an expired writer cannot publish over a retry with the same idempotency key", async () => {
@@ -176,13 +221,13 @@ test("rule evidence IDs remain distinct when different rule groups reuse an ID",
 });
 
 test("a passage beyond the writing guide remains available for review", async () => {
-  const lengthy = { ...safeNarrative, overview: { text: Array(81).fill("review").join(" "), evidenceIds: ["fact:niq_risk"] } };
+  const lengthy = { ...safeNarrative, overview: { text: `${Array(81).fill("review").join(" ")} The NIQ risk category needs clinician review.`, evidenceIds: ["fact:niq_risk"] } };
   const { call, request, getCalls } = await setup(step => step === "reviewer" ? { accepted: true, issues: [] } : lengthy);
   const response = await call("report-content", request());
   expect(response.status).toBe(200);
   const body = await response.json();
   expect(body.status).toBe("READY");
-  expect(body.narrative.overview).toEqual(lengthy.overview);
+  expect(plainPart(body.narrative.overview)).toEqual(lengthy.overview);
   expect(body.omittedNarrativeFields).not.toContain("overview");
   expect(getCalls()).toBe(2);
 });
@@ -331,7 +376,7 @@ test("a missing closing summary is repaired before a report is ready", async () 
   const response = await call("report-content", request());
   const body = await response.json();
   expect(body.status).toBe("READY");
-  expect(body.narrative.overallSummary).toEqual(safePart);
+  expect(plainPart(body.narrative.overallSummary)).toEqual(safePart);
 });
 
 test("an unrepairable closing summary keeps the report in clinical review", async () => {
@@ -705,7 +750,7 @@ test("a second targeted revision can resolve a remaining validation issue", asyn
     : step === "writer" ? first : ++revisions === 1 ? second : defaultNutritionPart);
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
-  expect(body.narrative.nutritionAdvice).toEqual(defaultNutritionPart);
+  expect(plainPart(body.narrative.nutritionAdvice)).toEqual(defaultNutritionPart);
   expect(getCalls()).toBe(6);
 });
 
@@ -815,7 +860,7 @@ test("missing details leave unsupported passages empty without an unavailable-da
   });
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
-  expect(body.narrative).toEqual(draft);
+  expect(plainNarrative(body.narrative)).toEqual(draft);
   expect(body.omittedNarrativeFields).toEqual([]);
   expect(prompts[0]).toContain('text "" and evidenceIds []');
   expect(prompts[0]).not.toContain("No product plan is selected");
@@ -867,7 +912,7 @@ test("a repeatedly rejected passage is omitted after one revision while supporte
   expect(body.issues).toEqual([]);
   expect(body.omittedNarrativeFields).toEqual(["overview"]);
   expect(body.narrative.overview).toEqual({ text: "", evidenceIds: [] });
-  expect(body.narrative.keyFindings).toEqual(safePart);
+  expect(plainPart(body.narrative.keyFindings)).toEqual(safePart);
   expect(getCalls()).toBe(4);
 });
 
@@ -878,7 +923,7 @@ test("a still-unsupported number is omitted even if the reviewer accepts it", as
   expect(body.status).toBe("READY");
   expect(body.omittedNarrativeFields).toEqual(["actionSummary"]);
   expect(body.narrative.actionSummary).toEqual({ text: "", evidenceIds: [] });
-  expect(body.narrative.overview).toEqual(safePart);
+  expect(plainPart(body.narrative.overview)).toEqual(safePart);
   expect(getCalls()).toBe(4);
 });
 
@@ -888,7 +933,7 @@ test("model punctuation and emoji are cleaned before independent clinical review
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
   expect(body.omittedNarrativeFields).toEqual([]);
-  expect(body.narrative.overview).toEqual({ text: "Review risk. Monitor intake, today", evidenceIds: ["fact:niq_risk"] });
+  expect(plainPart(body.narrative.overview)).toEqual({ text: "Review risk. Monitor intake, today", evidenceIds: ["fact:niq_risk"] });
   expect(getCalls()).toBe(2);
   expect(validateNarrative(normalizeNarrativePunctuation(styled), [{ id: "fact:niq_risk", text: "Review risk and monitor intake." }]).issues).not.toContain("overview:REPORT_STYLE");
 });
