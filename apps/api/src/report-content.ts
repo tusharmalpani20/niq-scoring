@@ -3,7 +3,7 @@ import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-ass
 import { classOnlyToxicity, resolveReportGuidance } from "@niq-scoring/contracts/report-guidance";
 import { resolveCarePlanGuidance } from "@niq-scoring/contracts/care-plan-resolver";
 import { productExceptionActionText, productIdentityName, productPlanItems } from "@niq-scoring/contracts/product-guidance";
-import { cancerTypeIds } from "@niq-scoring/contracts/cancer-type-ids";
+import { cancerTypeIds, cancerTypeLabels } from "@niq-scoring/contracts/cancer-type-ids";
 import type { Product } from "./product-catalog";
 
 const id = z.string().regex(/^[a-z][a-z0-9_]{0,79}$/);
@@ -230,6 +230,10 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
   }
   if (facts.plannedTreatmentStartDate && facts.plannedTreatmentStartDate > facts.assessmentDate) {
     evidence.push({ id: "fact:planned_treatment_start", text: `Treatment is planned to start on ${facts.plannedTreatmentStartDate}. This date is after the assessment date ${facts.assessmentDate}, so treatment is not confirmed as already underway.` });
+  }
+  if (facts.cancerTypeId && facts.cancerTypeId !== "cancer_other" && facts.cancerTypeId !== "cancer_unknown") {
+    const diagnosis = cancerTypeLabels[facts.cancerTypeId as (typeof cancerTypeIds)[number]];
+    evidence.push({ id: "fact:diagnosis", text: `Recorded cancer diagnosis: ${diagnosis}.` });
   }
   for (const fieldId of ["gastrointestinal_symptoms", "dietary_symptoms", "appetite_status"] as const) {
     const answer = facts.assessmentAnswers?.[fieldId];

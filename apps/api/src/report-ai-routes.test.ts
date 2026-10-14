@@ -117,7 +117,7 @@ test("the reviewer receives independent fixed checks beyond editable wording", a
   expect(systems.reviewer).toContain("concise, self-contained synthesis of the supported diagnosis and treatment context");
   expect(systems.reviewer).toContain("When matched kidney disease is present, also flag direct fluid or ORS");
   expect(systems.writer).toContain("matched treatment-status or treatment guidance");
-  expect(systems.writer).toContain("highlight one to three distinct, evidence-supported priority phrases");
+    expect(systems.writer).toContain("let a reader skim the core meaning of an actionable sentence");
   expect(systems.writer).not.toContain("independently reviewing a writer draft");
 });
 
@@ -257,6 +257,15 @@ test("weight evidence states direction and avoids inventing a time interval", ()
   const evidence = reportEvidence(definition, facts, { id: "low", label: "Low Risk" }, packet);
   expect(evidence.find(row => row.id === "fact:weight_direction")?.text).toContain("Recorded weight loss: 67 kg previously and 63 kg currently (6%).");
   expect(evidence.find(row => row.id === "fact:weight_direction")?.text).toContain("reported as 1–2 months ago; its exact measurement date is unknown");
+});
+
+test("recorded cancer diagnosis is available to the summary writer", () => {
+  const definition = createFinalAssessmentTemplate("Diagnosis evidence");
+  const facts = { reviewedScore: 12, treatmentTypeIds: [], drugClassIds: [], confirmedToxicityIds: [],
+    cancerTypeId: "cancer_6", assessmentDate: "2026-01-12", observations: [] };
+  const packet = matchedReportPacket(definition, facts, "low", facts.assessmentDate);
+  const evidence = reportEvidence(definition, facts, { id: "low", label: "Low Risk" }, packet);
+  expect(evidence.find(row => row.id === "fact:diagnosis")?.text).toBe("Recorded cancer diagnosis: Pancreatic cancer.");
 });
 
 test("the closing summary can cite recorded treatment context", () => {
