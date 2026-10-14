@@ -195,8 +195,10 @@ test("the reviewer receives independent fixed checks beyond editable wording", a
   expect(systems.reviewer).toContain("early oral nutrition supplements");
   expect(systems.reviewer).toContain("concise, self-contained synthesis of the supported diagnosis and treatment context");
   expect(systems.reviewer).toContain("When matched kidney disease is present, also flag direct fluid or ORS");
+  expect(systems.reviewer).toContain("Reject a shortened product name in exception advice");
   expect(systems.writer).toContain("matched treatment-status or treatment guidance");
   expect(systems.writer).toContain("A separate pass will choose the phrases to emphasize after clinical review");
+  expect(systems.writer).toContain("use its exact full product name from matched evidence");
   expect(systems.writer).not.toContain("independently reviewing a writer draft");
 });
 
