@@ -29,6 +29,7 @@ const environmentSchema = z.object({
   FACE_SCAN_WEBHOOK_SECRET: optionalSetting(z.string().min(24)),
   ENABLE_PROVISIONAL_SCORING: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   OPENROUTER_API_KEY: optionalSetting(z.string().min(1)),
+  REPORT_AI_PROVIDER_ENABLED: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
 });
 
 export type Environment = z.infer<typeof environmentSchema>;

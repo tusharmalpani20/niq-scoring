@@ -51,6 +51,7 @@ export type ReportRunPage = { items: ReportRunSummary[]; total: number; page: nu
 export interface ReportGenerationStore {
   // A matching v1 fingerprint permits an in-flight run to finish across the v2 rollout.
   reserve(input: NewReportRun, legacyFingerprint?: string): Promise<ReportRunReservation>;
+  renew(runId: string, attemptId: string): Promise<boolean>;
   appendCall(runId: string, attemptId: string, call: ReportCall): Promise<boolean>;
   finish(runId: string, attemptId: string, status: "READY" | "REVIEW_REQUIRED" | "FAILED", response: unknown | null, errorCode?: string): Promise<boolean>;
   list(input: { page: number; pageSize: number; clientId?: string }): Promise<ReportRunPage>;
@@ -84,6 +85,12 @@ export class MemoryReportGenerationStore implements ReportGenerationStore {
     const run = this.runs.find(row => row.id === runId);
     if (!run || run.attemptId !== attemptId || run.status !== "PROCESSING" || run.leaseExpiresAt <= this.now()) return false;
     this.calls.push({ runId, call });
+    return true;
+  }
+  async renew(runId: string, attemptId: string) {
+    const run = this.runs.find(row => row.id === runId);
+    if (!run || run.attemptId !== attemptId || run.status !== "PROCESSING" || run.leaseExpiresAt <= this.now()) return false;
+    run.leaseExpiresAt = new Date(this.now().getTime() + REPORT_RUN_LEASE_MS);
     return true;
   }
   async finish(runId: string, attemptId: string, status: "READY" | "REVIEW_REQUIRED" | "FAILED", response: unknown | null, errorCode?: string) {
@@ -130,6 +137,11 @@ export class PostgresReportGenerationStore implements ReportGenerationStore {
       select id from report_generation_runs where id=${runId} and attempt_id=${attemptId} and status='PROCESSING' and lease_expires_at>clock_timestamp() for update
     ) insert into report_generation_calls (id,run_id,step,status,model,provider,generation_id,prompt_tokens,completion_tokens,reasoning_tokens,cost_usd,latency_ms,error_code) select ${createEntityId()},id,${call.step},${call.status},${call.model},${call.provider},${call.generationId},${call.promptTokens},${call.completionTokens},${call.reasoningTokens},${call.costUsd},${call.latencyMs},${call.errorCode} from current_run returning id`;
     return inserted.length > 0;
+  }
+  async renew(runId: string, attemptId: string) {
+    const updated = await this.database`update report_generation_runs set lease_expires_at=clock_timestamp()+${REPORT_RUN_LEASE_MS}*interval '1 millisecond'
+      where id=${runId} and attempt_id=${attemptId} and status='PROCESSING' and lease_expires_at>clock_timestamp() returning id`;
+    return updated.length > 0;
   }
   async finish(runId: string, attemptId: string, status: "READY" | "REVIEW_REQUIRED" | "FAILED", response: unknown | null, errorCode?: string) {
     const updated = await this.database`update report_generation_runs set status=${status},response=${response === null ? null : this.database.json(response as never)},error_code=${errorCode ?? null},completed_at=now() where id=${runId} and attempt_id=${attemptId} and status='PROCESSING' and lease_expires_at>clock_timestamp() returning id`;

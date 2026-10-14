@@ -293,6 +293,30 @@ export const adminSessions = pgTable("admin_sessions", {
   userId: varchar("user_id", { length: 26 }).notNull().references(() => adminUsers.id),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+// A durable submission envelope. The response is scoped to the deployment,
+// and worker leases allow a crashed service to resume the same job.
+export const reportContentJobs = pgTable("report_content_jobs", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  credentialId: varchar("credential_id", { length: 26 }).notNull(),
+  clientId: varchar("client_id", { length: 26 }).notNull(),
+  deploymentId: varchar("deployment_id", { length: 26 }).notNull(),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  fingerprint: varchar("fingerprint", { length: 128 }).notNull(),
+  input: jsonb("input").notNull(),
+  status: varchar("status", { length: 30 }).notNull(),
+  response: jsonb("response"),
+  errorCode: varchar("error_code", { length: 80 }),
+  attemptId: varchar("attempt_id", { length: 26 }),
+  attempts: integer("attempts").notNull().default(0),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  uniqueIndex("report_content_jobs_idempotency_uq").on(table.deploymentId, table.idempotencyKey),
+  index("report_content_jobs_queue_idx").on(table.status, table.createdAt),
+  check("report_content_jobs_status_ck", sql`${table.status} in ('QUEUED','PROCESSING','READY','REVIEW_REQUIRED','FAILED')`),
+  foreignKey({ columns: [table.clientId, table.deploymentId], foreignColumns: [deployments.clientId, deployments.id], name: "report_content_jobs_client_deployment_fk" }),
+]);
 export const adminAuthAttempts = pgTable("admin_auth_attempts", {
   key: varchar("key", { length: 100 }).primaryKey(),
   count: integer("count").notNull(),

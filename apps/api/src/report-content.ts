@@ -359,7 +359,7 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   // empty field and the reviewer accepted it.
   for (const [field, prefixes] of [
     ["nutritionAdvice", ["rule:nutrition:"]],
-    ["treatmentAdvice", ["rule:status:", "rule:treatment:", "rule:class:"]],
+    ["treatmentAdvice", ["rule:status:", "rule:treatment:", "rule:class:", "rule:exception:"]],
     ["conditionAdvice", ["rule:comorbidity:"]],
     ["effectsAdvice", ["rule:toxicity:"]],
   ] as const) {

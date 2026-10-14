@@ -5,6 +5,7 @@ import { RuleStoreError } from "./rule-store";
 import { installAssessmentRoutes } from "./assessment-routes";
 import { installReportAiRoutes } from "./report-ai-routes";
 import { MemoryReportGenerationStore, type ReportGenerationStore } from "./report-generation-store";
+import { MemoryReportContentJobStore, type ReportContentJobStore } from "./report-content-job-store";
 import type { ReportTextProvider } from "./openrouter-report-client";
 import { ruleChecksum } from "./rule-routes";
 import { installRuleRoutes } from "./rule-routes";
@@ -47,6 +48,8 @@ export interface AppOptions {
   readinessCheck?: () => Promise<boolean>;
   now?: () => Date;
   reportGenerationStore?: ReportGenerationStore;
+  reportContentJobStore?: ReportContentJobStore;
+  onReportJobTick?: (tick: () => Promise<void>) => void;
   reportTextProvider?: ReportTextProvider;
 }
 
@@ -326,8 +329,10 @@ export function createApp(options: AppOptions) {
 
   installOrganizationInfoRoute(app, options.store, authenticateDeployment, now);
   installAssessmentRoutes(app, options.store, authenticateDeployment, now, options.platformEnabled ?? true);
-  installReportAiRoutes(app, { scoringStore: options.store, runStore: options.reportGenerationStore ?? new MemoryReportGenerationStore(),
+  const reportJobTick = installReportAiRoutes(app, { scoringStore: options.store, runStore: options.reportGenerationStore ?? new MemoryReportGenerationStore(),
+    jobStore: options.reportContentJobStore ?? new MemoryReportContentJobStore(),
     authenticate: authenticateDeployment, ...(options.reportTextProvider ? { provider: options.reportTextProvider } : {}), platformEnabled: options.platformEnabled ?? true });
+  options.onReportJobTick?.(reportJobTick);
 
   app.post("/v1/provisional/calculate", async (context) => {
     if (!provisionalScoringEnabled) return context.json({ error: "PROVISIONAL_SCORING_DISABLED" }, 503);

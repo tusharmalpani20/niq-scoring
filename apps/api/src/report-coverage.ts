@@ -27,7 +27,7 @@ export function requiredCoverageSources(evidence: ReportEvidence[]): CoverageSou
   const sources: CoverageSource[] = [];
   for (const item of evidence) {
     if (item.id.startsWith("rule:nutrition:")) sources.push({ ...item, field: "nutritionAdvice" });
-    else if (item.id.startsWith("rule:class:"))
+    else if (["rule:status:", "rule:treatment:", "rule:class:", "rule:exception:"].some(prefix => item.id.startsWith(prefix)))
       sources.push({ ...item, field: "treatmentAdvice" });
   }
   return sources;

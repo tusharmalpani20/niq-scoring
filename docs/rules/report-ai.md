@@ -14,8 +14,10 @@ or free-form clinical notes at this endpoint.
   existing rule lifecycle; copy it to a draft to change prompts.
 - Older active versions without `reportAi` use the fixed `baseline-v1` prompt
   configuration. The response and usage log identify this fallback.
-- Set `OPENROUTER_API_KEY` on the Scoring server and apply migration `0023`.
-  The key is never returned to Application or the admin UI.
+- Apply the Scoring migrations, including `0028_report_content_jobs`. Set
+  `OPENROUTER_API_KEY` and `REPORT_AI_PROVIDER_ENABLED=true` when provider calls
+  are ready to resume. The provider is disabled by default; the key is never
+  returned to Application or the admin UI.
 - OpenRouter requests require Azure routing, zero data retention, denied provider
   data collection, and no provider fallback. A response that explicitly identifies
   another provider is rejected. If OpenRouter has no Azure zero-retention endpoint
@@ -24,7 +26,13 @@ or free-form clinical notes at this endpoint.
 
 ## API
 
-`POST /v1/assessments/report-content` requires the deployment bearer credential.
+Application uses `POST /v1/assessments/report-content/jobs` to submit a durable
+job and `GET /v1/assessments/report-content/jobs/:runId` to read its status and
+completed response. Both require the deployment bearer credential. Repeating a
+submission with the same idempotency key and facts returns the same job. The
+older synchronous `POST /v1/assessments/report-content` remains available.
+
+The submission
 It accepts the pinned assessment reference, a completed Scoring result reference,
 an idempotency key, and reviewed structured facts with the completed assessment
 date. The reviewed score must equal
@@ -37,7 +45,7 @@ the allowlisted fields. Scoring does not retain a second assessment-answer snaps
 and therefore cannot independently compare those facts with the original answers.
 Any other integration using a deployment credential must uphold the same boundary.
 
-Scoring resolves only matched guidance. The response contains four short narrative
+Scoring resolves only matched guidance. The response contains nine narrative
 fields with evidence IDs, resolved guidance, result and rule provenance, model,
 prompt/schema versions, run ID, status, and issue codes. Possible treatment
 toxicities carry conditional nutrition guidance and remain separate from confirmed
@@ -48,19 +56,27 @@ When no single Products & doses rule is selected, Scoring omits the product plan
 and product exception wording from the report packet. Other matched sections can
 still be generated.
 
-The server runs one writer call, one reviewer call, and at most one targeted writer
-revision. A revised draft receives a second reviewer call. Local schema and
-evidence checks run independently of the model reviewer. Reviewer issues receive
-at most one targeted revision. If issues remain, the affected passage is omitted
-while supported passages can still produce a `READY` result. A failed provider call
-cannot produce a `READY` result. Application stores the finished PDF after the one
-final clinical approval of the assessment. There is no second report approval in
-this workflow.
+The report coordinator holds the pinned matched evidence and decides whether a
+draft can issue. It calls specialized writer, reviewer, coverage, intervention
+summary, and highlighter workers. The writer can repair passages after reviewer
+or coverage findings. Local schema and evidence checks are independent of the
+model reviewer. Coverage checks matched nutrition, treatment-status, drug-class,
+treatment, and product-exception guidance, preserving distinct source meaning,
+possible-effect summaries must pass their own audit, and highlighting may only
+mark exact phrases from approved text. The coordinator makes the final `READY`
+or `REVIEW_REQUIRED` decision; workers cannot approve their own output.
 
-The workflow is an explicit bounded function rather than a LangGraph dependency:
-the stages, retries, and durability are limited and visible in the Scoring store.
-Provider retries occur only for transient failures. An orchestration library can be
-introduced when the workflow actually needs branching or long-running resumptions.
+These are distinct role-specific model calls inside one durable Scoring job, not
+separately queued services. The job store persists input, status, lease, attempts,
+and the final response; the generation store records each worker call and fences
+late attempts. Active model work renews both attempt-fenced leases each minute.
+If either renewal fails, that attempt stops before another model step or final
+approval. If the provider is disabled, fails, or its output needs review,
+the coordinator tries a deterministic fallback from pinned matched rules. The
+fallback issues `READY` only when its source and coverage checks pass; conflicting
+or incomplete rules fail rather than producing unsupported patient advice.
+Application stores the PDF after final clinical approval of the assessment.
+There is no separate manual report approval in this workflow.
 
 `GET /admin/report-ai/models` lists the allowed model. `GET /admin/report-ai/runs`
 supports `page`, `pageSize`, and optional `clientId`. It returns run status and

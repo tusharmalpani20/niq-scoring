@@ -7,6 +7,7 @@ import { createApp } from "./app";
 import { PostgresScoringStore } from "./postgres-store";
 import { createFaceScanAdapter } from "./face-scan";
 import { PostgresReportGenerationStore } from "./report-generation-store";
+import { PostgresReportContentJobStore } from "./report-content-job-store";
 import { OpenRouterReportClient } from "./openrouter-report-client";
 
 const environment = parseEnvironment(Bun.env);
@@ -20,13 +21,17 @@ const workflow = environment.FACE_SCAN_ENCRYPTION_KEY && environment.CAREPLIX_AC
       minDispatchIntervalMs: environment.FACE_SCAN_MIN_DISPATCH_INTERVAL_MS,
       provider: new HttpCarePlixProvider({ baseUrl: environment.CAREPLIX_API_BASE_URL ?? "https://disabled.invalid", apiKey: environment.CAREPLIX_API_KEY ?? "", apiSecret: environment.CAREPLIX_API_SECRET ?? "" }),
     }) : undefined;
+let reportJobTick: (() => Promise<void>) | undefined;
 const app = createApp({
   ...(workflow ? { faceScanWorkflow: workflow } : {}),
   faceScanWebhookConfirmed: environment.FACE_SCAN_WEBHOOK_BEARER_CONFIRMED,
   ...(environment.FACE_SCAN_WEBHOOK_SECRET ? { faceScanWebhookSecret: environment.FACE_SCAN_WEBHOOK_SECRET } : {}),
   store: new PostgresScoringStore(database),
   reportGenerationStore: new PostgresReportGenerationStore(database),
-  ...(environment.OPENROUTER_API_KEY ? { reportTextProvider: new OpenRouterReportClient(environment.OPENROUTER_API_KEY) } : {}),
+  reportContentJobStore: new PostgresReportContentJobStore(database),
+  onReportJobTick: tick => { reportJobTick = tick; },
+  ...(environment.REPORT_AI_PROVIDER_ENABLED && environment.OPENROUTER_API_KEY
+    ? { reportTextProvider: new OpenRouterReportClient(environment.OPENROUTER_API_KEY) } : {}),
   authStore: new PostgresAdminAuthStore(database),
   ...(environment.ADMIN_BOOTSTRAP_TOKEN ? { adminBootstrapToken: environment.ADMIN_BOOTSTRAP_TOKEN } : {}),
   allowedOrigins: environment.CORS_ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()),
@@ -48,6 +53,7 @@ const app = createApp({
           and to_regclass('public.admin_auth_attempts') is not null
           and to_regclass('public.report_generation_runs') is not null
           and to_regclass('public.report_generation_calls') is not null
+          and to_regclass('public.report_content_jobs') is not null
           and exists(select 1 from information_schema.columns where table_schema='public' and table_name='report_generation_runs' and column_name='attempt_id')
           and exists(select 1 from information_schema.columns where table_schema='public' and table_name='report_generation_runs' and column_name='lease_expires_at')
           and to_regclass('public.products') is not null
@@ -78,4 +84,17 @@ if (workflow) setInterval(async () => {
   try { await workflow.tick(); if (++workerTicks % 12 === 0) console.info(JSON.stringify({ event: "face_scan_worker_metrics", ...await workflow.metrics() })); }
   catch { console.error(JSON.stringify({ event: "face_scan_worker_error" })); }
   finally { workerRunning = false; }
+}, 5_000);
+
+let reportWorkerRunning = false;
+setInterval(async () => {
+  if (reportWorkerRunning || !reportJobTick) return;
+  reportWorkerRunning = true;
+  try { await reportJobTick(); }
+  catch (error) {
+    const failure = error as { name?: string; code?: string; message?: string };
+    console.error(JSON.stringify({ event: "report_worker_error", name: failure?.name ?? "UnknownError",
+      code: failure?.code ?? null, message: failure?.message?.slice(0, 200) ?? "Report worker failed" }));
+  }
+  finally { reportWorkerRunning = false; }
 }, 5_000);
