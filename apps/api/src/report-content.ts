@@ -194,8 +194,8 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
     // Give the report agent every enabled intervention for the selected
     // treatment and drug class. These are options, not observed symptoms.
     possibleToxicities: report.possibleToxicities.filter(row => !row.requiresDrugConfirmation)
-      .map(({ id, classId, treatmentTypeId, nutritionalInterventions, requiresDrugConfirmation }) =>
-        ({ id, classId, treatmentTypeId, nutritionalInterventions, requiresDrugConfirmation })),
+      .map(({ id, classId, treatmentTypeId, expectedToxicity, nutritionalInterventions, requiresDrugConfirmation }) =>
+        ({ id, classId, treatmentTypeId, expectedToxicity, nutritionalInterventions, requiresDrugConfirmation })),
     classGuidance: report.classGuidance,
     carePlan: {
       nutritionalStatus: care.nutritionalStatus,
@@ -348,7 +348,7 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   const evidenceById = new Map(evidence.map(item => [item.id, item.text]));
   const requiredGuidance: Partial<Record<keyof ReportNarrative, readonly string[]>> = {
     nutritionAdvice: ["rule:nutrition:"],
-    treatmentAdvice: ["rule:status:", "rule:treatment:", "rule:class:", "rule:exception:", "possible:toxicity:"],
+    treatmentAdvice: ["rule:status:", "rule:treatment:", "rule:class:", "rule:exception:"],
     conditionAdvice: ["rule:comorbidity:"],
     effectsAdvice: ["rule:toxicity:", "possible:toxicity:", "rule:status:", "rule:treatment:"],
   };
@@ -367,10 +367,6 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     if (required.some(item => !parsed.data[field].evidenceIds.includes(item.id)))
       issues.push(`${field}:MISSING_MATCHED_COVERAGE`);
   }
-  const classCandidates = evidence.filter(item => item.id.startsWith("possible:toxicity:")
-    && !item.text.includes("Named-drug confirmation is required"));
-  if (classCandidates.some(item => !parsed.data.treatmentAdvice.evidenceIds.includes(item.id)))
-    issues.push("treatmentAdvice:MISSING_CANDIDATE_COVERAGE");
   const renalTargetsIndividualized = evidence.some(item => item.id.startsWith("rule:comorbidity:") &&
     /\b(?:kidney|renal)\b/i.test(item.text) && /\bindividuali[sz]/i.test(item.text));
   if (renalTargetsIndividualized) {

@@ -27,10 +27,66 @@ export function requiredCoverageSources(evidence: ReportEvidence[]): CoverageSou
   const sources: CoverageSource[] = [];
   for (const item of evidence) {
     if (item.id.startsWith("rule:nutrition:")) sources.push({ ...item, field: "nutritionAdvice" });
-    else if (item.id.startsWith("possible:toxicity:") || item.id.startsWith("rule:class:"))
+    else if (item.id.startsWith("rule:class:"))
       sources.push({ ...item, field: "treatmentAdvice" });
   }
   return sources;
+}
+
+export type InterventionSummary = { evidenceId: string; text: string };
+const summarySchema = z.object({ rows: z.array(z.object({ evidenceId: z.string(), text: z.string().trim().min(1).max(1800) }).strict()).max(150) }).strict();
+export const interventionSummaryJsonSchema = {
+  type: "object", additionalProperties: false, required: ["rows"],
+  properties: { rows: { type: "array", items: { type: "object", additionalProperties: false,
+    required: ["evidenceId", "text"], properties: { evidenceId: { type: "string" }, text: { type: "string" } },
+  } } },
+};
+
+/** Keep exactly one supported, conditional summary for each matched candidate. */
+export function assessInterventionSummaries(value: unknown, sources: ReportEvidence[]): {
+  rows: InterventionSummary[] | null; issues: string[];
+} {
+  const parsed = summarySchema.safeParse(value);
+  if (!parsed.success || parsed.data.rows.length !== sources.length)
+    return { rows: null, issues: ["INVALID_INTERVENTION_SUMMARIES"] };
+  const sourceById = new Map(sources.map(item => [item.id, item.text]));
+  const seen = new Set<string>();
+  const issues: string[] = [];
+  for (const row of parsed.data.rows) {
+    const source = sourceById.get(row.evidenceId);
+    if (!source || seen.has(row.evidenceId)) return { rows: null, issues: ["INVALID_INTERVENTION_SUMMARIES"] };
+    seen.add(row.evidenceId);
+    const sourceNumbers = new Set(source.match(/\d+(?:\.\d+)?/gu) ?? []);
+    if ((row.text.match(/\d+(?:\.\d+)?/gu) ?? []).some(number => !sourceNumbers.has(number)))
+      issues.push(`${row.evidenceId}:UNSUPPORTED_NUMBER`);
+    if (/\b(?:hba1c|a1c|glycated\s+ha?emoglobin)\b/i.test(row.text))
+      issues.push(`${row.evidenceId}:EXCLUDED_REPORT_TERM`);
+    if (/\b(?:you have developed|you are experiencing|chemotherapy has caused)\b/i.test(row.text))
+      issues.push(`${row.evidenceId}:POSSIBLE_EFFECT_AS_CONFIRMED`);
+  }
+  return { rows: issues.length ? null : parsed.data.rows, issues };
+}
+
+export function assessInterventionSummaryCoverage(value: unknown, sources: ReportEvidence[], summaries: InterventionSummary[]): {
+  accepted: boolean; gaps: Array<{ id: string; missing: string[] }>; invalid: boolean;
+} {
+  const parsed = coverageSchema.safeParse(value);
+  if (!parsed.success || parsed.data.rows.length !== sources.length || summaries.length !== sources.length)
+    return { accepted: false, gaps: [], invalid: true };
+  const sourceIds = new Set(sources.map(item => item.id));
+  const summaryIds = new Set(summaries.map(item => item.evidenceId));
+  if (sourceIds.size !== sources.length || summaryIds.size !== sources.length ||
+      [...sourceIds].some(id => !summaryIds.has(id)))
+    return { accepted: false, gaps: [], invalid: true };
+  const seen = new Set<string>();
+  const gaps: Array<{ id: string; missing: string[] }> = [];
+  for (const row of parsed.data.rows) {
+    if (!sourceIds.has(row.evidenceId) || seen.has(row.evidenceId) || row.covered === (row.missing.length > 0))
+      return { accepted: false, gaps: [], invalid: true };
+    seen.add(row.evidenceId);
+    if (!row.covered) gaps.push({ id: row.evidenceId, missing: row.missing });
+  }
+  return { accepted: gaps.length === 0, gaps, invalid: false };
 }
 
 export type CoverageGap = { id: string; field: CoverageField; missing: string[] };

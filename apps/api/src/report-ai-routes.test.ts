@@ -19,7 +19,7 @@ const safeNarrative = { overview: safePart, keyFindings: safePart, actionSummary
   nutritionAdvice: defaultNutritionPart, treatmentAdvice: omittedPart, conditionAdvice: omittedPart, effectsAdvice: omittedPart };
 const noGuidanceNarrative = { ...safeNarrative, nutritionAdvice: omittedPart };
 const usage = { model: "openai/gpt-6-luna", provider: "test-provider", generationId: "gen-test", promptTokens: 120, completionTokens: 40, reasoningTokens: 5, costUsd: 0.001, latencyMs: 10 };
-type Step = "writer" | "reviewer" | "revision" | "coverage" | "highlighter";
+type Step = "writer" | "reviewer" | "revision" | "coverage" | "summarizer" | "highlighter";
 const plainPart = (part: { text: string; evidenceIds: string[] }) => ({ ...part, text: part.text.replaceAll("**", "") });
 
 function fixtureHighlights(user: string) {
@@ -53,7 +53,8 @@ function fixtureHighlights(user: string) {
 }
 
 function fixtureCoverage(user: string) {
-  const rows = JSON.parse(user.split("Source rows: ")[1]!.split("\nReport fields: ")[0]!) as Array<{ id: string }>;
+  const source = user.includes("Candidate source rows: ") ? user.split("Candidate source rows: ")[1]!.split("\nCandidate summaries: ")[0]! : user.split("Source rows: ")[1]!.split("\nReport fields: ")[0]!;
+  const rows = JSON.parse(source) as Array<{ id: string }>;
   return { rows: rows.map(row => ({ evidenceId: row.id, covered: true, missing: [] })) };
 }
 
@@ -76,6 +77,7 @@ async function setup(handler: (step: Step, call: number, user: string, system: s
   let calls = 0;
   const provider: ReportTextProvider = { complete: async ({ step, user, system }) => ({
     content: step === "coverage" ? coverageAuditor?.(user) ?? fixtureCoverage(user)
+      : step === "summarizer" ? { rows: (JSON.parse(user.split("Source rows: ")[1]!.split("\nPatient safety context: ")[0]!) as Array<{ id: string; text: string }>).map(row => ({ evidenceId: row.id, text: `If this possible effect occurs, discuss nutrition care with your team. ${row.text.replace(/^.*Source guidance: /, "")}` })) }
       : step === "highlighter"
       ? highlighter?.(user) ?? fixtureHighlights(user)
       : await handler(step, ++calls, user, system), usage,
@@ -656,7 +658,7 @@ test("all treatment and class candidates reach the agent while reported effects 
   expect(candidateIds).toContain("toxicity_row_006");
   expect(candidateIds).toContain("toxicity_row_009");
   expect(none.guidance.possibleToxicities.every((item: { requiresDrugConfirmation: boolean }) => !item.requiresDrugConfirmation)).toBe(true);
-  expect(none.guidance.possibleToxicities[0]).not.toHaveProperty("expectedToxicity");
+  expect(none.guidance.possibleToxicities[0]).toHaveProperty("expectedToxicity");
   expect(none.guidance.toxicityInterventions).toEqual([]);
   expect(writerInputs[0]).toContain("possible:toxicity:toxicity_row_002");
   for (const id of candidateIds) expect(writerInputs[0]).toContain(`possible:toxicity:${id}`);
@@ -679,15 +681,15 @@ test("class candidate coverage stays conditional and named-drug candidates are r
     { id: "possible:toxicity:second", text: "Conditional class-and-treatment candidate: taste changes. This is a possible effect, not a patient symptom or treatment causation." },
     { id: "possible:toxicity:drug", text: "Candidate guidance for the selected treatment and drug class. This is not evidence that the patient has an effect. Named-drug confirmation is required before applying this drug-specific advice. Avoid grapefruit during treatment." },
   ];
-  expect(validateNarrative(noGuidanceNarrative, evidence).issues).toContain("treatmentAdvice:MISSING_CANDIDATE_COVERAGE");
+  expect(validateNarrative(noGuidanceNarrative, evidence).issues).toEqual([]);
   const conditional = { ...noGuidanceNarrative, treatmentAdvice: {
     text: "Possible mouth discomfort may occur. If it does, choose soft foods.", evidenceIds: ["possible:toxicity:general"],
   } };
-  expect(validateNarrative(conditional, evidence).issues).toContain("treatmentAdvice:MISSING_CANDIDATE_COVERAGE");
+  expect(validateNarrative(conditional, evidence).issues).toContain("treatmentAdvice:MISSING_MATCHED_GUIDANCE");
   const covered = { ...conditional, treatmentAdvice: {
     text: "Possible mouth discomfort and taste changes may occur.", evidenceIds: ["possible:toxicity:general", "possible:toxicity:second"],
   } };
-  expect(validateNarrative(covered, evidence).issues).toEqual([]);
+  expect(validateNarrative(covered, evidence).issues).toContain("treatmentAdvice:MISSING_MATCHED_GUIDANCE");
   const drugSpecific = { ...noGuidanceNarrative, treatmentAdvice: {
     text: "Avoid grapefruit during treatment.", evidenceIds: ["possible:toxicity:drug"],
   } };
