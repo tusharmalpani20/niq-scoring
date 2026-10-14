@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { narrativeFieldNames, type ReportNarrative } from "./report-content";
+import { narrativeFieldNames, type ReportNarrative, type CompleteReportNarrative } from "./report-content";
 
 const selectionSchema = z.object({
   phrase: z.string().min(1).max(180),
@@ -19,10 +19,10 @@ export function highlightJsonSchema(fields: readonly string[] = narrativeFieldNa
   };
 }
 
-export function plainNarrative(narrative: ReportNarrative): ReportNarrative {
+export function plainNarrative(narrative: ReportNarrative): CompleteReportNarrative {
   return Object.fromEntries(narrativeFieldNames.map(field => [field, {
-    ...narrative[field], text: narrative[field].text.replaceAll("**", ""),
-  }])) as ReportNarrative;
+    ...(narrative[field] ?? { text: "", evidenceIds: [] }), text: (narrative[field]?.text ?? "").replaceAll("**", ""),
+  }])) as CompleteReportNarrative;
 }
 
 const sentenceSegmenter = new Intl.Segmenter("en", { granularity: "sentence" });
@@ -41,7 +41,7 @@ function requiredHighlights(field: (typeof narrativeFieldNames)[number], text: s
 }
 
 /** The model supplies only selections; this checks exact spans and editorial coverage. */
-export function assessNarrativeHighlights(narrative: ReportNarrative, proposed: unknown) {
+export function assessNarrativeHighlights(narrative: ReportNarrative | CompleteReportNarrative, proposed: unknown) {
   const plain = plainNarrative(narrative);
   const parsed = highlightSchema.safeParse(proposed);
   const selected = parsed.success ? parsed.data : null;
@@ -97,7 +97,7 @@ export function assessNarrativeHighlights(narrative: ReportNarrative, proposed: 
 }
 
 /** After model repair fails, use only short, complete sentences that pass the same checks. */
-export function completeNarrativeHighlights(narrative: ReportNarrative, current: HighlightSelections) {
+export function completeNarrativeHighlights(narrative: ReportNarrative | CompleteReportNarrative, current: HighlightSelections) {
   const plain = plainNarrative(narrative);
   const selected = structuredClone(current);
   let assessment = assessNarrativeHighlights(plain, selected);

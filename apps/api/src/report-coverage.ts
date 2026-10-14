@@ -106,7 +106,11 @@ export function assessCoverage(value: unknown, sources: CoverageSource[], narrat
       return { accepted: false, gaps: [], invalid: true };
     seen.add(row.evidenceId);
     // A row cannot be covered by prose in another section or an empty passage.
-    if (!narrative[source.field].text.trim() || !narrative[source.field].evidenceIds.includes(source.id))
+    const empty = { text: "", evidenceIds: [] as string[] };
+    const shared = [narrative.redFlagsAdvice ?? empty, narrative.foodSafetyAdvice ?? empty];
+    const designated = narrative[source.field];
+    const cited = designated.evidenceIds.includes(source.id) || shared.some(part => part.evidenceIds.includes(source.id));
+    if ((!designated.text.trim() && !shared.some(part => part.text.trim())) || !cited)
       gaps.push({ id: source.id, field: source.field, missing: ["The matching advice is absent from its report section."] });
     else if (!row.covered) gaps.push({ id: source.id, field: source.field, missing: row.missing });
   }

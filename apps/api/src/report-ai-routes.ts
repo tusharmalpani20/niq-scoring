@@ -9,7 +9,7 @@ import type { DeploymentIdentity, ScoringStore } from "./store";
 import type { ReportGenerationStore } from "./report-generation-store";
 import type { ReportContentJobStore } from "./report-content-job-store";
 import { buildDeterministicReportFallback, ReportFallbackError } from "./report-fallback";
-import { coordinateReportAgents } from "./report-agent-coordinator";
+import { manageReportAgents } from "./report-manager";
 import { createReportAgentWorkers, ReportAttemptLost } from "./report-agent-worker";
 import { REPORT_AI_ACTIVE_MODEL, ReportModelError, type ReportTextProvider } from "./openrouter-report-client";
 import { eligibleClinicianToxicityOptions, matchedReportPacket, reportContentRequestSchema, reportEvidence, reportToxicityOptionsRequestSchema, validateReportFacts, validateReportSelection, type ReportContentRequest } from "./report-content";
@@ -88,7 +88,7 @@ export function installReportAiRoutes(app: Hono, options: {
       const guidance = matchedReportPacket(definition, input.facts, classification.id, input.facts.assessmentDate, await scoringStore.products.list());
       const evidence = reportEvidence(definition, input.facts, { id: classification.id, label: classification.label }, guidance);
       if (evidence.length > 500 || JSON.stringify(evidence).length > 80_000) return c.json({ error: "REPORT_CONTEXT_TOO_LARGE" }, 422);
-      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema3-prompt53` : "baseline-v53";
+      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema4-prompt56-manager2` : "baseline-v56-manager2";
       const legacyPromptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}` : "baseline-v1";
       const fingerprint = ruleChecksum({ endpoint: "report-content", assessmentReference: binding.assessmentReference, resultReference: input.resultReference,
         checksum: binding.checksum, promptVersion, facts: input.facts });
@@ -96,7 +96,7 @@ export function installReportAiRoutes(app: Hono, options: {
         checksum: binding.checksum, promptVersion: legacyPromptVersion, facts: input.facts });
       const reservation = await runStore.reserve({ clientId: identity.clientId, deploymentId: identity.deploymentId, assessmentReference: binding.assessmentReference,
         resultReference: input.resultReference, ruleVersionId: rule.id, checksum: binding.checksum, idempotencyKey: input.idempotencyKey,
-        fingerprint, model: REPORT_AI_ACTIVE_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION }, legacyFingerprint);
+        fingerprint, model: provider?.model ?? REPORT_AI_ACTIVE_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION }, legacyFingerprint);
       if (reservation.status === "CONFLICT") return c.json({ error: "IDEMPOTENCY_CONFLICT" }, 409);
       if (reservation.status === "IN_PROGRESS") return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
       if (reservation.status === "DUPLICATE") return c.json(reservation.run.response as never);
@@ -129,12 +129,12 @@ export function installReportAiRoutes(app: Hono, options: {
         ...(jobLease ? { jobLease: { store: jobStore, ...jobLease } } : {}) });
       assertLease = assertActive;
       try {
-        const { status, narrative: approvedNarrative, issues, omittedNarrativeFields, interventionSummaries } = await coordinateReportAgents({
+        const { status, narrative: approvedNarrative, issues, omittedNarrativeFields, interventionSummaries } = await manageReportAgents({
           aiConfig, evidence, guidance, classification: { id: classification.id, label: classification.label }, invoke,
         });
         const response = { runId, status, assessmentReference: binding.assessmentReference, resultReference: input.resultReference,
           ruleVersionId: rule.id, checksum: binding.checksum, classification: { id: classification.id, label: classification.label },
-          model: REPORT_AI_ACTIVE_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION,
+          model: provider?.model ?? REPORT_AI_ACTIVE_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION,
           guidance: { ...guidance, possibleToxicities: guidance.possibleToxicities.map(row => ({ ...row, summary: status === "READY" ? interventionSummaries.find(item => item.evidenceId === `possible:toxicity:${row.id}`)?.text ?? "" : "" })) }, narrative: approvedNarrative, issues,
           omittedNarrativeFields };
         assertActive();

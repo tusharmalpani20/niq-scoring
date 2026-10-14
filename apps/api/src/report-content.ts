@@ -74,7 +74,7 @@ export const reportToxicityOptionsRequestSchema = z.object({
 const narrativePart = z.object({ text: z.string().trim().max(4000), evidenceIds: z.array(z.string().min(1).max(120)).max(100) })
   .strict().refine(part => Boolean(part.text) === (part.evidenceIds.length > 0), "A passage needs evidence; an omitted passage needs neither text nor evidence");
 export const narrativeFieldNames = ["overview", "keyFindings", "actionSummary", "monitoringSummary", "overallSummary",
-  "nutritionAdvice", "treatmentAdvice", "conditionAdvice", "effectsAdvice"] as const;
+  "nutritionAdvice", "treatmentAdvice", "conditionAdvice", "effectsAdvice", "foodSafetyAdvice", "redFlagsAdvice"] as const;
 export const narrativeSchema = z.object({
   overview: narrativePart,
   keyFindings: narrativePart,
@@ -85,15 +85,26 @@ export const narrativeSchema = z.object({
   treatmentAdvice: narrativePart,
   conditionAdvice: narrativePart,
   effectsAdvice: narrativePart,
+  // Optional for nine-field reports already in storage. Fresh writer JSON
+  // still requires both fields through writerJsonSchema.
+  foodSafetyAdvice: narrativePart.optional(),
+  redFlagsAdvice: narrativePart.optional(),
 }).strict();
-export type ReportNarrative = z.infer<typeof narrativeSchema>;
+export type ReportNarrative = z.input<typeof narrativeSchema>;
+export type CompleteReportNarrative = Omit<z.output<typeof narrativeSchema>, "foodSafetyAdvice" | "redFlagsAdvice">
+  & { foodSafetyAdvice: z.infer<typeof narrativePart>; redFlagsAdvice: z.infer<typeof narrativePart> };
+
+function completeNarrative(value: z.output<typeof narrativeSchema>): CompleteReportNarrative {
+  const empty = { text: "", evidenceIds: [] as string[] };
+  return { ...value, foodSafetyAdvice: value.foodSafetyAdvice ?? empty, redFlagsAdvice: value.redFlagsAdvice ?? empty };
+}
 
 /** Remove harmless model formatting before clinical validation and review. */
 export function normalizeNarrativePunctuation(value: unknown): unknown {
   const parsed = narrativeSchema.safeParse(value);
   if (!parsed.success) return value;
-  return Object.fromEntries(narrativeFieldNames.map(field => {
-    const part = parsed.data[field];
+  return Object.fromEntries(narrativeFieldNames.filter(field => parsed.data[field] !== undefined).map(field => {
+    const part = parsed.data[field]!;
     const text = part.text
       .replace(/;\s*([\p{L}])/gu, (_match, next: string) => `. ${next.toLocaleUpperCase()}`)
       .replace(/;/gu, ".")
@@ -117,7 +128,7 @@ const narrativeJsonSchema = {
 export const writerJsonSchema = narrativeJsonSchema;
 export const reviewerJsonSchema = {
   type: "object", additionalProperties: false, required: ["accepted", "issues"],
-  properties: { accepted: { type: "boolean" }, issues: { type: "array", items: { type: "object", additionalProperties: false, required: ["field", "code", "evidenceIds", "reason"], properties: { field: { type: "string", enum: narrativeFieldNames }, code: { type: "string", enum: ["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"] }, evidenceIds: { type: "array", items: { type: "string" } }, reason: { type: "string", maxLength: 320 } } } } },
+  properties: { accepted: { type: "boolean" }, issues: { type: "array", maxItems: 10, items: { type: "object", additionalProperties: false, required: ["field", "code", "evidenceIds", "reason"], properties: { field: { type: "string", enum: narrativeFieldNames }, code: { type: "string", enum: ["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"] }, evidenceIds: { type: "array", items: { type: "string" }, maxItems: 10 }, reason: { type: "string", maxLength: 320 } } } } },
 };
 
 export function validateReportFacts(definition: FinalAssessmentDefinition, facts: ReportContentRequest["facts"]): boolean {
@@ -231,6 +242,11 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
   if (facts.plannedTreatmentStartDate && facts.plannedTreatmentStartDate > facts.assessmentDate) {
     evidence.push({ id: "fact:planned_treatment_start", text: `Treatment is planned to start on ${facts.plannedTreatmentStartDate}. This date is after the assessment date ${facts.assessmentDate}, so treatment is not confirmed as already underway.` });
   }
+  const nutritionalStatus = packet.carePlan.nutritionalStatus;
+  if (nutritionalStatus) {
+    const labels = { well_nourished: "Well nourished", moderately_nourished: "Moderately nourished", severely_malnourished: "Severely malnourished" } as const;
+    evidence.push({ id: "fact:nutritional_status", text: `Nutritional status for this risk category: ${labels[nutritionalStatus]}.` });
+  }
   if (facts.cancerTypeId && facts.cancerTypeId !== "cancer_other" && facts.cancerTypeId !== "cancer_unknown") {
     const diagnosis = cancerTypeLabels[facts.cancerTypeId as (typeof cancerTypeIds)[number]];
     evidence.push({ id: "fact:diagnosis", text: `Recorded cancer diagnosis: ${diagnosis}.` });
@@ -254,10 +270,9 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
   if (previousWeight !== undefined && currentWeight !== undefined) {
     const direction = previousWeight > currentWeight ? "loss" : previousWeight < currentWeight ? "gain" : "no change";
     const percentage = Math.round(Math.abs(previousWeight - currentWeight) / previousWeight * 1000) / 10;
-    const previousWeightLabel = definition.supportingInputs.find(input => input.id === "previous_weight_kg")?.label;
-    const timing = previousWeightLabel?.includes("1–2 months ago")
-      ? "The previous weight was reported as 1–2 months ago; its exact measurement date is unknown."
-      : "The interval between measurements was not supplied.";
+    // This assessment input now explicitly asks for weight one month ago.
+    // Existing demo assessments use the same interpretation by agreement.
+    const timing = "The previous weight was reported for 1 month ago.";
     evidence.push({ id: "fact:weight_direction", text: `Recorded weight ${direction}: ${previousWeight} kg previously and ${currentWeight} kg currently (${percentage}%). ${timing}` });
   }
   if (facts.dietPreferenceId) {
@@ -285,8 +300,13 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
   for (const row of packet.carePlan.statusModifiers) evidence.push({ id: `rule:status:${row.id}`, text: `${row.riskEmphasis}. ${row.actions}` });
   for (const row of packet.carePlan.treatmentGuidance) evidence.push({ id: `rule:treatment:${row.id}`, text: row.guidance });
   for (const row of packet.carePlan.coMorbidities) evidence.push({ id: `rule:comorbidity:${row.id}`, text: `${row.label}: ${row.guidance}` });
-  for (const row of packet.carePlan.products.notes) evidence.push({ id: `rule:exception:${row.id}`,
-    text: `${row.label}: ${row.action ? productExceptionActionText(row.action) : row.guidance}${row.action && row.guidance ? ` Explanation: ${row.guidance}` : ""}` });
+  for (const row of packet.carePlan.products.notes) {
+    // A removal is enforced when resolving the selected plan and remains
+    // internal; there is no patient-facing exclusion paragraph to cite.
+    if (row.action?.type === "remove") continue;
+    evidence.push({ id: `rule:exception:${row.id}`,
+      text: `${row.label}: ${row.action ? productExceptionActionText(row.action) : row.guidance}${row.action && row.guidance ? ` Explanation: ${row.guidance}` : ""}` });
+  }
   for (const product of packet.carePlan.products.catalog) if (product.description)
     evidence.push({ id: `catalog:product:${product.id}`, text: `${product.name}: ${product.description}. Product description only; dose and timing come from the selected plan.` });
   if (packet.carePlan.products.status === "selected") {
@@ -310,11 +330,12 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
 }
 
 /** Remove only passages the final checks could not support, retaining reviewed sections. */
-export function omitNarrativeFields(value: unknown, fields: ReadonlySet<string>): ReportNarrative | null {
+export function omitNarrativeFields(value: unknown, fields: ReadonlySet<string>): CompleteReportNarrative | null {
   const parsed = narrativeSchema.safeParse(value);
   if (!parsed.success) return null;
+  const complete = completeNarrative(parsed.data);
   return Object.fromEntries(narrativeFieldNames.map(field => [field,
-    fields.has(field) ? { text: "", evidenceIds: [] } : parsed.data[field]])) as ReportNarrative;
+    fields.has(field) ? { text: "", evidenceIds: [] } : complete[field]])) as CompleteReportNarrative;
 }
 
 function copiesGuidance(text: string, sources: string[]): boolean {
@@ -336,7 +357,7 @@ function copiesGuidance(text: string, sources: string[]): boolean {
 }
 
 /** Local checks do not replace clinical review, but reject malformed and ungrounded numerals. */
-export function validateNarrative(value: unknown, evidence: ReportEvidence[]): { narrative: ReportNarrative | null; issues: string[] } {
+export function validateNarrative(value: unknown, evidence: ReportEvidence[]): { narrative: CompleteReportNarrative | null; issues: string[] } {
   const parsed = narrativeSchema.safeParse(value);
   if (!parsed.success) return { narrative: null, issues: [
     "INVALID_NARRATIVE_SCHEMA",
@@ -345,6 +366,7 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     ...parsed.error.issues.slice(0, 5).map(issue =>
       `INVALID_NARRATIVE_SCHEMA:${issue.path.join(".") || "root"}:${issue.code}`),
   ] };
+  const data = completeNarrative(parsed.data);
   const evidenceById = new Map(evidence.map(item => [item.id, item.text]));
   const requiredGuidance: Partial<Record<keyof ReportNarrative, readonly string[]>> = {
     nutritionAdvice: ["rule:nutrition:"],
@@ -353,7 +375,18 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     effectsAdvice: ["rule:toxicity:", "possible:toxicity:", "rule:status:", "rule:treatment:"],
   };
   const issues: string[] = [];
-  if (evidenceById.has("fact:niq_risk") && !parsed.data.overallSummary.text)
+  const sentences = (text: string) => text.replace(/\*\*/g, "").split(/\n|(?<=[.!?])\s+/u)
+    .map(line => line.trim().toLocaleLowerCase().replace(/[.!?]+$/, "").replace(/\s+/g, " "))
+    .filter(line => line.split(" ").length >= 6);
+  for (const shared of ["redFlagsAdvice", "foodSafetyAdvice"] as const) {
+    const sharedSentences = new Set(sentences(data[shared].text));
+    if (!sharedSentences.size) continue;
+    for (const field of narrativeFieldNames.filter(name => name !== shared)) {
+      if (sentences(data[field].text).some(sentence => sharedSentences.has(sentence)))
+        issues.push(`${field}:DUPLICATE_${shared === "redFlagsAdvice" ? "RED_FLAG" : "FOOD_SAFETY"}`);
+    }
+  }
+  if (evidenceById.has("fact:niq_risk") && !data.overallSummary.text)
     issues.push("overallSummary:MISSING_SUMMARY");
   // Matched guidance must not disappear merely because the model returned an
   // empty field and the reviewer accepted it.
@@ -364,14 +397,15 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     ["effectsAdvice", ["rule:toxicity:"]],
   ] as const) {
     const required = evidence.filter(item => prefixes.some(prefix => item.id.startsWith(prefix)));
-    if (required.some(item => !parsed.data[field].evidenceIds.includes(item.id)))
+    const sharedSectionIds = [...data.redFlagsAdvice.evidenceIds, ...data.foodSafetyAdvice.evidenceIds];
+    if (required.some(item => !data[field].evidenceIds.includes(item.id) && !sharedSectionIds.includes(item.id)))
       issues.push(`${field}:MISSING_MATCHED_COVERAGE`);
   }
   const renalTargetsIndividualized = evidence.some(item => item.id.startsWith("rule:comorbidity:") &&
     /\b(?:kidney|renal)\b/i.test(item.text) && /\bindividuali[sz]/i.test(item.text));
   if (renalTargetsIndividualized) {
     for (const field of ["nutritionAdvice", "treatmentAdvice"] as const) {
-      const sentences = parsed.data[field].text.split(/(?<=[.!?])\s+/u);
+      const sentences = data[field].text.split(/(?<=[.!?])\s+/u);
       if (sentences.some(sentence => /\b\d+(?:[.\u2013\u2014-]\d+)?\s*(?:kcal\/kg(?:\/day)?|g(?:\s+protein)?\/kg(?:\/day)?)\b/i.test(sentence)))
         issues.push(`${field}:RENAL_FIXED_TARGET_NEEDS_TEAM`);
       if (sentences.some(sentence =>
@@ -381,7 +415,7 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
         issues.push(`${field}:RENAL_TARGET_NEEDS_QUALIFICATION`);
     }
     for (const field of ["nutritionAdvice", "treatmentAdvice", "conditionAdvice", "effectsAdvice"] as const) {
-      const sentences = parsed.data[field].text.split(/(?<=[.!?])\s+/u);
+      const sentences = data[field].text.split(/(?<=[.!?])\s+/u);
       if (sentences.some(sentence => /^\s*(?:include|eat|choose|add|increase)\b/i.test(sentence)
         && /\b(?:potassium|magnesium)\b/i.test(sentence)))
         issues.push(`${field}:RENAL_ELECTROLYTE_FOODS_NEED_APPROVAL`);
@@ -400,24 +434,28 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   const productNames = evidence.filter(item => item.id.startsWith("rule:product:"))
     .flatMap(item => /^Selected product plan: ([^.]+)\./.exec(item.text)?.[1]?.split(/\s+\+\s+/) ?? []);
   // Exception advice must identify a different product unambiguously.
-  for (const item of evidence.filter(row => row.id.startsWith("rule:exception:") && parsed.data.treatmentAdvice.evidenceIds.includes(row.id))) {
+  for (const item of evidence.filter(row => row.id.startsWith("rule:exception:") && data.treatmentAdvice.evidenceIds.includes(row.id))) {
     const fullName = /\b(?:Recommend|Remove|Limit|Replace|Withhold|Do not recommend)\s+([A-Z][\w-]+(?:\s+[A-Z][\w-]+){1,5})\s+(?:at|from|to|with|until|for)\b/i.exec(item.text)?.[1];
     if (!fullName) continue;
     const shortName = fullName.split(/\s+/u).at(-1)!;
-    if (new RegExp(`\\b${shortName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(parsed.data.treatmentAdvice.text)
-      && !parsed.data.treatmentAdvice.text.toLocaleLowerCase().includes(fullName.toLocaleLowerCase())
-      && /\b(?:not recommended|avoid|remove|withhold|limit)\b/i.test(parsed.data.treatmentAdvice.text))
+    if (new RegExp(`\\b${shortName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(data.treatmentAdvice.text)
+      && !data.treatmentAdvice.text.toLocaleLowerCase().includes(fullName.toLocaleLowerCase())
+      && /\b(?:not recommended|avoid|remove|withhold|limit)\b/i.test(data.treatmentAdvice.text))
       issues.push("treatmentAdvice:SHORTENED_EXCEPTION_PRODUCT");
   }
-  if (productNames.some(name => name.length > 3 && parsed.data.actionSummary.text.split(/[.!?]/u).some(sentence =>
+  if (productNames.some(name => name.length > 3 && data.actionSummary.text.split(/[.!?]/u).some(sentence =>
     new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(sentence) &&
     /\b(?:\d+|product|supplement|serving|dose|take|daily|per day)\b/i.test(sentence))))
     issues.push("actionSummary:REPEATS_PRODUCT_PLAN");
   // The closing page should make sense on its own and cannot point to content
   // elsewhere in the report. Such references are especially confusing in a PDF.
-  if (/\b(?:above|below|aforementioned|listed)\b/i.test(parsed.data.overallSummary.text))
+  if (/\b(?:above|below|aforementioned|listed)\b/i.test(data.overallSummary.text))
     issues.push("overallSummary:POSITIONAL_REFERENCE");
-  for (const [field, part] of Object.entries(parsed.data)) {
+  for (const [field, part] of Object.entries(data)) {
+    if (/\bask\b.{0,70}\b(?:oral nutrition(?:al)? supplements?|(?:DM|diabet(?:es|ic)) supplements?|supplement (?:suitability|compatibility))\b/i.test(part.text))
+      issues.push(`${field}:REDUNDANT_SUPPLEMENT_PROMPT`);
+    if (/\b(?:Es Fortitude )?Nourish\b.{0,70}\b(?:cannot|can't|not|avoid|exclude|remove)\b|\b(?:cannot recommend|do not recommend|avoid|exclude|remove)\b.{0,70}\b(?:Es Fortitude )?Nourish\b/i.test(part.text))
+      issues.push(`${field}:INTERNAL_PRODUCT_EXCLUSION`);
     const selected = part.evidenceIds.map(id => evidenceById.get(id));
     if (selected.some(text => text === undefined)) issues.push(`${field}:UNKNOWN_EVIDENCE_ID`);
     if (part.evidenceIds.some(id => id.startsWith("possible:toxicity:") &&
@@ -449,5 +487,5 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
       issues.push(`${field}:PLANNED_TREATMENT_AS_CURRENT`);
     if (/[;—\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(part.text)) issues.push(`${field}:REPORT_STYLE`);
   }
-  return { narrative: issues.length ? null : parsed.data, issues };
+  return { narrative: issues.length ? null : data, issues };
 }

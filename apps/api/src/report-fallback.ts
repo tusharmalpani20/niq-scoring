@@ -1,4 +1,4 @@
-import { narrativeSchema, type ReportContentRequest, type ReportEvidence, type ReportNarrative, matchedReportPacket } from "./report-content";
+import { narrativeSchema, type ReportContentRequest, type ReportEvidence, type ReportNarrative, type CompleteReportNarrative, matchedReportPacket } from "./report-content";
 import { productExceptionActionText } from "@niq-scoring/contracts/product-guidance";
 
 type Packet = ReturnType<typeof matchedReportPacket>;
@@ -28,17 +28,40 @@ export function buildDeterministicReportFallback(input: {
     return value.trim();
   };
   const part = (rows: Array<{ id: string; text: string }>) => ({
-    text: rows.map(row => row.text.trim()).filter(Boolean).join("\n"),
-    evidenceIds: rows.filter(row => row.text.trim()).map(row => row.id),
+    text: [...new Map(rows.filter(row => row.text.trim()).map(row =>
+      [row.text.trim().toLocaleLowerCase().replace(/\s+/g, " ").replace(/[.!]+$/, ""), row.text.trim()])).values()].join("\n"),
+    evidenceIds: [...new Set(rows.filter(row => row.text.trim()).map(row => row.id))],
   });
+
+  // The model is the primary partitioner. This conservative sentence-level
+  // fallback keeps safety clauses in the dedicated sections without losing
+  // the original source evidence ID.
+  const partition = (rows: Array<{ id: string; text: string }>) => {
+    const advice: typeof rows = [], foodSafety: typeof rows = [], redFlags: typeof rows = [];
+    for (const row of rows) {
+      const sentences = row.text.split(/\n|•\s*|(?<=[!?])\s+|(?<!\d)\.(?!\d)\s+/u).map(text => text.trim()).filter(Boolean);
+      for (const text of sentences) {
+        if (/\bask\b.{0,70}\b(?:oral nutrition(?:al)? supplements?|(?:DM|diabet(?:es|ic)) supplements?)\b/i.test(text)) continue;
+        const item = { id: row.id, text };
+        if (/\b(?:food safety|freshly cooked|washed and peeled|washed\/peeled|boiled water|unpasteuri[sz]ed|raw sprouts|street food|leftovers?|food hygiene)\b/i.test(text)) foodSafety.push(item);
+        else if (/\b(?:red[- ]flag|urgent(?:ly)?|immediately|emergency|fever|chills|contact|call|inform .*same day|inform (?:the |your )?doctor|very low BP|seek (?:urgent|medical)|report persistent|threshold)\b/i.test(text)) redFlags.push(item);
+        else advice.push(item);
+      }
+    }
+    return { advice, foodSafety, redFlags };
+  };
 
   // A possible class-and-treatment effect is not a symptom reported by this
   // patient. Keep each matched intervention intact in its own conditional card.
+  const possibleSafety = partition(guidance.possibleToxicities.map(row => ({
+    id: `possible:toxicity:${row.id}`, text: row.nutritionalInterventions,
+  })));
   const possibleToxicities = guidance.possibleToxicities.map(row => {
     const id = `possible:toxicity:${row.id}`;
-    const intervention = requireSource(id, row.nutritionalInterventions);
+    requireSource(id, row.nutritionalInterventions);
     if (!row.expectedToxicity.trim()) throw new ReportFallbackError("FALLBACK_SOURCE_INCOMPLETE");
-    return { ...row, summary: `Possible effect: ${row.expectedToxicity.trim()}. If it occurs, follow this matched guidance: ${intervention}` };
+    const intervention = possibleSafety.advice.filter(item => item.id === id).map(item => item.text).join(". ");
+    return { ...row, summary: `Possible effect: ${row.expectedToxicity.trim()}.${intervention ? ` If it occurs, follow this matched guidance: ${intervention}` : ""}` };
   });
 
   const nutritionRows = guidance.nutritionInterventions.map(row => ({
@@ -52,7 +75,7 @@ export function buildDeterministicReportFallback(input: {
       text: requireSource(`rule:status:${row.id}`, `${row.riskEmphasis} ${row.actions}`) })),
     ...guidance.carePlan.treatmentGuidance.map(row => ({ id: `rule:treatment:${row.id}`,
       text: requireSource(`rule:treatment:${row.id}`, row.guidance) })),
-    ...guidance.carePlan.products.notes.map(row => ({ id: `rule:exception:${row.id}`,
+    ...guidance.carePlan.products.notes.filter(row => row.action?.type !== "remove").map(row => ({ id: `rule:exception:${row.id}`,
       text: `${row.label}. ${requireSource(`rule:exception:${row.id}`, [
         row.action ? productExceptionActionText(row.action) : "", row.guidance,
       ].filter(Boolean).join(" Explanation: "))}` })),
@@ -60,48 +83,53 @@ export function buildDeterministicReportFallback(input: {
   const conditionRows = guidance.carePlan.coMorbidities.map(row => ({ id: `rule:comorbidity:${row.id}`,
     text: `${row.label}. ${requireSource(`rule:comorbidity:${row.id}`, row.guidance)}` }));
   const reportedEffectRows = guidance.toxicityInterventions.map(row => ({ id: `rule:toxicity:${row.id}`,
-    text: `Clinician-confirmed effect: ${row.expectedToxicity}. ${requireSource(`rule:toxicity:${row.id}`, row.nutritionalInterventions)}` }));
+    text: `${facts.confirmedToxicityIds.includes(row.id) ? "Clinician-confirmed effect" : "Reported effect"}: ${row.expectedToxicity}. ${requireSource(`rule:toxicity:${row.id}`, row.nutritionalInterventions)}` }));
+  const partitions = partition([...nutritionRows, ...treatmentRows, ...conditionRows, ...reportedEffectRows,
+    ...guidance.possibleToxicities.map(row => ({ id: `possible:toxicity:${row.id}`, text: row.nutritionalInterventions }))]);
+  const nutritionContent = partition(nutritionRows).advice;
+  const treatmentContent = partition(treatmentRows).advice;
+  const conditionContent = partition(conditionRows).advice;
+  const effectContent = partition(reportedEffectRows).advice;
   const fact = (id: string) => evidence.find(row => row.id === id);
-  const overviewRows = [fact("fact:diagnosis"), fact("fact:treatment_status"),
-    fact("fact:planned_treatment_start"), ...evidence.filter(row => row.id.startsWith("fact:treatment_type_"))]
-    .filter((row): row is ReportEvidence => Boolean(row));
-  const findingRows = [fact("fact:niq_risk"), fact("fact:weight_direction")]
-    .filter((row): row is ReportEvidence => Boolean(row));
-  const reportedSymptoms = evidence.filter(row => row.id.startsWith("fact:assessment_") || row.id.startsWith("fact:clinician_toxicity_"));
+  const findingRows = [fact("fact:nutritional_status")]
+    .filter((row): row is ReportEvidence => Boolean(row))
+    .map(row => ({ ...row, text: row.text.replace("Nutritional status for this risk category:", "Nutritional status:") }));
+  const reportedSymptoms = evidence.filter(row => row.id.startsWith("fact:assessment_") || row.id.startsWith("fact:clinician_toxicity_"))
+    .map(row => ({ ...row, text: row.text.replace(/^Assessment records /, "Reported ")
+      .replace(/ This does not establish a treatment cause\./g, "") }));
   const selectedPlan = guidance.carePlan.products.status === "selected"
     ? guidance.carePlan.products.plans.map(row => ({ id: `rule:product:${row.id}`,
-      text: `Selected nutrition support: ${row.products}.` })) : [];
-  const relevantConditions = guidance.carePlan.coMorbidities.map(row => ({
-    id: `rule:comorbidity:${row.id}`, text: `Other condition relevant to nutrition care: ${row.label}.`,
-  }));
-  const actionLines = [...nutritionRows, ...treatmentRows].flatMap(row => row.text.split(/\n/u)
+      text: "The selected nutrition support plan guides supplementation." })) : [];
+  const actionLines = [...nutritionContent, ...treatmentContent].flatMap(row => row.text.split(/\n/u)
     .map(text => ({ id: row.id, text: text.trim().replace(/^[•-]\s*/u, "") }))
     .filter(item => /^(?:if\b.{0,120}\b(?:contact|call|tell|discuss|check)|contact|call|tell|discuss|seek)\b/i.test(item.text)));
-  const monitoringLines = [...nutritionRows, ...treatmentRows, ...conditionRows].flatMap(row => row.text.split(/\n/u)
+  const monitoringLines = [...nutritionContent, ...treatmentContent, ...conditionContent].flatMap(row => row.text.split(/\n/u)
     .map(text => ({ id: row.id, text: text.trim().replace(/^[•-]\s*/u, "") }))
-    .filter(item => /^(?:monitor|track|check|record|keep track|watch)\b/i.test(item.text)));
+    .filter(item => /^(?:monitor|track|check|record|keep track|watch)\b/i.test(item.text) && !/:\s*$/.test(item.text)));
   const action = actionLines[0];
   const monitoring = monitoringLines.filter(line => line.text !== action?.text).slice(0, 2);
   const nutritionStrategy = guidance.nutritionInterventions[0]?.coreStrategy.trim()
     ? [{ id: `rule:nutrition:${guidance.nutritionInterventions[0].id}`,
-      text: `Matched nutrition strategy: ${guidance.nutritionInterventions[0].coreStrategy.trim()}` }] : [];
-  const overallRows = [...overviewRows, ...findingRows, ...nutritionStrategy, ...reportedSymptoms,
-    ...relevantConditions, ...selectedPlan, ...(action ? [action] : []), ...monitoring.slice(0, 1)];
+      text: `Nutrition priority: ${guidance.nutritionInterventions[0].coreStrategy.trim()}` }] : [];
+  const overallRows = [...findingRows, ...nutritionStrategy, ...selectedPlan, ...(action ? [action] : []), ...monitoring.slice(0, 1)];
   // The closing summary uses explicit recorded facts and matched strategy. It
   // never treats conditional effects as observed symptoms.
   const summary = overallRows.length ? part(overallRows) : part([{
-    id: "fact:niq_risk", text: `NIQ risk: ${classification.label}. Reviewed score: ${facts.reviewedScore}.`,
+    id: "fact:niq_risk", text: `Nutrition support is guided by the reviewed ${classification.label} risk category.`,
   }]);
-  const narrative: ReportNarrative = {
-    overview: part(overviewRows),
-    keyFindings: part([...findingRows, ...reportedSymptoms]),
+  const narrative: CompleteReportNarrative = {
+    // Clinical facts already have their own cards; interpretation stays brief.
+    overview: part([]),
+    keyFindings: part([...findingRows, ...nutritionStrategy, ...reportedSymptoms]),
     actionSummary: part(action ? [action] : []),
     monitoringSummary: part(monitoring),
     overallSummary: summary,
-    nutritionAdvice: part(nutritionRows),
-    treatmentAdvice: part(treatmentRows),
-    conditionAdvice: part(conditionRows),
-    effectsAdvice: part(reportedEffectRows),
+    nutritionAdvice: part(nutritionContent),
+    treatmentAdvice: part(treatmentContent),
+    conditionAdvice: part(conditionContent),
+    effectsAdvice: part(effectContent),
+    foodSafetyAdvice: part(partitions.foodSafety),
+    redFlagsAdvice: part(partitions.redFlags),
   };
   const sectionFor = (id: string): keyof ReportNarrative | "possible" | null => {
     if (id.startsWith("rule:nutrition:")) return "nutritionAdvice";
@@ -116,7 +144,9 @@ export function buildDeterministicReportFallback(input: {
   for (const row of evidence) {
     const section = sectionFor(row.id);
     if (section === "possible" ? !possibleIds.has(row.id)
-      : section && !narrative[section].evidenceIds.includes(row.id))
+      : section && !narrative[section].evidenceIds.includes(row.id)
+        && !narrative.redFlagsAdvice.evidenceIds.includes(row.id)
+        && !narrative.foodSafetyAdvice.evidenceIds.includes(row.id))
       throw new ReportFallbackError("FALLBACK_SOURCE_INCOMPLETE");
   }
   // The source workbook contains generic fixed targets and food examples that
