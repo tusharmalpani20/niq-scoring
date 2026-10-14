@@ -30,6 +30,56 @@ const actionVerb = /\b(?:aim|ask|avoid|call|check|choose|contact|discuss|follow|
 const interpretationCue = /\b(?:affect|change|changed|changes|concern|decline|decrease|decreased|help|important|increase|increased|maintain|monitor|prevent|priorities|priority|review|support|worsen|worsening)\b/i;
 const numericMeaningCue = /\b(?:affect|concern|decline|help|important|maintain|monitor|prevent|priorities|priority|review|support|worsen|worsening)\b/i;
 
+/** Pick a short, exact action phrase for deterministic fallback cards. */
+export function selectActionHighlight(text: string): string | null {
+  const sentences = Array.from(sentenceSegmenter.segment(text), item => item.segment);
+  for (const sentence of sentences) {
+    const trimmed = sentence.trim();
+    const conditionalAction = trimmed.match(/^(If\b.{0,80}?,\s*(?:follow|use|contact|call|discuss|check|tell|seek)\b[^,:.!?]*)(?=[:,.!?]|$)/i);
+    if (conditionalAction && (conditionalAction[1]!.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? []).length >= 3)
+      return conditionalAction[1]!.trim();
+    const words = Array.from(trimmed.matchAll(/[\p{L}\p{N}]+(?:[’'-][\p{L}\p{N}]+)*/gu));
+    const actionIndex = words.findIndex(word => actionVerb.test(word[0]));
+    if (actionIndex < 0) continue;
+    const startIndex = /^if\b/i.test(trimmed) ? 0 : actionIndex;
+    const endIndex = Math.min(words.length, startIndex + 15);
+    if (endIndex - startIndex < 3) continue;
+    const start = words[startIndex]!.index!;
+    const last = words[endIndex - 1]!;
+    let end = last.index! + last[0].length;
+    const clauseBreaks = Array.from(trimmed.slice(start, end).matchAll(/[,;:]/gu));
+    const clauseEnd = clauseBreaks.at(-1)?.index;
+    if (words.length - startIndex > 15 && clauseEnd !== undefined && clauseEnd > 0
+      && (trimmed.slice(start, start + clauseEnd).match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? []).length >= 3)
+      end = start + clauseEnd;
+    const openingParenthesis = trimmed.indexOf("(", start);
+    const closingParenthesis = trimmed.indexOf(")", openingParenthesis + 1);
+    if (openingParenthesis >= start && openingParenthesis < end && (closingParenthesis < 0 || closingParenthesis >= end)) {
+      const beforeExamples = trimmed.slice(start, openingParenthesis).trimEnd();
+      if ((beforeExamples.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? []).length >= 3) end = start + beforeExamples.length;
+    }
+    // Keep slash units such as mg/dL together when the word limit lands on
+    // the first half of the measurement.
+    const unitSuffix = trimmed.slice(end).match(/^\/(?:dL|mL|kg|day)\b/i)?.[0];
+    if (unitSuffix) end += unitSuffix.length;
+    const phrase = trimmed.slice(start, end).replace(/[,:;]+$/u, "").trim();
+    if ((phrase.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? []).length >= 3 && actionVerb.test(phrase)) return phrase;
+  }
+  return null;
+}
+
+/** Mark one exact action or priority phrase in deterministic fallback prose. */
+export function markFallbackHighlight(field: (typeof narrativeFieldNames)[number], text: string): string {
+  const phrase = selectActionHighlight(text) ?? (field === "overallSummary" || field === "keyFindings"
+    ? Array.from(sentenceSegmenter.segment(text), item => item.segment.trim()).map(sentence => {
+      const words = Array.from(sentence.matchAll(/[\p{L}\p{N}]+(?:[’'-][\p{L}\p{N}]+)*/gu));
+      if (!interpretationCue.test(sentence) || words.length < 3) return null;
+      const end = Math.min(words.length, 15);
+      return sentence.slice(words[0]!.index!, words[end - 1]!.index! + words[end - 1]![0].length);
+    }).find(Boolean) ?? null : null);
+  return phrase ? text.replace(phrase, `**${phrase}**`) : text;
+}
+
 function requiredHighlights(field: (typeof narrativeFieldNames)[number], text: string): number {
   if (!text.trim()) return 0;
   // Interpretation is rendered from overview and keyFindings together.
@@ -105,7 +155,7 @@ export function completeNarrativeHighlights(narrative: ReportNarrative | Complet
     if (!assessment.issues[field]) continue;
     const sentences = Array.from(sentenceSegmenter.segment(plain[field].text), item => item.segment.trim());
     for (const sentence of sentences) {
-      const phrase = sentence.replace(/[.!?]+$/u, "").trim();
+      const phrase = selectActionHighlight(sentence) ?? sentence.replace(/[.!?]+$/u, "").trim();
       if (!phrase || selected[field].length === 3 || selected[field].some(choice => choice.phrase === phrase)) continue;
       const kind = /\b(?:contact|call|seek|urgent)\b/i.test(phrase) ? "warning" : actionVerb.test(phrase) ? "action" : "finding";
       const trial = { ...selected, [field]: [...selected[field], { phrase, kind }] } as HighlightSelections;

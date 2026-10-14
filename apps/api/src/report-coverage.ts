@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ReportEvidence, ReportNarrative } from "./report-content";
+import { narrativeFieldNames, type ReportEvidence, type ReportNarrative } from "./report-content";
 
 export const coverageFields = ["nutritionAdvice", "treatmentAdvice"] as const;
 export type CoverageField = (typeof coverageFields)[number];
@@ -9,7 +9,7 @@ export type CoverageSource = { id: string; field: CoverageField; text: string };
 const coverageRowSchema = z.object({
   evidenceId: z.string(),
   covered: z.boolean(),
-  missing: z.array(z.string().trim().min(1).max(220)).max(12),
+  missing: z.array(z.string().trim().min(1).max(500)).max(12),
 }).strict();
 const coverageSchema = z.object({ rows: z.array(coverageRowSchema).max(150) }).strict();
 
@@ -18,7 +18,7 @@ export const coverageJsonSchema = {
   properties: { rows: { type: "array", items: { type: "object", additionalProperties: false,
     required: ["evidenceId", "covered", "missing"], properties: {
       evidenceId: { type: "string" }, covered: { type: "boolean" },
-      missing: { type: "array", items: { type: "string" } },
+      missing: { type: "array", items: { type: "string", maxLength: 500 } },
     } } } },
 };
 
@@ -105,12 +105,12 @@ export function assessCoverage(value: unknown, sources: CoverageSource[], narrat
     if (!source || seen.has(row.evidenceId) || row.covered === (row.missing.length > 0))
       return { accepted: false, gaps: [], invalid: true };
     seen.add(row.evidenceId);
-    // A row cannot be covered by prose in another section or an empty passage.
-    const empty = { text: "", evidenceIds: [] as string[] };
-    const shared = [narrative.redFlagsAdvice ?? empty, narrative.foodSafetyAdvice ?? empty];
+    // The semantic audit considers the full report. Ownership rules determine
+    // where an action belongs, while equivalent shared targets need not repeat.
+    const passages = narrativeFieldNames.map(field => narrative[field]);
     const designated = narrative[source.field];
-    const cited = designated.evidenceIds.includes(source.id) || shared.some(part => part.evidenceIds.includes(source.id));
-    if ((!designated.text.trim() && !shared.some(part => part.text.trim())) || !cited)
+    const cited = passages.some(part => part?.evidenceIds.includes(source.id));
+    if ((!designated.text.trim() && !passages.some(part => part?.text.trim())) || !cited)
       gaps.push({ id: source.id, field: source.field, missing: ["The matching advice is absent from its report section."] });
     else if (!row.covered) gaps.push({ id: source.id, field: source.field, missing: row.missing });
   }

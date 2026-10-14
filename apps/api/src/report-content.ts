@@ -110,14 +110,17 @@ export function normalizeNarrativePunctuation(value: unknown): unknown {
       .replace(/;/gu, ".")
       .replace(/\s*—\s*/gu, ", ")
       .replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}]/gu, "")
-      .replace(/\s+/gu, " ")
+      .replace(/\r\n?/gu, "\n")
+      .replace(/[ \t]*\n[ \t]*/gu, "\n")
+      .replace(/\n{3,}/gu, "\n\n")
+      .split("\n").map(line => line.replace(/[ \t]+/gu, " ").trim()).join("\n")
       .trim();
     return [field, { text, evidenceIds: part.evidenceIds }];
   })) as ReportNarrative;
 }
 export const reviewSchema = z.object({
   accepted: z.boolean(),
-  issues: z.array(z.object({ field: z.enum(narrativeFieldNames), code: z.enum(["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"]), evidenceIds: z.array(z.string()).max(10), reason: z.string().trim().min(1).max(320).optional() }).strict()).max(10),
+  issues: z.array(z.object({ field: z.enum(narrativeFieldNames), code: z.enum(["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"]), evidenceIds: z.array(z.string()).max(20), reason: z.string().trim().min(1).max(500).optional() }).strict()).max(40),
 }).strict();
 
 const narrativeJsonSchema = {
@@ -128,7 +131,7 @@ const narrativeJsonSchema = {
 export const writerJsonSchema = narrativeJsonSchema;
 export const reviewerJsonSchema = {
   type: "object", additionalProperties: false, required: ["accepted", "issues"],
-  properties: { accepted: { type: "boolean" }, issues: { type: "array", maxItems: 10, items: { type: "object", additionalProperties: false, required: ["field", "code", "evidenceIds", "reason"], properties: { field: { type: "string", enum: narrativeFieldNames }, code: { type: "string", enum: ["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"] }, evidenceIds: { type: "array", items: { type: "string" }, maxItems: 10 }, reason: { type: "string", maxLength: 320 } } } } },
+  properties: { accepted: { type: "boolean" }, issues: { type: "array", maxItems: 10, items: { type: "object", additionalProperties: false, required: ["field", "code", "evidenceIds", "reason"], properties: { field: { type: "string", enum: narrativeFieldNames }, code: { type: "string", enum: ["UNSUPPORTED_CLAIM", "UNSUPPORTED_NUMBER", "OVERSTATED_TOXICITY", "DRUG_SPECIFIC_CLAIM", "UNSAFE_INSTRUCTION", "UNCLEAR_WORDING"] }, evidenceIds: { type: "array", items: { type: "string" }, maxItems: 20 }, reason: { type: "string", maxLength: 500 } } } } },
 };
 
 export function validateReportFacts(definition: FinalAssessmentDefinition, facts: ReportContentRequest["facts"]): boolean {
@@ -224,6 +227,15 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
 }
 
 export type ReportEvidence = { id: string; text: string };
+
+/** True only when kidney disease is an explicitly matched comorbidity row. */
+export function hasMatchedKidneyCondition(evidence: ReportEvidence[]): boolean {
+  return evidence.some(item => {
+    if (!item.id.startsWith("rule:comorbidity:")) return false;
+    const label = item.text.split(":", 1)[0]!.trim();
+    return /\b(?:kidney|renal|CKD|ESRD)\b/i.test(`${item.id.replace(/[_-]/gu, " ")} ${label}`);
+  });
+}
 export function reportEvidence(definition: FinalAssessmentDefinition, facts: ReportContentRequest["facts"], classification: { id: string; label: string }, packet: ReturnType<typeof matchedReportPacket>): ReportEvidence[] {
   const evidence: ReportEvidence[] = [{ id: "fact:niq_risk", text: `NIQ risk: ${classification.label}; reviewed score ${facts.reviewedScore}` }];
   const optionLabel = (fieldId: string, optionId: string) => {
@@ -356,6 +368,8 @@ function copiesGuidance(text: string, sources: string[]): boolean {
   });
 }
 
+const headingKey = (text: string) => text.toLocaleLowerCase().replace(/^thyroid (?:issues|disorder)$/, "thyroid");
+
 /** Local checks do not replace clinical review, but reject malformed and ungrounded numerals. */
 export function validateNarrative(value: unknown, evidence: ReportEvidence[]): { narrative: CompleteReportNarrative | null; issues: string[] } {
   const parsed = narrativeSchema.safeParse(value);
@@ -388,6 +402,8 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   }
   if (evidenceById.has("fact:niq_risk") && !data.overallSummary.text)
     issues.push("overallSummary:MISSING_SUMMARY");
+  if (/\b(?:check|monitor|measure|record|track|test|retest|repeat)\w*\b.{0,100}\b(?:TSH|thyroid[- ]stimulating hormone|blood glucose|glucose level|blood pressure|blood count|lab(?:oratory)? result|weight)\b/i.test(data.conditionAdvice.text))
+    issues.push("conditionAdvice:MONITORING_BELONGS_IN_SUMMARY");
   // Matched guidance must not disappear merely because the model returned an
   // empty field and the reviewer accepted it.
   for (const [field, prefixes] of [
@@ -397,13 +413,10 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     ["effectsAdvice", ["rule:toxicity:"]],
   ] as const) {
     const required = evidence.filter(item => prefixes.some(prefix => item.id.startsWith(prefix)));
-    const sharedSectionIds = [...data.redFlagsAdvice.evidenceIds, ...data.foodSafetyAdvice.evidenceIds];
-    if (required.some(item => !data[field].evidenceIds.includes(item.id) && !sharedSectionIds.includes(item.id)))
-      issues.push(`${field}:MISSING_MATCHED_COVERAGE`);
+    const citedIds = new Set(narrativeFieldNames.flatMap(name => data[name].evidenceIds));
+    if (required.some(item => !citedIds.has(item.id))) issues.push(`${field}:MISSING_MATCHED_COVERAGE`);
   }
-  const renalTargetsIndividualized = evidence.some(item => item.id.startsWith("rule:comorbidity:") &&
-    /\b(?:kidney|renal)\b/i.test(item.text) && /\bindividuali[sz]/i.test(item.text));
-  if (renalTargetsIndividualized) {
+  if (hasMatchedKidneyCondition(evidence)) {
     for (const field of ["nutritionAdvice", "treatmentAdvice"] as const) {
       const sentences = data[field].text.split(/(?<=[.!?])\s+/u);
       if (sentences.some(sentence => /\b\d+(?:[.\u2013\u2014-]\d+)?\s*(?:kcal\/kg(?:\/day)?|g(?:\s+protein)?\/kg(?:\/day)?)\b/i.test(sentence)))
@@ -433,6 +446,11 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   }
   const productNames = evidence.filter(item => item.id.startsWith("rule:product:"))
     .flatMap(item => /^Selected product plan: ([^.]+)\./.exec(item.text)?.[1]?.split(/\s+\+\s+/) ?? []);
+  if (productNames.length && /\b(?:consider|introduce|ask whether)\b.{0,70}\boral nutrition(?:al)? supplements?\b/i.test(data.nutritionAdvice.text))
+    issues.push("nutritionAdvice:REDUNDANT_SUPPLEMENT_PROMPT");
+  const containsTabletStop = (text: string) => /\b(?:do not|don.t) stop\b.{0,45}\btablets?\b|\bdo not stop these tablets\b/i.test(text);
+  if (containsTabletStop(data.conditionAdvice.text) && containsTabletStop(data.redFlagsAdvice.text))
+    issues.push("redFlagsAdvice:DUPLICATE_MEDICATION_ACTION");
   // Exception advice must identify a different product unambiguously.
   for (const item of evidence.filter(row => row.id.startsWith("rule:exception:") && data.treatmentAdvice.evidenceIds.includes(row.id))) {
     const fullName = /\b(?:Recommend|Remove|Limit|Replace|Withhold|Do not recommend)\s+([A-Z][\w-]+(?:\s+[A-Z][\w-]+){1,5})\s+(?:at|from|to|with|until|for)\b/i.exec(item.text)?.[1];
@@ -452,6 +470,29 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   if (/\b(?:above|below|aforementioned|listed)\b/i.test(data.overallSummary.text))
     issues.push("overallSummary:POSITIONAL_REFERENCE");
   for (const [field, part] of Object.entries(data)) {
+    const lines = part.text.split("\n");
+    for (const markedLine of lines) {
+      const line = markedLine.replace(/\*\*([^*\n]+)\*\*/g, "$1");
+      if (/^\s*#{1,6}\s/u.test(line)) {
+        const heading = /^### ([\p{L}\p{N}][\p{L}\p{N} &'(),/-]*)$/u.exec(line)?.[1];
+        const supportedLabels = evidence.filter(item => item.id.startsWith("rule:comorbidity:")
+          && part.evidenceIds.includes(item.id)).map(item => item.text.split(":", 1)[0]!.trim());
+        if (field !== "conditionAdvice" || !heading || !supportedLabels.some(label => headingKey(label) === headingKey(heading)))
+          issues.push(`${field}:UNSUPPORTED_HEADING`);
+      }
+      if (/^\s*(?:[-*+]\s|\d+[.)]\s|>+\s|---+$)|\*|__|~~|`|\[[^\]]+\]\(/u.test(line))
+        issues.push(`${field}:MARKDOWN_STYLE`);
+    }
+    if (field === "conditionAdvice" && part.text) {
+      const citedLabels = evidence.filter(item => item.id.startsWith("rule:comorbidity:")
+        && part.evidenceIds.includes(item.id)).map(item => item.text.split(":", 1)[0]!.trim());
+      const headings = lines.flatMap(line => {
+        const match = /^### (.+)$/u.exec(line);
+        return match ? [match[1]!] : [];
+      });
+      if (citedLabels.some(label => !headings.some(heading => headingKey(heading) === headingKey(label))))
+        issues.push("conditionAdvice:MISSING_CONDITION_HEADING");
+    }
     if (/\bask\b.{0,70}\b(?:oral nutrition(?:al)? supplements?|(?:DM|diabet(?:es|ic)) supplements?|supplement (?:suitability|compatibility))\b/i.test(part.text))
       issues.push(`${field}:REDUNDANT_SUPPLEMENT_PROMPT`);
     if (/\b(?:Es Fortitude )?Nourish\b.{0,70}\b(?:cannot|can't|not|avoid|exclude|remove)\b|\b(?:cannot recommend|do not recommend|avoid|exclude|remove)\b.{0,70}\b(?:Es Fortitude )?Nourish\b/i.test(part.text))

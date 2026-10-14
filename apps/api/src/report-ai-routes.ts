@@ -88,7 +88,7 @@ export function installReportAiRoutes(app: Hono, options: {
       const guidance = matchedReportPacket(definition, input.facts, classification.id, input.facts.assessmentDate, await scoringStore.products.list());
       const evidence = reportEvidence(definition, input.facts, { id: classification.id, label: classification.label }, guidance);
       if (evidence.length > 500 || JSON.stringify(evidence).length > 80_000) return c.json({ error: "REPORT_CONTEXT_TOO_LARGE" }, 422);
-      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema4-prompt56-manager2` : "baseline-v56-manager2";
+      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema4-prompt60-manager3` : "baseline-v60-manager3";
       const legacyPromptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}` : "baseline-v1";
       const fingerprint = ruleChecksum({ endpoint: "report-content", assessmentReference: binding.assessmentReference, resultReference: input.resultReference,
         checksum: binding.checksum, promptVersion, facts: input.facts });
