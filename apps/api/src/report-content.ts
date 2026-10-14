@@ -250,7 +250,11 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
   if (previousWeight !== undefined && currentWeight !== undefined) {
     const direction = previousWeight > currentWeight ? "loss" : previousWeight < currentWeight ? "gain" : "no change";
     const percentage = Math.round(Math.abs(previousWeight - currentWeight) / previousWeight * 1000) / 10;
-    evidence.push({ id: "fact:weight_direction", text: `Recorded weight ${direction}: ${previousWeight} kg previously and ${currentWeight} kg currently (${percentage}%). The interval between measurements was not supplied.` });
+    const previousWeightLabel = definition.supportingInputs.find(input => input.id === "previous_weight_kg")?.label;
+    const timing = previousWeightLabel?.includes("1–2 months ago")
+      ? "The previous weight was reported as 1–2 months ago; its exact measurement date is unknown."
+      : "The interval between measurements was not supplied.";
+    evidence.push({ id: "fact:weight_direction", text: `Recorded weight ${direction}: ${previousWeight} kg previously and ${currentWeight} kg currently (${percentage}%). ${timing}` });
   }
   if (facts.dietPreferenceId) {
     const dietNames = { vegetarian: "Vegetarian", non_vegetarian: "Non-vegetarian", eggetarian: "Eggetarian", jain: "Jain (no eggs, fish, or meat)" };
