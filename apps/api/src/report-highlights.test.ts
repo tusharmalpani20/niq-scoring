@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { assessNarrativeHighlights, plainNarrative } from "./report-highlights";
+import { assessNarrativeHighlights, completeNarrativeHighlights, plainNarrative } from "./report-highlights";
 import { narrativeFieldNames, type ReportNarrative } from "./report-content";
 
 const narrative = Object.fromEntries(narrativeFieldNames.map(field => [field, {
@@ -59,4 +59,22 @@ test("a factual overview stays unbolded while the interpretation carries the tak
   ] });
   expect(result.accepted).toBe(false);
   expect(result.issues.overview).toContain("INVALID_SPAN_OR_ACTION");
+});
+
+test("complete interpretive sentences can recover a failed model selection", () => {
+  const prose = structuredClone(narrative);
+  prose.keyFindings.text = "Weight is stable. Preventing a decline in food intake is the main priority.";
+  const incomplete = assessNarrativeHighlights(prose, { ...selections, keyFindings: [] });
+  expect(incomplete.accepted).toBe(false);
+  const repaired = completeNarrativeHighlights(prose, incomplete.valid);
+  expect(repaired.accepted).toBe(true);
+  expect(repaired.marked.keyFindings.text).toContain("**Preventing a decline in food intake is the main priority**");
+  expect(plainNarrative(repaired.marked)).toEqual(prose);
+});
+
+test("fallback cannot turn a bare fact into a highlighted takeaway", () => {
+  const prose = structuredClone(narrative);
+  prose.keyFindings.text = "The recorded diagnosis is pancreatic cancer.";
+  const incomplete = assessNarrativeHighlights(prose, { ...selections, keyFindings: [] });
+  expect(completeNarrativeHighlights(prose, incomplete.valid).accepted).toBe(false);
 });

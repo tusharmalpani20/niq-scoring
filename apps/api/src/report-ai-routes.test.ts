@@ -136,15 +136,15 @@ test("invalid highlight suggestions trigger targeted repair before publication",
   expect(attempts).toBe(2);
 });
 
-test("an unrepairable highlight pass cannot publish a sparse report", async () => {
+test("a failed model pass can recover with validated complete sentences", async () => {
   let attempts = 0;
   const { call, request } = await setup(undefined, undefined, undefined, () => {
     attempts++;
     return {};
   });
   const body = await (await call("report-content", request())).json();
-  expect(body.status).toBe("REVIEW_REQUIRED");
-  expect(body.issues.some((issue: string) => issue.startsWith("HIGHLIGHT_QUALITY:"))).toBe(true);
+  expect(body.status).toBe("READY");
+  expect(body.narrative.keyFindings.text).toContain("**");
   expect(attempts).toBe(3);
 });
 

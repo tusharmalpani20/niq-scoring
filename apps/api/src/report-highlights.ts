@@ -90,3 +90,26 @@ export function assessNarrativeHighlights(narrative: ReportNarrative, proposed: 
   }
   return { marked, valid, issues, accepted: Object.keys(issues).length === 0 };
 }
+
+/** After model repair fails, use only short, complete sentences that pass the same checks. */
+export function completeNarrativeHighlights(narrative: ReportNarrative, current: HighlightSelections) {
+  const plain = plainNarrative(narrative);
+  const selected = structuredClone(current);
+  let assessment = assessNarrativeHighlights(plain, selected);
+  for (const field of narrativeFieldNames) {
+    if (!assessment.issues[field]) continue;
+    const sentences = Array.from(sentenceSegmenter.segment(plain[field].text), item => item.segment.trim());
+    for (const sentence of sentences) {
+      const phrase = sentence.replace(/[.!?]+$/u, "").trim();
+      if (!phrase || selected[field].length === 3 || selected[field].some(choice => choice.phrase === phrase)) continue;
+      const kind = /\b(?:contact|call|seek|urgent)\b/i.test(phrase) ? "warning" : actionVerb.test(phrase) ? "action" : "finding";
+      const trial = { ...selected, [field]: [...selected[field], { phrase, kind }] } as HighlightSelections;
+      const checked = assessNarrativeHighlights(plain, trial);
+      if (checked.valid[field].length !== selected[field].length + 1) continue;
+      selected[field] = trial[field];
+      assessment = checked;
+      if (!assessment.issues[field]) break;
+    }
+  }
+  return assessment;
+}
