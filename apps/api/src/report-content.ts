@@ -403,6 +403,16 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   }
   const productNames = evidence.filter(item => item.id.startsWith("rule:product:"))
     .flatMap(item => /^Selected product plan: ([^.]+)\./.exec(item.text)?.[1]?.split(/\s+\+\s+/) ?? []);
+  // Exception advice must identify a different product unambiguously.
+  for (const item of evidence.filter(row => row.id.startsWith("rule:exception:") && parsed.data.treatmentAdvice.evidenceIds.includes(row.id))) {
+    const fullName = /\b(?:Recommend|Remove|Limit|Replace|Withhold|Do not recommend)\s+([A-Z][\w-]+(?:\s+[A-Z][\w-]+){1,5})\s+(?:at|from|to|with|until|for)\b/i.exec(item.text)?.[1];
+    if (!fullName) continue;
+    const shortName = fullName.split(/\s+/u).at(-1)!;
+    if (new RegExp(`\\b${shortName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(parsed.data.treatmentAdvice.text)
+      && !parsed.data.treatmentAdvice.text.toLocaleLowerCase().includes(fullName.toLocaleLowerCase())
+      && /\b(?:not recommended|avoid|remove|withhold|limit)\b/i.test(parsed.data.treatmentAdvice.text))
+      issues.push("treatmentAdvice:SHORTENED_EXCEPTION_PRODUCT");
+  }
   if (productNames.some(name => name.length > 3 && parsed.data.actionSummary.text.split(/[.!?]/u).some(sentence =>
     new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(sentence) &&
     /\b(?:\d+|product|supplement|serving|dose|take|daily|per day)\b/i.test(sentence))))

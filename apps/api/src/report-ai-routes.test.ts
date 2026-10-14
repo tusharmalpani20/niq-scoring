@@ -255,6 +255,21 @@ test("care plan passages require matching rule evidence and copied guidance is r
     [{ ...evidence[1]!, text: longerRule }]).issues).not.toContain("nutritionAdvice:COPIED_GUIDANCE");
 });
 
+test("exception advice keeps the full name of a different product", () => {
+  const evidence = [
+    { id: "fact:niq_risk", text: "NIQ risk: Low Risk; reviewed score 12" },
+    { id: "rule:nutrition:nutrition_low", text: "Maintain nutrition and monitor appetite during treatment." },
+    { id: "rule:exception:pancreatic", text: "Pancreatic cancer: Remove Es Fortitude Nourish from the product plan." },
+  ];
+  const shortened = { ...safeNarrative, treatmentAdvice: {
+    text: "Nourish is not recommended for pancreatic cancer.", evidenceIds: ["rule:exception:pancreatic"],
+  } };
+  expect(validateNarrative(shortened, evidence).issues).toContain("treatmentAdvice:SHORTENED_EXCEPTION_PRODUCT");
+  const full = { ...shortened, treatmentAdvice: { ...shortened.treatmentAdvice,
+    text: "Es Fortitude Nourish is not recommended for pancreatic cancer." } };
+  expect(validateNarrative(full, evidence).issues).not.toContain("treatmentAdvice:SHORTENED_EXCEPTION_PRODUCT");
+});
+
 test("matched conditions and treatment effects cannot be silently omitted", () => {
   const evidence = [
     { id: "fact:niq_risk", text: "NIQ risk: High Risk; reviewed score 27" },
