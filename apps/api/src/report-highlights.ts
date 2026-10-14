@@ -34,7 +34,7 @@ function requiredHighlights(field: (typeof narrativeFieldNames)[number], text: s
   if (!text.trim()) return 0;
   // Interpretation is rendered from overview and keyFindings together.
   // A factual overview needs no forced bold when keyFindings carries the takeaway.
-  if (field === "overview") return 0;
+  if (field === "overview" || field === "keyFindings") return 0;
   if (field === "conditionAdvice" && text.length > 500) return 3;
   if ((field === "treatmentAdvice" || field === "effectsAdvice" || field === "overallSummary") && text.length > 400) return 2;
   return 1;
@@ -87,6 +87,11 @@ export function assessNarrativeHighlights(narrative: ReportNarrative, proposed: 
       result = `${result.slice(0, start)}**${result.slice(start, end)}**${result.slice(end)}`;
     marked[field] = { ...marked[field], text: result };
     if (fieldIssues.length) issues[field] = fieldIssues;
+  }
+  if ((plain.overview.text.trim() || plain.keyFindings.text.trim())
+    && valid.overview.length + valid.keyFindings.length === 0) {
+    const field = interpretationCue.test(plain.keyFindings.text) ? "keyFindings" : "overview";
+    issues[field] = [...(issues[field] ?? []), "INTERPRETATION_COVERAGE"];
   }
   return { marked, valid, issues, accepted: Object.keys(issues).length === 0 };
 }

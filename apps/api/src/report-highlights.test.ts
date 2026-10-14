@@ -63,8 +63,9 @@ test("a factual overview stays unbolded while the interpretation carries the tak
 
 test("complete interpretive sentences can recover a failed model selection", () => {
   const prose = structuredClone(narrative);
+  prose.overview.text = "The diagnosis is pancreatic cancer.";
   prose.keyFindings.text = "Weight is stable. Preventing a decline in food intake is the main priority.";
-  const incomplete = assessNarrativeHighlights(prose, { ...selections, keyFindings: [] });
+  const incomplete = assessNarrativeHighlights(prose, { ...selections, overview: [], keyFindings: [] });
   expect(incomplete.accepted).toBe(false);
   const repaired = completeNarrativeHighlights(prose, incomplete.valid);
   expect(repaired.accepted).toBe(true);
@@ -74,7 +75,18 @@ test("complete interpretive sentences can recover a failed model selection", () 
 
 test("fallback cannot turn a bare fact into a highlighted takeaway", () => {
   const prose = structuredClone(narrative);
+  prose.overview.text = "The diagnosis is pancreatic cancer.";
   prose.keyFindings.text = "The recorded diagnosis is pancreatic cancer.";
-  const incomplete = assessNarrativeHighlights(prose, { ...selections, keyFindings: [] });
+  const incomplete = assessNarrativeHighlights(prose, { ...selections, overview: [], keyFindings: [] });
   expect(completeNarrativeHighlights(prose, incomplete.valid).accepted).toBe(false);
+});
+
+test("one interpretation highlight covers the card when its other passage is factual", () => {
+  const prose = structuredClone(narrative);
+  prose.overview.text = "Early support can help prevent nutrition decline.";
+  prose.keyFindings.text = "Weight increased from 62 kg to 63 kg.";
+  const result = assessNarrativeHighlights(prose, { ...selections,
+    overview: [{ phrase: "Early support can help prevent nutrition decline", kind: "finding" }], keyFindings: [] });
+  expect(result.accepted).toBe(true);
+  expect(result.marked.keyFindings.text).toBe(prose.keyFindings.text);
 });
