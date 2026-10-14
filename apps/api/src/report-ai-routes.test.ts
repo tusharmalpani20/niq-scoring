@@ -99,7 +99,7 @@ test("report content uses pinned rules, nine bounded fields, idempotency, and sa
   expect(response.status).toBe(200);
   const body = await response.json();
   expect(body).toMatchObject({ status: "READY", ruleVersionId: rule.id, checksum: rule.packageChecksum,
-    model: "openai/gpt-6-luna" });
+    model: "dots-studio/dots-3-note-preview:free" });
   expect(plainNarrative(body.narrative)).toEqual(safeNarrative);
   expect(getCalls()).toBe(2);
   expect(await (await call("report-content", request())).json()).toEqual(body);

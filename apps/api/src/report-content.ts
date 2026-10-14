@@ -71,7 +71,7 @@ export const reportToxicityOptionsRequestSchema = z.object({
 
 // The writer may exceed its final word budget before a focused repair. Keep
 // intermediate prose parseable so the repair loop can shorten it safely.
-const narrativePart = z.object({ text: z.string().trim().max(4000), evidenceIds: z.array(z.string().min(1).max(120)).max(20) })
+const narrativePart = z.object({ text: z.string().trim().max(4000), evidenceIds: z.array(z.string().min(1).max(120)).max(100) })
   .strict().refine(part => Boolean(part.text) === (part.evidenceIds.length > 0), "A passage needs evidence; an omitted passage needs neither text nor evidence");
 export const narrativeFieldNames = ["overview", "keyFindings", "actionSummary", "monitoringSummary", "overallSummary",
   "nutritionAdvice", "treatmentAdvice", "conditionAdvice", "effectsAdvice"] as const;
