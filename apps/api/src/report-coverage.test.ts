@@ -11,10 +11,10 @@ const evidence = [
 const sources = requiredCoverageSources(evidence);
 const empty = { text: "", evidenceIds: [] };
 const narrative = {
-  overview: empty, keyFindings: empty, actionSummary: empty, monitoringSummary: empty,
-  overallSummary: empty, conditionAdvice: empty, effectsAdvice: empty,
+  overview: empty, actionSummary: empty, monitoringSummary: empty,
+  overallSummary: empty, conditionAdvice: empty, effectsAdvice: empty, foodSafetyAdvice: empty, redFlagsAdvice: empty, treatmentAdvice: empty,
   nutritionAdvice: { text: "Work toward nutrition targets and discuss support if intake falls.", evidenceIds: [sources[0]!.id] },
-  treatmentAdvice: { text: "Mouth sores may occur. Choose soft food and seek help if eating becomes difficult. Follow food safety advice.",
+  keyFindings: { text: "Mouth sores may occur. Choose soft food and seek help if eating becomes difficult. Follow food safety advice.",
     evidenceIds: [evidence[1]!.id, sources[1]!.id] },
 } as ReportNarrative;
 const covered = sources.map(source => ({ evidenceId: source.id, covered: true, missing: [] }));
@@ -31,9 +31,10 @@ test("a cited source with missing advice fails the independent audit", () => {
     { evidenceId: sources[1]!.id, covered: false, missing: ["The food safety protocol is missing."] }] }, sources, narrative);
   expect(result).toMatchObject({ accepted: false, invalid: false,
     gaps: [{ id: sources[1]!.id, field: "treatmentAdvice", missing: ["The food safety protocol is missing."] }] });
-  const withoutText = { ...narrative, treatmentAdvice: { text: "", evidenceIds: [evidence[1]!.id, sources[1]!.id] } };
+  const withoutText = Object.fromEntries(Object.entries(narrative).map(([field]) => [field, { text: "", evidenceIds: [] }])) as ReportNarrative;
+  withoutText.treatmentAdvice = { text: "", evidenceIds: [evidence[1]!.id, sources[1]!.id] };
   expect(assessCoverage({ rows: covered }, sources, withoutText).gaps.map(gap => gap.id))
-    .toEqual([sources[1]!.id]);
+    .toEqual([sources[0]!.id, sources[1]!.id]);
   expect(assessCoverage({ rows: [covered[0], { evidenceId: sources[1]!.id, covered: false, missing: [] }] }, sources, narrative).invalid).toBe(true);
 });
 
