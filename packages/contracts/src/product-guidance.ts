@@ -203,7 +203,8 @@ export type ProductPlan = ProductGuidance["plans"][number];
 
 /** Read simple legacy doses and the three workbook Surgical preparations. */
 export function productPlanItems(plan: ProductPlan): ProductPlanItem[] {
-  if (plan.items) return plan.items.map(item => productPlanItemSchema.parse(item));
+  // Validation reports missing quantities to the editor instead of throwing while reading the cart.
+  if (plan.items) return plan.items.map(item => structuredProductPlanItem(item) as ProductPlanItem);
   const names = plan.productNames ?? plan.products.split(" + ").map(name => name.trim());
   if (plan.stage === "surgical") {
     const lissOnly = plan.dose.match(/^([1-9]\d*) leveled scoops in 150ml water$/);
@@ -251,8 +252,7 @@ export function normalizeProductPlan(plan: ProductPlan): ProductPlan {
   const items = productPlanItems({ ...normalized, items: undefined });
   if (!items.length) return normalized;
   const snapshot = productPlanSnapshot(items);
-  if (snapshot.dose !== normalized.dose) return normalized;
-  return normalized.items?.every(item => item.quantityPerDay !== undefined) ? normalized : { ...normalized, ...snapshot };
+  return { ...normalized, ...snapshot };
 }
 
 export function productDurationText(stage: ProductPlan["stage"], days: number): string {

@@ -543,7 +543,7 @@ test("Other returns only generic nutrition guidance, never class toxicity or pro
   expect(body.guidance.carePlan.products.plans).toEqual([]);
 });
 
-test("product windows use the completed assessment date rather than report generation time", async () => {
+test("relative pre-conditioning advice avoids calendar windows in report evidence", async () => {
   const writerInputs: string[] = [];
   const { call, request, facts } = await setup((step, _call, user) => {
     if (step === "writer") writerInputs.push(user);
@@ -560,7 +560,7 @@ test("product windows use the completed assessment date rather than report gener
   const body = await response.json();
   expect(body.guidance.carePlan.products).toMatchObject({
     status: "selected",
-    plans: [{ stage: "pre_conditioning", duration: "15 days before treatment (2026-10-05 to 2026-10-19, with treatment planned for 2026-10-20)" }],
+    plans: [{ stage: "pre_conditioning", duration: "You can start these supplements 15 days before your treatment." }],
   });
   expect(writerInputs.at(-1)).toContain("fact:planned_treatment_start");
   expect(writerInputs.at(-1)).toContain("not confirmed as already underway");
@@ -596,22 +596,25 @@ test("writer receives the matched cart quantities and regimen instructions", asy
   expect(writerInputs.at(-1)).toContain("Nourish: 2 per day; meal timing: After meals");
 });
 
-test("a selected product includes its verified catalogue description, while dose stays with the rule", async () => {
+test("a selected product carries master benefits without image bytes, while dose stays with the rule", async () => {
   const prompts: string[] = [];
   const { call, request, facts, store } = await setup((step, _call, user) => {
     if (step === "writer") prompts.push(user);
     return step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative;
   });
   const old = (await store.products.list()).find(product => product.name === "Invigour")!;
-  await store.products.update(old.id, { name: "Es Invigour", description: "Nutrition support described in the supplied report", aliases: ["Invigour"] });
+  await store.products.update(old.id, { name: "Es Invigour", description: "Nutrition support described in the supplied report", aliases: ["Invigour"], benefits: ["Supports energy and protein intake.", "Helps maintain muscle mass."], imageDataUrl: "data:image/png;base64,cHJpdmF0ZS1pbWFnZS1ieXRlcw==" });
   const response = await call("report-content", request({ facts: { ...facts, assessmentDate: "2026-10-12",
     treatmentStatusId: "treatment_status_newly_diagnosed", plannedTreatmentStartDate: "2026-10-20", cancerTypeId: "cancer_1" } }));
   expect(response.status).toBe(200);
   const body = await response.json();
-  expect(body.guidance.carePlan.products.catalog).toContainEqual({ id: old.id, name: "Es Invigour", description: "Nutrition support described in the supplied report", aliases: ["Invigour"] });
+  expect(body.guidance.carePlan.products.catalog).toContainEqual({ id: old.id, name: "Es Invigour", description: "Nutrition support described in the supplied report", aliases: ["Invigour"], benefits: ["Supports energy and protein intake.", "Helps maintain muscle mass."] });
   expect(body.guidance.carePlan.products.plans[0].items[0].productName).toBe("Invigour");
   expect(prompts.at(-1)).toContain(`catalog:product:${old.id}`);
-  expect(prompts.at(-1)).toContain("Product description only; dose and timing come from the selected plan.");
+  expect(prompts.at(-1)).toContain("Product benefits only; dose and timing come from the selected plan.");
+  expect(prompts.at(-1)).toContain("Supports energy and protein intake.");
+  expect(JSON.stringify(body.guidance.carePlan.products.catalog)).not.toContain("imageDataUrl");
+  expect(prompts.at(-1)).not.toContain("cHJpdmF0ZS1pbWFnZS1ieXRlcw==");
 });
 
 test("writer and reviewer receive the patient's diet preference", async () => {
@@ -638,8 +641,8 @@ test("writer receives the sheet's Surgical scoop quantity without a made-up dail
   } }));
   expect(response.status).toBe(200);
   const plan = (await response.json()).guidance.carePlan.products.plans[0];
-  expect(plan.items).toEqual([{ productName: "Liss WH", quantityPerDay: 1, description: "leveled scoops in 150ml water" }]);
-  expect(writerInputs.at(-1)).toContain("Liss WH: 1 leveled scoops in 150ml water");
+  expect(plan.items).toEqual([{ productName: "Liss WH", quantityPerDay: 1, unit: "level scoop", preparation: "Mix in 150 mL water." }]);
+  expect(writerInputs.at(-1)).toContain("Liss WH: 1 level scoop per day; prepare: Mix in 150 mL water.");
   expect(writerInputs.at(-1)).not.toContain("Liss WH: undefined per day");
 });
 

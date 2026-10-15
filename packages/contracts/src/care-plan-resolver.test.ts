@@ -144,8 +144,35 @@ describe("care plan guidance from the versioned workbooks", () => {
     });
   });
 
-  test("uses the rule's numeric durations and calculates windows from assessment and event dates", () => {
+  test("relative pre-conditioning guidance needs no treatment date or eligibility window", () => {
     const rule = definition();
+    const facts: CarePlanFacts = { ...base, treatmentStatusId: "treatment_status_newly_diagnosed", cancerTypeId: "cancer_1" };
+    for (const plannedTreatmentStartDate of [undefined, "2027-03-20", "2026-01-01"]) {
+      const result = resolveCarePlanGuidance(rule, { ...facts, plannedTreatmentStartDate });
+      expect(result.products.status).toBe("selected");
+      expect(result.products.plans[0]?.duration).toBe("You can start these supplements 15 days before your treatment.");
+    }
+    expect(publicQuestionnaire(rule)).toHaveProperty("preConditioningStartPolicy", "relative_guidance");
+  });
+
+  test("a fixed vegetarian replacement keeps a total quantity of one with its own timing", () => {
+    const rule = definition();
+    const note = rule.carePlanGuidance!.products.notes.find(row => row.kind === "vegetarian_liss_substitution")!;
+    note.action = { type: "replace", productName: "Liss WH", replacementProductName: "Invigour", replacementQuantityPerDay: 1,
+      timesPerDay: 1, mealTiming: "After breakfast.", preparation: "Mix in 150 mL water." };
+    for (const riskCategoryId of ["low", "moderate", "high"]) {
+      const result = resolveCarePlanGuidance(rule, { ...base, riskCategoryId, treatmentStatusId: "treatment_status_under_treatment",
+        surgicalStatusId: "cancer_surgical_status_done", surgeryDate: "2026-10-10", dietPreferenceId: "vegetarian" });
+      expect(result.products.status).toBe("selected");
+      expect(result.products.plans[0]?.stage).toBe("surgical");
+      expect(result.products.plans[0]?.items).toEqual([{ productName: "Invigour", quantityPerDay: 1,
+        timesPerDay: 1, mealTiming: "After breakfast.", preparation: "Mix in 150 mL water." }]);
+    }
+  });
+
+  test("uses the legacy date policy only when explicitly saved", () => {
+    const rule = definition();
+    rule.carePlanGuidance!.preConditioningStartPolicy = "date_window";
     const pre = rule.carePlanGuidance!.products.plans.find(row => row.stage === "pre_conditioning" && row.nutritionalStatus === "moderately_nourished")!;
     expect(pre.durationAmount).toBe(15);
     const preFacts: CarePlanFacts = { ...base, treatmentStatusId: "treatment_status_newly_diagnosed", plannedTreatmentStartDate: "2026-10-20", cancerTypeId: "cancer_1" };
@@ -294,7 +321,7 @@ describe("care plan guidance from the versioned workbooks", () => {
       plannedTreatmentStartDate: "2026-10-20", cancerTypeId: "cancer_7" };
     expect(validateFinalAssessmentDefinition(rule)).toEqual([]);
     expect(resolveCarePlanGuidance(rule, facts).products.plans[0]).toMatchObject({
-      dose: "1 Invigour + 3 Nourish", duration: "15 days before treatment (2026-10-05 to 2026-10-19, with treatment planned for 2026-10-20)",
+      dose: "1 Invigour + 3 Nourish", duration: "You can start these supplements 15 days before your treatment.",
     });
     notes.pop();
     notes.push({ ...custom, action: { type: "replace", productName: "Nourish", replacementProductName: "Protect", replacementQuantityPerDay: 2 } });

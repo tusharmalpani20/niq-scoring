@@ -58,6 +58,31 @@ test("final assessment creation uses the versioned fixed profile and supports sa
   expect(reopened.audit).toHaveLength(2);
 });
 
+test("draft saves and copies enforce the fixed care-plan defaults", async () => {
+  const { store, request, create } = adminSetup();
+  const source = await create();
+  const definition = structuredClone(source.definition as FinalAssessmentDefinition);
+  definition.carePlanGuidance!.preConditioningStartPolicy = "date_window";
+  definition.carePlanGuidance!.surgicalOverlapPolicy = "clinician_choice";
+  const saved = await request(`/${source.id}`, "PUT", { revision: source.revision, definition });
+  expect(saved.status).toBe(200);
+  const record = await saved.json() as RuleRecord;
+  expect((record.definition as FinalAssessmentDefinition).carePlanGuidance).toMatchObject({
+    preConditioningStartPolicy: "relative_guidance", surgicalOverlapPolicy: "surgical_priority",
+  });
+  expect(record.lifecycle).toBe("DRAFT");
+  // Model a version saved before these defaults became fixed.
+  await store.rules.save({ id: source.id, revision: record.revision, definition, checksum: ruleChecksum(definition), actor: actorId, now });
+  const copy = await request("", "POST", { name: "Copied review draft", requestId: crypto.randomUUID(), duplicateId: source.id });
+  expect(copy.status).toBe(201);
+  const copied = await copy.json() as RuleRecord;
+  expect((copied.definition as FinalAssessmentDefinition).carePlanGuidance).toMatchObject({
+    preConditioningStartPolicy: "relative_guidance", surgicalOverlapPolicy: "surgical_priority",
+  });
+  expect(copied.lifecycle).toBe("DRAFT");
+  expect(copied.clinicalUsePermitted).toBe(false);
+});
+
 test("final assessment keeps fixed options while allowing point edits", async () => {
   const { request, create } = adminSetup();
   const draft = await create();

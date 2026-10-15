@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { initialProductGuidance, productGuidanceSchema } from "./product-guidance-template";
-import { defaultProductExceptionAction, normalizeProductDuration, normalizeProductPlan, productDurationDays, productIdentityName, productPlanItems, productPlanSnapshot } from "./product-guidance";
+import { defaultProductExceptionAction, productPlanItemSchema, normalizeProductDuration, normalizeProductPlan, productDurationDays, productIdentityName, productPlanItems, productPlanSnapshot } from "./product-guidance";
 
 describe("product workbook defaults", () => {
   test("covers every stage and nutritional-status combination once", () => {
@@ -27,7 +27,7 @@ describe("product workbook defaults", () => {
     expect(plans.find(plan => plan.stage === "during_treatment" && plan.nutritionalStatus === "severely_malnourished")?.dose)
       .toBe("3 Invigour + 2 Protect");
     expect(plans.find(plan => plan.stage === "surgical" && plan.nutritionalStatus === "severely_malnourished")?.dose)
-      .toBe("1 Invigour + 2 leveled scoops in 150ml water");
+      .toBe("1 Invigour + 2 Liss WH (level scoop)");
     expect(plans.find(plan => plan.stage === "during_treatment")?.duration).toBe("Minimum 90 days during treatment");
     expect(plans.find(plan => plan.stage === "post_treatment")?.duration).toBe("365 days or more after treatment");
     expect(new Set(notes.map(note => note.kind))).toEqual(new Set([
@@ -50,16 +50,15 @@ describe("product workbook defaults", () => {
       productNames: ["Invigour", "Nourish"], products: "Invigour + Nourish", dose: "1 Invigour + 2 Nourish",
     });
     expect(productGuidanceSchema.safeParse({ ...initialProductGuidance(), plans: [{ ...plan, ...snapshot }] }).success).toBe(true);
-    expect(productPlanSnapshot([{ productName: "Liss WH", quantityPerDay: 1, description: "2 leveled scoops in 150ml water" }]).dose)
-      .toBe("1 Liss WH (2 leveled scoops in 150ml water)");
-    expect(productPlanSnapshot([{ productName: "Liss WH", quantityPerDay: 2, description: "leveled scoops in 150ml water" }]).dose)
-      .toBe("2 leveled scoops in 150ml water");
+    expect(productPlanSnapshot([{ productName: "Liss WH", quantityPerDay: 2, unit: "level scoop", preparation: "Mix in 150 mL water." }])).toMatchObject({
+      dose: "2 Liss WH (level scoop)", items: [{ productName: "Liss WH", quantityPerDay: 2, unit: "level scoop", preparation: "Mix in 150 mL water." }],
+    });
   });
 
   test("keeps rule-specific schedule fields through a plan snapshot", () => {
     const plan = initialProductGuidance().plans.find(row => row.stage === "during_treatment" && row.nutritionalStatus === "moderately_nourished")!;
     const items = [{ productName: "Es Invigour", quantityPerDay: 1, unit: "sachet", timesPerDay: 1,
-      preparation: "Mix in water and consume immediately", mealTiming: "After breakfast", rationale: "Nutrition support during treatment" },
+      preparation: "Mix in water and consume immediately", mealTiming: "After breakfast" },
     { productName: "Es Fortitude Protect", quantityPerDay: 2, unit: "sachets" }];
     const snapshot = productPlanSnapshot(items);
     const versioned = { ...plan, ...snapshot };
@@ -73,15 +72,24 @@ describe("product workbook defaults", () => {
   test("stores each workbook Surgical scoop count in the quantity field", () => {
     const surgical = initialProductGuidance().plans.filter(row => row.stage === "surgical");
     expect(surgical.map(row => row.items)).toEqual([
-      [{ productName: "Liss WH", quantityPerDay: 1, description: "leveled scoops in 150ml water" }],
-      [{ productName: "Liss WH", quantityPerDay: 2, description: "leveled scoops in 150ml water" }],
-      [{ productName: "Invigour", quantityPerDay: 1 }, { productName: "Liss WH", quantityPerDay: 2, description: "leveled scoops in 150ml water" }],
+      [{ productName: "Liss WH", quantityPerDay: 1, unit: "level scoop", preparation: "Mix in 150 mL water." }],
+      [{ productName: "Liss WH", quantityPerDay: 2, unit: "level scoop", preparation: "Mix in 150 mL water." }],
+      [{ productName: "Invigour", quantityPerDay: 1 }, { productName: "Liss WH", quantityPerDay: 2, unit: "level scoop", preparation: "Mix in 150 mL water." }],
     ]);
     for (const plan of surgical) {
       expect(productPlanSnapshot(productPlanItems(plan)).dose).toBe(plan.dose);
-      const legacy = { ...plan, items: undefined, productNames: undefined };
+      const legacy = { ...plan, items: undefined, productNames: undefined,
+        dose: plan.nutritionalStatus === "well_nourished" ? "1 leveled scoops in 150ml water"
+          : plan.nutritionalStatus === "moderately_nourished" ? "2 leveled scoops in 150ml water" : "1 Invigour + 2 leveled scoops in 150ml water" };
       expect(normalizeProductPlan(legacy)).toMatchObject({ items: plan.items, productNames: plan.productNames, dose: plan.dose });
     }
+  });
+
+  test("removes obsolete plan fields while retaining Liss WH serving details", () => {
+    const item = productPlanItemSchema.parse({ productName: "Liss WH", quantityPerDay: 2,
+      description: "leveled scoops in 150ml water", rationale: "Unused explanation" });
+    expect(item).toEqual({ productName: "Liss WH", quantityPerDay: 2, unit: "level scoop", preparation: "Mix in 150 mL water." });
+    expect(productPlanItems({ ...initialProductGuidance().plans[0]!, items: [item] })).toEqual([item]);
   });
 
   test("structured quantities must be positive whole numbers in a bounded range", () => {
