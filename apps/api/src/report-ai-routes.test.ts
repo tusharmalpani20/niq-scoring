@@ -1085,3 +1085,16 @@ test("provider failure records the error privately and publishes only verified f
   expect(run?.status).toBe("READY");
   expect(run?.calls.some(call => call.status === "FAILED" && call.errorCode === "MODEL_UNAVAILABLE")).toBe(true);
 });
+
+test("emphasis markup cannot force valid near-limit report prose into fallback", async () => {
+  let draft: ReturnType<typeof plainNarrative>;
+  const sentence = "Monitor your intake with your care team. ";
+  const text = sentence.repeat(Math.floor(3990 / sentence.length)).trim();
+  const fixture = await setup(step => step === "reviewer" ? { accepted: true, issues: [] } : draft);
+  draft = { ...plainNarrative(fixture.verifiedFixture), nutritionAdvice: { text, evidenceIds: fixture.verifiedFixture.nutritionAdvice.evidenceIds } };
+  const response = await (await fixture.call("report-content", fixture.request())).json();
+  expect(response.status).toBe("READY");
+  expect(response.model).not.toBe("rule-fallback");
+  expect(response.narrative.nutritionAdvice.text.length).toBeGreaterThan(4000);
+  expect(response.narrative.nutritionAdvice.text.replaceAll("**", "")).toBe(text);
+});

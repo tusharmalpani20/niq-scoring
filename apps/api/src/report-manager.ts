@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createReportSectionHighlighter } from "./report-section-highlighter";
+import { plainNarrative } from "./report-highlights";
 import { coordinateReportAgents } from "./report-agent-coordinator";
 import { hasMatchedKidneyCondition, narrativeFieldNames, validateNarrative } from "./report-content";
 import { ReportModelError } from "./openrouter-report-client";
@@ -51,7 +52,8 @@ export async function manageReportAgents(input: ReportInput) {
       `Make the final report decision. The complete output comprises the narrative, separate interventionSummaries for possible effects, and structured product table data. Do not require product doses or possible-effect card details in narrative prose. Approve only when worker status is READY, deterministic checks pass, and each distinct matched action appears once in an appropriate field, including monitoringSummary for routine patient tests and tracking, conditionAdvice for condition-specific guidance, and effectsAdvice for reported symptom care. If a status and nutrition risk target match, allow one citation-supported target in nutritionAdvice. Do not require duplicated advice. Routine condition tests belong only in monitoringSummary. Conditional symptom-specific tests and assessments may stay in the matching possible-effect card without duplication. Do not demand moving them into routine monitoring. Empty fields are valid when their content is covered in another appropriate field. Do not flag style-only wording. Approve if these checks pass; otherwise choose fallback and give concrete issues. Full context: ${JSON.stringify(context)}\nWorker result: ${JSON.stringify(result)}`, decisionJsonSchema));
     if (!reviewed.success || reviewed.data.issues.some(issue => issue.evidenceIds.some(id => !knownIds.has(id))))
       throw new ReportModelError("MODEL_INVALID_MANAGER_DECISION");
-    const finalCheck = validateNarrative(result.narrative, input.evidence);
+    // Typography must not count against the clinically reviewed prose length.
+    const finalCheck = validateNarrative(plainNarrative(result.narrative), input.evidence);
     if (reviewed.data.decision === "approve" && !reviewed.data.issues.length && finalCheck.narrative && !finalCheck.issues.length) return result;
     if (finalRound === 0 && reviewed.data.issues.length) {
       result = await coordinateReportAgents({ ...input, invoke, highlighter, initialDraft: result.repairCandidate, initialInterventionSummaries: result.interventionSummaries,

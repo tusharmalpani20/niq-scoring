@@ -91,3 +91,14 @@ test("settle waits for superseded work as well as the latest section", async () 
   finish(); await waiting;
   expect(settled).toBe(true);
 });
+
+test("invalid repair preserves valid earlier selections in other points", async () => {
+  let attempts = 0;
+  const highlighter = createReportSectionHighlighter(async () => ++attempts === 1
+    ? { points: [{ id: "p1", phrases: [{ phrase: "Track your intake", kind: "action" }] }] }
+    : { points: "malformed repair" });
+  const result = await highlighter.highlight("monitoring", "Track your intake each day. Weigh yourself daily.");
+  expect(attempts).toBe(2);
+  expect(result).toContain("**Track your intake** each day.");
+  expect(result).toContain("**Weigh yourself daily.**");
+});

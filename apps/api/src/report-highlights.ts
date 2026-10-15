@@ -26,7 +26,7 @@ export function plainNarrative(narrative: ReportNarrative): CompleteReportNarrat
 }
 
 const sentenceSegmenter = new Intl.Segmenter("en", { granularity: "sentence" });
-const actionVerb = /\b(?:aim|ask|avoid|call|check|choose|consume|contact|discuss|drink|eat|follow|have|include|increase|keep|leave|limit|maintain|mix|monitor|prepare|record|reduce|repeat|report|request|restrict|rinse|seek|separate|share|sip|sit|take|tell|track|try|use|weigh)\b/i;
+const actionVerb = /\b(?:agree|aim|ask|avoid|call|check|choose|consume|contact|discuss|drink|eat|follow|have|include|increase|inform|keep|leave|limit|maintain|mix|monitor|notify|prepare|record|reduce|repeat|report|request|restrict|rinse|seek|separate|share|sip|sit|stop|take|tell|track|try|use|weigh)\b/i;
 const interpretationCue = /\b(?:affect|change|changed|changes|concern|decline|decrease|decreased|help|important|increase|increased|maintain|monitor|prevent|priorities|priority|review|support|worsen|worsening)\b/i;
 const numericMeaningCue = /\b(?:affect|concern|decline|help|important|maintain|monitor|prevent|priorities|priority|review|support|worsen|worsening)\b/i;
 
@@ -118,22 +118,30 @@ export function highlightSectionPoints(text: string): Array<{ id: string; text: 
   return points;
 }
 
+const sectionSelectionSchema = selectionSchema.extend({ phrase: z.string().min(1).max(4000) });
 const pointSelectionSchema = z.object({
-  points: z.array(z.object({ id: z.string(), phrases: z.array(selectionSchema).max(20) }).strict()),
+  points: z.array(z.object({ id: z.string(), phrases: z.array(sectionSelectionSchema).max(20) }).strict()),
 }).strict();
 
 export const sectionHighlightJsonSchema = {
   type: "object", additionalProperties: false, required: ["points"], properties: {
     points: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "phrases"], properties: {
       id: { type: "string" }, phrases: { type: "array", maxItems: 20, items: { type: "object", additionalProperties: false,
-        required: ["phrase", "kind"], properties: { phrase: { type: "string", maxLength: 500 }, kind: { type: "string", enum: ["finding", "action", "warning"] } } } },
+        required: ["phrase", "kind"], properties: { phrase: { type: "string", maxLength: 4000 }, kind: { type: "string", enum: ["finding", "action", "warning"] } } } },
     } } },
   },
 };
 
 function isHighlightRequired(text: string): boolean {
-  return actionVerb.test(text) || /\b(?:urgent|immediately|emergency|red flag|seek care|go to (?:the )?\w+|call 911|fever|breathlessness|shortness of breath|threshold|if\s+.{0,80}\b(?:or|and)\b)/i.test(text)
+  return actionVerb.test(text) || /\b(?:do not|don[’']t|never|must not)\b/i.test(text) || /\b(?:urgent|immediately|emergency|red flag|seek care|go to (?:the )?\w+|call 911|fever|breathlessness|shortness of breath|threshold|if\s+.{0,80}\b(?:or|and)\b)/i.test(text)
     || /(?:\b(?:at least|above|over|below|under|greater than|less than)\s*\d|[<>]=?\s*\d|\b\d+(?:\.\d+)?\s*(?:°\s*[cf]|mmhg|mg\/dl|mmol\/l|bpm|%))\b/i.test(text);
+}
+
+/** A fragment must never remove negation, conditions, thresholds or escalation.
+ * Ordinary unqualified advice may still use a concise exact phrase. */
+function requiresCompleteHighlight(text: string): boolean {
+  return /\b(?:call|contact|seek|urgent|immediately|inform|notify|if|when|unless|until|except|without|never|not|only)\b|\bdon[’']t\b/i.test(text)
+    || (isHighlightRequired(text) && /\d|\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\b/i.test(text));
 }
 
 /** Assess exact, non-overlapping phrases against their individual sentence point. */
@@ -162,10 +170,10 @@ export function assessSectionHighlights(text: string, proposed: unknown) {
         && !(at > 0 && /[\p{L}\p{N}/]/u.test(point.text[at - 1]!))
         && !(end < point.text.length && /[\p{L}\p{N}/]/u.test(point.text[end]!))
         // Warning meaning is determined by the approved sentence, not the model's label.
-        && !(/\b(?:call|contact|seek|urgent|immediately)\b/i.test(point.text)
-          && /\b(?:if|for|when|or|above|below|over)\b|\d/i.test(point.text)
-          && choice.phrase !== point.text.trim())
-        && (choice.kind === "finding" || actionVerb.test(choice.phrase) || choice.kind === "warning");
+        && !(requiresCompleteHighlight(point.text) && choice.phrase !== point.text.trim())
+        && (choice.phrase === point.text.trim()
+          || ((choice.phrase.match(/[\p{L}\p{N}]+/gu) ?? []).length >= 2
+            && (!isHighlightRequired(point.text) || actionVerb.test(choice.phrase))));
       if (!validSpan) { issues.push("INVALID_SPAN"); continue; }
       accepted.push(choice);
       localRanges.push({ start: at, end });

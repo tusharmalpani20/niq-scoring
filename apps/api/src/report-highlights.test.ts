@@ -183,3 +183,35 @@ test("fallback covers medication separation and daily weight instructions", () =
   expect(complete.marked).toContain("**Repeat liver-function tests as scheduled.**");
   expect(complete.marked.replaceAll("**", "")).toBe(text);
 });
+
+test("highlight spans cannot reverse a prohibition or drop a safety qualification", () => {
+  for (const [text, phrase] of [
+    ["Do not restrict fluids unless your care team advises you to.", "restrict fluids"],
+    ["If vomiting occurs, sip ORS after checking your fluid plan.", "sip ORS"],
+    ["Leave four hours between it and calcium supplements.", "Leave four hours"],
+    ["Inform your doctor early if vomiting occurs.", "Inform your doctor"],
+  ]) for (const kind of ["action", "finding", "warning"]) {
+    expect(assessSectionHighlights(text!, { points: [{ id: "p1", phrases: [{ phrase, kind }] }] }).accepted).toBe(false);
+  }
+});
+
+test("long approved warning sentences retain fallback highlighting without losing other selections", () => {
+  const warning = `Contact your care team if ${"persistent symptoms and ".repeat(24)}breathlessness occur.`;
+  const source = `Track your intake. ${warning}`;
+  const result = completeSectionHighlights(source);
+  expect(result.accepted).toBe(true);
+  expect(result.marked).toContain(`**${warning}**`);
+  expect(result.marked).toContain("**Track your intake.**");
+  expect(result.marked.replaceAll("**", "")).toBe(source);
+});
+
+test("fallback highlights prohibitions and agreement on a patient care target", () => {
+  const text = "Do not stop these tablets on your own. Agree on a fluid target with your care team.";
+  expect(completeSectionHighlights(text).marked).toBe("**Do not stop these tablets on your own.** **Agree on a fluid target with your care team.**");
+});
+
+test("generic words labelled as findings cannot satisfy an actionable point", () => {
+  for (const phrase of ["your", "your intake"]) expect(assessSectionHighlights("Track your intake every day.", {
+    points: [{ id: "p1", phrases: [{ phrase, kind: "finding" }] }],
+  }).accepted).toBe(false);
+});
