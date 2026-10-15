@@ -1,12 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
 
+
 async function signIn(page: Page) {
   await page.goto("/versions");
   await page.getByLabel("Email address", { exact: true }).fill("browser@example.test");
   await page.getByLabel("Password", { exact: true }).fill("Synthetic-browser-test-only-123!");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+  await expect(page.getByRole("banner", { name: "Workspace header" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Synthetic browser QA");
   await page.goto("/versions");
 }
 
@@ -30,17 +32,17 @@ test("real API final-profile draft, reopen, duplicate and protected deletion", a
   await page.getByLabel("Description", { exact: true }).fill("Synthetic final-profile persistence check");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Back to versions", exact: true }).click();
+  await page.getByRole("button", { name: "Back to rules", exact: true }).click();
   await page.reload();
   await page.getByRole("button", { name, exact: true }).click();
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Synthetic final-profile persistence check");
-  await page.getByRole("button", { name: "Back to versions", exact: true }).click();
+  await page.getByRole("button", { name: "Back to rules", exact: true }).click();
   await page.getByRole("button", { name: `Duplicate ${name}`, exact: true }).click();
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Synthetic final-profile persistence check");
-  await page.getByRole("button", { name: "Back to versions", exact: true }).click();
+  await page.getByRole("button", { name: "Back to rules", exact: true }).click();
   for (const title of [`${name} copy`, name]) {
     await page.getByRole("button", { name: `Delete ${title}`, exact: true }).click();
     await expect(page.getByRole("alertdialog")).toContainText("Its activity history will be kept.");
@@ -53,6 +55,7 @@ test("real API persists final scoring edits and rejects altered fixed fields", a
   const name = `Final fixed browser ${info.project.name} ${Date.now()}`;
   await signIn(page);
   const created = await createFinalDraft(page, name);
+  await page.getByRole("tab", { name: "Scoring", exact: true }).click();
   await page.locator("#final-field-tumour_type").getByRole("button", { name: /options configured/ }).click();
   await page.getByLabel("Solid Tumour points", { exact: true }).fill("4");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
