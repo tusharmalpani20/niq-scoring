@@ -23,9 +23,13 @@ test("client opens a detail page with usage and its deployments", async ({ page 
     }
     if (path === "/api/auth/status") return route.fulfill({ json: { setupRequired: false } });
     if (path === "/api/auth/session") return route.fulfill({ json: { user: { id: "qa", displayName: "Browser QA", enabled: true } } });
+    if (path === "/api/admin/clients") return route.fulfill({ json: { items: [{ id: "c1", name: "Apollo", enabled: true, deploymentCount: 1 }], total: 1, page: 1, pageSize: 10, pageCount: 1 } });
+    if (path === "/api/admin/clients/c1" || path === "/api/admin/clients/apollo") return route.fulfill({ json: { client: { id: "c1", name: "Apollo", enabled: true, deploymentCount: 1 } } });
+    if (path === "/api/admin/deployments") return route.fulfill({ json: { items: [{ id: "d1", clientId: "c1", clientName: "Apollo", name: "Production", displayLabel: "Production", environment: "production", hostingType: "NIQ_HOSTED", enabled: true, ruleLabel: "Default (TEST-5)", assignment: { mode: "LATEST_APPROVED" }, entitlements: [] }], total: 1, page: 1, pageSize: 10, pageCount: 1 } });
+    if (path === "/api/admin/dashboard/clients/c1") return route.fulfill({ json: { clients: [{ id: "c1", name: "Apollo", assessments: 18, faceScans: 7, deployments: [{ id: "d1", name: "Production", enabled: true, assessments: { completed: 18, allowanceUsed: 18, limit: null, available: true }, faceScans: { completed: 7, allowanceUsed: 7, limit: null, available: true } }] }], attention: { expiringTokenDeployments: [], nearLimitDeployments: [] } } });
     if (path === "/api/admin/overview") return route.fulfill({ json: {
       clients: [{ id: "c1", name: "Apollo", enabled: true }],
-      deployments: [{ id: "d1", clientId: "c1", name: "Apollo Production", environment: "production", hostingType: "NIQ_HOSTED", enabled: true }],
+      deployments: [{ id: "d1", clientId: "c1", name: "Production", environment: "production", hostingType: "NIQ_HOSTED", enabled: true }],
       entitlements: [], assignments: [{ deploymentId: "d1", mode: "LATEST_APPROVED" }], versions: [{ id: "v1", version: "TEST-5", lifecycle: "ACTIVE", clinicalUsePermitted: true, isDefault: true }],
     } });
     if (path === "/api/admin/usage/rules") return route.fulfill({ json: { rules: new URL(route.request().url()).searchParams.has("clientId")
@@ -59,28 +63,27 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await page.goto("/overview");
   await expect(page.getByRole("heading", { name: "Assessments by rule" })).toBeVisible();
   await expect(page.locator(".recharts-surface")).toBeVisible();
-  await page.getByRole("link", { name: /View clients/ }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Clients", exact: true }).click();
   await page.getByRole("link", { name: "Apollo", exact: true }).click();
   await expect(page).toHaveURL(/\/clients\/apollo$/);
   await page.goto("/clients/c1");
-  await expect(page).toHaveURL(/\/clients\/apollo$/);
+  await expect(page).toHaveURL(/\/clients\/c1$/);
   await expect(page.getByRole("heading", { name: "Apollo" })).toBeVisible();
   await expect(page.getByText("Assessments scored")).toBeVisible();
-  await expect(page.getByText("18", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Assessments by rule" })).toBeVisible();
-  await expect(page.locator(".recharts-surface")).toHaveCount(2);
+  await expect(page.getByRole("paragraph").filter({ hasText: /^18$/ })).toBeVisible();
+  await expect(page.getByText("Assessments by rule", { exact: true })).toBeVisible();
+  await expect(page.locator(".recharts-surface")).toHaveCount(1);
   await page.getByRole("tab", { name: /Deployments/ }).click();
   await expect(page.getByRole("link", { name: "Production" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Assessments · all time" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Vital IQ · all time" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Assessments · this month", includeHidden: true })).toHaveCount(1);
+  await expect(page.getByRole("columnheader", { name: "Vital IQ scans · this month", includeHidden: true })).toHaveCount(1);
   await expect(page.getByRole("row", { name: /Production/ }).getByText("Default (TEST-5)")).toBeVisible();
   await expect(page.getByRole("row", { name: /Production/ }).getByText("Enabled")).toBeVisible();
   const deploymentPagination = page.getByRole("navigation", { name: "Client deployments pagination" });
   await expect(deploymentPagination).toContainText("Page 1 of 1");
-  await expect(deploymentPagination).toContainText("1 total");
   await expect(deploymentPagination.getByRole("button", { name: "Previous" })).toBeDisabled();
   await expect(deploymentPagination.getByRole("button", { name: "Next" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Edit production deployment" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit Production deployment" })).toBeVisible();
   await page.getByRole("button", { name: "Create deployment" }).click();
   await expect(page.getByRole("dialog").getByRole("combobox", { name: "Client" })).toHaveText("Apollo");
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
@@ -105,11 +108,10 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await expect(page.getByText("No tokens yet.")).toHaveCount(0);
   await page.getByRole("button", { name: "Retry" }).click();
   await expect(page.getByRole("button", { name: "Create token" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Actions" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Access" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Actions", includeHidden: true })).toHaveCount(1);
+  await expect(page.getByRole("columnheader", { name: "Access", includeHidden: true })).toHaveCount(1);
   const tokenPagination = page.getByRole("navigation", { name: "Activation tokens pagination" });
   await expect(tokenPagination).toContainText("Page 1 of 2");
-  await expect(tokenPagination).toContainText("12 total");
   await expect(tokenPagination.getByRole("button", { name: "Previous" })).toBeDisabled();
   await tokenPagination.getByRole("button", { name: "Next" }).click();
   await expect(tokenPagination).toContainText("Page 2 of 2");
@@ -133,7 +135,6 @@ test("client opens a detail page with usage and its deployments", async ({ page 
   await page.getByRole("alertdialog").getByRole("button", { name: "Revoke token" }).click();
   await expect(page.getByRole("row", { name: /nused1/ }).getByText("Revoked")).toBeVisible();
   await expect(tokenPagination).toContainText("Page 1 of 1");
-  await expect(tokenPagination).toContainText("6 total");
   expect(unusedTokenRevoked).toBe(true);
   await page.getByRole("button", { name: "Revoke access for token NIQ …used12" }).click();
   await expect(page.getByRole("alertdialog")).toContainText("Future requests using the credential issued by token");

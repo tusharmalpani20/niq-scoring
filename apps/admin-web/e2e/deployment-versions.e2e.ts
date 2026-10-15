@@ -7,10 +7,18 @@ test("deployments show and filter resolved versions and explain the default", as
     const path = new URL(route.request().url()).pathname;
     if (path === "/api/auth/status") return route.fulfill({ json: { setupRequired: false } });
     if (path === "/api/auth/session") return route.fulfill({ json: { user: { id: "qa", displayName: "Browser QA", enabled: true } } });
+    if (path === "/api/admin/deployments") {
+      const rows = [
+        { id: "d1", clientId: "c1", clientName: "Apollo", name: "Apollo", displayLabel: "Production", environment: "production", hostingType: "NIQ_HOSTED", enabled: true, ruleLabel: "Default (Rules 2)", assignment: { mode: "LATEST_APPROVED" }, entitlements: [] },
+        { id: "d2", clientId: "c2", clientName: "Beta", name: "Beta", displayLabel: "Test", environment: "test", hostingType: "NIQ_HOSTED", enabled: true, ruleLabel: "Rules 1", assignment: { mode: "PINNED", scoringRuleVersionId: "v1" }, entitlements: [] },
+      ].filter(row => !new URL(route.request().url()).searchParams.has("rule") || row.id === "d1");
+      return route.fulfill({ json: { items: rows, total: rows.length, page: 1, pageSize: 10, pageCount: 1 } });
+    }
+    if (path === "/api/admin/rules") return route.fulfill({ json: { versions: [{ id: "v1", version: "Rules 1" }, { id: "v2", version: "Rules 2" }], pageCount: 1 } });
     if (path === "/api/admin/overview") return route.fulfill({ json: {
       clients: [{ id: "c1", name: "Apollo", enabled: true }, { id: "c2", name: "Beta", enabled: true }],
       deployments: [
-        { id: "d1", clientId: "c1", name: "Apollo", environment: "production", hostingType: "NIQ_HOSTED", enabled: true },
+        { id: "d1", clientId: "c1", name: "Production", environment: "production", hostingType: "NIQ_HOSTED", enabled: true },
         { id: "d2", clientId: "c2", name: "Beta", environment: "test", hostingType: "NIQ_HOSTED", enabled: true },
       ],
       assignments: [{ deploymentId: "d1", mode: "LATEST_APPROVED" }, { deploymentId: "d2", mode: "PINNED", scoringRuleVersionId: "v1" }],
@@ -32,17 +40,17 @@ test("deployments show and filter resolved versions and explain the default", as
   const table = page.getByRole("table");
   await expect(table.getByText("Default (Rules 2)", { exact: true })).toBeVisible();
   await expect(table.getByText("Rules 1", { exact: true })).toBeVisible();
-  await page.getByRole("combobox", { name: "Rules", exact: true }).click();
-  await page.getByRole("option", { name: "Rules 2", exact: true }).click();
+  await page.locator("summary").filter({ hasText: "All rules" }).click();
+  await page.getByRole("button", { name: "Rules 2", exact: true }).click();
   await expect(table.getByRole("link", { name: "Apollo", exact: true })).toBeVisible();
   await expect(table.getByRole("link", { name: "Beta", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Clear filters", exact: true }).click();
   await expect(table.getByRole("link", { name: "Beta", exact: true })).toBeVisible();
-  await table.getByRole("link", { name: "Apollo", exact: true }).click();
+  await table.getByRole("link", { name: "Production", exact: true }).click();
   await expect(page).toHaveURL(/\/deployments\/apollo\/d1$/);
   await expect(page.getByRole("heading", { name: "Production" })).toBeVisible();
   await page.goto("/deployments");
-  await page.getByRole("button", { name: "Edit Apollo production deployment", exact: true }).click();
+  await page.getByRole("button", { name: "Edit Apollo Production deployment", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("list", { name: "Editing progress" })).toHaveCount(0);
   await expect(dialog).toContainText("Apollo");
