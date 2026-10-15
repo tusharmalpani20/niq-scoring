@@ -65,17 +65,21 @@ export function Deployments() {
   const [ruleError, setRuleError] = useState("");
   const ruleMenu = useRef<HTMLDetailsElement>(null);
   const [page, setPage] = useState(1);
+  function pageParameters() {
+    const params = new URLSearchParams({ page: String(page), pageSize: "10" });
+    if (search.trim()) params.set("search", search.trim());
+    if (hosting !== "all") params.set("hostingType", hosting);
+    if (status !== "all") params.set("status", status);
+    if (environment !== "all") params.set("environment", environment);
+    if (ruleVersion !== "all") params.set("rule", ruleVersion);
+    return params;
+  }
   useEffect(() => {
     const current = ++sequence.current;
     setLoading(true);
     const timer = window.setTimeout(async () => {
       setError("");
-      const params = new URLSearchParams({ page: String(page), pageSize: "10" });
-      if (search.trim()) params.set("search", search.trim());
-      if (hosting !== "all") params.set("hostingType", hosting);
-      if (status !== "all") params.set("status", status);
-      if (environment !== "all") params.set("environment", environment);
-      if (ruleVersion !== "all") params.set("rule", ruleVersion);
+      const params = pageParameters();
       try {
         const next = await request<DeploymentPage>(`/admin/deployments?${params}`);
         if (current !== sequence.current) return;
@@ -113,7 +117,23 @@ export function Deployments() {
     }, ruleSearch ? 200 : 0);
     return () => { current = false; window.clearTimeout(timer); };
   }, [ruleOpen, rulePage, ruleSearch]);
-  async function refresh() { setReload(value => value + 1); }
+  async function refresh() {
+    const current = ++sequence.current;
+    setLoading(true);
+    try {
+      // The dialog must retain its one-time token until the refresh really succeeds.
+      const next = await request<DeploymentPage>(`/admin/deployments?${pageParameters()}`);
+      if (current !== sequence.current) throw new Error("Deployment list changed while refreshing. Retry the refresh.");
+      setResult(next);
+      setError("");
+      if (page > next.pageCount) setPage(next.pageCount);
+    } catch (cause) {
+      if (current === sequence.current) setError(message(cause));
+      throw cause;
+    } finally {
+      if (current === sequence.current) setLoading(false);
+    }
+  }
   const deploymentUrl = (deployment: DeploymentRow) => `/deployments/${clientUrl({ id: deployment.clientId, name: deployment.clientName, enabled: true }).slice("/clients/".length)}/${deployment.id}`;
   const clientName = (deployment: DeploymentRow) => deployment.clientName || deployment.clientId;
   const deploymentLabel = (deployment: DeploymentRow) => deployment.displayLabel ?? deployment.name;

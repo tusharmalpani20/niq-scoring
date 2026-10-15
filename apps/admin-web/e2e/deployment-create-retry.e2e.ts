@@ -7,6 +7,7 @@ test("uncertain deployment creation retries the original request and keeps its t
     const path = new URL(route.request().url()).pathname;
     if (path === "/api/auth/status") return route.fulfill({ json: { setupRequired: false } });
     if (path === "/api/auth/session") return route.fulfill({ json: { user: { id: "qa", displayName: "Browser QA", enabled: true } } });
+    if (path === "/api/admin/deployments") return route.fulfill(failRefresh ? { status: 503, json: { error: "INTERNAL_ERROR" } } : { json: { items: [], total: 0, page: 1, pageSize: 10, pageCount: 1 } });
     if (path === "/api/admin/overview") return route.fulfill(failRefresh
       ? { status: 503, json: { error: "INTERNAL_ERROR" } }
       : { json: { clients: [{ id: "c1", name: "Apollo", enabled: true }], deployments: [], entitlements: [], assignments: [], versions: [{ id: "v1", version: "Rules 1", lifecycle: "ACTIVE", clinicalUsePermitted: true, isDefault: true }] } });
@@ -33,4 +34,10 @@ test("uncertain deployment creation retries the original request and keeps its t
   expect(attempts).toHaveLength(2);
   expect(attempts[0]?.key).toMatch(/^[0-9a-f-]{36}$/);
   expect(attempts[1]).toEqual(attempts[0]);
+  await expect(dialog).toContainText("The page could not refresh.");
+  failRefresh = false;
+  await dialog.getByRole("button", { name: "Retry refresh" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(/\/deployments\/d1\?tab=tokens$/);
+  expect(attempts).toHaveLength(2);
 });
