@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createReportSectionHighlighter } from "./report-section-highlighter";
 import { coordinateReportAgents } from "./report-agent-coordinator";
 import { hasMatchedKidneyCondition, narrativeFieldNames, validateNarrative } from "./report-content";
 import { ReportModelError } from "./openrouter-report-client";
@@ -40,7 +41,8 @@ export async function manageReportAgents(input: ReportInput) {
     throw new ReportModelError("MODEL_INVALID_MANAGER_PLAN");
   }
   const invoke: ReportInput["invoke"] = (step, system, user, schema) => input.invoke(step, system, user, schema);
-  let result = await coordinateReportAgents({ ...input, invoke });
+  const highlighter = input.highlighter ?? createReportSectionHighlighter(invoke);
+  let result = await coordinateReportAgents({ ...input, invoke, highlighter });
   // One final targeted repair may use the original writer draft. Changed text
   // must pass clinical review, completeness, cards and approval again.
   for (let finalRound = 0; finalRound < 2; finalRound++) {
@@ -52,7 +54,7 @@ export async function manageReportAgents(input: ReportInput) {
     const finalCheck = validateNarrative(result.narrative, input.evidence);
     if (reviewed.data.decision === "approve" && !reviewed.data.issues.length && finalCheck.narrative && !finalCheck.issues.length) return result;
     if (finalRound === 0 && reviewed.data.issues.length) {
-      result = await coordinateReportAgents({ ...input, invoke, initialDraft: result.repairCandidate,
+      result = await coordinateReportAgents({ ...input, invoke, highlighter, initialDraft: result.repairCandidate, initialInterventionSummaries: result.interventionSummaries,
         initialReviewIssues: reviewed.data.issues.map(issue => ({ ...issue, code: "UNCLEAR_WORDING" as const })) });
       continue;
     }

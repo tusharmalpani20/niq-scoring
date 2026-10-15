@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
-import { assessNarrativeHighlights, completeNarrativeHighlights, plainNarrative } from "./report-highlights";
-import { narrativeFieldNames, type ReportNarrative } from "./report-content";
+import { assessNarrativeHighlights, completeNarrativeHighlights, plainNarrative, highlightSectionPoints, assessSectionHighlights, completeSectionHighlights, markFallbackHighlight } from "./report-highlights";
+import { narrativeFieldNames, type CompleteReportNarrative } from "./report-content";
 
 const narrative = Object.fromEntries(narrativeFieldNames.map(field => [field, {
   text: field === "effectsAdvice" ? "" : "If intake falls, discuss an oral supplement with your care team.",
   evidenceIds: ["supported"],
-}])) as ReportNarrative;
+}])) as CompleteReportNarrative;
 const selections = Object.fromEntries(narrativeFieldNames.map(field => [field,
   field === "effectsAdvice" ? [] : [{ phrase: "discuss an oral supplement with your care team", kind: "action" }],
 ]));
@@ -89,4 +89,97 @@ test("one interpretation highlight covers the card when its other passage is fac
     overview: [{ phrase: "Early support can help prevent nutrition decline", kind: "finding" }], keyFindings: [] });
   expect(result.accepted).toBe(true);
   expect(result.marked.keyFindings.text).toBe(prose.keyFindings.text);
+});
+
+test("section points preserve newlines, exclude headings, and keep measurement units together", () => {
+  const points = highlightSectionPoints("### Red flags\nFever is at least 38.5 °C or breathlessness develops.\nGlucose is above 180 mg/dL.");
+  expect(points).toHaveLength(2);
+  expect(points[0]!.text).toContain("or breathlessness develops.");
+  expect(points[1]!.text).toContain("180 mg/dL");
+});
+
+test("section selections are exact per point and require all trigger points", () => {
+  const text = "### Red flags\nFever is at least 38.5 °C or breathlessness develops.\nCall your care team if this happens.";
+  const points = highlightSectionPoints(text);
+  const partial = { points: points.map(point => ({ id: point.id, phrases: point.id === "p1"
+    ? [{ phrase: "Fever is at least 38.5 °C", kind: "warning" }] : [] })) };
+  expect(assessSectionHighlights(text, partial).accepted).toBe(false);
+  const warning = "If fever reaches 38.5 °C or higher, or you develop breathlessness, contact your care team immediately.";
+  const warningPoint = highlightSectionPoints(warning)[0]!;
+  const extraPoints = highlightSectionPoints(`${warning}\nCall your care team for worsening symptoms.`);
+  const partialAlternative = assessSectionHighlights(`${warning}\nCall your care team for worsening symptoms.`, { points: extraPoints.map(point => ({
+    id: point.id, phrases: [{ phrase: point.id === warningPoint.id ? "If fever reaches 38.5 °C or higher" : point.text.trim(), kind: "warning" }],
+  })) });
+  expect(partialAlternative.accepted).toBe(false);
+  expect(partialAlternative.issues).toContain("INVALID_SPAN");
+  const complete = { points: points.map(point => ({ id: point.id, phrases: [{ phrase: point.text.trim(), kind: "warning" }] })) };
+  expect(assessSectionHighlights(text, complete).accepted).toBe(true);
+  expect(assessSectionHighlights(text, { points: [{ id: "p1", phrases: [] }, { id: "p2", phrases: [] }] }).issues).toContain("REQUIRED_POINT_UNHIGHLIGHTED");
+});
+
+test("routine context may stay unhighlighted while fallback marks every actionable point", () => {
+  const text = "The diagnosis is stable.\nCheck blood pressure daily.\nContact your care team for a fever.";
+  const points = highlightSectionPoints(text);
+  const assessment = assessSectionHighlights(text, { points: points.map(point => ({ id: point.id, phrases: [] })) });
+  expect(assessment.accepted).toBe(false);
+  expect(assessment.issues).toContain("REQUIRED_POINT_UNHIGHLIGHTED");
+  expect(completeSectionHighlights(text).accepted).toBe(true);
+  expect(markFallbackHighlight("conditionAdvice", text)).toBe("The diagnosis is stable.\n**Check blood pressure daily.**\n**Contact your care team for a fever.**");
+});
+
+test("section validation accepts long complete warning spans and preserves plaintext", () => {
+  const text = "If fever reaches 38.5 °C or higher, or you develop breathlessness, contact your care team immediately for urgent advice.";
+  const point = highlightSectionPoints(text)[0]!;
+  const result = assessSectionHighlights(text, { points: [{ id: point.id, phrases: [{ phrase: point.text.trim(), kind: "warning" }] }] });
+  expect(result.accepted).toBe(true);
+  expect(result.marked.replaceAll("**", "")).toBe(text);
+});
+
+test("fallback covers every warning bullet and numeric threshold beyond three points", () => {
+  const text = "### Red flags\nFever is at least 38.5 °C.\nBlood pressure is above 160/100 mmHg.\nGlucose is above 180 mg/dL.\nCall your care team for chest pain.\nSeek urgent care for breathlessness.\nContact your clinician if confusion develops.";
+  const marked = markFallbackHighlight("redFlagsAdvice", text);
+  expect((marked.match(/\*\*/gu) ?? []).length).toBe(12);
+  expect(marked).toContain("**Blood pressure is above 160/100 mmHg.**");
+  expect(marked).toContain("**Glucose is above 180 mg/dL.**");
+});
+
+test("long warning spans exceed 180 characters and survive deterministic repair", () => {
+  const warning = `If fever reaches 38.5 °C or higher, or you develop breathlessness, contact your care team immediately and follow the written plan ${"while monitoring symptoms and seeking urgent advice, ".repeat(4)}today.`;
+  expect(warning.length).toBeGreaterThan(180);
+  const point = highlightSectionPoints(warning)[0]!;
+  expect(assessSectionHighlights(warning, { points: [{ id: point.id, phrases: [{ phrase: point.text.trim(), kind: "warning" }] }] }).accepted).toBe(true);
+  const repaired = completeSectionHighlights(warning, { points: [{ id: point.id, phrases: [{ phrase: "If fever reaches 38.5 °C or higher", kind: "warning" }] }] });
+  expect(repaired.accepted).toBe(true);
+  expect(repaired.valid.points[0]!.phrases[0]!.phrase).toBe(point.text.trim());
+});
+
+test("fallback repairs partial existing bold and stays idempotent", () => {
+  const partial = "Check **blood pressure** daily. Contact your care team for a fever.";
+  const completed = markFallbackHighlight("conditionAdvice", partial);
+  expect(completed).toBe("**Check blood pressure daily.** **Contact your care team for a fever.**");
+  expect(markFallbackHighlight("conditionAdvice", completed)).toBe(completed);
+});
+
+test("warning conditions cannot be bypassed by labelling a partial selection as an action", () => {
+  const text = "Contact your doctor if your blood pressure is 160/100 mmHg or higher, or below 90 with dizziness.";
+  const result = assessSectionHighlights(text, { points: [{ id: "p1", phrases: [{ phrase: "Contact your doctor", kind: "action" }] }] });
+  expect(result.accepted).toBe(false);
+  expect(completeSectionHighlights(text, result.valid).marked).toBe(`**${text}**`);
+});
+
+test("partial words and measurement units cannot be accepted as highlight spans", () => {
+  const text = "Monitor blood glucose below 80 mg/dL with your doctor.";
+  for (const phrase of ["Monitor blood glucose below 80 mg", "onitor blood glucose"]) {
+    expect(assessSectionHighlights(text, { points: [{ id: "p1", phrases: [{ phrase, kind: "action" }] }] }).accepted).toBe(false);
+  }
+});
+
+
+test("fallback covers medication separation and daily weight instructions", () => {
+  const text = "Leave four hours between it and calcium supplements. Weigh yourself daily. Repeat liver-function tests as scheduled.";
+  const complete = completeSectionHighlights(text);
+  expect(complete.marked).toContain("**Leave four hours between it and calcium supplements.**");
+  expect(complete.marked).toContain("**Weigh yourself daily.**");
+  expect(complete.marked).toContain("**Repeat liver-function tests as scheduled.**");
+  expect(complete.marked.replaceAll("**", "")).toBe(text);
 });
