@@ -596,10 +596,10 @@ test("writer receives the matched cart quantities and regimen instructions", asy
   expect(writerInputs.at(-1)).toContain("Nourish: 2 per day; meal timing: After meals");
 });
 
-test("a selected product carries master benefits without image bytes, while dose stays with the rule", async () => {
+test("a selected product carries its image to the response while agent prompts retain text only", async () => {
   const prompts: string[] = [];
   const { call, request, facts, store } = await setup((step, _call, user) => {
-    if (step === "writer") prompts.push(user);
+    prompts.push(user);
     return step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative;
   });
   const old = (await store.products.list()).find(product => product.name === "Invigour")!;
@@ -608,13 +608,13 @@ test("a selected product carries master benefits without image bytes, while dose
     treatmentStatusId: "treatment_status_newly_diagnosed", plannedTreatmentStartDate: "2026-10-20", cancerTypeId: "cancer_1" } }));
   expect(response.status).toBe(200);
   const body = await response.json();
-  expect(body.guidance.carePlan.products.catalog).toContainEqual({ id: old.id, name: "Es Invigour", description: "Nutrition support described in the supplied report", aliases: ["Invigour"], benefits: ["Supports energy and protein intake.", "Helps maintain muscle mass."] });
+  expect(body.guidance.carePlan.products.catalog).toContainEqual({ id: old.id, name: "Es Invigour", description: "Nutrition support described in the supplied report", aliases: ["Invigour"], benefits: ["Supports energy and protein intake.", "Helps maintain muscle mass."], imageDataUrl: "data:image/png;base64,cHJpdmF0ZS1pbWFnZS1ieXRlcw==" });
   expect(body.guidance.carePlan.products.plans[0].items[0].productName).toBe("Invigour");
   expect(prompts.at(-1)).toContain(`catalog:product:${old.id}`);
   expect(prompts.at(-1)).toContain("Product benefits only; dose and timing come from the selected plan.");
   expect(prompts.at(-1)).toContain("Supports energy and protein intake.");
-  expect(JSON.stringify(body.guidance.carePlan.products.catalog)).not.toContain("imageDataUrl");
-  expect(prompts.at(-1)).not.toContain("cHJpdmF0ZS1pbWFnZS1ieXRlcw==");
+  expect(body.guidance.carePlan.products.catalog.find((product: {id:string}) => product.id === old.id)?.imageDataUrl).toBe("data:image/png;base64,cHJpdmF0ZS1pbWFnZS1ieXRlcw==");
+  expect(prompts.join(" ")).not.toContain("cHJpdmF0ZS1pbWFnZS1ieXRlcw==");
 });
 
 test("writer and reviewer receive the patient's diet preference", async () => {

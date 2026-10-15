@@ -8,6 +8,7 @@ import { ruleChecksum } from "./rule-routes";
 import type { DeploymentIdentity, ScoringStore } from "./store";
 import type { ReportGenerationStore } from "./report-generation-store";
 import type { ReportContentJobStore } from "./report-content-job-store";
+import { withReportProductImages } from "./report-product-images";
 import { buildDeterministicReportFallback, ReportFallbackError } from "./report-fallback";
 import { manageReportAgents } from "./report-manager";
 import { createReportAgentWorkers, ReportAttemptLost } from "./report-agent-worker";
@@ -85,10 +86,11 @@ export function installReportAiRoutes(app: Hono, options: {
       const classification = classifyScore(definition, input.facts.reviewedScore);
       if (!classification) return c.json({ error: "UNMATCHED_CLASSIFICATION" }, 422);
       if (input.facts.reviewedRiskCategoryId && classification.id !== input.facts.reviewedRiskCategoryId) return c.json({ error: "RISK_CATEGORY_MISMATCH" }, 409);
-      const guidance = matchedReportPacket(definition, input.facts, classification.id, input.facts.assessmentDate, await scoringStore.products.list());
+      const productCatalog = await scoringStore.products.list();
+      const guidance = matchedReportPacket(definition, input.facts, classification.id, input.facts.assessmentDate, productCatalog);
       const evidence = reportEvidence(definition, input.facts, { id: classification.id, label: classification.label }, guidance);
       if (evidence.length > 500 || JSON.stringify(evidence).length > 80_000) return c.json({ error: "REPORT_CONTEXT_TOO_LARGE" }, 422);
-      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema4-prompt62-manager3` : "baseline-v62-manager3";
+      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema4-prompt63-manager3` : "baseline-v63-manager3";
       const legacyPromptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}` : "baseline-v1";
       const fingerprint = ruleChecksum({ endpoint: "report-content", assessmentReference: binding.assessmentReference, resultReference: input.resultReference,
         checksum: binding.checksum, promptVersion, facts: input.facts });
@@ -122,7 +124,7 @@ export function installReportAiRoutes(app: Hono, options: {
           resultReference: input.resultReference, ruleVersionId: rule.id, checksum: binding.checksum,
           classification: { id: classification.id, label: classification.label }, model: "rule-fallback",
           promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION, generationMode: "RULE_FALLBACK" as const,
-          guidance: fallback.guidance, narrative: fallback.narrative, issues: [], omittedNarrativeFields: [] };
+          guidance: withReportProductImages(fallback.guidance, productCatalog), narrative: fallback.narrative, issues: [], omittedNarrativeFields: [] };
         if (!await runStore.finish(runId, attemptId, "READY", response)) throw new ReportAttemptLost();
         return c.json(response);
       };
@@ -145,7 +147,7 @@ export function installReportAiRoutes(app: Hono, options: {
         const response = { runId, status, assessmentReference: binding.assessmentReference, resultReference: input.resultReference,
           ruleVersionId: rule.id, checksum: binding.checksum, classification: { id: classification.id, label: classification.label },
           model: provider?.model ?? REPORT_AI_ACTIVE_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION,
-          guidance: { ...guidance, possibleToxicities: guidance.possibleToxicities.map(row => ({ ...row, summary: status === "READY" ? interventionSummaries.find(item => item.evidenceId === `possible:toxicity:${row.id}`)?.text ?? "" : "" })) }, narrative: approvedNarrative, issues,
+          guidance: { ...withReportProductImages(guidance, productCatalog), possibleToxicities: guidance.possibleToxicities.map(row => ({ ...row, summary: status === "READY" ? interventionSummaries.find(item => item.evidenceId === `possible:toxicity:${row.id}`)?.text ?? "" : "" })) }, narrative: approvedNarrative, issues,
           omittedNarrativeFields };
         assertActive();
         if (allowFallback && status === "REVIEW_REQUIRED") return await fallbackResponse();
