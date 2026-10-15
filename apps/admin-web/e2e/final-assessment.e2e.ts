@@ -48,6 +48,8 @@ for (const width of [390, 768, 845, 1065, 1440]) {
       expect(await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>("main *")).filter(el => el.clientWidth > 1 && !el.classList.contains("sr-only") && el.scrollWidth > el.clientWidth + 2 && getComputedStyle(el).overflowX !== "visible").map(el => el.tagName + "." + el.className))).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
     }
+    // The save bar appears only once there are unsaved edits.
+    await page.locator("#final-scoring-weight_loss input[type=number]").first().fill("4");
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     const lastField = await page.locator("#final-field-fluid_intake").boundingBox();
     const saveBar = await page.getByRole("button", { name: "Save draft", exact: true }).locator("../..").boundingBox();
@@ -155,6 +157,8 @@ test("confirmed drafts validate, approve explicitly and activate without editing
   await page.getByLabel("Description", { exact: true }).fill("Pending change");
   await expect(page.getByRole("button", { name: "Check rules", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  const updateDraft = page.getByRole("button", { name: "Update draft", exact: true });
+  if (await updateDraft.isVisible()) await updateDraft.click();
   await page.getByRole("button", { name: "Check rules", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("Checks passed");
   await page.getByRole("button", { name: "Continue to approval", exact: true }).click();
@@ -216,6 +220,8 @@ test("activation can explicitly make a version the default", async ({ page }) =>
   } }));
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Details", exact: true }).click();
+  const updateDraft = page.getByRole("button", { name: "Update draft", exact: true });
+  if (await updateDraft.isVisible()) await updateDraft.click();
   await page.getByRole("button", { name: "Check rules", exact: true }).click();
   await page.getByRole("button", { name: "Continue to approval", exact: true }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Approve version", exact: true }).click();
@@ -276,7 +282,8 @@ test("simple risk ranges preserve exclusive historical endpoints and save inclus
   const state = await mockFinalConsole(page);
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Risk categories", exact: true }).click();
-  await expect(page.getByRole("combobox")).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: /^Color for / })).toHaveCount(3);
+  await expect(page.getByRole("combobox", { name: /score comparison/ })).toHaveCount(0);
   await expect(page.getByText("0–15 points", { exact: true })).toBeVisible();
   await expect(page.getByText("26 points and above", { exact: true })).toBeVisible();
   for (const control of await page.getByText("Edit score range", { exact: true }).all()) await control.click();
@@ -411,6 +418,8 @@ test("failed checks show a result without advancing the timeline", async ({ page
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   state.transitionError = "RULE_VALIDATION_FAILED";
   state.transitionIssues = [{ message: "The sample assessment score does not match the expected score." }];
+  const updateDraft = page.getByRole("button", { name: "Update draft", exact: true });
+  if (await updateDraft.isVisible()) await updateDraft.click();
   await page.getByRole("button", { name: "Check rules", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("Checks failed");
   await expect(page.getByRole("dialog").getByRole("list", { name: "Reasons this action failed" })).toContainText("The sample assessment score does not match the expected score.");
@@ -424,6 +433,8 @@ test("editing a checked draft resets progress but retains history", async ({ pag
   await mockFinalConsole(page);
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Details", exact: true }).click();
+  const updateDraft = page.getByRole("button", { name: "Update draft", exact: true });
+  if (await updateDraft.isVisible()) await updateDraft.click();
   await page.getByRole("button", { name: "Check rules", exact: true }).click();
   await page.getByRole("button", { name: "Edit rules", exact: true }).click();
   await expect(page.getByRole("tab", { name: "Scoring", exact: true })).toHaveAttribute("data-state", "active");
@@ -441,6 +452,8 @@ test("retirement requires confirmation and remains visible in history and filter
   const state = await mockFinalConsole(page);
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Details", exact: true }).click();
+  const updateDraft = page.getByRole("button", { name: "Update draft", exact: true });
+  if (await updateDraft.isVisible()) await updateDraft.click();
   await page.getByRole("button", { name: "Check rules", exact: true }).click();
   await page.getByRole("button", { name: "Continue to approval", exact: true }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Approve version", exact: true }).click();

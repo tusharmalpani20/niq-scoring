@@ -7,7 +7,7 @@ test("creation retry preserves setup and request identity", async ({ page }) => 
   state.createError = "RULE_NAME_EXISTS";
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
-  await expect(page.getByText("A rule with this name already exists.")).toBeVisible();
+  await expect(page.getByText("This rule name is already in use or was used by a deleted rule. Choose a different name.")).toBeVisible();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Synthetic browser draft");
   state.createError = "";
   await page.getByRole("button", { name: "Create draft", exact: true }).click();

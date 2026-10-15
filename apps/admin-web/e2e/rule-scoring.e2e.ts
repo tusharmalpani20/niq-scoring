@@ -42,7 +42,7 @@ test("Excel option points and caps persist without changing questionnaire struct
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   await page.getByLabel("Description", { exact: true }).fill("Scoring edits survive tab switches");
   await page.getByRole("tab", { name: "Interventions", exact: true }).click();
-  await expect(page.getByText(/N\/A.*not finalized/i)).toBeVisible();
+  await expect(page.getByText("Not yet available", { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Scoring", exact: true }).click();
   await expect(page.getByLabel("Solid tumour", { exact: true })).toHaveValue("4");
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
@@ -57,8 +57,9 @@ test("Excel option points and caps persist without changing questionnaire struct
   expect(saved.domains[0]!.cap).toBe(8);
   expect(saved.total.cap).toBe(40);
   expect(saved.domains).toContainEqual(expect.objectContaining({ label: "Additional scores", cap: 3 }));
-  await page.getByRole("button", { name: "Back to versions", exact: true }).click();
+  await page.getByRole("button", { name: "Back to rules", exact: true }).click();
   await page.getByRole("button", { name: "Synthetic browser draft", exact: true }).click();
+  await page.getByRole("tab", { name: "Scoring", exact: true }).click();
   await page.locator("#rule-field-tumour_type").getByRole("button", { name: /configured/ }).click();
   await expect(page.getByLabel("Solid tumour", { exact: true })).toHaveValue("4");
   await expect(page.getByLabel("Total cap", { exact: true })).toHaveValue("40");
@@ -69,9 +70,10 @@ test("approved history retains fixed content and read-only scoring", async ({ pa
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
   state.freezeRecord();
-  await page.getByRole("button", { name: "Back to versions", exact: true }).click();
+  await page.getByRole("button", { name: "Back to rules", exact: true }).click();
   await page.getByRole("button", { name: "Synthetic browser draft", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Scoring", exact: true }).click();
   await page.locator("#rule-field-tumour_type").getByRole("button", { name: /configured/ }).click();
   await expect(page.getByLabel("Solid tumour", { exact: true })).toBeDisabled();
   await expect(page.getByLabel("Total cap", { exact: true })).toBeDisabled();
@@ -85,6 +87,7 @@ test("unspecified option scores stay blank until configured", async ({ page }) =
   const state = await mockConsole(page);
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
+  await page.getByRole("tab", { name: "Scoring", exact: true }).click();
   await page.locator("#rule-field-treatment_status").getByRole("button", { name: /configured/ }).click();
   const option = page.getByLabel("Palliative Care", { exact: true });
   await expect(option).toHaveValue("");
@@ -107,6 +110,7 @@ test("range editing persists boundaries and points while retaining fixed fields"
   const state = await mockConsole(page);
   await startDraft(page);
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
+  await page.getByRole("tab", { name: "Scoring", exact: true }).click();
   const row = page.locator("#rule-field-creatinine");
   await expect(row).toContainText("2 ranges configured");
   await row.getByRole("button", { name: /ranges configured/ }).click();
@@ -127,6 +131,7 @@ test("range editing persists boundaries and points while retaining fixed fields"
     expect.objectContaining({ min: 1.5 }),
   ] });
   await page.reload();
+  await page.getByRole("tab", { name: "Scoring", exact: true }).click();
   await row.getByRole("button", { name: /ranges configured/ }).click();
   await expect(editor.getByLabel("Range points", { exact: true }).first()).toHaveValue("3");
 });

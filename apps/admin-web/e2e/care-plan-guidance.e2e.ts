@@ -17,7 +17,7 @@ test("care plan rules use risk labels, allow treatment guidance and save edits",
   await page.getByLabel("Nutritional status for Moderate Risk").click();
   await page.getByRole("option", { name: "Moderately nourished" }).click();
   await expect(page.getByText("Choose a nutritional status for every risk category before checking this rule version.")).toHaveCount(0);
-  await page.getByLabel("Ask the clinician to choose").check();
+  await expect(page.getByLabel("Ask the clinician to choose")).toHaveCount(0);
   await page.getByRole("button", { name: /Treatment guidance 3/ }).click();
   await expect(page.getByText("Radiation Therapy · Moderately nourished")).toBeVisible();
   await page.getByRole("button", { name: "Add rule" }).click();
@@ -32,14 +32,14 @@ test("care plan rules use risk labels, allow treatment guidance and save edits",
   await page.getByRole("button", { name: /Products & doses 12/ }).click();
   await page.getByRole("button", { name: "Edit After surgery · Well nourished" }).click();
   const editor = page.getByRole("dialog");
-  await editor.getByLabel("Dose", { exact: true }).fill("Clinician-reviewed dose");
+  await editor.getByLabel("Liss WH preparation").fill("Clinician-reviewed preparation");
   await editor.getByRole("button", { name: "Save rule" }).click();
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
-  expect(state.getRecord()?.definition.carePlanGuidance?.surgicalOverlapPolicy).toBe("clinician_choice");
+  expect(state.getRecord()?.definition.carePlanGuidance?.surgicalOverlapPolicy).toBe("surgical_priority");
   expect(state.getRecord()?.definition.carePlanGuidance?.oncology.radiotherapy.find(row => row.treatmentTypeId === "current_cancer_treatment_immunotherapy")?.guidance)
     .toBe("Clinician-approved immunotherapy nutrition guidance.");
-  expect(state.getRecord()?.definition.carePlanGuidance?.products.plans.find(row => row.id === "product_surgical_well_nourished")?.dose)
-    .toBe("Clinician-reviewed dose");
+  expect(state.getRecord()?.definition.carePlanGuidance?.products.plans.find(row => row.id === "product_surgical_well_nourished")?.items?.[0]?.preparation)
+    .toBe("Clinician-reviewed preparation");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
