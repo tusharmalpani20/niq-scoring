@@ -66,6 +66,9 @@ describe("product workbook defaults", () => {
     expect(productPlanItems(versioned)).toEqual(items);
     expect(versioned.durationAmount).toBe(90);
     expect(productIdentityName("Es Invigour")).toBe(productIdentityName("Invigour"));
+    expect(productIdentityName("Es-Invigour")).toBe(productIdentityName("Invigour"));
+    expect(productIdentityName("Es Fortitude Nourish")).toBe(productIdentityName("Nourish"));
+    expect(productIdentityName("Es Fortitude Recover")).toBe(productIdentityName("Recover"));
     expect(productIdentityName("Es Fortitude Protect")).toBe(productIdentityName("Protect"));
   });
 

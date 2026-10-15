@@ -51,11 +51,13 @@ const productNameSchema = z.string().trim().min(1).max(120);
 const dailyQuantitySchema = z.number().int().min(1).max(100);
 const productDescriptionSchema = z.string().trim().min(1).max(500);
 
-/** Source workbook shorthands and PDF names identify the same two products. */
+/** Keep workbook names and their earlier shorthands matched to the same product. */
 export function productIdentityName(name: string): string {
   const normalized = name.trim().toLocaleLowerCase();
-  if (normalized === "es invigour") return "invigour";
+  if (normalized === "es invigour" || normalized === "es-invigour") return "invigour";
+  if (normalized === "es fortitude nourish") return "nourish";
   if (normalized === "es fortitude protect") return "protect";
+  if (normalized === "es fortitude recover") return "recover";
   return normalized;
 }
 
