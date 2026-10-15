@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { assessCoverage, assessInterventionSummaries, assessInterventionSummaryCoverage, requiredCoverageSources } from "./report-coverage";
-import type { ReportNarrative } from "./report-content";
+import { narrativeFieldNames, type ReportNarrative } from "./report-content";
 
 const evidence = [
   { id: "rule:nutrition:moderate", text: "Work toward nutrition targets and discuss support if intake falls." },
@@ -31,7 +31,8 @@ test("a cited source with missing advice fails the independent audit", () => {
     { evidenceId: sources[1]!.id, covered: false, missing: ["The food safety protocol is missing."] }] }, sources, narrative);
   expect(result).toMatchObject({ accepted: false, invalid: false,
     gaps: [{ id: sources[1]!.id, field: "treatmentAdvice", missing: ["The food safety protocol is missing."] }] });
-  const withoutText = Object.fromEntries(Object.entries(narrative).map(([field]) => [field, { text: "", evidenceIds: [] }])) as ReportNarrative;
+  const withoutText = structuredClone(narrative);
+  for (const field of narrativeFieldNames) withoutText[field] = { text: "", evidenceIds: [] };
   withoutText.treatmentAdvice = { text: "", evidenceIds: [evidence[1]!.id, sources[1]!.id] };
   expect(assessCoverage({ rows: covered }, sources, withoutText).gaps.map(gap => gap.id))
     .toEqual([sources[0]!.id, sources[1]!.id]);
