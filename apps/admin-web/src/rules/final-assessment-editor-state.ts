@@ -1,5 +1,5 @@
 import { finalAssessmentDefinitionSchema } from "@niq-scoring/contracts/final-assessment";
-import { initialCarePlanGuidance } from "@niq-scoring/contracts/care-plan-guidance";
+import { initialCarePlanGuidance, withCurrentCarePlanDefaults } from "@niq-scoring/contracts/care-plan-guidance";
 import { withDefaultRiskCategoryColors } from "@niq-scoring/contracts/final-assessment-template";
 import { normalizeProductPlan } from "@niq-scoring/contracts/product-guidance";
 import { initialReportAiConfig } from "@niq-scoring/contracts/report-ai";
@@ -14,7 +14,7 @@ function parse(value: unknown) {
 export function editableDefinition(record: RuleDetail) {
   const definition = parse(record.definition);
   if (!definition || !["DRAFT", "VALIDATED"].includes(record.lifecycle)) return definition;
-  const carePlanGuidance = definition.carePlanGuidance ?? initialCarePlanGuidance();
+  const carePlanGuidance = withCurrentCarePlanDefaults(definition.carePlanGuidance ?? initialCarePlanGuidance());
   return withDefaultRiskCategoryColors({ ...definition, stressScoring: definition.stressScoring ?? structuredClone(DEFAULT_STRESS_SCORING_CONFIG),
     carePlanGuidance: { ...carePlanGuidance, products: { ...carePlanGuidance.products,
       plans: carePlanGuidance.products.plans.map(normalizeProductPlan) } }, reportAi: definition.reportAi ?? initialReportAiConfig() });

@@ -21,6 +21,11 @@ export const carePlanGuidanceSchema = z.object({
 
 export type CarePlanGuidance = z.infer<typeof carePlanGuidanceSchema>;
 
+/** Fixed defaults apply on draft edits; published definitions retain their saved policies. */
+export function withCurrentCarePlanDefaults(guidance: CarePlanGuidance): CarePlanGuidance {
+  return { ...guidance, preConditioningStartPolicy: "relative_guidance", surgicalOverlapPolicy: "surgical_priority" };
+}
+
 /** Defaults refer to stable risk IDs; renaming a category does not change its mapping. */
 export function initialCarePlanGuidance(): CarePlanGuidance {
   return carePlanGuidanceSchema.parse({

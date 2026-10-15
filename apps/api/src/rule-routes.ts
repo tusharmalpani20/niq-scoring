@@ -1,3 +1,4 @@
+import { withCurrentCarePlanDefaults } from "@niq-scoring/contracts/care-plan-guidance";
 import { isFixedRuleDefinition } from "@niq-scoring/contracts/fixed-profile";
 import type { Hono, Context } from "hono";
 import { z } from "zod";
@@ -62,6 +63,8 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
       if (!isFixedVersionedDefinition(sourceDefinition.data)) return c.json({ error: "FIXED_RULE_REQUIRED" }, 409);
       definition = { ...(isFinalAssessmentDefinition(sourceDefinition.data) ? withDefaultRiskCategoryColors(sourceDefinition.data) : sourceDefinition.data), name: input.name };
     }
+    if (isFinalAssessmentDefinition(definition) && definition.carePlanGuidance)
+      definition = { ...definition, carePlanGuidance: withCurrentCarePlanDefaults(definition.carePlanGuidance) };
     const record = await store.create({ id: createEntityId(), definition, checksum: ruleChecksum(definition), actor: actor(c), requestId: input.requestId, fingerprint, now: now().toISOString() });
     return c.json({ ...record, audit: await store.audit(record.id) }, 201);
   }));
@@ -82,6 +85,8 @@ export function installRuleRoutes(app: Hono, store: RuleStore, now: () => Date) 
   app.put("/admin/rules/:id", guard(async c => {
     const parsed = z.object({ revision: z.number().int().positive(), definition: versionedRuleDefinitionSchema }).strict().safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "INVALID_RULE_DEFINITION", issues: parsed.error.issues }, 400);
+    if (isFinalAssessmentDefinition(parsed.data.definition) && parsed.data.definition.carePlanGuidance)
+      parsed.data.definition.carePlanGuidance = withCurrentCarePlanDefaults(parsed.data.definition.carePlanGuidance);
     if (!isFixedVersionedDefinition(parsed.data.definition)) return c.json({ error: "FIXED_RULE_REQUIRED" }, 409);
     const issues = definitionIssues(parsed.data.definition).filter(i => i.severity === "error");
     if (issues.length) return c.json({ error: "INVALID_RULE_DEFINITION", issues }, 400);
