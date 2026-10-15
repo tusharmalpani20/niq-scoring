@@ -45,8 +45,11 @@ export class MemoryReportContentJobStore implements ReportContentJobStore {
   }
   async claim() {
     const job = this.jobs.find(row => row.status === "QUEUED" && (row.leaseExpiresAt === null || row.leaseExpiresAt <= this.now()) ||
-      row.status === "PROCESSING" && row.leaseExpiresAt !== null && row.leaseExpiresAt <= this.now());
+      row.status === "PROCESSING" && row.leaseExpiresAt !== null && row.leaseExpiresAt <= this.now() || row.status === "REVIEW_REQUIRED");
     if (!job) return null;
+    // Legacy review results get one bounded recovery budget. Their response
+    // remains as a marker so retries keep the same fallback-only recovery key.
+    if (job.status === "REVIEW_REQUIRED") job.attempts = 0;
     if (job.attempts >= maxAttempts) { job.status = "FAILED"; job.errorCode = "REPORT_WORKER_ATTEMPTS_EXHAUSTED"; return null; }
     job.status = "PROCESSING";
     job.attemptId = createEntityId();
@@ -100,13 +103,13 @@ export class PostgresReportContentJobStore implements ReportContentJobStore {
   }
   async claim() {
     const [row] = await this.database<Record<string, unknown>[]>`with candidate as (
-      select id from report_content_jobs where (status='QUEUED' and (lease_expires_at is null or lease_expires_at<clock_timestamp())) or (status='PROCESSING' and lease_expires_at<clock_timestamp())
+      select id from report_content_jobs where (status='QUEUED' and (lease_expires_at is null or lease_expires_at<clock_timestamp())) or (status='PROCESSING' and lease_expires_at<clock_timestamp()) or status='REVIEW_REQUIRED'
       order by created_at,id for update skip locked limit 1
-    ) update report_content_jobs as job set status=case when job.attempts>=${maxAttempts} then 'FAILED' else 'PROCESSING' end,
-      error_code=case when job.attempts>=${maxAttempts} then 'REPORT_WORKER_ATTEMPTS_EXHAUSTED' else null end,
-      attempt_id=case when job.attempts>=${maxAttempts} then job.attempt_id else ${createEntityId()} end,
-      attempts=case when job.attempts>=${maxAttempts} then job.attempts else job.attempts+1 end,
-      lease_expires_at=case when job.attempts>=${maxAttempts} then null else clock_timestamp()+${leaseMs}*interval '1 millisecond' end
+    ) update report_content_jobs as job set status=case when job.status<>'REVIEW_REQUIRED' and job.attempts>=${maxAttempts} then 'FAILED' else 'PROCESSING' end,
+      error_code=case when job.status<>'REVIEW_REQUIRED' and job.attempts>=${maxAttempts} then 'REPORT_WORKER_ATTEMPTS_EXHAUSTED' else null end,
+      attempt_id=case when job.status<>'REVIEW_REQUIRED' and job.attempts>=${maxAttempts} then job.attempt_id else ${createEntityId()} end,
+      attempts=case when job.status='REVIEW_REQUIRED' then 1 when job.attempts>=${maxAttempts} then job.attempts else job.attempts+1 end,
+      lease_expires_at=case when job.status<>'REVIEW_REQUIRED' and job.attempts>=${maxAttempts} then null else clock_timestamp()+${leaseMs}*interval '1 millisecond' end
       from candidate where job.id=candidate.id returning job.id, job.credential_id as "credentialId", job.client_id as "clientId", job.deployment_id as "deploymentId", job.input, job.fingerprint, job.status, job.response, job.error_code as "errorCode", job.attempt_id as "attemptId", job.attempts, job.lease_expires_at as "leaseExpiresAt"`;
     return row?.status === "PROCESSING" ? this.map(row) : null;
   }

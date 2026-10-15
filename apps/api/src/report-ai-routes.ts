@@ -65,8 +65,8 @@ export function installReportAiRoutes(app: Hono, options: {
     }
   });
 
-  const generateReport = async (c: Context, identity: DeploymentIdentity, input: ReportContentRequest, allowFallback = false,
-    jobLease?: { id: string; attemptId: string }) => {
+  const generateReport = async (c: Context, identity: DeploymentIdentity, input: ReportContentRequest, allowFallback = true,
+    jobLease?: { id: string; attemptId: string }, forceFallback = false): Promise<Response> => {
     if (!provider && !allowFallback) return c.json({ error: "REPORT_AI_NOT_CONFIGURED" }, 503);
     try {
       const { binding, rule } = await scoringStore.bindAssessment({ identity, assessmentReference: input.assessmentReference, platformEnabled, create: false });
@@ -99,7 +99,16 @@ export function installReportAiRoutes(app: Hono, options: {
         fingerprint, model: provider?.model ?? REPORT_AI_ACTIVE_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION }, legacyFingerprint);
       if (reservation.status === "CONFLICT") return c.json({ error: "IDEMPOTENCY_CONFLICT" }, 409);
       if (reservation.status === "IN_PROGRESS") return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
-      if (reservation.status === "DUPLICATE") return c.json(reservation.run.response as never);
+      if (reservation.status === "DUPLICATE") {
+        if (allowFallback && reservation.run.status === "REVIEW_REQUIRED") {
+          if (forceFallback) return c.json({ error: "AUTOMATIC_REVIEW_RECOVERY_FAILED" }, 422);
+          // Preserve the rejected run for audit. A separate idempotent run must
+          // build and validate rule content, never relabel the rejected text.
+          const recoveryKey = `auto-review:${ruleChecksum({ runId: reservation.run.id, promptVersion, facts: input.facts })}`;
+          return generateReport(c, identity, { ...input, idempotencyKey: recoveryKey }, true, jobLease, true);
+        }
+        return c.json(reservation.run.response as never);
+      }
       if (reservation.status !== "NEW") return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
       const runId = reservation.run.id;
       const attemptId = reservation.run.attemptId;
@@ -108,6 +117,7 @@ export function installReportAiRoutes(app: Hono, options: {
         const fallback = buildDeterministicReportFallback({ facts: input.facts,
           classification: { id: classification.id, label: classification.label }, guidance, evidence });
         assertLease();
+        if (jobLease && !await jobStore.renew(jobLease.id, jobLease.attemptId)) throw new ReportAttemptLost();
         const response = { runId, status: "READY" as const, assessmentReference: binding.assessmentReference,
           resultReference: input.resultReference, ruleVersionId: rule.id, checksum: binding.checksum,
           classification: { id: classification.id, label: classification.label }, model: "rule-fallback",
@@ -116,7 +126,7 @@ export function installReportAiRoutes(app: Hono, options: {
         if (!await runStore.finish(runId, attemptId, "READY", response)) throw new ReportAttemptLost();
         return c.json(response);
       };
-      if (allowFallback && !provider) {
+      if (allowFallback && (!provider || forceFallback)) {
         try { return await fallbackResponse(); }
         catch (error) {
           if (error instanceof ReportAttemptLost) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
@@ -195,15 +205,20 @@ export function installReportAiRoutes(app: Hono, options: {
     if (!job || !job.attemptId) return;
     const context = { json: (value: unknown, status?: unknown) => Response.json(value, { status: typeof status === "number" ? status : 200 }) } as unknown as Context;
     try {
-      const result = await generateReport(context, job.identity, job.input, true, { id: job.id, attemptId: job.attemptId });
+      const recoveringReview = job.response !== null && typeof job.response === "object"
+        && (job.response as { status?: unknown }).status === "REVIEW_REQUIRED";
+      const input = recoveringReview ? { ...job.input,
+        idempotencyKey: `auto-review-job:${ruleChecksum({ jobId: job.id, fingerprint: job.fingerprint })}` } : job.input;
+      const result = await generateReport(context, job.identity, input, true,
+        { id: job.id, attemptId: job.attemptId }, recoveringReview);
       const payload = await result.json() as Record<string, unknown>;
-      const status = payload.status === "READY" || payload.status === "REVIEW_REQUIRED" ? payload.status : "FAILED";
+      const status = payload.status === "READY" && Array.isArray(payload.issues) && !payload.issues.length ? "READY" : "FAILED";
       if (status === "FAILED" && (result.status >= 500 || payload.error === "REQUEST_IN_PROGRESS")) {
         await jobStore.retry(job.id, job.attemptId, String(payload.error ?? "REPORT_GENERATION_FAILED"));
         return;
       }
       await jobStore.finish(job.id, job.attemptId, status, status === "FAILED" ? null : payload,
-        status === "FAILED" ? String(payload.error ?? "REPORT_GENERATION_FAILED") : undefined);
+        status === "FAILED" ? String(payload.error ?? (payload.status === "REVIEW_REQUIRED" ? "AUTOMATIC_REVIEW_RECOVERY_FAILED" : "REPORT_GENERATION_FAILED")) : undefined);
     } catch {
       await jobStore.retry(job.id, job.attemptId, "REPORT_GENERATION_FAILED");
     }
