@@ -42,6 +42,8 @@ export const products = pgTable("products", {
   name: varchar("name", { length: 120 }).notNull(),
   description: text("description"),
   aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
+  benefits: text("benefits").array().notNull().default(sql`'{}'::text[]`),
+  imageDataUrl: text("image_data_url"),
   ...timestamps,
 }, table => [uniqueIndex("products_name_uq").on(sql`lower(btrim(${table.name}))`)]);
 

@@ -218,6 +218,13 @@
       "when": 1791999320636,
       "tag": "0030_report_manager_calls",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792000000000,
+      "tag": "0031_product_benefits_images",
+      "breakpoints": true
     }
   ]
 }

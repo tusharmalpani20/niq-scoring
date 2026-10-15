@@ -1,9 +1,10 @@
+import { createHash } from "node:crypto";
 import type postgres from "postgres";
 import { createEntityId } from "./lib/id";
 import { recordAdminMutation, type AdminMutationAudit } from "./admin-mutation-audit";
 
-export type Product = { id: string; name: string; description: string | null; aliases: string[]; createdAt: string; updatedAt: string };
-export type ProductInput = Pick<Product, "name" | "description" | "aliases">;
+export type Product = { id: string; name: string; description: string | null; aliases: string[]; benefits: string[]; imageDataUrl: string | null; createdAt: string; updatedAt: string };
+export type ProductInput = Pick<Product, "name" | "description" | "aliases"> & Partial<Pick<Product, "benefits" | "imageDataUrl">>;
 export const initialProductNames = ["Invigour", "Nourish", "Protect", "Recover", "Liss WH"] as const;
 
 export class ProductCatalogError extends Error {
@@ -17,10 +18,13 @@ export interface ProductCatalog {
   delete(id: string, audit?: AdminMutationAudit): Promise<boolean>;
 }
 
+const imageChecksum = (image: string | null) => image ? createHash("sha256").update(image).digest("hex") : null;
 const normalizedName = (name: string) => name.trim().toLowerCase();
-const normalizedInput = (input: ProductInput): ProductInput => ({
+const normalizedInput = (input: ProductInput): Pick<Product, "name" | "description" | "aliases" | "benefits" | "imageDataUrl"> => ({
   name: input.name.trim(), description: input.description?.trim() || null,
   aliases: [...new Set(input.aliases.map(alias => alias.trim()).filter(Boolean))],
+  benefits: [...new Set((input.benefits ?? []).map(benefit => benefit.trim()).filter(Boolean))],
+  imageDataUrl: input.imageDataUrl ?? null,
 });
 function collides(rows: Product[], input: ProductInput, ownId?: string): boolean {
   const names = [input.name, ...input.aliases].map(normalizedName);
@@ -32,7 +36,7 @@ export class MemoryProductCatalog implements ProductCatalog {
   readonly records: Product[];
   constructor(private readonly now: () => Date = () => new Date()) {
     const timestamp = this.now().toISOString();
-    this.records = initialProductNames.map(name => ({ id: createEntityId(), name, description: null, aliases: [], createdAt: timestamp, updatedAt: timestamp }));
+    this.records = initialProductNames.map(name => ({ id: createEntityId(), name, description: null, aliases: [], benefits: [], imageDataUrl: null, createdAt: timestamp, updatedAt: timestamp }));
   }
   async list() { return [...this.records].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)); }
   async create(raw: ProductInput) {
@@ -46,7 +50,7 @@ export class MemoryProductCatalog implements ProductCatalog {
   async update(id: string, raw: ProductInput) {
     const product = this.records.find(row => row.id === id);
     if (!product) throw new ProductCatalogError("PRODUCT_NOT_FOUND");
-    const input = normalizedInput(raw);
+    const input = normalizedInput({ ...raw, benefits: raw.benefits ?? product.benefits, imageDataUrl: raw.imageDataUrl === undefined ? product.imageDataUrl : raw.imageDataUrl });
     if (collides(this.records, input, id)) throw new ProductCatalogError("PRODUCT_NAME_EXISTS");
     Object.assign(product, input);
     product.updatedAt = this.now().toISOString();
@@ -67,18 +71,18 @@ const fromRow = (row: ProductRow): Product => ({ ...row, createdAt: row.createdA
 export class PostgresProductCatalog implements ProductCatalog {
   constructor(private readonly database: Database) {}
   async list() {
-    const rows = await this.database<ProductRow[]>`select id, name, description, aliases, created_at as "createdAt", updated_at as "updatedAt" from products order by lower(name), id`;
+    const rows = await this.database<ProductRow[]>`select id, name, description, aliases, benefits, image_data_url as "imageDataUrl", created_at as "createdAt", updated_at as "updatedAt" from products order by lower(name), id`;
     return rows.map(fromRow);
   }
   async create(raw: ProductInput, audit?: AdminMutationAudit) {
     const input = normalizedInput(raw);
     return this.database.begin(async tx => {
-      const existing = await tx<ProductRow[]>`select id, name, description, aliases, created_at as "createdAt", updated_at as "updatedAt" from products for update`;
+      const existing = await tx<ProductRow[]>`select id, name, description, aliases, benefits, image_data_url as "imageDataUrl", created_at as "createdAt", updated_at as "updatedAt" from products for update`;
       if (collides(existing.map(fromRow), input)) throw new ProductCatalogError("PRODUCT_NAME_EXISTS");
       const id = createEntityId();
-      const [row] = await tx<ProductRow[]>`insert into products (id, name, description, aliases) values (${id}, ${input.name}, ${input.description}, ${tx.array(input.aliases)}) on conflict (lower(btrim(name))) do nothing returning id, name, description, aliases, created_at as "createdAt", updated_at as "updatedAt"`;
+      const [row] = await tx<ProductRow[]>`insert into products (id, name, description, aliases, benefits, image_data_url) values (${id}, ${input.name}, ${input.description}, ${tx.array(input.aliases)}, ${tx.array(input.benefits ?? [])}, ${input.imageDataUrl ?? null}) on conflict (lower(btrim(name))) do nothing returning id, name, description, aliases, benefits, image_data_url as "imageDataUrl", created_at as "createdAt", updated_at as "updatedAt"`;
       if (!row) throw new ProductCatalogError("PRODUCT_NAME_EXISTS");
-      await recordAdminMutation(tx, audit, "PRODUCT_CREATED", "PRODUCT", id, { name: row.name, description: row.description, aliases: row.aliases });
+      await recordAdminMutation(tx, audit, "PRODUCT_CREATED", "PRODUCT", id, { name: row.name, description: row.description, aliases: row.aliases, benefits: row.benefits, imageChecksum: imageChecksum(row.imageDataUrl) });
       return fromRow(row);
     });
   }
@@ -86,13 +90,13 @@ export class PostgresProductCatalog implements ProductCatalog {
     const input = normalizedInput(raw);
     try {
       return await this.database.begin(async tx => {
-        const existing = await tx<ProductRow[]>`select id, name, description, aliases, created_at as "createdAt", updated_at as "updatedAt" from products for update`;
+        const existing = await tx<ProductRow[]>`select id, name, description, aliases, benefits, image_data_url as "imageDataUrl", created_at as "createdAt", updated_at as "updatedAt" from products for update`;
         const prior = existing.find(row => row.id === id);
         if (!prior) throw new ProductCatalogError("PRODUCT_NOT_FOUND");
         if (collides(existing.map(fromRow), input, id)) throw new ProductCatalogError("PRODUCT_NAME_EXISTS");
-        const [row] = await tx<ProductRow[]>`update products set name=${input.name}, description=${input.description}, aliases=${tx.array(input.aliases)}, updated_at=now() where id=${id} returning id, name, description, aliases, created_at as "createdAt", updated_at as "updatedAt"`;
+        const [row] = await tx<ProductRow[]>`update products set name=${input.name}, description=${input.description}, aliases=${tx.array(input.aliases)}, benefits=${tx.array(raw.benefits === undefined ? prior.benefits : input.benefits)}, image_data_url=${raw.imageDataUrl === undefined ? prior.imageDataUrl : raw.imageDataUrl}, updated_at=now() where id=${id} returning id, name, description, aliases, benefits, image_data_url as "imageDataUrl", created_at as "createdAt", updated_at as "updatedAt"`;
         if (!row) throw new ProductCatalogError("PRODUCT_NOT_FOUND");
-        await recordAdminMutation(tx, audit, "PRODUCT_RENAMED", "PRODUCT", id, { before: { name: prior.name, description: prior.description, aliases: prior.aliases }, after: { name: row.name, description: row.description, aliases: row.aliases } });
+        await recordAdminMutation(tx, audit, "PRODUCT_RENAMED", "PRODUCT", id, { before: { name: prior.name, description: prior.description, aliases: prior.aliases, benefits: prior.benefits, imageChecksum: imageChecksum(prior.imageDataUrl) }, after: { name: row.name, description: row.description, aliases: row.aliases, benefits: row.benefits, imageChecksum: imageChecksum(row.imageDataUrl) } });
         return fromRow(row);
       });
     } catch (error) {

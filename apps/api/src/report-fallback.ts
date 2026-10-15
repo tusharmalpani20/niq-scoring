@@ -302,10 +302,10 @@ export function buildDeterministicReportFallback(input: {
       text: `Nutrition priority: ${guidance.nutritionInterventions[0].coreStrategy.trim().replace(/[.!?]+$/, "")}.` }] : [];
   const overallRows = guidance.carePlan.products.status === "selected"
     ? guidance.carePlan.products.plans.flatMap(row => {
-      const product = guidance.carePlan.products.catalog.find(item => row.products.includes(item.name) && item.description);
+      const product = guidance.carePlan.products.catalog.find(item => row.products.includes(item.name) && (item.benefits?.length || item.description));
       return [
         { id: `rule:product:${row.id}`, text: `Your selected nutrition support is ${row.products}.` },
-        ...(product ? [{ id: `catalog:product:${product.id}`, text: product.description! }] : []),
+        ...(product ? [{ id: `catalog:product:${product.id}`, text: product.benefits?.length ? product.benefits.map(benefit => `• ${benefit}`).join("\n") : product.description! }] : []),
       ];
     }) : [];
   // The closing summary names the selected support plan without duplicating its

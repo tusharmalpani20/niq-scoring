@@ -36,6 +36,7 @@ export function message(cause: unknown) {
 
 const errors: Record<string, string> = {
   PRODUCT_NAME_EXISTS: "A product with this name already exists.",
+  PRODUCT_IMAGE_TOO_LARGE: "Choose a product image up to 5 MB.",
   PRODUCT_NOT_FOUND: "This product is no longer available. Refresh the list.",
   FIXED_RULE_REQUIRED: "Fields and options must match the fixed Excel questionnaire. Create a new version for older custom definitions.",
   VERSION_UNAVAILABLE: "Choose an approved, available rule.",

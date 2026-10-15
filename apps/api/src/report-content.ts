@@ -194,7 +194,7 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
     ?? plan.productNames ?? plan.products.split(" + ").map(name => name.trim())).map(productIdentityName)));
   const productDetails = care.products.status === "selected" ? catalog.filter(product =>
     [product.name, ...product.aliases].some(name => selectedNames.has(productIdentityName(name))))
-    .map(({ id, name, description, aliases }) => ({ id, name, description, aliases })) : [];
+    .map(({ id, name, description, aliases, benefits }) => ({ id, name, description, aliases, benefits: benefits ?? [] })) : [];
   const publicPlan = (plan: (typeof care.products.plans)[number]) => {
     const { id, stage, nutritionalStatus, products, dose, duration, durationAmount } = plan;
     const items = productPlanItems(plan);
@@ -319,8 +319,10 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
     evidence.push({ id: `rule:exception:${row.id}`,
       text: `${row.label}: ${row.action ? productExceptionActionText(row.action) : row.guidance}${row.action && row.guidance ? ` Explanation: ${row.guidance}` : ""}` });
   }
-  for (const product of packet.carePlan.products.catalog) if (product.description)
-    evidence.push({ id: `catalog:product:${product.id}`, text: `${product.name}: ${product.description}. Product description only; dose and timing come from the selected plan.` });
+  for (const product of packet.carePlan.products.catalog) {
+    const details = product.benefits.length ? product.benefits.map(benefit => `• ${benefit}`).join("\n") : product.description;
+    if (details) evidence.push({ id: `catalog:product:${product.id}`, text: `${product.name}: ${details}. Product benefits only; dose and timing come from the selected plan.` });
+  }
   if (packet.carePlan.products.status === "selected") {
     for (const row of packet.carePlan.products.plans) {
       const details = row.items?.map(item => `${item.productName}: ${[
