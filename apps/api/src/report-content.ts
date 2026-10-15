@@ -12,6 +12,7 @@ const assessmentAnswersSchema = z.object({
   gastrointestinal_symptoms: ids.max(200).optional(),
   dietary_symptoms: ids.max(200).optional(),
   appetite_status: id.optional(),
+  functional_capacity: id.optional(),
   previous_weight_kg: z.number().finite().positive().max(1000).optional(),
   current_weight_kg: z.number().finite().positive().max(1000).optional(),
 }).strict();
@@ -263,7 +264,7 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
     const diagnosis = cancerTypeLabels[facts.cancerTypeId as (typeof cancerTypeIds)[number]];
     evidence.push({ id: "fact:diagnosis", text: `Recorded cancer diagnosis: ${diagnosis}.` });
   }
-  for (const fieldId of ["gastrointestinal_symptoms", "dietary_symptoms", "appetite_status"] as const) {
+  for (const fieldId of ["gastrointestinal_symptoms", "dietary_symptoms", "appetite_status", "functional_capacity"] as const) {
     const answer = facts.assessmentAnswers?.[fieldId];
     const selected = typeof answer === "string" ? [answer] : answer ?? [];
     const field = definition.sections.flatMap(section => section.fields).find(item => item.id === fieldId);

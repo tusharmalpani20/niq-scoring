@@ -141,7 +141,7 @@ export function buildDeterministicReportFallback(input: {
 
   function groupReportedSymptoms(rows: ReportEvidence[]): Array<{ id: string; text: string }> {
     const mouth = rows.filter(row => /mouth sores?|mouth ulcers?|mucositis/i.test(row.text));
-    const rest = rows.filter(row => !mouth.includes(row) && !/appetite/i.test(row.text));
+    const rest = rows.filter(row => !mouth.includes(row) && !/appetite|functional capacity/i.test(row.text));
     const result = rest.map(row => {
       const match = row.text.match(/^Assessment records ([^:]+):\s*(.*?)(?:\. This does not establish a treatment cause\.)?$/i);
       const text = match ? `You reported ${(match[2] ?? "").toLocaleLowerCase()}.`
@@ -149,7 +149,7 @@ export function buildDeterministicReportFallback(input: {
       return { ...row, text };
     });
     if (mouth.length) result.unshift({ id: mouth.map(row => row.id).join(" "),
-      text: "Mouth sores were reported in this assessment. The assessment does not establish that treatment caused them." });
+      text: "Mouth sores were reported in this assessment." });
     return result;
   }
 
@@ -224,7 +224,7 @@ export function buildDeterministicReportFallback(input: {
     const symptomMatches = evidence.some(item => item.id.startsWith("fact:assessment_")
       && symptomTerms(item.text).some(term => symptomTerms(row.expectedToxicity).includes(term)));
     const summary = patientLanguage(symptomMatches
-      ? "A related symptom was reported separately; this does not establish a treatment cause."
+      ? "A related symptom was reported separately."
       : intervention || "Follow the care team's guidance if this effect occurs.");
     // Prefer an action from the matched recommendation itself. The conditional
     // lead is only the fallback when the approved source has no action verb.
@@ -326,10 +326,19 @@ export function buildDeterministicReportFallback(input: {
     ...(monitoring[0] ? [{ id: monitoring[0].id, text: monitoring[0].text }] : []),
   ];
   const summary = part(summaryRows);
+  // Keep the fallback interpretation factual and traceable if model review fails.
+  const interpretationFacts = evidence.filter(row => /^(?:fact:assessment_(?:appetite_status|functional_capacity)_|fact:bmi$)/.test(row.id));
+  const interpretationRows = [
+    { id: "fact:niq_risk", text: `Your NIQ score is ${facts.reviewedScore}, indicating ${input.classification.label}.` },
+    ...evidence.filter(row => row.id === "fact:weight_direction").map(row => ({ ...row, text: row.text })),
+    ...(interpretationFacts.length ? [{ id: interpretationFacts.map(row => row.id).join(" "), text: interpretationFacts.map(row => row.text.replace(/^Assessment records /, "").replace(/\. This does not establish a treatment cause\.$/, ".")).join(" ") }] : []),
+    ...reportedSymptoms,
+    ...nutritionStrategy,
+  ];
   const narrative: CompleteReportNarrative = {
     // Clinical facts already have their own cards; interpretation stays brief.
     overview: part([]),
-    keyFindings: part([...nutritionStrategy, ...reportedSymptoms]),
+    keyFindings: part(interpretationRows),
     actionSummary: part(action ? [action] : []),
     monitoringSummary: part(monitoring),
     overallSummary: summary,
