@@ -273,18 +273,18 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
         ...(action.timesPerDay ? { timesPerDay: action.timesPerDay } : {}),
         ...(action.mealTiming ? { mealTiming: action.mealTiming } : {}),
         ...(action.preparation ? { preparation: action.preparation } : {}),
-        ...(action.description ? { description: action.description } : {}) };
+        ...(!action.preparation && action.description ? { preparation: action.description } : {}) };
       if (destination >= 0) items[destination] = replacement;
       else items.push(replacement);
       adjusted = true;
     } else if (action.type === "recommend") {
       if (index >= 0) {
         items[index] = { ...items[index]!, quantityPerDay: action.quantityPerDay,
-          ...(action.description ? { description: action.description } : {}) };
+          ...(action.description ? { preparation: action.description } : {}) };
         adjusted = true;
       } else {
         items.push({ productName: action.productName, quantityPerDay: action.quantityPerDay,
-          ...(action.description ? { description: action.description } : {}) });
+          ...(action.description ? { preparation: action.description } : {}) });
         adjusted = true;
       }
     }

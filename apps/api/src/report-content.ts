@@ -326,14 +326,10 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
   if (packet.carePlan.products.status === "selected") {
     for (const row of packet.carePlan.products.plans) {
       const details = row.items?.map(item => `${item.productName}: ${[
-        item.quantityPerDay === undefined ? item.description : item.unit ? `${item.quantityPerDay} ${item.unit} per day`
-          : item.productName === "Liss WH" && item.description === "leveled scoops in 150ml water"
-            ? `${item.quantityPerDay} ${item.description}` : `${item.quantityPerDay} per day`,
+        item.quantityPerDay === undefined ? undefined : `${item.quantityPerDay}${item.unit ? ` ${item.unit}` : ""} per day`,
         item.timesPerDay ? item.timesPerDay === 1 ? "taken once per day" : `taken ${item.timesPerDay} times per day` : undefined,
-        item.preparation ? `prepare: ${item.preparation}` : item.description && item.quantityPerDay !== undefined
-          && !(item.productName === "Liss WH" && item.description === "leveled scoops in 150ml water") ? `description: ${item.description}` : undefined,
+        item.preparation ? `prepare: ${item.preparation}` : undefined,
         item.mealTiming ? `meal timing: ${item.mealTiming}` : undefined,
-        item.rationale ? `approved reason: ${item.rationale}` : undefined,
       ].filter(Boolean).join("; ")}`).join(". ");
       evidence.push({ id: `rule:product:${row.id}`, text: details
         ? `Selected product plan: ${row.products}. Dosage and preparation: ${details}. Duration: ${row.duration}.`

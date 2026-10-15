@@ -567,7 +567,7 @@ test("product windows use the completed assessment date rather than report gener
   expect(writerInputs.at(-1)).toContain("Selected product plan: Invigour + Nourish. Dosage and preparation: Invigour: 1 per day. Nourish: 1 per day.");
 });
 
-test("writer receives the matched cart quantities and descriptions", async () => {
+test("writer receives the matched cart quantities and regimen instructions", async () => {
   const writerInputs: string[] = [];
   const { call, request, facts } = await setup((step, _call, user) => {
     if (step === "writer") writerInputs.push(user);
@@ -575,10 +575,10 @@ test("writer receives the matched cart quantities and descriptions", async () =>
   }, definition => {
     const plan = definition.carePlanGuidance!.products.plans.find(row => row.id === "product_pre_conditioning_well_nourished")!;
     plan.items = [{ productName: "Invigour", quantityPerDay: 1, unit: "sachet", timesPerDay: 1,
-      preparation: "Mix in water", mealTiming: "After breakfast", rationale: "Nutrition support" },
-    { productName: "Nourish", quantityPerDay: 2, description: "After meals" }];
+      preparation: "Mix in water", mealTiming: "After breakfast" },
+    { productName: "Nourish", quantityPerDay: 2, mealTiming: "After meals" }];
     plan.productNames = ["Invigour", "Nourish"];
-    plan.dose = "1 Invigour + 2 Nourish (After meals)";
+    plan.dose = "1 Invigour (sachet) + 2 Nourish";
   });
   const response = await call("report-content", request({ facts: {
     ...facts, assessmentDate: "2026-10-12", treatmentStatusId: "treatment_status_newly_diagnosed",
@@ -588,12 +588,12 @@ test("writer receives the matched cart quantities and descriptions", async () =>
   const body = await response.json();
   expect(body.guidance.carePlan.products.plans[0].items).toEqual([
     { productName: "Invigour", quantityPerDay: 1, unit: "sachet", timesPerDay: 1,
-      preparation: "Mix in water", mealTiming: "After breakfast", rationale: "Nutrition support" },
-    { productName: "Nourish", quantityPerDay: 2, description: "After meals" },
+      preparation: "Mix in water", mealTiming: "After breakfast" },
+    { productName: "Nourish", quantityPerDay: 2, mealTiming: "After meals" },
   ]);
   expect(body.guidance.carePlan.products.plans[0].durationAmount).toBe(15);
-  expect(writerInputs.at(-1)).toContain("Invigour: 1 sachet per day; taken once per day; prepare: Mix in water; meal timing: After breakfast; approved reason: Nutrition support");
-  expect(writerInputs.at(-1)).toContain("Nourish: 2 per day; description: After meals");
+  expect(writerInputs.at(-1)).toContain("Invigour: 1 sachet per day; taken once per day; prepare: Mix in water; meal timing: After breakfast");
+  expect(writerInputs.at(-1)).toContain("Nourish: 2 per day; meal timing: After meals");
 });
 
 test("a selected product includes its verified catalogue description, while dose stays with the rule", async () => {

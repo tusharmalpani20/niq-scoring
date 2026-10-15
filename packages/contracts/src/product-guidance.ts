@@ -127,21 +127,26 @@ export function defaultProductExceptionAction(kind: ProductNoteKind): ProductExc
   }
 }
 
-/** A product's saved quantity and optional dosage/preparation in a plan. */
-export const productPlanItemSchema = z.object({
+/** Convert saved serving text into the dedicated fields instead of retaining free-text extras. */
+export function structuredProductPlanItem(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const { description, rationale: _reason, ...item } = value as Record<string, unknown>;
+  if (description === "leveled scoops in 150ml water" && item.productName === "Liss WH")
+    return { ...item, unit: item.unit || "level scoop", preparation: item.preparation || "Mix in 150 mL water." };
+  return { ...item, ...(typeof description === "string" && description.trim() && !item.preparation ? { preparation: description } : {}) };
+}
+
+/** Regimen instructions belong to the versioned rule, not the product catalogue. */
+export const productPlanItemSchema = z.preprocess(structuredProductPlanItem, z.object({
   productName: productNameSchema,
   quantityPerDay: dailyQuantitySchema.optional(),
-  /** Preparation or serving detail for this plan, not a shared product attribute. */
-  description: productDescriptionSchema.optional(),
-  /** Regimen instructions belong to the versioned rule, not the product catalogue. */
   unit: z.string().trim().min(1).max(40).optional(),
   timesPerDay: dailyQuantitySchema.optional(),
   preparation: productDescriptionSchema.optional(),
   mealTiming: productDescriptionSchema.optional(),
-  rationale: productDescriptionSchema.optional(),
-}).strict().refine(item => item.quantityPerDay !== undefined || item.description !== undefined, {
-  message: "Provide a daily quantity or dosage/preparation description",
-});
+}).strict().refine(item => item.quantityPerDay !== undefined, {
+  message: "Provide a daily quantity",
+}));
 export type ProductPlanItem = z.infer<typeof productPlanItemSchema>;
 
 /** Workbook-derived plans and guidance are versioned and editable with a rule. */
@@ -196,23 +201,21 @@ export type ProductGuidance = z.infer<typeof productGuidanceSchema>;
 
 export type ProductPlan = ProductGuidance["plans"][number];
 
-const lissPreparation = "leveled scoops in 150ml water";
-
 /** Read simple legacy doses and the three workbook Surgical preparations. */
 export function productPlanItems(plan: ProductPlan): ProductPlanItem[] {
-  if (plan.items) return plan.items.map(item => ({ ...item }));
+  if (plan.items) return plan.items.map(item => productPlanItemSchema.parse(item));
   const names = plan.productNames ?? plan.products.split(" + ").map(name => name.trim());
   if (plan.stage === "surgical") {
     const lissOnly = plan.dose.match(/^([1-9]\d*) leveled scoops in 150ml water$/);
     if (names.length === 1 && names[0] === "Liss WH" && lissOnly && Number(lissOnly[1]) <= 100) {
-      return [{ productName: "Liss WH", quantityPerDay: Number(lissOnly[1]), description: lissPreparation }];
+      return [{ productName: "Liss WH", quantityPerDay: Number(lissOnly[1]), unit: "level scoop", preparation: "Mix in 150 mL water." }];
     }
     const withInvigour = plan.dose.match(/^([1-9]\d*) Invigour \+ ([1-9]\d*) leveled scoops in 150ml water$/);
     if (names.length === 2 && names[0] === "Invigour" && names[1] === "Liss WH" && withInvigour
       && Number(withInvigour[1]) <= 100 && Number(withInvigour[2]) <= 100) {
       return [
         { productName: "Invigour", quantityPerDay: Number(withInvigour[1]) },
-        { productName: "Liss WH", quantityPerDay: Number(withInvigour[2]), description: lissPreparation },
+        { productName: "Liss WH", quantityPerDay: Number(withInvigour[2]), unit: "level scoop", preparation: "Mix in 150 mL water." },
       ];
     }
   }
@@ -236,17 +239,14 @@ export function productPlanSnapshot(items: ProductPlanItem[]): Pick<ProductPlan,
     items: items.map(item => ({ ...item })),
     productNames: items.map(item => item.productName),
     products: items.map(item => item.productName).join(" + "),
-    dose: items.map(item => item.quantityPerDay === undefined
-      ? item.description ?? ""
-      : item.productName === "Liss WH" && item.description === lissPreparation
-        ? `${item.quantityPerDay} ${lissPreparation}`
-        : `${item.quantityPerDay} ${item.productName}${item.description ? ` (${item.description})` : ""}`).join(" + "),
+    dose: items.map(item => `${item.quantityPerDay ?? ""} ${item.productName}${item.unit ? ` (${item.unit})` : ""}`.trim()).join(" + "),
   };
 }
 
 /** Upgrade only recognized workbook Surgical doses in editable versions. */
 export function normalizeProductPlan(plan: ProductPlan): ProductPlan {
   const normalized = normalizeProductDuration(plan);
+  if (normalized.items?.length) return { ...normalized, ...productPlanSnapshot(productPlanItems(normalized)) };
   if (normalized.stage !== "surgical") return normalized;
   const items = productPlanItems({ ...normalized, items: undefined });
   if (!items.length) return normalized;

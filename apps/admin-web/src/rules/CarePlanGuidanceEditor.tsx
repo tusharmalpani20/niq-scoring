@@ -137,9 +137,8 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
     }
     const planItems = editing.kind === "plans" ? productPlanItems(editing.item) : [];
     if (editing.kind === "plans" && (!planItems.length || planItems.some(row =>
-      row.quantityPerDay === undefined || !Number.isInteger(row.quantityPerDay) || row.quantityPerDay < 1 || row.quantityPerDay > 100
-      || (row.description?.length ?? 0) > 500))) {
-      setError("Enter a quantity from 1 to 100 for every product and keep descriptions under 500 characters."); return;
+      row.quantityPerDay === undefined || !Number.isInteger(row.quantityPerDay) || row.quantityPerDay < 1 || row.quantityPerDay > 100))) {
+      setError("Enter a quantity from 1 to 100 for every product."); return;
     }
     if (editing.kind === "statusModifiers" && (!classes.some(row => row.id === editing.item.classId) || !treatments.some(row => row.id === editing.item.treatmentTypeId))) {
       setError("Choose a configured drug class and treatment."); return;
@@ -188,7 +187,7 @@ export function CarePlanGuidanceEditor({ definition, disabled, onChange }: Props
       // Names come from the shared Products list when available; quantities stay in this rule.
       const catalogItems = selected.map(item => ({ ...item,
         productName: catalog.find(product => product.name.toLocaleLowerCase() === item.productName.toLocaleLowerCase())?.name ?? item.productName }));
-      return catalogItems.map(item => `${item.quantityPerDay === undefined ? "" : `${item.quantityPerDay} `}${item.productName}${item.description ? ` (${item.description})` : ""}`).join(" + ");
+      return catalogItems.map(item => `${item.quantityPerDay === undefined ? "" : `${item.quantityPerDay} `}${item.productName}${item.unit ? ` (${item.unit})` : ""}`).join(" + ");
     }
     if ("kind" in row) {
       return `${exceptionPreview(row, surgeryOptions)}${row.guidance.trim() ? ` ${guidancePresentationText(row.guidance)}` : ""}`;

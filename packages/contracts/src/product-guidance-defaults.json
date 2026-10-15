@@ -141,8 +141,8 @@
       "nutritionalStatus": "well_nourished",
       "products": "Liss WH",
       "productNames": ["Liss WH"],
-      "items": [{ "productName": "Liss WH", "quantityPerDay": 1, "description": "leveled scoops in 150ml water" }],
-      "dose": "1 leveled scoops in 150ml water",
+      "items": [{ "productName": "Liss WH", "quantityPerDay": 1, "unit": "level scoop", "preparation": "Mix in 150 mL water." }],
+      "dose": "1 Liss WH (level scoop)",
       "duration": "30days post surgery",
       "durationAmount": 30,
       "enabled": true,
@@ -158,8 +158,8 @@
       "nutritionalStatus": "moderately_nourished",
       "products": "Liss WH",
       "productNames": ["Liss WH"],
-      "items": [{ "productName": "Liss WH", "quantityPerDay": 2, "description": "leveled scoops in 150ml water" }],
-      "dose": "2 leveled scoops in 150ml water",
+      "items": [{ "productName": "Liss WH", "quantityPerDay": 2, "unit": "level scoop", "preparation": "Mix in 150 mL water." }],
+      "dose": "2 Liss WH (level scoop)",
       "duration": "30days post surgery",
       "durationAmount": 30,
       "enabled": true,
@@ -177,9 +177,9 @@
       "productNames": ["Invigour", "Liss WH"],
       "items": [
         { "productName": "Invigour", "quantityPerDay": 1 },
-        { "productName": "Liss WH", "quantityPerDay": 2, "description": "leveled scoops in 150ml water" }
+        { "productName": "Liss WH", "quantityPerDay": 2, "unit": "level scoop", "preparation": "Mix in 150 mL water." }
       ],
-      "dose": "1 Invigour + 2 leveled scoops in 150ml water",
+      "dose": "1 Invigour + 2 Liss WH (level scoop)",
       "duration": "30days post surgery",
       "durationAmount": 30,
       "enabled": true,
