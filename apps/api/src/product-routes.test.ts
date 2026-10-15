@@ -3,6 +3,10 @@ import { createApp } from "./app";
 import { MemoryAdminAuthStore } from "./admin-auth-store";
 import { MemoryScoringStore } from "./store";
 
+// Actual 1×1 PNG fixture, rather than arbitrary bytes with an image MIME label.
+const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=";
+type ProductDetails = { id: string; name: string; description: string | null; aliases: string[]; benefits: string[]; imageDataUrl: string | null };
+
 const now = "2026-09-13T00:00:00.000Z";
 const headers = { cookie: "niq_scoring_session=product-test-session", origin: "http://localhost:4173", "content-type": "application/json" };
 
@@ -63,4 +67,69 @@ describe("shared product catalog", () => {
     expect((await request("", "POST", { name: "Invigour" })).status).toBe(409);
     expect((await request(`/${invigour.id}`, "PUT", { name: "Es Invigour", aliases: ["Protect"] })).status).toBe(409);
   });
+
+  test("roundtrips benefit bullets and images, preserving omitted fields and allowing explicit removal", async () => {
+    const { request } = setup();
+    const created = await request("", "POST", {
+      name: "Nutrition Support", description: "Shared product description", aliases: ["Old Support"],
+      benefits: ["Supports daily nutrition", "Supports protein intake"], imageDataUrl: png,
+    });
+    expect(created.status).toBe(201);
+    const product = await created.json() as ProductDetails;
+    const expected = { description: "Shared product description", aliases: ["Old Support"],
+      benefits: ["Supports daily nutrition", "Supports protein intake"], imageDataUrl: png };
+    expect(product).toMatchObject(expected);
+    const listed = await (await request()).json() as { products: ProductDetails[] };
+    expect(listed.products.find(row => row.id === product.id)).toMatchObject(expected);
+
+    const renamed = await request(`/${product.id}`, "PUT", { name: "Updated Support" });
+    expect(renamed.status).toBe(200);
+    expect(await renamed.json()).toMatchObject({ id: product.id, name: "Updated Support", ...expected });
+
+    const benefitsUpdated = await request(`/${product.id}`, "PUT", { name: "Updated Support", benefits: ["Updated benefit"] });
+    expect(benefitsUpdated.status).toBe(200);
+    expect(await benefitsUpdated.json()).toMatchObject({ benefits: ["Updated benefit"], imageDataUrl: png });
+    const removed = await request(`/${product.id}`, "PUT", { name: "Updated Support", imageDataUrl: null });
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toMatchObject({ benefits: ["Updated benefit"], imageDataUrl: null });
+    const cleared = await request(`/${product.id}`, "PUT", { name: "Updated Support", benefits: [] });
+    expect(cleared.status).toBe(200);
+    expect(await cleared.json()).toMatchObject({ benefits: [], imageDataUrl: null });
+    const restored = await request(`/${product.id}`, "PUT", { name: "Updated Support", imageDataUrl: png });
+    expect(restored.status).toBe(200);
+    expect(await restored.json()).toMatchObject({ benefits: [], imageDataUrl: png });
+  });
+
+  test("rejects invalid raster images and benefit bullets without changing the saved product", async () => {
+    const { request } = setup();
+    const product = await (await request("", "POST", { name: "Stable Product", benefits: ["Retained benefit"], imageDataUrl: png })).json() as ProductDetails;
+    const invalidImages = [
+      "data:image/svg+xml;base64," + Buffer.from("<svg/>").toString("base64"),
+      png.replace("image/png", "image/jpeg"),
+      "data:image/png;base64," + Buffer.from("not a PNG image").toString("base64"),
+      png.replace(/=+$/, ""),
+    ];
+    for (const imageDataUrl of invalidImages) {
+      expect((await request(`/${product.id}`, "PUT", { name: product.name, imageDataUrl })).status).toBe(400);
+    }
+    for (const benefits of [[""], ["x".repeat(501)], Array.from({ length: 21 }, (_, index) => `Benefit ${index}`)]) {
+      expect((await request(`/${product.id}`, "PUT", { name: product.name, benefits })).status).toBe(400);
+    }
+    const listed = await (await request()).json() as { products: ProductDetails[] };
+    expect(listed.products.find(row => row.id === product.id)).toMatchObject({ benefits: ["Retained benefit"], imageDataUrl: png });
+  });
+
+  test("rejects images over the decoded size limit and requests over the body limit", async () => {
+    const { request } = setup();
+    const bytes = Buffer.alloc(5 * 1024 * 1024 + 1);
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes);
+    const imageDataUrl = `data:image/png;base64,${bytes.toString("base64")}`;
+    expect((await request("", "POST", { name: "Oversized Image", imageDataUrl })).status).toBe(400);
+    const overBodyLimit = await request("", "POST", { name: "Oversized Body", imageDataUrl: "x".repeat(8 * 1024 * 1024) });
+    expect(overBodyLimit.status).toBe(413);
+    expect(await overBodyLimit.json()).toEqual({ error: "PRODUCT_IMAGE_TOO_LARGE" });
+    const listed = await (await request()).json() as { products: ProductDetails[] };
+    expect(listed.products).toHaveLength(5);
+  });
+
 });
