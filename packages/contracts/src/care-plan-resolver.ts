@@ -65,7 +65,9 @@ function addDays(date: string, days: number): string | null {
   return Number.isFinite(start) ? new Date(start + days * 86_400_000).toISOString().slice(0, 10) : null;
 }
 
-function reportPlan(plan: ProductPlan, facts: CarePlanFacts): ProductPlan {
+function reportPlan(plan: ProductPlan, facts: CarePlanFacts, relativePreConditioning = false): ProductPlan {
+  if (relativePreConditioning && plan.stage === "pre_conditioning")
+    return { ...plan, duration: `You can start these supplements ${productDurationDays(plan) ?? 15} days before your treatment.` };
   // Pinned older versions retain their original month wording. Editable drafts
   // convert the two reviewed defaults before they are saved as day-based rules.
   if (/\bmonths?\b/i.test(plan.duration)) return plan;
@@ -141,8 +143,9 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
   const surgicalPlan = planFor("surgical");
   const preTreatmentDays = preTreatmentPlan ? productDurationDays(preTreatmentPlan) : null;
   const surgicalDays = surgicalPlan ? productDurationDays(surgicalPlan) : null;
+  const relativePreConditioning = config.preConditioningStartPolicy === "relative_guidance";
   const untilTreatment = facts.asOfDate && facts.plannedTreatmentStartDate ? daysBetween(facts.asOfDate, facts.plannedTreatmentStartDate) : null;
-  const applicableTreatmentStage = treatmentStage === "pre_conditioning" && (untilTreatment === null || preTreatmentDays === null || untilTreatment < 0 || untilTreatment > preTreatmentDays)
+  const applicableTreatmentStage = treatmentStage === "pre_conditioning" && !relativePreConditioning && (untilTreatment === null || preTreatmentDays === null || untilTreatment < 0 || untilTreatment > preTreatmentDays)
     ? null : treatmentStage === "during_treatment" && !facts.treatmentTypeIds.length ? null : treatmentStage;
   const sinceSurgery = facts.asOfDate && facts.surgeryDate ? daysBetween(facts.surgeryDate, facts.asOfDate) : null;
   const untilSurgery = facts.asOfDate && facts.plannedSurgeryDate ? daysBetween(facts.asOfDate, facts.plannedSurgeryDate) : null;
@@ -182,7 +185,7 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
   if (facts.surgicalStatusId === "cancer_surgical_status_done" && !facts.surgeryDate) {
     return { ...base, products: { status: "facts_required", plans: [], notes: visibleNotes, reason: "Surgery date is needed to check the Surgical plan window." } };
   }
-  if (treatmentStage === "pre_conditioning" && !facts.plannedTreatmentStartDate && !recentSurgery) {
+  if (treatmentStage === "pre_conditioning" && !relativePreConditioning && !facts.plannedTreatmentStartDate && !recentSurgery) {
     return { ...base, products: { status: "facts_required", plans: [], notes: visibleNotes, reason: "Planned treatment start date is needed to check the pre-treatment product window." } };
   }
   if (!candidates.length) return { ...base, products: { status: "none", plans: [], notes: visibleNotes } };
@@ -211,7 +214,7 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
   if (chosenCandidates.length > 1 && config.surgicalOverlapPolicy === "clinician_choice") {
     const hasProductChange = selectedNotes.some(row => noteAction(row)?.type !== "use_plan");
     return { ...base, products: { status: "clinician_choice_required", plans: [],
-      ...(hasProductChange ? {} : { choices: chosenCandidates.map(row => reportPlan(row, facts)) }),
+      ...(hasProductChange ? {} : { choices: chosenCandidates.map(row => reportPlan(row, facts, relativePreConditioning)) }),
       notes: visibleNotes, reason: hasProductChange
         ? "Both treatment-stage and Surgical plans match with product exceptions; a clinician must choose and review the adjusted plan."
         : "Both treatment-stage and Surgical plans match; a clinician must choose one. Do not combine doses." } };
@@ -267,6 +270,9 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
       items = items.filter(item => productIdentityName(item.productName) !== source);
       const destination = items.findIndex(item => productIdentityName(item.productName) === productIdentityName(action.replacementProductName));
       const replacement = { productName: action.replacementProductName, quantityPerDay: replacementQuantity,
+        ...(action.timesPerDay ? { timesPerDay: action.timesPerDay } : {}),
+        ...(action.mealTiming ? { mealTiming: action.mealTiming } : {}),
+        ...(action.preparation ? { preparation: action.preparation } : {}),
         ...(action.description ? { description: action.description } : {}) };
       if (destination >= 0) items[destination] = replacement;
       else items.push(replacement);
@@ -284,5 +290,5 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
     }
   }
   const finalPlan = adjusted ? { ...selected, ...productPlanSnapshot(items) } : selected;
-  return { ...base, products: { status: "selected", plans: [reportPlan(finalPlan, facts)], notes: visibleNotes } };
+  return { ...base, products: { status: "selected", plans: [reportPlan(finalPlan, facts, relativePreConditioning)], notes: visibleNotes } };
 }

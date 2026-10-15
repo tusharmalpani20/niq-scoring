@@ -83,6 +83,9 @@ export const productExceptionActionSchema = z.discriminatedUnion("type", [
     /** Copy the replaced product's known daily quantity into the replacement. */
     matchSourceQuantity: z.boolean().optional(),
     replacementQuantityPerDay: dailyQuantitySchema.optional(),
+    timesPerDay: dailyQuantitySchema.optional(),
+    mealTiming: productDescriptionSchema.optional(),
+    preparation: productDescriptionSchema.optional(),
     description: productDescriptionSchema.optional(),
   }).strict().refine(action => !action.matchSourceQuantity || action.replacementQuantityPerDay === undefined, {
     message: "Choose a matching or fixed replacement quantity",

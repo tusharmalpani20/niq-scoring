@@ -11,6 +11,7 @@ export type PublicQuestionnaire = {
 export type PublicFinalAssessment = {
   formatVersion: 2;
   profile: "NIQ_FINAL_ASSESSMENT";
+  preConditioningStartPolicy?: "date_window" | "relative_guidance";
   sections: Array<{ id: string; title: string; description: string; fields: Array<{ id: string; label: string; type: string; help: string; unit: string; options: Array<{ id: string; label: string; help: string }>; dependencies: string[] }> }>;
   supportingInputs: Array<{ id: string; label: string; kind: string; unit?: string; required: boolean; options?: Array<{ id: string; label: string; help: string }> }>;
   drugClassConfig?: {
@@ -24,6 +25,7 @@ export function publicQuestionnaire(definition: RuleDefinition | FinalAssessment
   if (isFinalAssessmentDefinition(definition)) return {
     formatVersion: 2,
     profile: definition.profile,
+    ...(definition.carePlanGuidance?.preConditioningStartPolicy ? { preConditioningStartPolicy: definition.carePlanGuidance.preConditioningStartPolicy } : {}),
     sections: definition.sections.map(section => ({
       id: section.id,
       title: section.title,

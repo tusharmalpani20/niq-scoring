@@ -25,7 +25,7 @@ function fixedStructure(definition: FinalAssessmentDefinition) {
         kind: field.kind,
         help: field.help,
         unit: field.unit,
-        options: "options" in field ? field.options.map(option => ({ id: option.id, label: option.label, help: option.help })) : [],
+        options: "options" in field ? field.options.map(option => ({ id: option.id, label: field.id === "dietary_symptoms" && option.id === "dietary_symptoms_mouth_sores" && option.label === "Mouth sores" ? "Mouth Ulcers / Mucositis" : option.label, help: option.help })) : [],
         dependencies: field.kind === "count" ? { countInputId: field.countInputId } : field.kind === "calculated" ? { inputIds: field.inputIds, formula: field.formula, bandIds: field.scoring.bands.map(band => band.id) } : field.kind === "derived" ? { sourceInputId: field.sourceInputId, outcomeIds: field.scoring.outcomes.map(outcome => ({ id: outcome.id, label: outcome.label })), mapping: field.scoring.mapping } : field.kind === "conditional" ? { palliative: { optionId: field.scoring.palliative.optionId, paths: field.scoring.palliative.paths.map(path => ({ id: path.id, label: path.label, children: path.children.map(child => ({ id: child.id, label: child.label })) })) } } : null,
         sources: field.sources,
       })),
