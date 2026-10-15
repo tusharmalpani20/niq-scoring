@@ -41,7 +41,12 @@ export function selectActionHighlight(text: string): string | null {
     const words = Array.from(trimmed.matchAll(/[\p{L}\p{N}]+(?:[’'-][\p{L}\p{N}]+)*/gu));
     const actionIndex = words.findIndex(word => actionVerb.test(word[0]));
     if (actionIndex < 0) continue;
-    const startIndex = /^if\b/i.test(trimmed) ? 0 : actionIndex;
+    let startIndex = /^if\b/i.test(trimmed) ? 0 : actionIndex;
+    if (startIndex === actionIndex) {
+      const prefix = words.slice(Math.max(0, actionIndex - 2), actionIndex).map(word => word[0]).join(" ");
+      if (/\b(?:do not|don[’']t|never|must not)$/i.test(prefix))
+        startIndex = Math.max(0, actionIndex - (/(?:do not|must not)$/i.test(prefix) ? 2 : 1));
+    }
     const endIndex = Math.min(words.length, startIndex + 15);
     if (endIndex - startIndex < 3) continue;
     const start = words[startIndex]!.index!;
@@ -68,19 +73,31 @@ export function selectActionHighlight(text: string): string | null {
   return null;
 }
 
-/** Mark every actionable point in deterministic fallback prose without changing its words. */
+/** Mark concise useful phrases in deterministic fallback prose without changing its words. */
 export function markFallbackHighlight(field: (typeof narrativeFieldNames)[number], text: string): string {
   // Rebuild from plain text so existing partial markdown cannot shift offsets or
-  // cause nested bold markers. Required points become complete, idempotent spans.
+  // cause nested bold markers. Selected clauses remain exact and idempotent.
   const source = text.replaceAll("**", "");
   const points = highlightSectionPoints(source);
-  const spans = points.filter(point => isHighlightRequired(point.text)
-    || ((field === "overallSummary" || field === "keyFindings") && interpretationCue.test(point.text)
-      && (!/\d/.test(point.text) || numericMeaningCue.test(point.text))))
-    .map(point => {
-      const leading = point.text.length - point.text.trimStart().length;
-      return { start: point.start + leading, end: point.end - (point.text.length - point.text.trimEnd().length) };
-    });
+  const sectionWords = sectionWordCount(source);
+  let budget = Math.max(1, Math.floor(sectionWords * 0.35));
+  const spans: Array<{start: number; end: number}> = [];
+  for (const point of points) {
+    const eligible = isHighlightRequired(point.text)
+      || ((field === "overallSummary" || field === "keyFindings") && interpretationCue.test(point.text)
+        && (!/\d/.test(point.text) || numericMeaningCue.test(point.text)));
+    if (!eligible) continue;
+    const trimmed = point.text.trim();
+    const shortWarning = sectionWords <= 12 && points.length === 1 && highRiskWarning.test(trimmed);
+    const phrase = shortWarning ? trimmed : conciseSectionPhrase(point.text);
+    if (!phrase) continue;
+    const count = sectionWordCount(phrase);
+    if (count > budget && !shortWarning) continue;
+    const at = point.text.indexOf(phrase);
+    if (at < 0) continue;
+    spans.push({ start: point.start + at, end: point.start + at + phrase.length });
+    budget -= count;
+  }
   if (spans.length) {
     let result = source;
     for (const span of spans.sort((a, b) => b.start - a.start)) {
@@ -89,14 +106,9 @@ export function markFallbackHighlight(field: (typeof narrativeFieldNames)[number
     }
     return result;
   }
-  const phrase = selectActionHighlight(source) ?? (field === "overallSummary" || field === "keyFindings"
-    ? Array.from(sentenceSegmenter.segment(source), item => item.segment.trim()).map(sentence => {
-      const words = Array.from(sentence.matchAll(/[\p{L}\p{N}]+(?:[’'-][\p{L}\p{N}]+)*/gu));
-      if (!interpretationCue.test(sentence) || words.length < 3) return null;
-      const end = Math.min(words.length, 15);
-      return sentence.slice(words[0]!.index!, words[end - 1]!.index! + words[end - 1]![0].length);
-    }).find(Boolean) ?? null : null);
-  return phrase ? source.replace(phrase, `**${phrase}**`) : source;
+  const phrase = selectActionHighlight(source);
+  return phrase && sectionWordCount(phrase) <= Math.max(1, Math.floor(sectionWords * 0.35))
+    ? source.replace(phrase, `**${phrase}**`) : source;
 }
 
 /** Split a section into exact sentence spans; markdown headings are structural, not highlight points. */
@@ -126,7 +138,7 @@ const pointSelectionSchema = z.object({
 export const sectionHighlightJsonSchema = {
   type: "object", additionalProperties: false, required: ["points"], properties: {
     points: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "phrases"], properties: {
-      id: { type: "string" }, phrases: { type: "array", maxItems: 20, items: { type: "object", additionalProperties: false,
+      id: { type: "string" }, phrases: { type: "array", maxItems: 2, items: { type: "object", additionalProperties: false,
         required: ["phrase", "kind"], properties: { phrase: { type: "string", maxLength: 4000 }, kind: { type: "string", enum: ["finding", "action", "warning"] } } } },
     } } },
   },
@@ -137,11 +149,37 @@ function isHighlightRequired(text: string): boolean {
     || /(?:\b(?:at least|above|over|below|under|greater than|less than)\s*\d|[<>]=?\s*\d|\b\d+(?:\.\d+)?\s*(?:°\s*[cf]|mmhg|mg\/dl|mmol\/l|bpm|%))\b/i.test(text);
 }
 
-/** A fragment must never remove negation, conditions, thresholds or escalation.
- * Ordinary unqualified advice may still use a concise exact phrase. */
-function requiresCompleteHighlight(text: string): boolean {
-  return /\b(?:call|contact|seek|urgent|immediately|inform|notify|if|when|unless|until|except|without|never|not|only)\b|\bdon[’']t\b/i.test(text)
-    || (isHighlightRequired(text) && /\d|\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\b/i.test(text));
+const sectionWordPattern = /[\p{L}\p{N}]+(?:[’'-][\p{L}\p{N}]+)*/gu;
+const sectionWordCount = (value: string) => value.match(sectionWordPattern)?.length ?? 0;
+const highRiskWarning = /\b(?:urgent|immediately|emergency|red flag|seek care|go to (?:the )?\w+|call 911|fever|breathlessness|shortness of breath|threshold)\b/i;
+const meaningfulNumericPhrase = (phrase: string) => /\d/.test(phrase)
+  && sectionWordCount(phrase) >= 3
+  && /[\p{L}]{2}/u.test(phrase);
+
+/** Pick a compact exact clause for fallbacks; the original sentence stays visible. */
+export function conciseSectionPhrase(text: string): string | null {
+  const trimmed = text.trim();
+  const action = selectActionHighlight(trimmed);
+  if (action && sectionWordCount(action) <= 15) return action;
+  const words = Array.from(trimmed.matchAll(sectionWordPattern));
+  if (words.length < 3) return null;
+  const cue = /\b(?:fever|breathlessness|shortness of breath|urgent|immediately|emergency|worsening|call|contact|seek|stop|do not|don't|never|must not|above|below|over|under|at least|more than|less than)\b/i;
+  if (!cue.test(trimmed)) return null;
+  const cueAt = trimmed.search(cue);
+  let start = cueAt;
+  // Keep a preceding condition or negation when it directly qualifies the cue.
+  const prefix = trimmed.slice(0, cueAt);
+  const conditionAt = prefix.search(/\b(?:if|when|unless|until|do not|don[’']t|never|must not)\b/i);
+  if (conditionAt >= 0 && sectionWordCount(prefix.slice(conditionAt)) <= 8) start = conditionAt;
+  const startWord = words.findIndex(word => word.index! >= start);
+  if (startWord < 0) return null;
+  const endWord = Math.min(words.length, startWord + 12);
+  let end = words[endWord - 1]!.index! + words[endWord - 1]![0].length;
+  // Include a slash unit that belongs to a measurement.
+  const unitSuffix = trimmed.slice(end).match(/^\/(?:dL|mL|kg|day)\b/i)?.[0];
+  if (unitSuffix) end += unitSuffix.length;
+  const phrase = trimmed.slice(words[startWord]!.index!, end).replace(/[,:;]+$/u, "").trim();
+  return sectionWordCount(phrase) >= 2 ? phrase : null;
 }
 
 /** Assess exact, non-overlapping phrases against their individual sentence point. */
@@ -156,6 +194,9 @@ export function assessSectionHighlights(text: string, proposed: unknown) {
   for (const item of supplied) counts.set(item.id, (counts.get(item.id) ?? 0) + 1);
   const selectionsById = new Map(supplied.map(item => [item.id, item]));
   const allRanges: Array<{ start: number; end: number }> = [];
+  let selectedWordCount = 0;
+  const sectionWords = sectionWordCount(text);
+  const shortWarningException = sectionWords <= 12 && points.length === 1 && highRiskWarning.test(points[0]?.text ?? "");
   for (const point of points) {
     const submitted = selectionsById.get(point.id);
     if (!submitted || counts.get(point.id) !== 1) issues.push("POINT_ID_COVERAGE");
@@ -164,22 +205,30 @@ export function assessSectionHighlights(text: string, proposed: unknown) {
     for (const choice of submitted?.phrases ?? []) {
       const at = point.text.indexOf(choice.phrase);
       const end = at + choice.phrase.length;
-      const validSpan = at >= 0 && point.text.indexOf(choice.phrase, end) < 0
+      const phraseWords = sectionWordCount(choice.phrase);
+      const validSpan = accepted.length < 2 && at >= 0 && point.text.indexOf(choice.phrase, end) < 0
         && !/^\s|\s$/u.test(choice.phrase) && !localRanges.some(r => at < r.end && end > r.start)
         && !allRanges.some(r => point.start + at < r.end && point.start + end > r.start)
         && !(at > 0 && /[\p{L}\p{N}/]/u.test(point.text[at - 1]!))
+        && !(at > 0 && /[\d][\s]*[-–—]\s*$/u.test(point.text.slice(0, at)))
         && !(end < point.text.length && /[\p{L}\p{N}/]/u.test(point.text[end]!))
-        // Warning meaning is determined by the approved sentence, not the model's label.
-        && !(requiresCompleteHighlight(point.text) && choice.phrase !== point.text.trim())
-        && (choice.phrase === point.text.trim()
-          || ((choice.phrase.match(/[\p{L}\p{N}]+/gu) ?? []).length >= 2
-            && (!isHighlightRequired(point.text) || actionVerb.test(choice.phrase))));
-      if (!validSpan) { issues.push("INVALID_SPAN"); continue; }
+        && !(end < point.text.length && /^\s*[-–—]\s*\d/u.test(point.text.slice(end)))
+        && !(end < point.text.length && /^(?:\s*%|\s*°\s*[cf]\b|\s*(?:mmhg|mg\/dl|mmol\/l|bpm)\b)/i.test(point.text.slice(end)))
+        && !(at > 0 && /\b(?:do not|don[’']t|never|must not)\s+$/i.test(point.text.slice(0, at))
+          && !/\b(?:do not|don[’']t|never|must not)\s+/i.test(choice.phrase))
+        // Full-sentence emphasis is reserved for a genuinely short standalone warning.
+        && (choice.phrase !== point.text.trim() || shortWarningException)
+        && phraseWords >= 2
+        && (shortWarningException || selectedWordCount + phraseWords <= Math.max(1, Math.floor(sectionWords * 0.35)))
+        && !/^\s*[\d.,%°<>/-]+\s*$/u.test(choice.phrase)
+        && (!isHighlightRequired(point.text) || actionVerb.test(choice.phrase) || highRiskWarning.test(choice.phrase)
+          || meaningfulNumericPhrase(choice.phrase));
+      if (!validSpan) { issues.push(accepted.length >= 2 ? "TOO_MANY_PHRASES_PER_POINT" : "INVALID_SPAN"); continue; }
       accepted.push(choice);
       localRanges.push({ start: at, end });
       allRanges.push({ start: point.start + at, end: point.start + end });
+      selectedWordCount += phraseWords;
     }
-    if (isHighlightRequired(point.text) && !accepted.length) issues.push("REQUIRED_POINT_UNHIGHLIGHTED");
     valid.points.push({ id: point.id, phrases: accepted });
   }
   if (supplied.some(item => !points.some(point => point.id === item.id))) issues.push("UNKNOWN_POINT_ID");
@@ -189,18 +238,22 @@ export function assessSectionHighlights(text: string, proposed: unknown) {
   return { accepted: issues.length === 0, marked, valid, issues };
 }
 
-/** Fill required points with complete sentence spans while retaining accepted model choices. */
+/** Fill only concise, exact clauses after model failure; zero emphasis is valid. */
 export function completeSectionHighlights(text: string, proposed?: unknown) {
   const points = highlightSectionPoints(text);
   const current = new Map(assessSectionHighlights(text, proposed).valid.points.map(item => [item.id, item.phrases]));
   const complete = { points: points.map(point => {
     const phrases = current.get(point.id) ?? [];
     if (phrases.length || !isHighlightRequired(point.text)) return { id: point.id, phrases };
-    const phrase = point.text.trim();
+    const phrase = conciseSectionPhrase(point.text);
+    if (!phrase) return { id: point.id, phrases };
     const kind = /\b(?:urgent|immediately|emergency|fever|breathlessness|shortness of breath|call|contact|seek care)\b/i.test(phrase) ? "warning" as const : "action" as const;
     return { id: point.id, phrases: [{ phrase, kind }] };
   }) };
-  return assessSectionHighlights(text, complete);
+  // Candidate phrases may exceed the remaining section budget. Revalidate only
+  // accepted spans so optional fallback emphasis always returns a valid result.
+  const assessment = assessSectionHighlights(text, complete);
+  return assessSectionHighlights(text, assessment.valid);
 }
 
 function requiredHighlights(field: (typeof narrativeFieldNames)[number], text: string): number {

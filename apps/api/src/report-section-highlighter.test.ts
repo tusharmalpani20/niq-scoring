@@ -8,7 +8,7 @@ const selectAll: ReportWorkerInvoker = async (_step, _system, user) => {
     phrases: [{ phrase: point.text.trim(), kind: "warning" }] })) };
 };
 
-test("highlights each section separately, including every warning after the third point", async () => {
+test("reviews every section point while repairing blanket emphasis", async () => {
   const requests: Array<{section: string; points: Array<{id: string; text: string}>}> = [];
   const highlighter = createReportSectionHighlighter(async (...args) => {
     requests.push(JSON.parse(args[2]));
@@ -16,10 +16,11 @@ test("highlights each section separately, including every warning after the thir
   });
   const warnings = "Call your doctor for fever. Contact your doctor for chest pain. Call for confusion. Contact your doctor for weight gain over 1 kg in a day or breathlessness.";
   const marked = await highlighter.highlight("redFlagsAdvice", warnings);
-  expect(requests).toHaveLength(1);
+  expect(requests).toHaveLength(2);
   expect(requests[0]!.section).toBe("redFlagsAdvice");
   expect(requests[0]!.points).toHaveLength(4);
-  expect(marked).toContain("**Contact your doctor for weight gain over 1 kg in a day or breathlessness.**");
+  expect(marked).not.toContain("**Contact your doctor for weight gain over 1 kg in a day or breathlessness.**");
+  expect(marked).toContain("or breathlessness");
   expect(marked.replaceAll("**", "")).toBe(warnings);
 });
 
@@ -40,7 +41,7 @@ test("provider failure cannot block approved text or lose a warning alternative"
   const highlighter = createReportSectionHighlighter(async () => { throw new Error("provider unavailable"); });
   const text = "Call your doctor for weight gain over 1 kg in a day or breathlessness.";
   const marked = await highlighter.highlight("possible:edema", text);
-  expect(marked).toContain("**");
+  expect(marked).not.toContain(`**${text}**`);
   expect(marked).toContain("or breathlessness");
   expect(marked.replaceAll("**", "")).toBe(text);
 });
@@ -54,7 +55,7 @@ test("rejects rewritten selections and falls back without rewriting approved wor
   const text = "Contact your doctor for fever.";
   const marked = await highlighter.highlight("redFlagsAdvice", text);
   expect(calls).toBe(2);
-  expect(marked).toContain("**");
+  expect(marked).not.toContain("Take new medicine");
   expect(marked.replaceAll("**", "")).toBe(text);
 });
 
@@ -97,8 +98,9 @@ test("invalid repair preserves valid earlier selections in other points", async 
   const highlighter = createReportSectionHighlighter(async () => ++attempts === 1
     ? { points: [{ id: "p1", phrases: [{ phrase: "Track your intake", kind: "action" }] }] }
     : { points: "malformed repair" });
-  const result = await highlighter.highlight("monitoring", "Track your intake each day. Weigh yourself daily.");
+  const result = await highlighter.highlight("monitoring", "Track your intake each day and share changes with the care team. Weigh yourself daily.");
   expect(attempts).toBe(2);
-  expect(result).toContain("**Track your intake** each day.");
-  expect(result).toContain("**Weigh yourself daily.**");
+  expect(result).toContain("**Track your intake** each day and share changes");
+  expect(result.replaceAll("**", "")).toContain("Weigh yourself daily.");
+  expect(result).not.toContain("**Weigh yourself daily.**");
 });

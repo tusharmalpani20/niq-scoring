@@ -98,120 +98,114 @@ test("section points preserve newlines, exclude headings, and keep measurement u
   expect(points[1]!.text).toContain("180 mg/dL");
 });
 
-test("section selections are exact per point and require all trigger points", () => {
-  const text = "### Red flags\nFever is at least 38.5 °C or breathlessness develops.\nCall your care team if this happens.";
+const words = (text: string) => text.match(/[\p{L}\p{N}]+(?:[’'-][\p{L}\p{N}]+)*/gu)?.length ?? 0;
+function expectSelective(marked: string, source: string) {
+  expect(marked.replaceAll("**", "")).toBe(source);
+  const emphasized = Array.from(marked.matchAll(/\*\*(.+?)\*\*/gs), match => match[1]!).join(" ");
+  expect(words(emphasized)).toBeLessThanOrEqual(Math.floor(words(source) * 0.35));
+}
+
+test("section selections require every exact point ID while zero emphasis is valid", () => {
+  const text = "Check blood pressure daily. Contact your care team for a fever.";
   const points = highlightSectionPoints(text);
-  const partial = { points: points.map(point => ({ id: point.id, phrases: point.id === "p1"
-    ? [{ phrase: "Fever is at least 38.5 °C", kind: "warning" }] : [] })) };
-  expect(assessSectionHighlights(text, partial).accepted).toBe(false);
-  const warning = "If fever reaches 38.5 °C or higher, or you develop breathlessness, contact your care team immediately.";
-  const warningPoint = highlightSectionPoints(warning)[0]!;
-  const extraPoints = highlightSectionPoints(`${warning}\nCall your care team for worsening symptoms.`);
-  const partialAlternative = assessSectionHighlights(`${warning}\nCall your care team for worsening symptoms.`, { points: extraPoints.map(point => ({
-    id: point.id, phrases: [{ phrase: point.id === warningPoint.id ? "If fever reaches 38.5 °C or higher" : point.text.trim(), kind: "warning" }],
-  })) });
-  expect(partialAlternative.accepted).toBe(false);
-  expect(partialAlternative.issues).toContain("INVALID_SPAN");
-  const complete = { points: points.map(point => ({ id: point.id, phrases: [{ phrase: point.text.trim(), kind: "warning" }] })) };
-  expect(assessSectionHighlights(text, complete).accepted).toBe(true);
-  expect(assessSectionHighlights(text, { points: [{ id: "p1", phrases: [] }, { id: "p2", phrases: [] }] }).issues).toContain("REQUIRED_POINT_UNHIGHLIGHTED");
+  expect(assessSectionHighlights(text, { points: points.map(point => ({ id: point.id, phrases: [] })) }).accepted).toBe(true);
+  for (const rows of [[], [{ id: "p1", phrases: [] }], [{ id: "p1", phrases: [] }, { id: "p1", phrases: [] }]]) {
+    expect(assessSectionHighlights(text, { points: rows }).accepted).toBe(false);
+  }
 });
 
-test("routine context may stay unhighlighted while fallback marks every actionable point", () => {
-  const text = "The diagnosis is stable.\nCheck blood pressure daily.\nContact your care team for a fever.";
-  const points = highlightSectionPoints(text);
-  const assessment = assessSectionHighlights(text, { points: points.map(point => ({ id: point.id, phrases: [] })) });
-  expect(assessment.accepted).toBe(false);
-  expect(assessment.issues).toContain("REQUIRED_POINT_UNHIGHLIGHTED");
-  expect(completeSectionHighlights(text).accepted).toBe(true);
-  expect(markFallbackHighlight("conditionAdvice", text)).toBe("The diagnosis is stable.\n**Check blood pressure daily.**\n**Contact your care team for a fever.**");
-});
-
-test("section validation accepts long complete warning spans and preserves plaintext", () => {
-  const text = "If fever reaches 38.5 °C or higher, or you develop breathlessness, contact your care team immediately for urgent advice.";
-  const point = highlightSectionPoints(text)[0]!;
-  const result = assessSectionHighlights(text, { points: [{ id: point.id, phrases: [{ phrase: point.text.trim(), kind: "warning" }] }] });
+test("selective emphasis accepts meaningful clauses without hiding unselected conditions", () => {
+  const text = "Contact your doctor if your blood pressure is 160/100 mmHg or higher, or below 90 with dizziness.";
+  const result = assessSectionHighlights(text, { points: [{ id: "p1", phrases: [{ phrase: "Contact your doctor", kind: "action" }] }] });
   expect(result.accepted).toBe(true);
-  expect(result.marked.replaceAll("**", "")).toBe(text);
+  expect(result.marked).toContain("**Contact your doctor** if your blood pressure");
+  expectSelective(result.marked, text);
 });
 
-test("fallback covers every warning bullet and numeric threshold beyond three points", () => {
+test("ordinary full sentences and blanket warning emphasis are rejected", () => {
+  for (const text of ["Check blood pressure daily.", "If fever reaches 38.5 °C or higher, or you develop breathlessness, contact your care team immediately for urgent advice."]) {
+    expect(assessSectionHighlights(text, { points: [{ id: "p1", phrases: [{ phrase: text, kind: "warning" }] }] }).accepted).toBe(false);
+    expectSelective(completeSectionHighlights(text).marked, text);
+  }
+});
+
+test("a genuinely short standalone warning may be fully emphasized", () => {
+  const text = "Seek urgent care for breathlessness.";
+  const result = assessSectionHighlights(text, { points: [{ id: "p1", phrases: [{ phrase: text, kind: "warning" }] }] });
+  expect(result.accepted).toBe(true);
+  expect(result.marked).toBe(`**${text}**`);
+});
+
+test("fallback preserves every warning and threshold without blanket highlighting", () => {
   const text = "### Red flags\nFever is at least 38.5 °C.\nBlood pressure is above 160/100 mmHg.\nGlucose is above 180 mg/dL.\nCall your care team for chest pain.\nSeek urgent care for breathlessness.\nContact your clinician if confusion develops.";
-  const marked = markFallbackHighlight("redFlagsAdvice", text);
-  expect((marked.match(/\*\*/gu) ?? []).length).toBe(12);
-  expect(marked).toContain("**Blood pressure is above 160/100 mmHg.**");
-  expect(marked).toContain("**Glucose is above 180 mg/dL.**");
+  expectSelective(markFallbackHighlight("redFlagsAdvice", text), text);
+  const completed = completeSectionHighlights(text);
+  expect(completed.accepted).toBe(true);
+  expectSelective(completed.marked, text);
 });
 
-test("long warning spans exceed 180 characters and survive deterministic repair", () => {
-  const warning = `If fever reaches 38.5 °C or higher, or you develop breathlessness, contact your care team immediately and follow the written plan ${"while monitoring symptoms and seeking urgent advice, ".repeat(4)}today.`;
-  expect(warning.length).toBeGreaterThan(180);
-  const point = highlightSectionPoints(warning)[0]!;
-  expect(assessSectionHighlights(warning, { points: [{ id: point.id, phrases: [{ phrase: point.text.trim(), kind: "warning" }] }] }).accepted).toBe(true);
-  const repaired = completeSectionHighlights(warning, { points: [{ id: point.id, phrases: [{ phrase: "If fever reaches 38.5 °C or higher", kind: "warning" }] }] });
-  expect(repaired.accepted).toBe(true);
-  expect(repaired.valid.points[0]!.phrases[0]!.phrase).toBe(point.text.trim());
+test("long warnings survive deterministic repair with concise exact emphasis", () => {
+  const text = `If fever reaches 38.5 °C or higher, or you develop breathlessness, contact your care team immediately and follow the written plan ${"while monitoring symptoms and seeking urgent advice, ".repeat(4)}today.`;
+  expect(text.length).toBeGreaterThan(180);
+  const result = completeSectionHighlights(text, { points: [{ id: "p1", phrases: [{ phrase: "unsupported medicine", kind: "warning" }] }] });
+  expect(result.accepted).toBe(true);
+  expect(result.marked).not.toContain(`**${text}**`);
+  expectSelective(result.marked, text);
 });
 
 test("fallback repairs partial existing bold and stays idempotent", () => {
-  const partial = "Check **blood pressure** daily. Contact your care team for a fever.";
-  const completed = markFallbackHighlight("conditionAdvice", partial);
-  expect(completed).toBe("**Check blood pressure daily.** **Contact your care team for a fever.**");
+  const source = "Check blood pressure daily. Contact your care team for a fever.";
+  const completed = markFallbackHighlight("conditionAdvice", source.replace("blood pressure", "**blood pressure**"));
+  expectSelective(completed, source);
   expect(markFallbackHighlight("conditionAdvice", completed)).toBe(completed);
 });
 
-test("warning conditions cannot be bypassed by labelling a partial selection as an action", () => {
-  const text = "Contact your doctor if your blood pressure is 160/100 mmHg or higher, or below 90 with dizziness.";
-  const result = assessSectionHighlights(text, { points: [{ id: "p1", phrases: [{ phrase: "Contact your doctor", kind: "action" }] }] });
-  expect(result.accepted).toBe(false);
-  expect(completeSectionHighlights(text, result.valid).marked).toBe(`**${text}**`);
-});
-
-test("partial words and measurement units cannot be accepted as highlight spans", () => {
-  const text = "Monitor blood glucose below 80 mg/dL with your doctor.";
-  for (const phrase of ["Monitor blood glucose below 80 mg", "onitor blood glucose"]) {
-    expect(assessSectionHighlights(text, { points: [{ id: "p1", phrases: [{ phrase, kind: "action" }] }] }).accepted).toBe(false);
-  }
-});
-
-
-test("fallback covers medication separation and daily weight instructions", () => {
-  const text = "Leave four hours between it and calcium supplements. Weigh yourself daily. Repeat liver-function tests as scheduled.";
-  const complete = completeSectionHighlights(text);
-  expect(complete.marked).toContain("**Leave four hours between it and calcium supplements.**");
-  expect(complete.marked).toContain("**Weigh yourself daily.**");
-  expect(complete.marked).toContain("**Repeat liver-function tests as scheduled.**");
-  expect(complete.marked.replaceAll("**", "")).toBe(text);
-});
-
-test("highlight spans cannot reverse a prohibition or drop a safety qualification", () => {
+test("partial words, numeric ranges and measurement units are rejected", () => {
   for (const [text, phrase] of [
-    ["Do not restrict fluids unless your care team advises you to.", "restrict fluids"],
-    ["If vomiting occurs, sip ORS after checking your fluid plan.", "sip ORS"],
-    ["Leave four hours between it and calcium supplements.", "Leave four hours"],
-    ["Inform your doctor early if vomiting occurs.", "Inform your doctor"],
-  ]) for (const kind of ["action", "finding", "warning"]) {
-    expect(assessSectionHighlights(text!, { points: [{ id: "p1", phrases: [{ phrase, kind }] }] }).accepted).toBe(false);
-  }
+    ["Monitor blood glucose below 80 mg/dL with your doctor.", "Monitor blood glucose below 80 mg"],
+    ["Monitor blood glucose below 80 mg/dL with your doctor.", "onitor blood glucose"],
+    ["Maintain an intake of 25–30 kcal/kg/day with the care team advising on your individual target.", "30 kcal/kg/day"],
+    ["Maintain an intake of 25–30 kcal/kg/day with the care team advising on your individual target.", "intake of 25"],
+  ]) expect(assessSectionHighlights(text!, { points: [{ id: "p1", phrases: [{ phrase, kind: "action" }] }] }).accepted).toBe(false);
 });
 
-test("long approved warning sentences retain fallback highlighting without losing other selections", () => {
-  const warning = `Contact your care team if ${"persistent symptoms and ".repeat(24)}breathlessness occur.`;
-  const source = `Track your intake. ${warning}`;
-  const result = completeSectionHighlights(source);
+test("fallback retains complete medication separation and monitoring text", () => {
+  const text = "Leave four hours between it and calcium supplements. Weigh yourself daily. Repeat liver-function tests as scheduled.";
+  const result = completeSectionHighlights(text);
   expect(result.accepted).toBe(true);
-  expect(result.marked).toContain(`**${warning}**`);
-  expect(result.marked).toContain("**Track your intake.**");
-  expect(result.marked.replaceAll("**", "")).toBe(source);
+  expectSelective(result.marked, text);
 });
 
-test("fallback highlights prohibitions and agreement on a patient care target", () => {
-  const text = "Do not stop these tablets on your own. Agree on a fluid target with your care team.";
-  expect(completeSectionHighlights(text).marked).toBe("**Do not stop these tablets on your own.** **Agree on a fluid target with your care team.**");
+test("highlight spans cannot reverse a prohibition, regardless of assigned kind", () => {
+  const text = "Do not restrict fluids unless your care team advises you to, based on your individual care plan.";
+  for (const kind of ["action", "finding", "warning"]) expect(assessSectionHighlights(text, {
+    points: [{ id: "p1", phrases: [{ phrase: "restrict fluids", kind }] }],
+  }).accepted).toBe(false);
+  const allowed = assessSectionHighlights(text, { points: [{ id: "p1", phrases: [{ phrase: "Do not restrict fluids", kind: "action" }] }] });
+  expect(allowed.accepted).toBe(true);
+  expectSelective(allowed.marked, text);
 });
 
-test("generic words labelled as findings cannot satisfy an actionable point", () => {
-  for (const phrase of ["your", "your intake"]) expect(assessSectionHighlights("Track your intake every day.", {
+test("long approved warnings retain all alternatives and other monitoring instructions", () => {
+  const warning = `Contact your care team if ${"persistent symptoms and ".repeat(24)}breathlessness occur.`;
+  const text = `Track your intake. ${warning}`;
+  const result = completeSectionHighlights(text);
+  expect(result.accepted).toBe(true);
+  expectSelective(result.marked, text);
+});
+
+test("section budget and maximum two phrases prevent blanket highlighting", () => {
+  const text = "Track your intake and check blood pressure, then record your weight each day while keeping the care team informed about any changes.";
+  const phrase = (value: string) => ({ phrase: value, kind: "action" });
+  const result = assessSectionHighlights(text, { points: [{ id: "p1", phrases: [phrase("Track your intake"), phrase("check blood pressure"), phrase("record your weight")] }] });
+  expect(result.accepted).toBe(false);
+  expect(result.issues).toContain("TOO_MANY_PHRASES_PER_POINT");
+  expectSelective(result.marked, text);
+  expect(assessSectionHighlights(text, { points: [{ id: "p1", phrases: [phrase("Track your intake and check blood pressure, then record your weight")] }] }).accepted).toBe(false);
+});
+
+test("generic words and isolated numbers do not satisfy an actionable highlight", () => {
+  for (const phrase of ["your", "your intake", "80"]) expect(assessSectionHighlights("Track your intake every day and discuss changes with the care team when needed, with an energy target of 80.", {
     points: [{ id: "p1", phrases: [{ phrase, kind: "finding" }] }],
   }).accepted).toBe(false);
 });

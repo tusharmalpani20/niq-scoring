@@ -235,7 +235,7 @@ test("invalid highlight suggestions trigger targeted repair before publication",
   expect(body.narrative.nutritionAdvice.text).not.toContain("start an unsupported treatment");
 });
 
-test("a failed model pass can recover with validated complete sentences", async () => {
+test("a failed model pass recovers factual interpretation without forcing emphasis", async () => {
   let attempts = 0;
   const { call, request } = await setup(undefined, undefined, undefined, () => {
     attempts++;
@@ -243,7 +243,8 @@ test("a failed model pass can recover with validated complete sentences", async 
   });
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
-  expect(body.narrative.keyFindings.text).toContain("**");
+  expect(body.narrative.keyFindings.text.replaceAll("**", "")).toContain("Your NIQ score is 12, indicating Low Risk.");
+  expect(body.narrative.keyFindings.evidenceIds).toContain("fact:niq_risk");
   expect(attempts).toBeGreaterThan(3);
 });
 
