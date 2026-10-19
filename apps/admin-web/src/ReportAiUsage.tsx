@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { message, request } from "./api";
 import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";
+import { ReportAiTrace } from "./ReportAiTrace";
 
 type Call = {
   step: "writer" | "reviewer" | "revision";
@@ -30,6 +31,7 @@ type Run = {
   model: string;
   promptVersion: string;
   schemaVersion: number;
+  generationMode?: string | null;
   errorCode: string | null;
   createdAt: string;
   completedAt: string | null;
@@ -91,7 +93,7 @@ export function ReportAiUsage() {
 
   return <section className="min-w-0 space-y-5" aria-label="Report AI usage">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="text-lg font-semibold">Generation runs</h2><p className="mt-1 text-sm text-muted-foreground">Operational logs for AI report text. Patient facts, prompts, and generated wording are omitted.</p></div>
+      <div><h2 className="text-lg font-semibold">Generation runs</h2><p className="mt-1 text-sm text-muted-foreground">Usage summaries omit patient facts and generated wording. Open an individual agent trace to inspect retained prompts, responses, and review decisions.</p></div>
       <Button variant="outline" disabled={loading} onClick={() => setReload(value => value + 1)}>Refresh</Button>
     </div>
     {error && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 p-4 text-sm"><span>Could not load generation runs. {error}</span><Button variant="outline" size="sm" onClick={() => setReload(value => value + 1)}>Try again</Button></div>}
@@ -105,8 +107,11 @@ export function ReportAiUsage() {
       {data.items.length === 0 ? <p className="rounded-xl border bg-card p-8 text-center text-sm text-muted-foreground">No report text has been generated yet.</p> : <div className="space-y-3">{data.items.map(run => <article key={run.id} className="min-w-0 rounded-xl border bg-card p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 space-y-1"><p className="text-sm font-semibold">{run.clientName ?? run.clientId} · {run.deploymentName ?? run.deploymentId}</p><p className="text-xs text-muted-foreground">{formatTime(run.createdAt)} · Run {run.id}</p></div><Badge variant={run.status === "READY" ? "success" : run.status === "FAILED" ? "destructive" : "secondary"}>{run.status.replaceAll("_", " ").toLowerCase()}</Badge></div>
         <div className="mt-3 grid gap-x-5 gap-y-2 text-xs sm:grid-cols-2 lg:grid-cols-4"><p><span className="text-muted-foreground">Rule version:</span> {run.ruleVersionId}</p><p><span className="text-muted-foreground">Model:</span> {modelLabel(run.model)}</p><p><span className="text-muted-foreground">Prompt:</span> {run.promptVersion}</p><p><span className="text-muted-foreground">Calls:</span> {run.calls.length}</p></div>
+        {run.generationMode === "RULE_FALLBACK" && <p className="mt-2 text-xs font-medium text-amber-700">Rule-based fallback · agent narrative was not issued</p>}
+        {run.generationMode === "SECTION_FALLBACK" && <p className="mt-2 text-xs font-medium text-amber-700">Section recovery · approved agent sections retained</p>}
         {run.errorCode && <p className="mt-3 text-xs text-destructive">Run error: {run.errorCode}</p>}
         <details className="mt-3 border-t pt-3 text-sm"><summary className="cursor-pointer font-medium text-primary">View model calls and usage</summary><div className="mt-3 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-xs"><thead className="border-b bg-muted/40 text-muted-foreground"><tr><th className="p-2">Step</th><th className="p-2">Status</th><th className="p-2">Provider</th><th className="p-2 text-right">Input</th><th className="p-2 text-right">Cached input</th><th className="p-2 text-right">Output</th><th className="p-2 text-right">Reasoning</th><th className="p-2 text-right">Cost</th><th className="p-2 text-right">Time</th></tr></thead><tbody>{run.calls.map((call, index) => <tr key={`${call.step}-${index}`} className="border-b last:border-0"><td className="p-2 capitalize">{stepLabel(call.step)}</td><td className="p-2">{call.status.toLowerCase()}</td><td className="p-2">{providerLabel(call.provider)}{call.reasoningEffort && <span className="mt-1 block text-muted-foreground">Reasoning: {call.reasoningEffort}</span>}{call.model !== run.model && <span className="mt-1 block text-muted-foreground">{modelLabel(call.model)}</span>}</td><td className="p-2 text-right tabular-nums">{formatNumber(call.promptTokens)}</td><td className="p-2 text-right tabular-nums">{formatNumber(call.cachedInputTokens)}</td><td className="p-2 text-right tabular-nums">{formatNumber(call.completionTokens)}</td><td className="p-2 text-right tabular-nums">{formatNumber(call.reasoningTokens)}</td><td className="p-2 text-right tabular-nums">{call.provider === "codex-subscription" && call.costUsd === null ? "Subscription" : formatCost(call.costUsd)}</td><td className="p-2 text-right tabular-nums">{call.latencyMs === null ? "—" : `${(call.latencyMs / 1000).toFixed(1)}s`}</td></tr>)}</tbody></table></div>{run.calls.some(call => call.errorCode) && <ul className="mt-2 space-y-1 text-xs text-destructive">{run.calls.filter(call => call.errorCode).map((call, index) => <li key={`${call.step}-${index}`}>{call.step}: {call.errorCode}</li>)}</ul>}</details>
+        <ReportAiTrace runId={run.id} />
       </article>)}</div>}
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm"><p className="text-muted-foreground">Page {data.page} of {lastPage}</p><div className="flex gap-2"><Button variant="outline" disabled={loading || page <= 1} onClick={() => setPage(value => value - 1)}>Previous</Button><Button variant="outline" disabled={loading || page >= lastPage} onClick={() => setPage(value => value + 1)}>Next</Button></div></div>
     </>}
