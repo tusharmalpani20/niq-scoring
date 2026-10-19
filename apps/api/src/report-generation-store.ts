@@ -47,7 +47,7 @@ export type ReportRunReservation =
   | { status: "CONFLICT" | "IN_PROGRESS" };
 
 export type NewReportRun = Omit<ReportRun, "id" | "status" | "response" | "errorCode" | "attemptId" | "leaseExpiresAt" | "createdAt" | "completedAt">;
-export type ReportRunSummary = Pick<ReportRun, "id" | "clientId" | "deploymentId" | "ruleVersionId" | "checksum" | "model" | "promptVersion" | "schemaVersion" | "status" | "errorCode" | "createdAt" | "completedAt"> & { calls: ReportCall[] };
+export type ReportRunSummary = Pick<ReportRun, "id" | "clientId" | "deploymentId" | "ruleVersionId" | "checksum" | "model" | "promptVersion" | "schemaVersion" | "status" | "errorCode" | "createdAt" | "completedAt"> & { calls: ReportCall[]; generationMode?: string | null };
 export type ReportRunPage = { items: ReportRunSummary[]; total: number; page: number; pageSize: number };
 
 export interface ReportGenerationStore {
@@ -63,6 +63,9 @@ export class MemoryReportGenerationStore implements ReportGenerationStore {
   constructor(private readonly now = () => new Date()) {}
   runs: ReportRun[] = [];
   calls: Array<{ runId: string; call: ReportCall }> = [];
+  isActive(runId: string, attemptId: string) {
+    return this.runs.some(run => run.id === runId && run.attemptId === attemptId && run.status === "PROCESSING" && run.leaseExpiresAt > this.now());
+  }
   async reserve(input: NewReportRun, legacyFingerprint?: string): Promise<ReportRunReservation> {
     const prior = this.runs.find(row => row.deploymentId === input.deploymentId && row.idempotencyKey === input.idempotencyKey);
     if (prior) {
@@ -109,7 +112,7 @@ export class MemoryReportGenerationStore implements ReportGenerationStore {
   async list({ page, pageSize, clientId }: { page: number; pageSize: number; clientId?: string }): Promise<ReportRunPage> {
     const filtered = this.runs.filter(row => !clientId || row.clientId === clientId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     // Report content is intentionally absent from admin usage responses.
-    return { items: filtered.slice((page - 1) * pageSize, page * pageSize).map(row => ({ id: row.id, clientId: row.clientId, deploymentId: row.deploymentId, ruleVersionId: row.ruleVersionId, checksum: row.checksum, model: row.model, promptVersion: row.promptVersion, schemaVersion: row.schemaVersion, status: row.status, errorCode: row.errorCode, createdAt: row.createdAt, completedAt: row.completedAt, calls: this.calls.filter(c => c.runId === row.id).map(c => c.call) })), total: filtered.length, page, pageSize };
+    return { items: filtered.slice((page - 1) * pageSize, page * pageSize).map(row => ({ id: row.id, clientId: row.clientId, deploymentId: row.deploymentId, ruleVersionId: row.ruleVersionId, checksum: row.checksum, model: row.model, promptVersion: row.promptVersion, schemaVersion: row.schemaVersion, generationMode: (row.response as { generationMode?: string } | null)?.generationMode ?? null, status: row.status, errorCode: row.errorCode, createdAt: row.createdAt, completedAt: row.completedAt, calls: this.calls.filter(c => c.runId === row.id).map(c => c.call) })), total: filtered.length, page, pageSize };
   }
 }
 
@@ -152,7 +155,7 @@ export class PostgresReportGenerationStore implements ReportGenerationStore {
   }
   async list({ page, pageSize, clientId }: { page: number; pageSize: number; clientId?: string }): Promise<ReportRunPage> {
     const [count] = await this.database<Array<{ total: number }>>`select count(*)::int as total from report_generation_runs where (${clientId ?? null}::text is null or client_id=${clientId ?? null})`;
-    const rows = await this.database<Array<Omit<ReportRunSummary, "calls">>>`select id,client_id as "clientId",deployment_id as "deploymentId",rule_version_id as "ruleVersionId",checksum,model,prompt_version as "promptVersion",schema_version as "schemaVersion",status,error_code as "errorCode",created_at as "createdAt",completed_at as "completedAt" from report_generation_runs where (${clientId ?? null}::text is null or client_id=${clientId ?? null}) order by created_at desc,id desc limit ${pageSize} offset ${(page - 1) * pageSize}`;
+    const rows = await this.database<Array<Omit<ReportRunSummary, "calls">>>`select id,client_id as "clientId",deployment_id as "deploymentId",rule_version_id as "ruleVersionId",checksum,model,prompt_version as "promptVersion",schema_version as "schemaVersion",status,response->>'generationMode' as "generationMode",error_code as "errorCode",created_at as "createdAt",completed_at as "completedAt" from report_generation_runs where (${clientId ?? null}::text is null or client_id=${clientId ?? null}) order by created_at desc,id desc limit ${pageSize} offset ${(page - 1) * pageSize}`;
     const items = await Promise.all(rows.map(async row => {
       const calls = await this.database<ReportCall[]>`select step,status,model,provider,generation_id as "generationId",prompt_tokens as "promptTokens",cached_input_tokens as "cachedInputTokens",reasoning_effort as "reasoningEffort",completion_tokens as "completionTokens",reasoning_tokens as "reasoningTokens",cost_usd::float8 as "costUsd",latency_ms as "latencyMs",error_code as "errorCode" from report_generation_calls where run_id=${row.id} order by created_at,id`;
       return { ...row, response: null, calls: [...calls] };

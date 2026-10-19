@@ -363,3 +363,38 @@ export const faceScanReceipts = pgTable("face_scan_receipts", {
   check("face_scan_receipt_channel_ck", sql`${t.channel} in ('DIRECT','WEBHOOK')`),
   check("face_scan_receipt_disposition_ck", sql`${t.disposition} in ('RECEIVED','ACCEPTED','DUPLICATE','CONFLICT','UNPROCESSABLE')`),
 ]);
+
+// Sensitive assessment-derived traces are restricted to diagnostic access and expire after 30 days.
+export const reportTraceCalls = pgTable("report_trace_calls", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  runId: varchar("run_id", { length: 26 }).notNull().references(() => reportGenerationRuns.id, { onDelete: "cascade" }),
+  attemptId: varchar("attempt_id", { length: 26 }).notNull(),
+  sequence: integer("sequence").notNull(),
+  step: varchar("step", { length: 30 }).notNull(),
+  system: text("system_prompt").notNull(),
+  user: text("user_prompt").notNull(),
+  schema: jsonb("response_schema").notNull(),
+  response: jsonb("response"),
+  usage: jsonb("usage"),
+  errorCode: varchar("error_code", { length: 80 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, table => [
+  uniqueIndex("report_trace_call_sequence_uq").on(table.runId, table.attemptId, table.sequence),
+  index("report_trace_calls_expiry_idx").on(table.expiresAt),
+  check("report_trace_call_sequence_ck", sql`${table.sequence}>0`),
+]);
+
+export const reportTraceEvents = pgTable("report_trace_events", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  runId: varchar("run_id", { length: 26 }).notNull().references(() => reportGenerationRuns.id, { onDelete: "cascade" }),
+  attemptId: varchar("attempt_id", { length: 26 }).notNull(),
+  stage: varchar("stage", { length: 80 }).notNull(),
+  payload: jsonb("payload").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, table => [
+  index("report_trace_events_run_created_idx").on(table.runId, table.createdAt),
+  index("report_trace_events_expiry_idx").on(table.expiresAt),
+]);

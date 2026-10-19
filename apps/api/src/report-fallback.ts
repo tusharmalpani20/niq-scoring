@@ -1,3 +1,4 @@
+import { closingReportSummary } from "./report-closing-summary";
 import { narrativeSchema, type ReportContentRequest, type ReportEvidence, type ReportNarrative, type CompleteReportNarrative, matchedReportPacket } from "./report-content";
 import { productExceptionActionText } from "@niq-scoring/contracts/product-guidance";
 import { markFallbackHighlight, selectActionHighlight } from "./report-highlights";
@@ -21,7 +22,7 @@ export function buildDeterministicReportFallback(input: {
   classification: Classification;
   guidance: Packet;
   evidence: ReportEvidence[];
-}): { narrative: ReportNarrative; guidance: Packet & { possibleToxicities: Array<Packet["possibleToxicities"][number] & { summary: string }> } } {
+}): { narrative: ReportNarrative; guidance: Omit<Packet, "possibleToxicities"> & { possibleToxicities: Array<Packet["possibleToxicities"][number] & { summary: string }> } } {
   const { facts, guidance, evidence } = input;
   const evidenceIds = new Set(evidence.map(item => item.id));
   const requireSource = (id: string, value: string) => {
@@ -89,7 +90,7 @@ export function buildDeterministicReportFallback(input: {
       .replace(/^Moderate risk[;,]\s*intake may drop with (.+)$/i, "Your intake may drop with $1")
       .replace(/^Maintain oral intake/i, "Aim to maintain oral intake")
       .replace(/^(?:Maintain|Aim to maintain) oral intake (?:≥|at least )?75%/i, "Aim to meet at least 75% of your nutrition needs through oral intake")
-      .replace(/^Introduce ONS if intake is suboptimal/i, "If food intake is low, use your selected nutrition support plan")
+      .replace(/^Introduce ONS if intake is suboptimal/i, "Implement the prescribed nutrition support plan to meet nutritional requirements and support treatment tolerance")
       .replace(/^Energy (.+?) kcal\/kg\/day;\s*protein (.+?) g\/kg\/day/i,
         "Daily energy target: $1 kilocalories per kilogram of body weight per day, and protein target: $2 grams per kilogram of body weight per day")
       .replace(/^Sodium under 2 g\/day,?\s*/i, "Choose lower-sodium foods, ")
@@ -104,6 +105,14 @@ export function buildDeterministicReportFallback(input: {
       .replace(/\s+–\s+/g, ", ").replace(/\s*&\s*/g, " and ");
     readable = readable.replace(/^For food safety, use freshly cooked food[;,]\s*washed\/peeled fruit[;,]\s*boiled or filtered water[;,]\s*no street food or leftovers older than 24 h\.?$/i,
       "For food safety, eat freshly cooked food, wash and peel fruit, use boiled or filtered water, and avoid street food or leftovers older than 24 hours.")
+      .replace(/^Adequate protein and energy\.?$/i, "Maintain adequate protein and energy intake.")
+      .replace(/^ORS and fluids to replace losses\.?$/i, "Replace fluid losses with oral rehydration solution and other fluids.")
+      .replace(/^Low-residue soft foods/i, "Choose low-residue soft foods")
+      .replace(/^Small frequent meals\.?$/i, "Eat small, frequent meals.")
+      .replace(/^Small, frequent, bland, cool meals/i, "Eat small, frequent, bland, cool meals")
+      .replace(/^Antiemetics on schedule\.?$/i, "Take your prescribed anti-nausea medicines on schedule.")
+      .replace(/^Ginger in modest amounts\.?$/i, "Use ginger in modest amounts.")
+      .replace(/^ORS sips if vomiting\.?$/i, "If vomiting occurs, take small sips of oral rehydration solution.")
       .replace(/^Soft, moist, lukewarm or cool foods/i, "Choose soft, moist, lukewarm or cool foods")
       .replace(/^Soft moist foods \((.+)\), mouth rinses, a fluid target\.?$/i, "Choose soft, moist foods ($1), rinse your mouth, and follow your fluid target.")
       .replace(/^Bland salt–soda rinse after meals\.?$/i, "Use a mild salt and baking soda rinse after meals.")
@@ -220,12 +229,13 @@ export function buildDeterministicReportFallback(input: {
     const id = `possible:toxicity:${row.id}`;
     requireSource(id, row.nutritionalInterventions);
     if (!row.expectedToxicity.trim()) throw new ReportFallbackError("FALLBACK_SOURCE_INCOMPLETE");
-    const intervention = possibleSafety.advice.filter(item => item.id === id).map(item => item.text).join(" ");
+    const intervention = [...possibleSafety.advice, ...possibleSafety.foodSafety, ...possibleSafety.redFlags, ...possibleSafety.monitoring]
+      .filter(item => item.id === id).map(item => item.text).join(" ");
     const symptomMatches = evidence.some(item => item.id.startsWith("fact:assessment_")
       && symptomTerms(item.text).some(term => symptomTerms(row.expectedToxicity).includes(term)));
-    const summary = patientLanguage(symptomMatches
-      ? "A related symptom was reported separately."
-      : intervention || "Follow the care team's guidance if this effect occurs.");
+    // Shared sections do not replace the care needed to understand this card.
+    const care = intervention || makeReadable(row.nutritionalInterventions, "advice");
+    const summary = patientLanguage(symptomMatches ? care : `If this effect occurs, follow this guidance. ${care}`);
     // Prefer an action from the matched recommendation itself. The conditional
     // lead is only the fallback when the approved source has no action verb.
     const highlight = selectActionHighlight(intervention) ?? selectActionHighlight(summary);
@@ -299,46 +309,54 @@ export function buildDeterministicReportFallback(input: {
   const monitoring = monitoringLines.filter(line => line.text !== action?.text);
   const nutritionStrategy = guidance.nutritionInterventions[0]?.coreStrategy.trim()
     ? [{ id: `rule:nutrition:${guidance.nutritionInterventions[0].id}`,
-      text: `Nutrition priority: ${guidance.nutritionInterventions[0].coreStrategy.trim().replace(/[.!?]+$/, "")}.` }] : [];
-  const overallRows = guidance.carePlan.products.status === "selected"
-    ? guidance.carePlan.products.plans.flatMap(row => {
-      const product = guidance.carePlan.products.catalog.find(item => row.products.includes(item.name) && (item.benefits?.length || item.description));
-      return [
-        { id: `rule:product:${row.id}`, text: `Your selected nutrition support is ${row.products}.` },
-        ...(product ? [{ id: `catalog:product:${product.id}`, text: product.benefits?.length ? product.benefits.map(benefit => `• ${benefit}`).join("\n") : product.description! }] : []),
-      ];
-    }) : [];
-  // The closing summary names the selected support plan without duplicating its
-  // structured dosage card or repeating the interpretation above.
-  const statusLabels = {
-    well_nourished: "Well nourished",
-    moderately_nourished: "Moderately nourished",
-    severely_malnourished: "Severely malnourished",
-  } as const;
-  const matchedNutrition = guidance.nutritionInterventions.find(row => row.coreStrategy.trim());
-  const status = guidance.carePlan.nutritionalStatus;
-  const summaryRows = [
-    { id: "fact:niq_risk", text: `Your reviewed nutrition risk is ${input.classification.label}.` },
-    ...(status ? [{ id: "fact:nutritional_status", text: `Your nutritional status is ${statusLabels[status]}.` }] : []),
-    ...(matchedNutrition ? [{ id: `rule:nutrition:${matchedNutrition.id}`,
-      text: `The main nutrition priority is ${matchedNutrition.coreStrategy.trim().replace(/[.!?]+$/, "")}.` }] : []),
-    ...overallRows,
-    ...(monitoring[0] ? [{ id: monitoring[0].id, text: monitoring[0].text }] : []),
-  ];
-  const summary = part(summaryRows);
-  // Keep the fallback interpretation factual and traceable if model review fails.
-  const interpretationFacts = evidence.filter(row => /^(?:fact:assessment_(?:appetite_status|functional_capacity)_|fact:bmi$)/.test(row.id));
+      text: (() => {
+        const strategy = guidance.nutritionInterventions[0].coreStrategy.trim().replace(/[.!?]+$/, "").replace(/^./, letter => letter.toLocaleLowerCase());
+        return /^(?:maintain|prevent|optimise|optimize|support|improve|preserve|meet|avoid)\b/i.test(strategy)
+          ? `Your nutrition plan aims to ${strategy}.` : `Your nutrition plan prioritises ${strategy}.`;
+      })() }] : [];
+  const summary = closingReportSummary({
+    riskLabel: input.classification.label,
+    evidence,
+    nutrition: [...nutritionContent, ...treatmentContent, ...effectContent],
+    monitoring,
+    products: guidance.carePlan.products.status === "selected"
+      ? guidance.carePlan.products.plans.map(row => ({ id: `rule:product:${row.id}`, text: row.products })) : [],
+  });
+  // Build complete sentences from pinned facts, rather than joining raw labels.
+  // Qualify the effect on eating only when the matched guidance supports it.
+  const sentence = (text: string) => /[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`;
   const interpretationRows = [
-    { id: "fact:niq_risk", text: `Your NIQ score is ${facts.reviewedScore}, indicating ${input.classification.label}.` },
-    ...evidence.filter(row => row.id === "fact:weight_direction").map(row => ({ ...row, text: row.text })),
-    ...(interpretationFacts.length ? [{ id: interpretationFacts.map(row => row.id).join(" "), text: interpretationFacts.map(row => row.text.replace(/^Assessment records /, "").replace(/\. This does not establish a treatment cause\.$/, ".")).join(" ") }] : []),
+    { id: "fact:niq_risk", text: `Your NIQ score of ${facts.reviewedScore} indicates ${input.classification.label.toLocaleLowerCase()}.` },
+    ...evidence.filter(row => row.id === "fact:weight_direction").map(row => ({ ...row,
+      text: sentence(row.text.replace(/^Recorded weight (gain|loss): ([\d.]+) kg previously and ([\d.]+) kg currently \(([\d.]+)%\)\. The previous measurement was recorded on ([\d-]+); the current measurement was recorded on ([\d-]+)\..*$/,
+        "Your recorded weight changed from $2 kg on $5 to $3 kg on $6, a $4% $1.")
+        .replace(/^Recorded weight no change: ([\d.]+) kg previously and ([\d.]+) kg currently \([\d.]+%\)\. The previous measurement was recorded on ([\d-]+); the current measurement was recorded on ([\d-]+)\..*$/,
+          "Your recorded weight remained $2 kg between $3 and $4.")
+        .replace(/^Recorded weight (gain|loss): ([\d.]+) kg previously and ([\d.]+) kg currently \(([\d.]+)%\)\. The previous weight was reported for 1 month ago\.$/,
+        "Your weight has changed from $2 kg one month ago to $3 kg, a $4% $1.")
+        .replace(/^Recorded weight no change: ([\d.]+) kg previously and ([\d.]+) kg currently \([\d.]+%\)\. The previous weight was reported for 1 month ago\.$/,
+          "Your weight remains $2 kg compared with one month ago.")) })),
+    ...evidence.filter(row => row.id === "fact:bmi").map(row => ({ ...row,
+      text: sentence(row.text.replace(/^BMI:\s*/, "Your BMI is ")) })),
+    ...evidence.filter(row => /^fact:assessment_appetite_status_/.test(row.id)).map(row => {
+      const label = row.text.replace(/^Assessment records [^:]+:\s*/, "").replace(/\. This does not establish a treatment cause\.$/, "").replace(/\.$/, "");
+      return { ...row, text: /^normal$/i.test(label) ? "You report a normal appetite." : `Your reported appetite is ${label.toLocaleLowerCase()}.` };
+    }),
+    ...evidence.filter(row => /^fact:assessment_functional_capacity_/.test(row.id)).map(row => {
+      const label = row.text.replace(/^Assessment records [^:]+:\s*/, "").replace(/\. This does not establish a treatment cause\.$/, "").replace(/\.$/, "");
+      return { ...row, text: /^reduced activity$/i.test(label) ? "Your functional activity is reduced." : `Your recorded functional capacity is ${label.toLocaleLowerCase()}.` };
+    }),
     ...reportedSymptoms,
     ...nutritionStrategy,
   ];
+  const mouthFact = evidence.find(row => row.id.startsWith("fact:assessment_") && /mouth sores?|mouth ulcers?|mucositis/i.test(row.text));
+  const mouthEatingRule = nutritionRows.find(row => /mouth sores?|mouth ulcers?|mucositis/i.test(row.text) && /intake|eat|nutrition/i.test(row.text));
+  if (mouthFact && mouthEatingRule) interpretationRows.push({ id: `${mouthFact.id} ${mouthEatingRule.id}`,
+    text: "Mouth sores may make eating more difficult, so maintaining your nutritional intake is a priority." });
   const narrative: CompleteReportNarrative = {
     // Clinical facts already have their own cards; interpretation stays brief.
     overview: part([]),
-    keyFindings: part(interpretationRows),
+    keyFindings: { ...part(interpretationRows), text: part(interpretationRows).text.replace(/\n+/g, " ") },
     actionSummary: part(action ? [action] : []),
     monitoringSummary: part(monitoring),
     overallSummary: summary,

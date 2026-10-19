@@ -164,6 +164,7 @@ test("partial words, numeric ranges and measurement units are rejected", () => {
   for (const [text, phrase] of [
     ["Monitor blood glucose below 80 mg/dL with your doctor.", "Monitor blood glucose below 80 mg"],
     ["Monitor blood glucose below 80 mg/dL with your doctor.", "onitor blood glucose"],
+    ["Contact the care team for a temperature above 38.5°C while following the prescribed emergency instructions.", "a temperature above 38"],
     ["Maintain an intake of 25–30 kcal/kg/day with the care team advising on your individual target.", "30 kcal/kg/day"],
     ["Maintain an intake of 25–30 kcal/kg/day with the care team advising on your individual target.", "intake of 25"],
   ]) expect(assessSectionHighlights(text!, { points: [{ id: "p1", phrases: [{ phrase, kind: "action" }] }] }).accepted).toBe(false);
@@ -208,4 +209,51 @@ test("generic words and isolated numbers do not satisfy an actionable highlight"
   for (const phrase of ["your", "your intake", "80"]) expect(assessSectionHighlights("Track your intake every day and discuss changes with the care team when needed, with an energy target of 80.", {
     points: [{ id: "p1", phrases: [{ phrase, kind: "finding" }] }],
   }).accepted).toBe(false);
+});
+
+
+test("warning highlights keep trailing numerical comparators complete", () => {
+  for (const direction of ["above", "below"]) {
+    const text = `During treatment, contact your oncology team immediately for a fever of 38°C (100.4°F) or ${direction}, and follow its emergency instructions without delay. Keep your care team informed about other new symptoms and changes.`;
+    for (const phrase of ["contact your oncology team immediately for a fever of 38°C (100.4°F) or", "a fever of 38°C (100.4°F)", "a fever of 38°C (100.4°F"]) {
+      const result = assessSectionHighlights(text, {points:[{id:"p1",phrases:[{phrase,kind:"warning"}]},{id:"p2",phrases:[]}]});
+      expect(result.accepted).toBe(false);
+      expect(result.valid.points[0]!.phrases).toEqual([]);
+    }
+    const completePhrase = `a fever of 38°C (100.4°F) or ${direction}`;
+    const complete = assessSectionHighlights(text,{points:[{id:"p1",phrases:[{phrase:completePhrase,kind:"warning"}]},{id:"p2",phrases:[]}]});
+    expect(complete.accepted).toBe(true);
+    expect(complete.marked).toContain(`**${completePhrase}**`);
+    const fallback = completeSectionHighlights(text);
+    expectSelective(fallback.marked,text);
+    expect(fallback.marked).toContain("**contact your oncology team immediately**");
+    expect(fallback.marked).not.toMatch(/\*\*[^*]+(?:\bor|\band)\*\*/);
+    for (const span of Array.from(fallback.marked.matchAll(/\*\*(.+?)\*\*/g), match=>match[1]!))
+      if (span.includes("38°C")) expect(span).toContain(`or ${direction}`);
+  }
+});
+
+test("model highlighting rejects dangling conjunctions and omitted leading comparators", () => {
+  const text = "Contact your care team for a temperature of at least 38°C and report any new symptoms while following your care team's instructions during treatment.";
+  for (const phrase of ["Contact your care team for", "Contact your care team for a temperature of at least", "a temperature of at least 38°C and", "38°C and report any new symptoms", "least 38°C and report any new symptoms"]) {
+    const result = assessSectionHighlights(text,{points:[{id:"p1",phrases:[{phrase,kind:"warning"}]}]});
+    expect(result.accepted).toBe(false);
+    expect(result.valid.points[0]!.phrases).toEqual([]);
+  }
+  expect(assessSectionHighlights(text,{points:[{id:"p1",phrases:[{phrase:"a temperature of at least 38°C",kind:"warning"}]}]}).accepted).toBe(true);
+});
+
+
+test("partial protein target units and duplicate point selections cannot become approved emphasis", () => {
+  const text = "Aim for 30–35 kcal/kg/day and 1.2–1.5 g protein/kg/day while following the nutrition plan and discussing changes with your care team.";
+  for (const phrase of ["1.2–1.5 g", "1.2–1.5 g protein"]) {
+    const result = assessSectionHighlights(text, {points: [{id: "p1", phrases: [{phrase, kind: "finding"}]}]});
+    expect(result.accepted).toBe(false);
+    expect(result.valid.points[0]!.phrases).toEqual([]);
+  }
+  const duplicate = assessSectionHighlights(text, {points: [
+    {id: "p1", phrases: []}, {id: "p1", phrases: [{phrase: "30–35 kcal/kg/day", kind: "finding"}]},
+  ]});
+  expect(duplicate.accepted).toBe(false);
+  expect(duplicate.valid.points[0]!.phrases).toEqual([]);
 });

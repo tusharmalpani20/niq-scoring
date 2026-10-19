@@ -225,6 +225,13 @@
       "when": 1792000000000,
       "tag": "0031_product_benefits_images",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792070000000,
+      "tag": "0032_report_agent_traces",
+      "breakpoints": true
     }
   ]
 }

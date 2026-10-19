@@ -104,3 +104,127 @@ test("invalid repair preserves valid earlier selections in other points", async 
   expect(result.replaceAll("**", "")).toContain("Weigh yourself daily.");
   expect(result).not.toContain("**Weigh yourself daily.**");
 });
+
+test("clinical targets retain their complete units even when the model selects no phrase", async () => {
+  const text = "Aim for 30–35 kcal/kg/day and 1.2–1.5 g protein/kg/day. Include suitable protein foods with meals and discuss changes in intake with your care team.";
+  const highlighter = createReportSectionHighlighter(async (_step, _system, user) => ({
+    points: JSON.parse(user).points.map((point: {id: string}) => ({id:point.id,phrases:[]})),
+  }));
+  const marked = await highlighter.highlight("nutritionAdvice", text);
+  expect(marked).toContain("**30–35 kcal/kg/day**");
+  expect(marked).toContain("**1.2–1.5 g protein/kg/day**");
+  expect(marked.replaceAll("**", "")).toBe(text);
+});
+
+test("batches approved sections four at a time, reuses exact wording and bounds concurrency", async () => {
+  let calls = 0, active = 0, peak = 0;
+  const batches: number[] = [];
+  const highlighter = createReportSectionHighlighter(async (_step, _system, user) => {
+    const input = JSON.parse(user);
+    calls++; active++; peak = Math.max(peak, active);
+    batches.push(input.sections.length);
+    await new Promise(resolve => setTimeout(resolve, 5));
+    active--;
+    return {sections: Object.fromEntries(input.sections.map((section: {section: string; points: Array<{id: string}>}) =>
+      [section.section, {points: Object.fromEntries(section.points.map(point => [point.id, []]))}]))};
+  }, 4);
+  const entries = Array.from({length: 9}, (_, index) => ({section: `section:${index}`,
+    text: "Aim for 30–35 kcal/kg/day and 1.2–1.5 g protein/kg/day. Include protein foods with meals."}));
+  const results = await highlighter.highlightMany(entries);
+  expect(batches).toEqual([4, 4, 1]);
+  expect(peak).toBe(2);
+  for (const entry of entries) {
+    expect(results.get(entry.section)?.replaceAll("**", "")).toBe(entry.text);
+    expect(results.get(entry.section)).toContain("**30–35 kcal/kg/day**");
+    expect(results.get(entry.section)).toContain("**1.2–1.5 g protein/kg/day**");
+    await highlighter.highlight(entry.section, entry.text);
+  }
+  await highlighter.highlightMany(entries);
+  expect(calls).toBe(3);
+});
+
+test("malformed and missing keyed batch points fall back independently without extra model calls", async () => {
+  let calls = 0;
+  const highlighter = createReportSectionHighlighter(async () => {
+    calls++;
+    return {sections: {
+      valid: {points: {p1: [{phrase: "Track your intake", kind: "action"}], p2: []}},
+      rewrite: {points: {p1: [{phrase: "Take new medicine", kind: "action"}]}},
+      collapsed: {points: [{id: "p1", phrases: []}, {id: "p1", phrases: []}]},
+    }};
+  });
+  const text = "Track your intake each day and share any changes with the care team. Keep a daily record of your weight, symptoms, and meals.";
+  const entries = ["valid", "rewrite", "collapsed", "missing"].map(section => ({section, text}));
+  const results = await highlighter.highlightMany(entries);
+  expect(calls).toBe(1);
+  expect(results.get("valid")).toContain("**Track your intake**");
+  for (const entry of entries) {
+    expect(results.get(entry.section)?.replaceAll("**", "")).toBe(text);
+    expect(results.get(entry.section)).not.toContain("Take new medicine");
+  }
+});
+
+test("legacy collapsed section arrays cannot bypass the keyed response contract", async () => {
+  let calls = 0;
+  const highlighter = createReportSectionHighlighter(async () => {
+    calls++;
+    return {sections: [{section: "treatmentAdvice", points: [
+      {id: "p1", phrases: [{phrase: "Take new medicine", kind: "action"}]},
+      {id: "p1", phrases: []}, {id: "p2", phrases: []},
+    ]}]};
+  });
+  const text = "Track your intake each day and share changes with your care team. Contact your doctor if symptoms persist.";
+  const entries = ["treatmentAdvice", "redFlagsAdvice"].map(section => ({section, text}));
+  const results = await highlighter.highlightMany(entries);
+  expect(calls).toBe(1);
+  for (const entry of entries) expect(results.get(entry.section)?.replaceAll("**", "")).toBe(entry.text);
+});
+
+test("settle waits for batched provider failure and preserves approved text", async () => {
+  let finish!: () => void;
+  const gate = new Promise<void>(resolve => { finish = resolve; });
+  const highlighter = createReportSectionHighlighter(async () => {
+    await gate;
+    throw new Error("provider unavailable");
+  });
+  const text = "Aim for 30–35 kcal/kg/day and contact the care team if intake falls.";
+  const results = highlighter.highlightMany([{section: "nutritionAdvice", text}]);
+  let settled = false;
+  const waiting = highlighter.settle().then(() => { settled = true; });
+  await Promise.resolve();
+  expect(settled).toBe(false);
+  finish();
+  const marked = (await results).get("nutritionAdvice")!;
+  await waiting;
+  expect(settled).toBe(true);
+  expect(marked.replaceAll("**", "")).toBe(text);
+  expect(marked).toContain("**30–35 kcal/kg/day**");
+});
+
+
+test("batch response schema binds every section to its own exact point keys", async () => {
+  let responseSchema: any;
+  const highlighter = createReportSectionHighlighter(async (_step, _system, user, schema) => {
+    responseSchema = schema;
+    const input = JSON.parse(user);
+    return {sections: Object.fromEntries(input.sections.map((section: {section: string; points: Array<{id: string}>}) =>
+      [section.section, {points: Object.fromEntries(section.points.map(point => [point.id, []]))}]))};
+  });
+  const entries = [{section: "nutritionAdvice", text: "Aim for 30–35 kcal/kg/day and 1.2–1.5 g protein/kg/day. Include suitable protein foods with meals."},
+    {section: "redFlagsAdvice", text: "Contact your care team immediately for a fever and follow its emergency instructions during treatment."}];
+  const result = await highlighter.highlightMany(entries);
+  const sections = responseSchema.properties.sections;
+  expect(sections.type).toBe("object");
+  expect(sections.required).toEqual(["nutritionAdvice", "redFlagsAdvice"]);
+  expect(sections.additionalProperties).toBe(false);
+  const nutrition = sections.properties.nutritionAdvice.properties.points;
+  const warnings = sections.properties.redFlagsAdvice.properties.points;
+  expect(nutrition.required).toEqual(["p1", "p2"]);
+  expect(warnings.required).toEqual(["p1"]);
+  expect(Object.keys(nutrition.properties)).toEqual(["p1", "p2"]);
+  expect(Object.keys(warnings.properties)).toEqual(["p1"]);
+  expect(nutrition.additionalProperties).toBe(false);
+  expect(result.get("nutritionAdvice")).toContain("**30–35 kcal/kg/day**");
+  expect(result.get("nutritionAdvice")).toContain("**1.2–1.5 g protein/kg/day**");
+  expect(result.get("redFlagsAdvice")).toBe(entries[1]!.text);
+});

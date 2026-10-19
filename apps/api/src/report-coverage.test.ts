@@ -53,3 +53,28 @@ test("every matched candidate needs one safe summary and a complete audit", () =
   expect(assessInterventionSummaryCoverage({ rows: [{ evidenceId: candidates[0]!.id, covered: true,
     missing: [] }] }, candidates, rows).accepted).toBe(true);
 });
+
+test("possible-effect cards reject placeholders and references instead of care", () => {
+  const candidates = evidence.filter(item => item.id.startsWith("possible:toxicity:"));
+  for (const text of ["A related symptom was reported separately.", "For comfort, see Reported symptom care.", "Refer to the food safety section."]) {
+    expect(assessInterventionSummaries({ rows: [{ evidenceId: candidates[0]!.id, text }] }, candidates).issues)
+      .toContain(`${candidates[0]!.id}:INCOMPLETE_REFERENCED_CARE`);
+  }
+});
+
+test("a detailed treatment audit preserves fifteen distinct concerns for manager review", () => {
+  const missing = Array.from({length:15},(_,index)=>`Distinct supported treatment action ${index+1} is missing.`);
+  const result=assessCoverage({rows:[covered[0],{evidenceId:sources[1]!.id,covered:false,missing}]},sources,narrative);
+  expect(result.invalid).toBe(false);
+  expect(result.gaps[0]?.missing).toEqual(missing);
+});
+
+test("card sentence capitalization is repaired before review without changing clinical notation", () => {
+  const id = "possible:toxicity:fatigue";
+  const text = "Monitor weight and intake. your care team should intensify support if weight loss continues. ask the care team about tests. Keep 1.2–1.5 g/kg/day, pH and e.g. your usual foods unchanged.";
+  const input = {rows: [{evidenceId: id, text}]};
+  const result = assessInterventionSummaries(input, [{id, text}]);
+  expect(result.issues).toEqual([]);
+  expect(result.rows?.[0]?.text).toBe("Monitor weight and intake. Your care team should intensify support if weight loss continues. Ask the care team about tests. Keep 1.2–1.5 g/kg/day, pH and e.g. your usual foods unchanged.");
+  expect(input.rows[0]!.text).toBe(text);
+});

@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import { createFinalAssessmentTemplate } from "@niq-scoring/contracts/final-assessment-template";
 import { createApp } from "./app";
+import { MemoryReportContentJobStore } from "./report-content-job-store";
 import { MemoryScoringStore } from "./store";
+import { MemoryReportTraceStore } from "./report-trace-store";
 import { MemoryReportGenerationStore, REPORT_RUN_LEASE_MS } from "./report-generation-store";
 import { MemoryAdminAuthStore } from "./admin-auth-store";
 import { createEntityId } from "./lib/id";
@@ -27,8 +29,11 @@ const usage = { model: "openai/gpt-6-luna", provider: "test-provider", generatio
 type Step = "writer" | "reviewer" | "revision" | "coverage" | "summarizer" | "highlighter";
 const plainPart = (part: { text: string; evidenceIds: string[] }) => ({ ...part, text: part.text.replaceAll("**", "") });
 
-function fixtureHighlights(user: string) {
-  const { points } = JSON.parse(user) as { section: string; points: Array<{ id: string; text: string }> };
+function fixtureHighlights(user: string): { points: Array<{ id: string; phrases: Array<{ phrase: string; kind: "finding" | "action" }> }> } | { sections: unknown[] } {
+  const payload = JSON.parse(user) as { sections?: Array<{ section: string; points: Array<{ id: string; text: string }> }>; section: string; points: Array<{ id: string; text: string }> };
+  if (payload.sections) return { sections: payload.sections.map(section => ({ section: section.section,
+    ...fixtureHighlights(JSON.stringify(section)) })) };
+  const { points } = payload;
   return { points: points.map(({ id, text }) => {
     const actionVerb = /\b(?:aim|ask|avoid|call|check|choose|contact|discuss|follow|keep|maintain|monitor|record|report|seek|separate|share|take|tell|track|use)\b/i;
     const sentences = Array.from(new Intl.Segmenter("en", { granularity: "sentence" }).segment(text), item => item.segment);
@@ -56,6 +61,28 @@ function fixtureHighlights(user: string) {
 
 function fixtureManager(system: string, user: string, schema: Record<string, unknown>) {
   const properties = schema.properties as Record<string, unknown> | undefined;
+  if (properties?.sources) {
+    const { evidence } = JSON.parse(user) as { evidence: Array<{ id: string; text: string }> };
+    return { sources: evidence.map(source => {
+      const card = source.id.startsWith("possible:toxicity:");
+      const product = /^(?:rule:product:|catalog:product:)/u.test(source.id);
+      return { evidenceId: source.id, actions: source.id.startsWith("fact:") ? [] : [{
+        action: source.text, qualification: "", sourceQuote: source.text,
+        destination: card ? "possibleEffectCard" : product ? "structuredProductPlan" : "nutritionAdvice",
+        cardEvidenceId: card ? source.id : null, stage: card ? "card" : product ? "assembled" : "narrative",
+      }] };
+    }) };
+  }
+  if (properties?.resolutions) {
+    const { conflicts } = JSON.parse(user);
+    return { resolutions: conflicts.map((row: any) => ({ nutrient: row.nutrient, decision: "withhold_numeric", selectedSourceId: null,
+      rationale: "The fixture provides no justified source precedence, so the disputed target is individualised." })) };
+  }
+  if ((properties?.assignments as any)?.items?.properties?.unitId) return { assignments: JSON.parse(user).units.map((unit: any) => ({
+    unitId: unit.unitId, destination: unit.evidenceId.startsWith("possible:toxicity:") ? "possibleEffectCard"
+      : /^(?:rule:product:|catalog:product:)/u.test(unit.evidenceId) ? "structuredProductPlan" : "nutritionAdvice",
+    cardEvidenceId: unit.evidenceId.startsWith("possible:toxicity:") ? unit.evidenceId : null,
+  })) };
   if (properties?.assignments) return { assignments: ["writer", "reviewer", "coverage", "summarizer", "highlighter"].map(role => ({ role })) };
   if (system.includes("Adjudicate only the completeness auditor")) return fixtureCoverage(user);
   if (properties?.retainedIssueIndexes) {
@@ -74,10 +101,51 @@ function fixtureCoverage(user: string) {
   return { rows: rows.map(row => ({ evidenceId: row.id ?? row.evidenceId!, covered: true, missing: [] })) };
 }
 
+/** Translate legacy fixture prose to the provider's precise-edit contract. This
+ * is test scaffolding only: production still validates every exact anchor.
+ */
+function fixturePatches(user: string, response: unknown) {
+  if (!response || typeof response !== "object" || "edits" in response) return response;
+  const current = user.match(/Current draft: ([^\n]+)\n/)?.[1];
+  if (!current) throw new Error("Patch fixture needs the current draft");
+  const draft = JSON.parse(current) as Record<string, { text: string; evidenceIds: string[] }>;
+  const concernText = user.match(/Issues: ([^\n]+)\n/)?.[1]
+    ?? user.match(/Missing meanings: ([^\n]+)\n/)?.[1] ?? "[]";
+  const concerns = JSON.parse(concernText) as Array<{ field?: string; code?: string }>;
+  const fields = [...new Set(concerns.map(issue => issue.field ?? issue.code?.split(":")[0])
+    .filter((field): field is string => Boolean(field && draft[field])))];
+  const part = response as { text?: string; evidenceIds?: string[] };
+  const targets = "text" in part
+    ? { [fields[0] ?? Object.keys(draft)[0]!]: part as { text: string; evidenceIds: string[] } }
+    : response as typeof draft;
+  const edits = Object.entries(targets).filter(([field, target]) => draft[field] && (!fields.length || fields.includes(field))
+    && target.text !== draft[field]!.text).map(([field, target]) => {
+    const old = draft[field]!.text;
+    let prefix = 0;
+    while (prefix < old.length && prefix < target.text.length && old[prefix] === target.text[prefix]) prefix++;
+    let suffix = 0;
+    while (suffix < old.length - prefix && suffix < target.text.length - prefix
+      && old[old.length - 1 - suffix] === target.text[target.text.length - 1 - suffix]) suffix++;
+    // Add neighbouring context when a pure insertion or repeated substring
+    // would otherwise leave an ambiguous anchor.
+    while (old.length && (prefix === old.length - suffix
+      || old.indexOf(old.slice(prefix, old.length - suffix)) !== old.lastIndexOf(old.slice(prefix, old.length - suffix)))) {
+      if (prefix > 0) prefix--;
+      else if (suffix > 0) suffix--;
+      else break;
+    }
+    const find = old.slice(prefix, old.length - suffix);
+    if (find.length > 500) throw new Error("Fixture replacement exceeds the precise anchor budget");
+    return { field, find, replace: target.text.slice(prefix, target.text.length - suffix), evidenceIds: target.evidenceIds };
+  });
+  return { edits };
+}
+
 async function setup(handler: (step: Step, call: number, user: string, system: string) => unknown = step => step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative,
   configure?: (definition: FinalAssessmentDefinition) => void, runs = new MemoryReportGenerationStore(),
   highlighter?: (user: string) => unknown, coverageAuditor?: (user: string) => unknown,
-  summarizer?: (user: string) => unknown | Promise<unknown>) {
+  summarizer?: (user: string) => unknown | Promise<unknown>, planner?: () => unknown,
+  jobs = new MemoryReportContentJobStore()) {
   const store = new MemoryScoringStore();
   const definition = createFinalAssessmentTemplate("Report test");
   configure?.(definition);
@@ -100,18 +168,25 @@ async function setup(handler: (step: Step, call: number, user: string, system: s
     content: step === "coverage" ? await (coverageAuditor?.(user) ?? fixtureCoverage(user))
       : step === "highlighter"
       ? highlighter?.(user) ?? fixtureHighlights(user)
-      : step === "manager" ? fixtureManager(system, user, schema)
+      : step === "manager" ? planner && (schema.properties as any).assignments && (schema.properties as any).assignments.items?.properties?.unitId ? planner() : fixtureManager(system, user, schema)
       : step === "summarizer" ? await (summarizer?.(user) ?? fixtureSummaries(user))
-      : (() => { const result = handler(step, ++calls, user, system); return result === safeNarrative ? verifiedFixture : result; })(), usage,
+      : await (async () => {
+        const result = await handler(step, ++calls, user, system);
+        const selected = result === safeNarrative ? verifiedFixture : result;
+        return (schema.properties as Record<string, unknown> | undefined)?.edits ? fixturePatches(user, selected) : selected;
+      })(), usage,
   }) };
-  const app = createApp({ store, authStore: new MemoryAdminAuthStore(), reportGenerationStore: runs, reportTextProvider: provider,
+  let jobTick!: () => Promise<void>;
+  const traces = new MemoryReportTraceStore(runs);
+  const authStore = new MemoryAdminAuthStore();
+  const app = createApp({ store, authStore, reportContentJobStore: jobs, onReportJobTick: tick => { jobTick = tick; }, reportGenerationStore: runs, reportTraceStore: traces, reportTextProvider: provider,
     region: "test", allowedOrigins: [], runtimeEnvironment: "test", provisionalScoringRequested: false, now: () => new Date("2026-01-02T00:00:00Z") });
   const call = (action: string, data: unknown) => app.request(`/v1/assessments/${action}`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(data) });
   await call("start", { assessmentReference: "report-assessment" });
   const reviewed = await (await call("classify-reviewed", { assessmentReference: "report-assessment", idempotencyKey: "reviewed-result-1", score: 12 })).json();
   const resultReference = reviewed.result.resultReference as string;
   const request = (overrides: Record<string, unknown> = {}) => ({ assessmentReference: "report-assessment", resultReference, idempotencyKey: "report-run-1", facts, ...overrides });
-  return { app, call, store, runs, rule, request, facts, verifiedFixture, getCalls: () => calls };
+  return { app, call, store, jobs, jobTick, token, runs, traces, authStore, rule, request, facts, verifiedFixture, getCalls: () => calls };
 }
 
 function fixtureSummaries(user: string) {
@@ -145,9 +220,11 @@ test("report content uses pinned rules, eleven bounded fields, idempotency, and 
 test("a separate post-review pass adds only exact emphasis to approved prose", async () => {
   const requested: string[] = [];
   const { call, request, runs } = await setup(undefined, undefined, undefined, user => {
-    const parsed = JSON.parse(user) as { section: string; points: Array<{ id: string; text: string }> };
-    requested.push(parsed.section);
-    expect(parsed.points.every(point => point.id && point.text)).toBe(true);
+    const parsed = JSON.parse(user) as { sections: Array<{ section: string; points: Array<{ id: string; text: string }> }> };
+    for (const section of parsed.sections) {
+      requested.push(section.section);
+      expect(section.points.every(point => point.id && point.text)).toBe(true);
+    }
     return fixtureHighlights(user);
   });
   const response = await call("report-content", request());
@@ -159,38 +236,30 @@ test("a separate post-review pass adds only exact emphasis to approved prose", a
   expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.some(call => call.step === "highlighter")).toBe(true);
 });
 
-test("approved section highlighting starts while the real coverage stage is pending", async () => {
+test("highlighting waits until coverage and final clinical approval complete", async () => {
   let releaseCoverage!: () => void;
   let coverageStarted!: () => void;
-  let highlightingStarted!: () => void;
-  let coverageFinished = false;
+  let highlighted = false;
   const released = new Promise<void>(resolve => { releaseCoverage = resolve; });
   const coverageEntered = new Promise<void>(resolve => { coverageStarted = resolve; });
-  const highlighted = new Promise<void>(resolve => { highlightingStarted = resolve; });
   const { call, request } = await setup(undefined, undefined, undefined, user => {
-    highlightingStarted();
+    highlighted = true;
     return fixtureHighlights(user);
-  }, async user => {
-    coverageStarted();
-    await released;
-    coverageFinished = true;
-    return fixtureCoverage(user);
-  });
+  }, async user => { coverageStarted(); await released; return fixtureCoverage(user); });
   const response = call("report-content", request());
-  try {
-    await Promise.all([coverageEntered, highlighted]);
-    expect(coverageFinished).toBe(false);
-  } finally { releaseCoverage(); }
+  try { await coverageEntered; expect(highlighted).toBe(false); }
+  finally { releaseCoverage(); }
   const body = await (await response).json();
   expect(body.status).toBe("READY");
   expect(body.model).not.toBe("rule-fallback");
+  expect(highlighted).toBe(true);
 });
 
 test("coverage does not require removed supplement suitability advice", async () => {
   const { call, request, runs } = await setup(undefined, undefined, undefined, undefined, user => {
     const result = fixtureCoverage(user);
     return { rows: result.rows.map(row => ({ ...row, covered: false,
-      missing: ["The removed supplement-suitability request is missing."] })) };
+      missing: ["[nutritionAdvice] The removed supplement-suitability request is missing."] })) };
   });
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
@@ -208,7 +277,7 @@ test("the manager adjudicates a covered nutrition source without adding removed 
         : safeNarrative, undefined, undefined, undefined, user => {
     const result = fixtureCoverage(user);
     return ++audited === 1
-      ? { rows: result.rows.map(row => ({ ...row, covered: false, missing: ["Add oral nutrition supplement advice."] })) }
+      ? { rows: result.rows.map(row => ({ ...row, covered: false, missing: ["[nutritionAdvice] Add oral nutrition supplement advice."] })) }
       : result;
   });
   const body = await (await call("report-content", request())).json();
@@ -219,19 +288,20 @@ test("the manager adjudicates a covered nutrition source without adding removed 
   expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.some(call => call.step === "coverage")).toBe(true);
 });
 
-test("invalid highlight suggestions trigger targeted repair before publication", async () => {
+test("invalid batched highlight suggestions recover locally without another model call", async () => {
   let attempts = 0;
   const { call, request } = await setup(undefined, undefined, undefined, user => {
     attempts++;
     if (attempts !== 1) return fixtureHighlights(user);
-    const parsed = JSON.parse(user) as { points: Array<{ id: string }> };
-    return { points: parsed.points.map(point => ({ id: point.id,
-      phrases: [{ phrase: "start an unsupported treatment", kind: "action" }] })) };
+    const parsed = JSON.parse(user) as { sections: Array<{ section: string; points: Array<{ id: string }> }> };
+    return { sections: parsed.sections.map(section => ({ section: section.section,
+      points: section.points.map(point => ({ id: point.id,
+        phrases: [{ phrase: "start an unsupported treatment", kind: "action" }] })) })) };
   });
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
   expect(body.narrative.nutritionAdvice.text).toContain("**");
-  expect(attempts).toBeGreaterThan(2);
+  expect(attempts).toBe(1);
   expect(body.narrative.nutritionAdvice.text).not.toContain("start an unsupported treatment");
 });
 
@@ -243,9 +313,9 @@ test("a failed model pass recovers factual interpretation without forcing emphas
   });
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
-  expect(body.narrative.keyFindings.text.replaceAll("**", "")).toContain("Your NIQ score is 12, indicating Low Risk.");
+  expect(body.narrative.keyFindings.text.replaceAll("**", "")).toContain("Your NIQ score of 12 indicates low risk.");
   expect(body.narrative.keyFindings.evidenceIds).toContain("fact:niq_risk");
-  expect(attempts).toBeGreaterThan(3);
+  expect(attempts).toBe(1);
 });
 
 test("an expired writer cannot publish over a retry with the same idempotency key", async () => {
@@ -495,13 +565,16 @@ test("a missing closing summary is repaired before a report is ready", async () 
   expect(plainPart(body.narrative.overallSummary)).toEqual(safePart);
 });
 
-test("an unrepairable closing summary keeps the report in clinical review", async () => {
+test("an unrepaired closing summary receives section fallback while other passages are retained", async () => {
   const missing = { ...safeNarrative, overallSummary: omittedPart };
   const { call, request } = await setup(step => step === "reviewer" ? { accepted: true, issues: [] } : missing);
   const response = await call("report-content", request());
   const body = await response.json();
   expect(body.status).toBe("READY");
-  expect(body.generationMode).toBe("RULE_FALLBACK");
+  expect(body.generationMode).toBe("SECTION_FALLBACK");
+  expect(body.sectionOrigins.overallSummary).toBe("rule_fallback");
+  expect(body.sectionOrigins.nutritionAdvice).toBe("agent");
+  expect(plainPart(body.narrative.nutritionAdvice)).toEqual(defaultNutritionPart);
   expect(body.narrative.overallSummary.text).toBeTruthy();
 });
 
@@ -528,7 +601,7 @@ test("an excluded term is removed through report revision before publication", a
   const body = await response.json();
   expect(body.status).toBe("READY");
   expect(JSON.stringify(body.narrative)).not.toMatch(/hba1c|\ba1c\b/i);
-  expect(getCalls()).toBe(5);
+  expect(getCalls()).toBe(4);
   expect(prompts.every(system => system.includes("Do not mention HbA1c"))).toBe(true);
 });
 
@@ -626,8 +699,8 @@ test("writer and reviewer receive the patient's diet preference", async () => {
   });
   expect((await call("report-content", request({ facts: { ...facts, dietPreferenceId: "jain" } }))).status).toBe(200);
   expect(prompts.writer?.user).toContain('"id":"fact:diet_preference","text":"Reported diet preference: Jain (no eggs, fish, or meat)"');
-  expect(prompts.writer?.system).toContain("Keep diet suggestions compatible with reported preferences");
-  expect(prompts.reviewer?.system).toContain("Keep diet suggestions compatible with reported preferences");
+  expect(prompts.writer?.system).toContain("diet suggestions compatible with the recorded preference");
+  expect(prompts.reviewer?.system).toContain("diet suggestions compatible with the recorded preference");
 });
 
 test("writer receives the sheet's Surgical scoop quantity without a made-up daily frequency", async () => {
@@ -733,7 +806,7 @@ test("all treatment and class candidates reach the agent while reported effects 
   expect(writerInputs.at(-1)).toContain("Fatigue. This does not establish a treatment cause.");
   expect(writerInputs.at(-1)).not.toContain("Reduced. This does not establish a treatment cause.");
   expect(writerInputs.at(-1)).not.toContain("Nutrition guidance source topic: Fatigue / reduced appetite");
-  expect(safetyInstructions.at(-1)).toContain("Keep possible treatment effects conditional");
+  expect(safetyInstructions.at(-1)).toContain("Keep possible effects conditional");
 });
 
 test("class candidate coverage stays conditional and named-drug candidates are rejected", () => {
@@ -852,13 +925,15 @@ test("pinned answer options are validated and weight direction stays separate fr
   expect(unchanged.guidance.toxicityInterventions).toEqual([]);
 });
 
-test("unsupported numerals trigger one revision and independent reviewer recheck", async () => {
+test("unsupported numerals in optional overview are omitted without rewriting required care", async () => {
   const bad = { ...safeNarrative, overview: { text: "The score is 999.", evidenceIds: ["fact:niq_risk"] } };
   const { call, request, runs, getCalls } = await setup(step => step === "writer" ? bad : step === "reviewer" ? { accepted: true, issues: [] } : safeNarrative);
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
   expect(body.narrative.overview.text).not.toContain("999");
-  expect(getCalls()).toBe(4);
+  expect(body.omittedNarrativeFields).toContain("overview");
+  expect(plainPart(body.narrative.nutritionAdvice)).toEqual(defaultNutritionPart);
+  expect(getCalls()).toBe(2);
   expect((await runs.list({ page: 1, pageSize: 10 })).items[0]?.calls.map(call => call.step)).toContain("manager");
 });
 
@@ -867,11 +942,12 @@ test("a second targeted revision can resolve a remaining validation issue", asyn
   const second = { ...safeNarrative, nutritionAdvice: { text: "Take 888 servings.", evidenceIds: ["rule:nutrition:nutrition_low"] } };
   let revisions = 0;
   const { call, request, getCalls } = await setup(step => step === "reviewer" ? { accepted: true, issues: [] }
-    : step === "writer" ? first : ++revisions === 1 ? second : defaultNutritionPart);
+    : step === "writer" ? first : ++revisions === 1 ? second.nutritionAdvice : defaultNutritionPart);
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
   expect(plainPart(body.narrative.nutritionAdvice)).toEqual(defaultNutritionPart);
-  expect(getCalls()).toBe(7);
+  expect(revisions).toBe(2);
+  expect(getCalls()).toBe(6);
 });
 
 test("advice can cover several matched rules within its larger word budget", () => {
@@ -995,7 +1071,7 @@ test("reviewed score must equal the completed result even with a fresh idempoten
   expect((await runs.list({ page: 1, pageSize: 10 })).items).toEqual([]);
 });
 
-test("reviewer issues cannot override the automatic verified fallback", async () => {
+test("a flagged optional passage receives scoped recovery without replacing approved care", async () => {
   let reviewed = 0;
   const { call, request, getCalls } = await setup(step => {
     if (step === "reviewer") return ++reviewed === 1
@@ -1005,9 +1081,11 @@ test("reviewer issues cannot override the automatic verified fallback", async ()
   });
   const body = await (await call("report-content", request())).json();
   expect(body.status).toBe("READY");
-  expect(body.generationMode).toBe("RULE_FALLBACK");
+  expect(body.generationMode).toBe("SECTION_FALLBACK");
+  expect(body.sectionOrigins.overview).toBe("rule_fallback");
+  expect(body.sectionOrigins.nutritionAdvice).toBe("agent");
   expect(body.narrative.overview.text).toBe("");
-  expect(getCalls()).toBe(2);
+  expect(getCalls()).toBe(3);
 });
 
 test("a rejected reviewer claim is never published", async () => {
@@ -1024,18 +1102,20 @@ test("a rejected reviewer claim is never published", async () => {
   expect(body.narrative.overview.text).not.toContain("diagnosis");
 });
 
-test("a repeatedly rejected passage is replaced by verified rule content", async () => {
-  const { call, request, getCalls } = await setup(step => step === "reviewer"
+test("a repeatedly rejected passage remains held after scoped recovery is independently rejected", async () => {
+  const { call, request, getCalls, verifiedFixture } = await setup(step => step === "reviewer"
     ? { accepted: true, issues: [{ field: "overview", code: "UNSUPPORTED_CLAIM", evidenceIds: ["fact:niq_risk"] }] }
     : safeNarrative);
   const body = await (await call("report-content", request())).json();
-  expect(body.status).toBe("READY");
-  expect(body.generationMode).toBe("RULE_FALLBACK");
-  expect(body.narrative.overview.text).not.toContain("The NIQ risk category needs clinician review");
-  expect(getCalls()).toBe(2);
+  expect(body.status).toBe("REVIEW_REQUIRED");
+  expect(body.generationMode).toBe("SECTION_FALLBACK");
+  expect(body.issues).toContain("overview:UNSUPPORTED_CLAIM");
+  expect(body.sectionOrigins.nutritionAdvice).toBe("agent");
+  expect(plainPart(body.narrative.nutritionAdvice)).toEqual(plainPart(verifiedFixture.nutritionAdvice));
+  expect(getCalls()).toBe(3);
 });
 
-test("a still-unsupported number is replaced by verified rule content", async () => {
+test("a still-unsupported optional action number is omitted while the report remains usable", async () => {
   const bad = { ...safeNarrative, actionSummary: { text: "Take 999 servings.", evidenceIds: ["fact:niq_risk"] } };
   const { call, request, getCalls } = await setup(step => step === "reviewer" ? { accepted: true, issues: [] } : bad);
   const body = await (await call("report-content", request())).json();
@@ -1043,6 +1123,7 @@ test("a still-unsupported number is replaced by verified rule content", async ()
   expect(body.omittedNarrativeFields).toContain("actionSummary");
   expect(body.narrative.actionSummary).toEqual({ text: "", evidenceIds: [] });
   expect(JSON.stringify(body.narrative)).not.toContain("999");
+  // Three bounded no-change repair attempts precede the permitted omission.
   expect(getCalls()).toBe(5);
 });
 
@@ -1092,8 +1173,14 @@ test("provider failure records the error privately and publishes only verified f
 
 test("emphasis markup cannot force valid near-limit report prose into fallback", async () => {
   let draft: ReturnType<typeof plainNarrative>;
-  const sentence = "Monitor your intake with your care team. ";
-  const text = sentence.repeat(Math.floor(3990 / sentence.length)).trim();
+  const topics = ["meals", "snacks", "food intake", "appetite", "fluid intake", "hydration", "diet", "nutrition", "protein intake", "energy intake"];
+  // Distinct sentences keep this a length/formatting test rather than a
+  // duplicate-prose fixture rejected by the editorial check.
+  let text = "";
+  for (const first of topics) for (const second of topics) {
+    const sentence = `Monitor your ${first} and ${second} with your care team.`;
+    if (text.length + sentence.length + 1 <= 3990) text += `${text ? " " : ""}${sentence}`;
+  }
   const fixture = await setup(step => step === "reviewer" ? { accepted: true, issues: [] } : draft);
   draft = { ...plainNarrative(fixture.verifiedFixture), nutritionAdvice: { text, evidenceIds: fixture.verifiedFixture.nutritionAdvice.evidenceIds } };
   const response = await (await fixture.call("report-content", fixture.request())).json();
@@ -1101,4 +1188,94 @@ test("emphasis markup cannot force valid near-limit report prose into fallback",
   expect(response.model).not.toBe("rule-fallback");
   expect(response.narrative.nutritionAdvice.text.length).toBeGreaterThan(4000);
   expect(response.narrative.nutritionAdvice.text.replaceAll("**", "")).toBe(text);
+});
+
+
+test("agent traces require an admin session and never enter deployment report or usage responses", async () => {
+  const { app, call, request, traces, authStore, runs } = await setup();
+  const body = await (await call("report-content", request())).json();
+  const path = `/admin/report-ai/runs/${body.runId}/trace`;
+  expect((await app.request(path)).status).toBe(401);
+  expect((await app.request(path, { headers: { authorization: `Bearer niq_dep_report123456.${"a".repeat(40)}` } })).status).toBe(401);
+  const userId = createEntityId();
+  authStore.state.users.push({ id: userId, email: "trace@example.test", displayName: "Trace admin", passwordHash: "unused", enabled: true, createdAt: "2026-01-01T00:00:00Z" });
+  const token = "test-admin-trace-session";
+  authStore.state.sessions.push({ userId, tokenHash: new Bun.CryptoHasher("sha256").update(token).digest("hex"), expiresAt: "2099-01-01T00:00:00Z" });
+  const response = await app.request(path, { headers: { cookie: `niq_scoring_session=${token}` } });
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  const trace = await response.json();
+  expect(trace.run.promptVersion).toContain("prompt99");
+  expect(trace.calls.find((row: any) => row.step === "writer").user).toContain("Current weight");
+  expect(trace.calls.find((row: any) => row.step === "reviewer").response).toEqual({ accepted: true, issues: [] });
+  expect(trace.events.map((row: any) => row.stage)).toEqual(["run_started", "agent_review_complete", "run_complete"]);
+  expect(JSON.stringify(await runs.list({ page: 1, pageSize: 10 }))).not.toContain("Current weight");
+  expect(body).not.toHaveProperty("trace");
+  expect((await traces.read(body.runId))?.calls).toHaveLength(trace.calls.length);
+});
+
+test("fallback preserves agent rejection messages and final reasons in the private trace", async () => {
+  const reason = "The proposed nutrition instruction conflicts with its cited source.";
+  const { call, request, traces } = await setup(step => step === "reviewer"
+    ? { accepted: false, issues: [{ field: "nutritionAdvice", code: "UNCLEAR_WORDING", evidenceIds: ["rule:nutrition:nutrition_low"], reason }] }
+    : safeNarrative);
+  const body = await (await call("report-content", request())).json();
+  expect(body.generationMode).toBe("SECTION_FALLBACK");
+  expect(body.status).toBe("REVIEW_REQUIRED");
+  expect(body.sectionOrigins.nutritionAdvice).toBe("rule_fallback");
+  const trace = await traces.read(body.runId);
+  expect(trace?.calls.some(row => row.step === "reviewer" && JSON.stringify(row.response).includes(reason))).toBe(true);
+  const decision = trace?.events.find(row => row.stage === "agent_review_complete");
+  expect(decision?.payload).toMatchObject({ status: "REVIEW_REQUIRED", issues: expect.arrayContaining(["nutritionAdvice:UNCLEAR_WORDING"]) });
+  expect(trace?.events.at(-1)?.payload).toEqual({ status: "REVIEW_REQUIRED", generationMode: "SECTION_FALLBACK" });
+  expect(JSON.stringify(body)).not.toContain(reason);
+});
+
+
+test("a timed-out source planner fails explicitly without publishing a rule fallback", async () => {
+  const { call, request, runs } = await setup(undefined, undefined, undefined, undefined, undefined, undefined,
+    () => { throw new ReportModelError("MODEL_TIMEOUT"); });
+  const response = await call("report-content", request());
+  expect(response.status).toBe(503);
+  const body = await response.json();
+  expect(body.error).toBe("MODEL_SOURCE_CHECKLIST_FAILED");
+  const run = (await runs.list({ page: 1, pageSize: 10 })).items[0]!;
+  expect(run.status).toBe("FAILED");
+  expect(run.calls.some(call => call.step === "writer")).toBe(false);
+});
+
+
+test("a failed planning attempt exposes worker-owned retry progress and resubmission keeps one job", async () => {
+  let now = Date.now();
+  const jobs = new MemoryReportContentJobStore(() => new Date(now));
+  const f = await setup(undefined, undefined, undefined, undefined, undefined, undefined, () => ({assignments: []}), jobs);
+  const submitted = await (await f.call("report-content/jobs", f.request())).json();
+  await f.jobTick();
+  const poll = await (await f.app.request(`/v1/assessments/report-content/jobs/${submitted.runId}`, {
+    headers: {authorization: `Bearer ${f.token}`},
+  })).json();
+  expect(poll.status).toBe("QUEUED");
+  expect(poll.errorCode).toBe("MODEL_INVALID_SOURCE_CHECKLIST");
+  expect(poll.attempts).toBe(1);
+  expect(poll.retryScheduled).toBe(true);
+  expect(Date.parse(poll.nextAttemptAt)).toBeGreaterThan(Date.now());
+  const again = await (await f.call("report-content/jobs", f.request())).json();
+  expect(again.runId).toBe(submitted.runId);
+  expect(f.jobs.jobs).toHaveLength(1);
+  const claim = f.jobs.jobs[0]!;
+  expect(claim.status).toBe("QUEUED");
+  expect(claim.attempts).toBe(1);
+  for (let retry = 0; retry < 2; retry++) { now += 90_000; await f.jobTick(); }
+  const terminal = await (await f.app.request(`/v1/assessments/report-content/jobs/${submitted.runId}`, {
+    headers: {authorization: `Bearer ${f.token}`},
+  })).json();
+  expect(terminal).toMatchObject({status: "FAILED", attempts: 3, retryScheduled: false, nextAttemptAt: null});
+  expect(f.jobs.jobs).toHaveLength(1);
+});
+
+test("narrative sentence capitalization is normalized before review without changing units", () => {
+  const input = {...safeNarrative, monitoringSummary: {text: "Monitor intake. your care team should adjust support if needed. Keep pH, 1.2 g/kg/day and e.g. your usual foods unchanged.", evidenceIds: ["fact:niq_risk"]}};
+  const normalized = normalizeNarrativePunctuation(input) as typeof input;
+  expect(normalized.monitoringSummary.text).toBe("Monitor intake. Your care team should adjust support if needed. Keep pH, 1.2 g/kg/day and e.g. your usual foods unchanged.");
+  expect(input.monitoringSummary.text).toContain(". your care team");
 });

@@ -6,6 +6,7 @@ import { PostgresAdminAuthStore } from "./admin-auth-store";
 import { createApp } from "./app";
 import { PostgresScoringStore } from "./postgres-store";
 import { createFaceScanAdapter } from "./face-scan";
+import { PostgresReportTraceStore } from "./report-trace-store";
 import { PostgresReportGenerationStore } from "./report-generation-store";
 import { PostgresReportContentJobStore } from "./report-content-job-store";
 import { OpenRouterReportClient } from "./openrouter-report-client";
@@ -22,6 +23,7 @@ const workflow = environment.FACE_SCAN_ENCRYPTION_KEY && environment.CAREPLIX_AC
       minDispatchIntervalMs: environment.FACE_SCAN_MIN_DISPATCH_INTERVAL_MS,
       provider: new HttpCarePlixProvider({ baseUrl: environment.CAREPLIX_API_BASE_URL ?? "https://disabled.invalid", apiKey: environment.CAREPLIX_API_KEY ?? "", apiSecret: environment.CAREPLIX_API_SECRET ?? "" }),
     }) : undefined;
+const reportTraceStore = new PostgresReportTraceStore(database);
 let reportJobTick: (() => Promise<void>) | undefined;
 const app = createApp({
   ...(workflow ? { faceScanWorkflow: workflow } : {}),
@@ -29,6 +31,7 @@ const app = createApp({
   ...(environment.FACE_SCAN_WEBHOOK_SECRET ? { faceScanWebhookSecret: environment.FACE_SCAN_WEBHOOK_SECRET } : {}),
   store: new PostgresScoringStore(database),
   reportGenerationStore: new PostgresReportGenerationStore(database),
+  reportTraceStore,
   reportContentJobStore: new PostgresReportContentJobStore(database),
   onReportJobTick: tick => { reportJobTick = tick; },
   ...(environment.REPORT_AI_PROVIDER_ENABLED
@@ -57,6 +60,8 @@ const app = createApp({
           and to_regclass('public.admin_auth_attempts') is not null
           and to_regclass('public.report_generation_runs') is not null
           and to_regclass('public.report_generation_calls') is not null
+          and to_regclass('public.report_trace_calls') is not null
+          and to_regclass('public.report_trace_events') is not null
           and exists(select 1 from information_schema.columns where table_schema='public' and table_name='report_generation_calls' and column_name='cached_input_tokens')
           and exists(select 1 from information_schema.columns where table_schema='public' and table_name='report_generation_calls' and column_name='reasoning_effort')
           and to_regclass('public.report_content_jobs') is not null
@@ -104,3 +109,12 @@ setInterval(async () => {
   }
   finally { reportWorkerRunning = false; }
 }, 5_000);
+
+// Expired clinical traces are hidden immediately and physically removed in
+// bounded batches. Usage metadata and report records have separate lifetimes.
+const pruneReportTraces = async () => {
+  try { await reportTraceStore.pruneExpired(); }
+  catch { console.error(JSON.stringify({ event: "report_trace_cleanup_failed" })); }
+};
+void pruneReportTraces();
+setInterval(pruneReportTraces, 60 * 60 * 1000);

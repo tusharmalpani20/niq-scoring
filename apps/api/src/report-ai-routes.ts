@@ -6,24 +6,26 @@ import { classifyScore } from "@niq-scoring/scoring-engine/versioned";
 import { BindingError } from "./assessment-binding";
 import { ruleChecksum } from "./rule-routes";
 import type { DeploymentIdentity, ScoringStore } from "./store";
+import type { ReportTraceStore } from "./report-trace-store";
 import type { ReportGenerationStore } from "./report-generation-store";
 import type { ReportContentJobStore } from "./report-content-job-store";
 import { withReportProductImages } from "./report-product-images";
 import { buildDeterministicReportFallback, ReportFallbackError } from "./report-fallback";
 import { manageReportAgents } from "./report-manager";
-import { createReportAgentWorkers, ReportAttemptLost } from "./report-agent-worker";
+import { createReportAgentWorkers, ReportAttemptLost, ReportTraceError } from "./report-agent-worker";
 import { REPORT_AI_ACTIVE_MODEL, ReportModelError, type ReportTextProvider } from "./openrouter-report-client";
 import { eligibleClinicianToxicityOptions, matchedReportPacket, reportContentRequestSchema, reportEvidence, reportToxicityOptionsRequestSchema, validateReportFacts, validateReportSelection, type ReportContentRequest } from "./report-content";
 
 export function installReportAiRoutes(app: Hono, options: {
   scoringStore: ScoringStore;
   runStore: ReportGenerationStore;
+  traceStore: ReportTraceStore;
   jobStore: ReportContentJobStore;
   authenticate: (c: Context) => Promise<DeploymentIdentity | null>;
   provider?: ReportTextProvider;
   platformEnabled: boolean;
 }) {
-  const { scoringStore, runStore, jobStore, authenticate, provider, platformEnabled } = options;
+  const { scoringStore, runStore, traceStore, jobStore, authenticate, provider, platformEnabled } = options;
 
   app.get("/admin/report-ai/models", c => c.json({ models: [{ id: REPORT_AI_MODEL, label: "GPT-6 Luna", provider: "OpenRouter" }] }));
   app.get("/admin/report-ai/runs", async c => {
@@ -37,6 +39,16 @@ export function installReportAiRoutes(app: Hono, options: {
     const clients = new Map(overview.clients.map(client => [client.id, client.name]));
     const deployments = new Map(overview.deployments.map(deployment => [deployment.id, deployment.name]));
     return c.json({ ...result, items: result.items.map(item => ({ ...item, clientName: clients.get(item.clientId) ?? "Unknown client", deploymentName: deployments.get(item.deploymentId) ?? "Unknown deployment" })) });
+  });
+
+  // This content-bearing endpoint inherits the admin session guard. Usage lists
+  // and deployment endpoints must never include prompts or assessment-derived text.
+  app.get("/admin/report-ai/runs/:runId/trace", async c => {
+    c.header("Cache-Control", "no-store");
+    const runId = c.req.param("runId");
+    if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(runId)) return c.json({ error: "INVALID_REQUEST" }, 400);
+    const trace = await traceStore.read(runId);
+    return trace ? c.json(trace) : c.json({ error: "REPORT_RUN_NOT_FOUND" }, 404);
   });
 
   app.post("/v1/assessments/report-toxicity-options", async c => {
@@ -90,32 +102,27 @@ export function installReportAiRoutes(app: Hono, options: {
       const guidance = matchedReportPacket(definition, input.facts, classification.id, input.facts.assessmentDate, productCatalog);
       const evidence = reportEvidence(definition, input.facts, { id: classification.id, label: classification.label }, guidance);
       if (evidence.length > 500 || JSON.stringify(evidence).length > 80_000) return c.json({ error: "REPORT_CONTEXT_TOO_LARGE" }, 422);
-      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema4-prompt63-manager3` : "baseline-v63-manager3";
-      const legacyPromptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}` : "baseline-v1";
+      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema4-prompt99-manager4` : "baseline-v99-manager4";
       const fingerprint = ruleChecksum({ endpoint: "report-content", assessmentReference: binding.assessmentReference, resultReference: input.resultReference,
         checksum: binding.checksum, promptVersion, facts: input.facts });
-      const legacyFingerprint = ruleChecksum({ endpoint: "report-content", assessmentReference: binding.assessmentReference, resultReference: input.resultReference,
-        checksum: binding.checksum, promptVersion: legacyPromptVersion, facts: input.facts });
       const reservation = await runStore.reserve({ clientId: identity.clientId, deploymentId: identity.deploymentId, assessmentReference: binding.assessmentReference,
         resultReference: input.resultReference, ruleVersionId: rule.id, checksum: binding.checksum, idempotencyKey: input.idempotencyKey,
-        fingerprint, model: provider?.model ?? REPORT_AI_ACTIVE_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION }, legacyFingerprint);
+        fingerprint, model: provider?.model ?? REPORT_AI_ACTIVE_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION });
       if (reservation.status === "CONFLICT") return c.json({ error: "IDEMPOTENCY_CONFLICT" }, 409);
       if (reservation.status === "IN_PROGRESS") return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
-      if (reservation.status === "DUPLICATE") {
-        if (allowFallback && reservation.run.status === "REVIEW_REQUIRED") {
-          if (forceFallback) return c.json({ error: "AUTOMATIC_REVIEW_RECOVERY_FAILED" }, 422);
-          // Preserve the rejected run for audit. A separate idempotent run must
-          // build and validate rule content, never relabel the rejected text.
-          const recoveryKey = `auto-review:${ruleChecksum({ runId: reservation.run.id, promptVersion, facts: input.facts })}`;
-          return generateReport(c, identity, { ...input, idempotencyKey: recoveryKey }, true, jobLease, true);
-        }
-        return c.json(reservation.run.response as never);
-      }
+      if (reservation.status === "DUPLICATE") return c.json(reservation.run.response as never);
       if (reservation.status !== "NEW") return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
       const runId = reservation.run.id;
       const attemptId = reservation.run.attemptId;
       let assertLease = () => {};
-      const fallbackResponse = async () => {
+      const recordTrace = async (stage: string, payload: unknown) => {
+        let saved: boolean;
+        try { saved = await traceStore.appendEvent(runId, attemptId, { stage, payload }); }
+        catch { throw new ReportTraceError(); }
+        if (!saved) throw new ReportAttemptLost();
+      };
+      const fallbackResponse = async (reason: { code: string; issues?: string[] }) => {
+        await recordTrace("fallback_selected", reason);
         const fallback = buildDeterministicReportFallback({ facts: input.facts,
           classification: { id: classification.id, label: classification.label }, guidance, evidence });
         assertLease();
@@ -125,41 +132,63 @@ export function installReportAiRoutes(app: Hono, options: {
           classification: { id: classification.id, label: classification.label }, model: "rule-fallback",
           promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION, generationMode: "RULE_FALLBACK" as const,
           guidance: withReportProductImages(fallback.guidance, productCatalog), narrative: fallback.narrative, issues: [], omittedNarrativeFields: [] };
+        await recordTrace("run_complete", { status: "READY", generationMode: "RULE_FALLBACK" });
         if (!await runStore.finish(runId, attemptId, "READY", response)) throw new ReportAttemptLost();
         return c.json(response);
       };
+      try { await recordTrace("run_started", { promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION, checksum: binding.checksum }); }
+      catch (error) {
+        if (error instanceof ReportAttemptLost) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
+        await runStore.finish(runId, attemptId, "FAILED", null, "REPORT_TRACE_UNAVAILABLE");
+        return c.json({ error: "REPORT_TRACE_UNAVAILABLE", runId }, 503);
+      }
       if (allowFallback && (!provider || forceFallback)) {
-        try { return await fallbackResponse(); }
+        try { return await fallbackResponse({ code: forceFallback ? "REVIEW_RECOVERY" : "PROVIDER_NOT_CONFIGURED" }); }
         catch (error) {
           if (error instanceof ReportAttemptLost) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
-          const code = error instanceof ReportFallbackError ? error.code : "REPORT_GENERATION_FAILED";
+          const code = error instanceof ReportFallbackError || error instanceof ReportTraceError ? error.code : "REPORT_GENERATION_FAILED";
           await runStore.finish(runId, attemptId, "FAILED", null, code);
           return c.json({ error: code, runId }, 422);
         }
       }
-      const { invoke, assertActive, stop } = createReportAgentWorkers({ provider: provider!, runStore, runId, attemptId,
+      const { invoke, assertActive, stop } = createReportAgentWorkers({ provider: provider!, runStore, traceStore, runId, attemptId,
         ...(jobLease ? { jobLease: { store: jobStore, ...jobLease } } : {}) });
       assertLease = assertActive;
       try {
-        const { status, narrative: approvedNarrative, issues, omittedNarrativeFields, interventionSummaries } = await manageReportAgents({
+        const { status, narrative: approvedNarrative, issues, omittedNarrativeFields, interventionSummaries, sectionOrigins, targetResolutions } = await manageReportAgents({
           aiConfig, evidence, guidance, classification: { id: classification.id, label: classification.label }, invoke,
+          sectionFallback: () => buildDeterministicReportFallback({ facts: input.facts,
+            classification: { id: classification.id, label: classification.label }, guidance, evidence }).narrative,
         });
         const response = { runId, status, assessmentReference: binding.assessmentReference, resultReference: input.resultReference,
           ruleVersionId: rule.id, checksum: binding.checksum, classification: { id: classification.id, label: classification.label },
           model: provider?.model ?? REPORT_AI_ACTIVE_MODEL, promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION,
+          generationMode: Object.values(sectionOrigins).includes("rule_fallback") ? "SECTION_FALLBACK" as const : "AGENT" as const, sectionOrigins, targetResolutions,
           guidance: { ...withReportProductImages(guidance, productCatalog), possibleToxicities: guidance.possibleToxicities.map(row => ({ ...row, summary: status === "READY" ? interventionSummaries.find(item => item.evidenceId === `possible:toxicity:${row.id}`)?.text ?? "" : "" })) }, narrative: approvedNarrative, issues,
           omittedNarrativeFields };
         assertActive();
-        if (allowFallback && status === "REVIEW_REQUIRED") return await fallbackResponse();
+        if (targetResolutions.length) await recordTrace("source_conflicts_resolved", { targetResolutions });
+        if (Object.values(sectionOrigins).includes("rule_fallback")) await recordTrace("section_recovery", { sectionOrigins, status, issues });
+        await recordTrace("agent_review_complete", { status, issues, omittedNarrativeFields, sectionOrigins, targetResolutions });
+        await recordTrace("run_complete", { status, generationMode: response.generationMode });
         if (!await runStore.finish(runId, attemptId, status, response)) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
         return c.json(response);
       } catch (error) {
         if (error instanceof ReportAttemptLost) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
-        if (allowFallback && !(error instanceof ReportFallbackError)) {
-          try { return await fallbackResponse(); }
+        const planningFailed = error instanceof ReportModelError &&
+          (error.code === "MODEL_INVALID_SOURCE_CHECKLIST" || error.code.startsWith("MODEL_SOURCE_CHECKLIST"));
+        if (allowFallback && !planningFailed && !(error instanceof ReportFallbackError) && !(error instanceof ReportTraceError)) {
+          const code = error instanceof ReportModelError ? error.code : "REPORT_GENERATION_FAILED";
+          try { return await fallbackResponse({ code }); }
           catch (fallbackError) { error = fallbackError; }
         }
-        const code = error instanceof ReportFallbackError ? error.code : error instanceof ReportModelError ? error.code : "REPORT_GENERATION_FAILED";
+        const code = error instanceof ReportFallbackError || error instanceof ReportTraceError || error instanceof ReportModelError ? error.code : "REPORT_GENERATION_FAILED";
+        if (!(error instanceof ReportTraceError)) {
+          try { await recordTrace("run_failed", { code }); }
+          catch (traceError) {
+            if (traceError instanceof ReportAttemptLost) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
+          }
+        }
         if (!await runStore.finish(runId, attemptId, "FAILED", null, code)) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
         return c.json({ error: code, runId },
           error instanceof ReportFallbackError ? 422 : error instanceof ReportModelError && error.code === "MODEL_PAYMENT_REQUIRED" ? 402 : 503);
@@ -197,7 +226,11 @@ export function installReportAiRoutes(app: Hono, options: {
     if (!identity) return c.json({ error: "UNAUTHORIZED" }, 401);
     const job = await jobStore.get(c.req.param("runId"), identity);
     if (!job) return c.json({ error: "REPORT_JOB_NOT_FOUND" }, 404);
-    return c.json({ runId: job.id, status: job.status,
+    // A failed model attempt can still belong to a queued durable retry. Poll
+    // this job, rather than treating a transient run failure as a new request.
+    const retryScheduled = job.status === "QUEUED" && job.attempts > 0 && job.leaseExpiresAt !== null;
+    return c.json({ runId: job.id, status: job.status, attempts: job.attempts, retryScheduled,
+      nextAttemptAt: retryScheduled ? job.leaseExpiresAt!.toISOString() : null,
       ...(job.response !== null ? { response: job.response } : {}),
       ...(job.errorCode ? { errorCode: job.errorCode } : {}) });
   });

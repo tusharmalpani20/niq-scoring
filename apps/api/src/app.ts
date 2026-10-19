@@ -4,6 +4,7 @@ import { installOrganizationInfoRoute } from "./organization-info";
 import { RuleStoreError } from "./rule-store";
 import { installAssessmentRoutes } from "./assessment-routes";
 import { installReportAiRoutes } from "./report-ai-routes";
+import { MemoryReportTraceStore, type ReportTraceStore } from "./report-trace-store";
 import { MemoryReportGenerationStore, type ReportGenerationStore } from "./report-generation-store";
 import { MemoryReportContentJobStore, type ReportContentJobStore } from "./report-content-job-store";
 import type { ReportTextProvider } from "./openrouter-report-client";
@@ -48,6 +49,7 @@ export interface AppOptions {
   readinessCheck?: () => Promise<boolean>;
   now?: () => Date;
   reportGenerationStore?: ReportGenerationStore;
+  reportTraceStore?: ReportTraceStore;
   reportContentJobStore?: ReportContentJobStore;
   onReportJobTick?: (tick: () => Promise<void>) => void;
   reportTextProvider?: ReportTextProvider;
@@ -329,7 +331,11 @@ export function createApp(options: AppOptions) {
 
   installOrganizationInfoRoute(app, options.store, authenticateDeployment, now);
   installAssessmentRoutes(app, options.store, authenticateDeployment, now, options.platformEnabled ?? true);
-  const reportJobTick = installReportAiRoutes(app, { scoringStore: options.store, runStore: options.reportGenerationStore ?? new MemoryReportGenerationStore(),
+  const reportRunStore = options.reportGenerationStore ?? new MemoryReportGenerationStore();
+  const reportTraceStore = options.reportTraceStore ?? (reportRunStore instanceof MemoryReportGenerationStore
+    ? new MemoryReportTraceStore(reportRunStore) : undefined);
+  if (!reportTraceStore) throw new Error("REPORT_TRACE_STORE_REQUIRED");
+  const reportJobTick = installReportAiRoutes(app, { scoringStore: options.store, runStore: reportRunStore, traceStore: reportTraceStore,
     jobStore: options.reportContentJobStore ?? new MemoryReportContentJobStore(),
     authenticate: authenticateDeployment, ...(options.reportTextProvider ? { provider: options.reportTextProvider } : {}), platformEnabled: options.platformEnabled ?? true });
   options.onReportJobTick?.(reportJobTick);

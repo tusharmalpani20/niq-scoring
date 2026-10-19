@@ -1,3 +1,6 @@
+import { normalizeReportSentenceStarts, reportEditorialFindings } from "./report-editorial";
+import { copiedGuidanceFindings } from "./report-copied-guidance";
+import { dietRecommendationIssues } from "./report-diet-policy";
 import { z } from "zod";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
 import { classOnlyToxicity, resolveReportGuidance } from "@niq-scoring/contracts/report-guidance";
@@ -42,6 +45,16 @@ export const reportContentRequestSchema = z.object({
     drugClassIds: ids,
     confirmedToxicityIds: ids,
     assessmentAnswers: assessmentAnswersSchema.optional(),
+    weightComparison: z.object({
+      source: z.enum(["assessment_history", "reported_previous_weight"]),
+      previousWeightKg: z.number().finite().positive().max(1000),
+      currentWeightKg: z.number().finite().positive().max(1000),
+      previousDate: calendarDate.optional(),
+      currentDate: calendarDate,
+      previousLabel: z.string().trim().max(100).optional(),
+      changePercent: z.number().finite(),
+    }).strict().refine(value => value.source !== "assessment_history" || Boolean(value.previousDate),
+      "Assessment history requires its actual measurement date").optional(),
     coMorbidityIds: ids.optional(),
     cancerTypeId: id.optional(),
     dietPreferenceId: z.enum(["vegetarian", "non_vegetarian", "eggetarian", "jain"]).optional(),
@@ -106,7 +119,7 @@ export function normalizeNarrativePunctuation(value: unknown): unknown {
   if (!parsed.success) return value;
   return Object.fromEntries(narrativeFieldNames.filter(field => parsed.data[field] !== undefined).map(field => {
     const part = parsed.data[field]!;
-    const text = part.text
+    const text = normalizeReportSentenceStarts(part.text
       .replace(/;\s*([\p{L}])/gu, (_match, next: string) => `. ${next.toLocaleUpperCase()}`)
       .replace(/;/gu, ".")
       .replace(/\s*—\s*/gu, ", ")
@@ -115,7 +128,7 @@ export function normalizeNarrativePunctuation(value: unknown): unknown {
       .replace(/[ \t]*\n[ \t]*/gu, "\n")
       .replace(/\n{3,}/gu, "\n\n")
       .split("\n").map(line => line.replace(/[ \t]+/gu, " ").trim()).join("\n")
-      .trim();
+      .trim());
     return [field, { text, evidenceIds: part.evidenceIds }];
   })) as ReportNarrative;
 }
@@ -198,7 +211,14 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
     .map(({ id, name, description, aliases, benefits }) => ({ id, name, description, aliases, benefits: benefits ?? [] })) : [];
   const publicPlan = (plan: (typeof care.products.plans)[number]) => {
     const { id, stage, nutritionalStatus, products, dose, duration, durationAmount } = plan;
-    const items = productPlanItems(plan);
+    // Client-approved report instruction correction for the exact historical
+    // Invigour text. The frozen published rule and its checksum stay intact;
+    // both model evidence and the saved structured plan receive this wording.
+    // This preparation amount does not imply a daily quantity or dosage unit.
+    const items = productPlanItems(plan).map(item => productIdentityName(item.productName) === "invigour"
+      && item.preparation === "Mix in 150 mL water and consume immediately after preparation."
+      ? { ...item, preparation: "Mix 1 sachet in 150 mL water and consume immediately after preparation." }
+      : item);
     return { id, stage, nutritionalStatus, products, dose, duration,
       ...(durationAmount ? { durationAmount } : {}), ...(items.length ? { items } : {}) };
   };
@@ -252,6 +272,10 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
     if (label) evidence.push({ id: `fact:treatment_type_${treatmentId}`,
       text: `${facts.plannedTreatmentStartDate && facts.plannedTreatmentStartDate > facts.assessmentDate ? "Recorded planned cancer treatment modality" : "Recorded current cancer treatment"}: ${label}.` });
   }
+  for (const classId of facts.drugClassIds) {
+    const label = definition.drugClassConfig?.classes.find(row => row.id === classId)?.label;
+    if (label) evidence.push({ id: `fact:drug_class_${classId}`, text: `Recorded treatment drug class: ${label}.` });
+  }
   if (facts.plannedTreatmentStartDate && facts.plannedTreatmentStartDate > facts.assessmentDate) {
     evidence.push({ id: "fact:planned_treatment_start", text: `Treatment is planned to start on ${facts.plannedTreatmentStartDate}. This date is after the assessment date ${facts.assessmentDate}, so treatment is not confirmed as already underway.` });
   }
@@ -279,13 +303,17 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
     if (row) evidence.push({ id: `fact:clinician_toxicity_${rowId}`,
       text: `Clinician explicitly confirmed ${classOnlyToxicity(row).expectedToxicity}. This confirmation does not select or require a guidance row.` });
   }
-  const { previous_weight_kg: previousWeight, current_weight_kg: currentWeight } = facts.assessmentAnswers ?? {};
+  // The caller shares the chart's selected comparison; the questionnaire value
+  // is used only when no recorded-assessment comparison is available.
+  const comparison = facts.weightComparison;
+  const previousWeight = comparison?.previousWeightKg ?? facts.assessmentAnswers?.previous_weight_kg;
+  const currentWeight = comparison?.currentWeightKg ?? facts.assessmentAnswers?.current_weight_kg;
   if (previousWeight !== undefined && currentWeight !== undefined) {
     const direction = previousWeight > currentWeight ? "loss" : previousWeight < currentWeight ? "gain" : "no change";
     const percentage = Math.round(Math.abs(previousWeight - currentWeight) / previousWeight * 1000) / 10;
-    // This assessment input now explicitly asks for weight one month ago.
-    // Existing demo assessments use the same interpretation by agreement.
-    const timing = "The previous weight was reported for 1 month ago.";
+    const timing = comparison?.source === "assessment_history"
+      ? `The previous measurement was recorded on ${comparison.previousDate}; the current measurement was recorded on ${comparison.currentDate}. This recorded change alone does not establish nutritional improvement or deterioration.`
+      : "The previous weight was reported for 1 month ago.";
     evidence.push({ id: "fact:weight_direction", text: `Recorded weight ${direction}: ${previousWeight} kg previously and ${currentWeight} kg currently (${percentage}%). ${timing}` });
   }
   if (facts.dietPreferenceId) {
@@ -293,6 +321,9 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
     evidence.push({ id: "fact:diet_preference", text: `Reported diet preference: ${dietNames[facts.dietPreferenceId]}` });
   }
   for (const row of facts.observations) {
+    // The legacy observation is questionnaire-derived and may use a different
+    // baseline. Do not let it contradict the chart-aligned comparison.
+    if (comparison && row.id === "weight_loss_percent") continue;
     const [label, unit] = observationLabels[row.id];
     evidence.push({ id: `fact:${row.id}`, text: `${label}: ${row.value}${unit ? ` ${unit}` : ""}${row.measuredAt ? ` on ${row.measuredAt}` : ""}` });
   }
@@ -349,23 +380,6 @@ export function omitNarrativeFields(value: unknown, fields: ReadonlySet<string>)
     fields.has(field) ? { text: "", evidenceIds: [] } : complete[field]])) as CompleteReportNarrative;
 }
 
-function copiesGuidance(text: string, sources: string[]): boolean {
-  const words = (value: string) => value.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-  const passage = words(text);
-  if (passage.length < 8) return false;
-  return sources.some(source => {
-    const sourceWords = words(source);
-    const sourceText = sourceWords.join(" ");
-    const passageText = passage.join(" ");
-    // A complete short rule or a sustained passage is copying. A short
-    // clinical phrase shared with a longer rule can still be the clearest wording.
-    if (sourceWords.length >= 8 && sourceWords.length <= passage.length + 2 && passageText.includes(sourceText)) return true;
-    const span = 25;
-    for (let index = 0; index <= passage.length - span; index++)
-      if (sourceText.includes(passage.slice(index, index + span).join(" "))) return true;
-    return false;
-  });
-}
 
 const headingKey = (text: string) => text.toLocaleLowerCase().replace(/^thyroid (?:issues|disorder)$/, "thyroid");
 
@@ -383,22 +397,11 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   const evidenceById = new Map(evidence.map(item => [item.id, item.text]));
   const requiredGuidance: Partial<Record<keyof ReportNarrative, readonly string[]>> = {
     nutritionAdvice: ["rule:nutrition:"],
-    treatmentAdvice: ["rule:status:", "rule:treatment:", "rule:class:", "rule:exception:"],
+    treatmentAdvice: ["rule:nutrition:", "rule:status:", "rule:treatment:", "rule:class:", "rule:exception:"],
     conditionAdvice: ["rule:comorbidity:"],
     effectsAdvice: ["rule:toxicity:", "possible:toxicity:", "rule:status:", "rule:treatment:"],
   };
-  const issues: string[] = [];
-  const sentences = (text: string) => text.replace(/\*\*/g, "").split(/\n|(?<=[.!?])\s+/u)
-    .map(line => line.trim().toLocaleLowerCase().replace(/[.!?]+$/, "").replace(/\s+/g, " "))
-    .filter(line => line.split(" ").length >= 6);
-  for (const shared of ["redFlagsAdvice", "foodSafetyAdvice"] as const) {
-    const sharedSentences = new Set(sentences(data[shared].text));
-    if (!sharedSentences.size) continue;
-    for (const field of narrativeFieldNames.filter(name => name !== shared)) {
-      if (sentences(data[field].text).some(sentence => sharedSentences.has(sentence)))
-        issues.push(`${field}:DUPLICATE_${shared === "redFlagsAdvice" ? "RED_FLAG" : "FOOD_SAFETY"}`);
-    }
-  }
+  const issues: string[] = reportEditorialFindings(data).map(finding => `${finding.field}:${finding.code}`);
   if (evidenceById.has("fact:niq_risk") && !data.overallSummary.text)
     issues.push("overallSummary:MISSING_SUMMARY");
   if (/\b(?:check|monitor|measure|record|track|test|retest|repeat)\w*\b.{0,100}\b(?:TSH|thyroid[- ]stimulating hormone|blood glucose|glucose level|blood pressure|blood count|lab(?:oratory)? result|weight)\b/i.test(data.conditionAdvice.text))
@@ -445,11 +448,30 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   }
   const productNames = evidence.filter(item => item.id.startsWith("rule:product:"))
     .flatMap(item => /^Selected product plan: ([^.]+)\./.exec(item.text)?.[1]?.split(/\s+\+\s+/) ?? []);
-  if (productNames.length && /\b(?:consider|introduce|ask whether)\b.{0,70}\boral nutrition(?:al)? supplements?\b/i.test(data.nutritionAdvice.text))
+  if (productNames.length && /\b(?:consider|ask whether)\b.{0,70}\boral nutrition(?:al)? supplements?\b/i.test(data.nutritionAdvice.text))
     issues.push("nutritionAdvice:REDUNDANT_SUPPLEMENT_PROMPT");
-  const containsTabletStop = (text: string) => /\b(?:do not|don.t) stop\b.{0,45}\btablets?\b|\bdo not stop these tablets\b/i.test(text);
-  if (containsTabletStop(data.conditionAdvice.text) && containsTabletStop(data.redFlagsAdvice.text))
-    issues.push("redFlagsAdvice:DUPLICATE_MEDICATION_ACTION");
+  if (productNames.some(name => data.nutritionAdvice.text.toLocaleLowerCase().includes(name.toLocaleLowerCase()))
+    && /\b(?:mix(?:ing)?|sachets?|scoops?|times daily|after breakfast|before meals)\b/i.test(data.nutritionAdvice.text))
+    issues.push("nutritionAdvice:REGIMEN_BELONGS_IN_PRODUCT_PLAN");
+  for (const field of narrativeFieldNames) {
+    if (dietRecommendationIssues(data[field].text, evidence).length) issues.push(`${field}:DIET_INCOMPATIBLE_FOOD`);
+    if (/\[(?:rule|fact|possible|catalog):[^\]]+\]/iu.test(data[field].text)) issues.push(`${field}:INTERNAL_EVIDENCE_MARKER`);
+    const sentences = data[field].text.split(/(?<=[.!?])\s+|\n/u);
+    const clinicianActor = /\b(?:care team|clinician|doctor|oncologist|medical supervision|medically supervised|prescribed)\b/i;
+    // Normalization can split a clinician instruction at a semicolon. A clear
+    // "they" in the next sentence retains that actor; a patient imperative does not.
+    if (sentences.some((sentence, index) => /\b(?:start|initiate|begin|consider)\b.{0,40}\b(?:enteral|parenteral)\s+(?:nutrition|feeding)\b/i.test(sentence)
+      && !clinicianActor.test(sentence)
+      && !( /\bthey\b/i.test(sentence) && clinicianActor.test(sentences[index - 1] ?? ""))))
+      issues.push(`${field}:CLINICIAN_ACTION_NEEDS_ACTOR`);
+    // A later clarification does not retract an earlier self-care imperative.
+    // Correction of a documented deficiency remains clinician-managed.
+    if (sentences.some((sentence, index) => /\b(?:correct|treat|manage)\s+(?:any\s+|documented\s+|confirmed\s+)?(?:nutrient\s+|nutritional\s+)?deficienc(?:y|ies)\b/i.test(sentence)
+      && !clinicianActor.test(sentence)
+      && !/\b(?:do not|don['’]t|never)\s+(?:correct|treat|manage)\b/i.test(sentence)
+      && !(/\bthey\b/i.test(sentence) && clinicianActor.test(sentences[index - 1] ?? ""))))
+      issues.push(`${field}:CLINICIAN_ACTION_NEEDS_ACTOR`);
+  }
   // Exception advice must identify a different product unambiguously.
   for (const item of evidence.filter(row => row.id.startsWith("rule:exception:") && data.treatmentAdvice.evidenceIds.includes(row.id))) {
     const fullName = /\b(?:Recommend|Remove|Limit|Replace|Withhold|Do not recommend)\s+([A-Z][\w-]+(?:\s+[A-Z][\w-]+){1,5})\s+(?:at|from|to|with|until|for)\b/i.exec(item.text)?.[1];
@@ -469,6 +491,8 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   if (/\b(?:above|below|aforementioned|listed)\b/i.test(data.overallSummary.text))
     issues.push("overallSummary:POSITIONAL_REFERENCE");
   for (const [field, part] of Object.entries(data)) {
+    if (/\b(?:their cause is not established|the cause is unknown|patient.reported mouth symptoms|a related symptom was reported separately)\b/i.test(part.text))
+      issues.push(`${field}:REPORTED_SYMPTOM_FILLER`);
     const lines = part.text.split("\n");
     for (const markedLine of lines) {
       const line = markedLine.replace(/\*\*([^*\n]+)\*\*/g, "$1");
@@ -511,10 +535,10 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
       && !part.evidenceIds.some(id => id.startsWith("fact:assessment_") || id.startsWith("fact:clinician_toxicity_")))
       issues.push(`${field}:TREATMENT_GUIDANCE_NEEDS_REPORTED_EFFECT`);
     const prefixes = requiredGuidance[field as keyof ReportNarrative];
-    if (part.text && prefixes && !part.evidenceIds.some(id => prefixes.some(prefix => id.startsWith(prefix))))
+    if (part.text && prefixes && !(field === "treatmentAdvice" && part.evidenceIds.every(id => id.startsWith("fact:"))) && !part.evidenceIds.some(id => prefixes.some(prefix => id.startsWith(prefix))))
       issues.push(`${field}:MISSING_MATCHED_GUIDANCE`);
-    if (part.text && prefixes && copiesGuidance(part.text, part.evidenceIds.filter(id => id.startsWith("rule:") || id.startsWith("possible:"))
-      .map(id => evidenceById.get(id)).filter((source): source is string => Boolean(source))))
+    if (part.text && prefixes && copiedGuidanceFindings(part.text, part.evidenceIds.filter(id => id.startsWith("rule:") || id.startsWith("possible:"))
+      .flatMap(id => { const text = evidenceById.get(id); return text ? [{id, text}] : []; })).length)
       issues.push(`${field}:COPIED_GUIDANCE`);
     const sourceNumbers = new Set(selected.flatMap(text => text?.match(/\d+(?:\.\d+)?/g) ?? []));
     if ((part.text.match(/\d+(?:\.\d+)?/g) ?? []).some(number => !sourceNumbers.has(number))) issues.push(`${field}:UNSUPPORTED_NUMBER`);

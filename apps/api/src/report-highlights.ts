@@ -30,13 +30,32 @@ const actionVerb = /\b(?:agree|aim|ask|avoid|call|check|choose|consume|contact|d
 const interpretationCue = /\b(?:affect|change|changed|changes|concern|decline|decrease|decreased|help|important|increase|increased|maintain|monitor|prevent|priorities|priority|review|support|worsen|worsening)\b/i;
 const numericMeaningCue = /\b(?:affect|concern|decline|help|important|maintain|monitor|prevent|priorities|priority|review|support|worsen|worsening)\b/i;
 
+/** A numeric trigger and its comparator must stay together inside emphasis.
+ * Short action-only spans remain valid: the full condition stays visible nearby. */
+function completeHighlightBounds(text: string, start: number, end: number): boolean {
+  const phrase = text.slice(start, end);
+  if ((phrase.match(/\(/gu)?.length ?? 0) !== (phrase.match(/\)/gu)?.length ?? 0)) return false;
+  if (/\b(?:and|or|but|nor|either|to|for|of|with|at|than|least|most)\s*$/iu.test(phrase)) return false;
+  if (!/\d/u.test(phrase)) return true;
+  const prefix = text.slice(0, start);
+  if (/\d\.$/u.test(prefix) && /^\d/u.test(phrase)
+    || /\d$/u.test(phrase) && /^\.\d/u.test(text.slice(end))) return false;
+  if (/\b(?:at least|at most|more than|less than|greater than|above|below|over|under)\s*$/iu.test(prefix)) return false;
+  if (/\bat\s+$/iu.test(prefix) && /^(?:least|most)\b/iu.test(phrase)
+    || /\b(?:more|less|greater)\s+$/iu.test(prefix) && /^than\b/iu.test(phrase)) return false;
+  // A second temperature unit in parentheses may sit between the boundary and
+  // its comparator, for example “38°C (100.4°F) or above”.
+  return !/^(?:\s*\([^)]*\))?\s+or\s+(?:above|below|higher|lower|more|less)\b/iu.test(text.slice(end));
+}
+
 /** Pick a short, exact action phrase for deterministic fallback cards. */
 export function selectActionHighlight(text: string): string | null {
   const sentences = Array.from(sentenceSegmenter.segment(text), item => item.segment);
   for (const sentence of sentences) {
     const trimmed = sentence.trim();
     const conditionalAction = trimmed.match(/^(If\b.{0,80}?,\s*(?:follow|use|contact|call|discuss|check|tell|seek)\b[^,:.!?]*)(?=[:,.!?]|$)/i);
-    if (conditionalAction && (conditionalAction[1]!.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? []).length >= 3)
+    if (conditionalAction && completeHighlightBounds(trimmed, 0, conditionalAction[1]!.trimEnd().length)
+      && (conditionalAction[1]!.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? []).length >= 3)
       return conditionalAction[1]!.trim();
     const words = Array.from(trimmed.matchAll(/[\p{L}\p{N}]+(?:[’'-][\p{L}\p{N}]+)*/gu));
     const actionIndex = words.findIndex(word => actionVerb.test(word[0]));
@@ -67,8 +86,16 @@ export function selectActionHighlight(text: string): string | null {
     // the first half of the measurement.
     const unitSuffix = trimmed.slice(end).match(/^\/(?:dL|mL|kg|day)\b/i)?.[0];
     if (unitSuffix) end += unitSuffix.length;
-    const phrase = trimmed.slice(start, end).replace(/[,:;]+$/u, "").trim();
-    if ((phrase.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? []).length >= 3 && actionVerb.test(phrase)) return phrase;
+    let phrase = trimmed.slice(start, end).replace(/[,:;]+$/u, "").trim();
+    if (!completeHighlightBounds(trimmed, start, start + phrase.length)) {
+      // Prefer a complete short instruction over a cut-off warning trigger.
+      // Do not remove an initial condition or a prohibition to obtain it.
+      const qualifier = phrase.search(/\s+\b(?:for|if|when|unless|until)\b/iu);
+      if (qualifier < 0 || /^if\b/iu.test(phrase)) continue;
+      phrase = phrase.slice(0, qualifier).trimEnd();
+    }
+    if (completeHighlightBounds(trimmed, start, start + phrase.length)
+      && (phrase.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? []).length >= 3 && actionVerb.test(phrase)) return phrase;
   }
   return null;
 }
@@ -151,6 +178,7 @@ function isHighlightRequired(text: string): boolean {
 
 const sectionWordPattern = /[\p{L}\p{N}]+(?:[’'-][\p{L}\p{N}]+)*/gu;
 const sectionWordCount = (value: string) => value.match(sectionWordPattern)?.length ?? 0;
+const nutritionTargetMatches = (text: string) => Array.from(text.matchAll(/\b\d+(?:\.\d+)?(?:\s*[–−-]\s*\d+(?:\.\d+)?)?\s*(?:kcal|g(?:\s+protein)?)\s*\/\s*kg\s*\/\s*day\b/gi));
 const highRiskWarning = /\b(?:urgent|immediately|emergency|red flag|seek care|go to (?:the )?\w+|call 911|fever|breathlessness|shortness of breath|threshold)\b/i;
 const meaningfulNumericPhrase = (phrase: string) => /\d/.test(phrase)
   && sectionWordCount(phrase) >= 3
@@ -179,7 +207,7 @@ export function conciseSectionPhrase(text: string): string | null {
   const unitSuffix = trimmed.slice(end).match(/^\/(?:dL|mL|kg|day)\b/i)?.[0];
   if (unitSuffix) end += unitSuffix.length;
   const phrase = trimmed.slice(words[startWord]!.index!, end).replace(/[,:;]+$/u, "").trim();
-  return sectionWordCount(phrase) >= 2 ? phrase : null;
+  return sectionWordCount(phrase) >= 2 && completeHighlightBounds(trimmed, words[startWord]!.index!, words[startWord]!.index! + phrase.length) ? phrase : null;
 }
 
 /** Assess exact, non-overlapping phrases against their individual sentence point. */
@@ -202,11 +230,15 @@ export function assessSectionHighlights(text: string, proposed: unknown) {
     if (!submitted || counts.get(point.id) !== 1) issues.push("POINT_ID_COVERAGE");
     const accepted: Array<{ phrase: string; kind: "finding" | "action" | "warning" }> = [];
     const localRanges: Array<{ start: number; end: number }> = [];
-    for (const choice of submitted?.phrases ?? []) {
+    for (const choice of counts.get(point.id) === 1 ? submitted?.phrases ?? [] : []) {
       const at = point.text.indexOf(choice.phrase);
       const end = at + choice.phrase.length;
       const phraseWords = sectionWordCount(choice.phrase);
+      const completeTarget = nutritionTargetMatches(point.text).some(match => match.index === at && match[0] === choice.phrase);
       const validSpan = accepted.length < 2 && at >= 0 && point.text.indexOf(choice.phrase, end) < 0
+        && completeHighlightBounds(point.text, at, end)
+        && !nutritionTargetMatches(point.text).some(match => at < match.index! + match[0].length && end > match.index!
+          && (at > match.index! || end < match.index! + match[0].length))
         && !/^\s|\s$/u.test(choice.phrase) && !localRanges.some(r => at < r.end && end > r.start)
         && !allRanges.some(r => point.start + at < r.end && point.start + end > r.start)
         && !(at > 0 && /[\p{L}\p{N}/]/u.test(point.text[at - 1]!))
@@ -219,7 +251,7 @@ export function assessSectionHighlights(text: string, proposed: unknown) {
         // Full-sentence emphasis is reserved for a genuinely short standalone warning.
         && (choice.phrase !== point.text.trim() || shortWarningException)
         && phraseWords >= 2
-        && (shortWarningException || selectedWordCount + phraseWords <= Math.max(1, Math.floor(sectionWords * 0.35)))
+        && (shortWarningException || completeTarget || selectedWordCount + phraseWords <= Math.max(1, Math.floor(sectionWords * 0.35)))
         && !/^\s*[\d.,%°<>/-]+\s*$/u.test(choice.phrase)
         && (!isHighlightRequired(point.text) || actionVerb.test(choice.phrase) || highRiskWarning.test(choice.phrase)
           || meaningfulNumericPhrase(choice.phrase));
@@ -239,12 +271,15 @@ export function assessSectionHighlights(text: string, proposed: unknown) {
 }
 
 /** Fill only concise, exact clauses after model failure; zero emphasis is valid. */
-export function completeSectionHighlights(text: string, proposed?: unknown) {
+export function completeSectionHighlights(text: string, proposed?: unknown, fillActions = true) {
   const points = highlightSectionPoints(text);
   const current = new Map(assessSectionHighlights(text, proposed).valid.points.map(item => [item.id, item.phrases]));
   const complete = { points: points.map(point => {
-    const phrases = current.get(point.id) ?? [];
-    if (phrases.length || !isHighlightRequired(point.text)) return { id: point.id, phrases };
+    // Measurement values and their full units form one meaningful takeaway.
+    // Reserve these spans before optional model emphasis uses the word budget.
+    const targets = nutritionTargetMatches(point.text).map(match => ({ phrase: match[0], kind: "finding" as const }));
+    const phrases = [...targets, ...(current.get(point.id) ?? []).filter(choice => !targets.some(target => target.phrase.includes(choice.phrase) || choice.phrase.includes(target.phrase)))].slice(0, 2);
+    if (phrases.length || !fillActions || !isHighlightRequired(point.text)) return { id: point.id, phrases };
     const phrase = conciseSectionPhrase(point.text);
     if (!phrase) return { id: point.id, phrases };
     const kind = /\b(?:urgent|immediately|emergency|fever|breathlessness|shortness of breath|call|contact|seek care)\b/i.test(phrase) ? "warning" as const : "action" as const;
