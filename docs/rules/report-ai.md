@@ -8,15 +8,22 @@ or free-form clinical notes at this endpoint.
 ## Configuration and deployment
 
 - A rule version may contain `reportAi`: `enabled`, `model`, `writerPrompt`, and
-  `reviewerPrompt`. The only allowed model is `openai/gpt-6-luna`.
+  `reviewerPrompt`. Its model field remains `openai/gpt-6-luna` for compatibility;
+  server-owned stage assignments select the actual model for each call.
+- Both provider adapters use the same model roles: manager, clinical reviewer and
+  coverage use GPT-6.1 Sol; writer, revision, intervention summaries and highlighting
+  use GPT-6 Luna. Scoring shares this mapping between its adapters. Provider-specific
+  model IDs differ (`openai/` prefix for OpenRouter), while orchestration stays the same.
 - The editable prompts are user-role content. Fixed safety and evidence rules are
   server-owned system-role content. Editing an active rule is prohibited by the
   existing rule lifecycle; copy it to a draft to change prompts.
 - Older active versions without `reportAi` use the fixed `baseline-v1` prompt
   configuration. The response and usage log identify this fallback.
 - Apply the Scoring migrations, including `0028_report_content_jobs`. Set
-  `OPENROUTER_API_KEY` and `REPORT_AI_PROVIDER_ENABLED=true` when provider calls
-  are ready to resume. The provider is disabled by default; the key is never
+  `REPORT_AI_PROVIDER=openrouter`, `OPENROUTER_API_KEY` and
+  `REPORT_AI_PROVIDER_ENABLED=true` when switching to OpenRouter. Use
+  `REPORT_AI_PROVIDER=codex_proxy` to keep the local proxy selected. Changing model
+  assignments does not change this provider setting. The provider is disabled by default; the key is never
   returned to Application or the admin UI.
 - OpenRouter requests require Azure routing, zero data retention, denied provider
   data collection, and no provider fallback. A response that explicitly identifies
