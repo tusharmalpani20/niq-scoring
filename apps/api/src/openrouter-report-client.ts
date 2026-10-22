@@ -1,12 +1,13 @@
 import { REPORT_AI_MODEL } from "@niq-scoring/contracts/report-ai";
 import type { ReportCall } from "./report-generation-store";
+import { reportModelForStep } from "./report-model-routing";
 
 export type ReportStep = ReportCall["step"];
 export type ReasoningEffort = "medium" | "default" | null;
 export const REPORT_AI_ACTIVE_MODEL = REPORT_AI_MODEL;
 export const REPORT_AI_MANAGER_MODEL = "openai/gpt-6.1-sol";
 export const REPORT_AI_WORKER_MODEL = "openai/gpt-6-luna";
-const modelForStep = (step: ReportStep) => step === "manager" ? REPORT_AI_MANAGER_MODEL : REPORT_AI_WORKER_MODEL;
+const modelForStep = (step: ReportStep) => reportModelForStep(step, REPORT_AI_MANAGER_MODEL, REPORT_AI_WORKER_MODEL);
 export type ModelCompletion = { content: unknown; usage: Omit<ReportCall, "step" | "status" | "errorCode"> & { reasoningEffort?: ReasoningEffort } };
 export interface ReportTextProvider {
   readonly model?: string;

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { OpenRouterReportClient } from "./openrouter-report-client";
+import { CodexProxyReportClient } from "./codex-proxy-report-client";
 
 test("OpenRouter manager and worker routes use the approved Azure models with medium reasoning", async () => {
   let seen: Record<string, unknown> | null = null;
@@ -54,4 +55,34 @@ test("a provider spend limit stops generation with a fixed payment code", async 
   const client = new OpenRouterReportClient("test-secret", "https://openrouter.ai/api/v1", request);
   await expect(client.complete({ step: "writer", system: "fixed safety", user: "data", schema: { type: "object" } }))
     .rejects.toMatchObject({ code: "MODEL_PAYMENT_REQUIRED" });
+});
+
+
+test("both provider adapters assign every report stage to the same model role", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const request = (async (_url: URL | RequestInfo, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body));
+    bodies.push(body);
+    return Response.json({id: "routing-test", provider: "Azure", model: body.model,
+      choices: [{message: {content: "{}"}}]});
+  }) as typeof fetch;
+  const openRouter = new OpenRouterReportClient("test-secret", "https://openrouter.ai/api/v1", request);
+  const proxy = new CodexProxyReportClient("http://127.0.0.1:8999", "test", "gpt-6.1-sol", "gpt-6-luna");
+  const schema = {type: "object", additionalProperties: false, properties: {}};
+  const stages = [
+    ["manager", "gpt-6.1-sol"], ["reviewer", "gpt-6.1-sol"], ["coverage", "gpt-6.1-sol"],
+    ["writer", "gpt-6-luna"], ["revision", "gpt-6-luna"],
+    ["summarizer", "gpt-6-luna"], ["highlighter", "gpt-6-luna"],
+  ] as const;
+  for (const [step, model] of stages) {
+    const expected = `openai/${model}`;
+    const result = await openRouter.complete({step, system: "fixed policy", user: "clinical context", schema});
+    expect(proxy.modelForStep(step)).toBe(model);
+    expect(openRouter.modelForStep(step)).toBe(expected);
+    expect(result.usage.model).toBe(expected);
+    expect(bodies.at(-1)).toMatchObject({model: expected,
+      messages: [{role: "system", content: "fixed policy"}, {role: "user", content: "clinical context"}],
+      response_format: {json_schema: {schema}}});
+  }
+  expect(bodies).toHaveLength(stages.length);
 });

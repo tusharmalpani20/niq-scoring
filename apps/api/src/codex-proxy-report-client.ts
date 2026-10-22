@@ -1,4 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
+import { reportModelForStep } from "./report-model-routing";
 import { ReportModelError, type ModelCompletion, type ReportStep, type ReportTextProvider } from "./openrouter-report-client";
 
 const count = (value: unknown): number | null => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
@@ -9,7 +10,7 @@ const waitForAdmission = (milliseconds: number, signal: AbortSignal) => delay(mi
 export class CodexProxyReportClient implements ReportTextProvider {
   readonly provider = "codex-subscription";
   constructor(private readonly baseUrl: string, private readonly token: string, public readonly model: string, private readonly workerModel: string, private readonly request = fetch, private readonly wait = waitForAdmission) {}
-  modelForStep(step: ReportStep): string { return ["manager", "reviewer", "coverage"].includes(step) ? this.model : this.workerModel; }
+  modelForStep(step: ReportStep): string { return reportModelForStep(step, this.model, this.workerModel); }
 
   async complete(input: { step: ReportStep; system: string; user: string; schema: Record<string, unknown>; signal?: AbortSignal }): Promise<ModelCompletion> {
     const started = performance.now();
