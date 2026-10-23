@@ -443,6 +443,24 @@ test("a selected plan does not suppress source-supported clinician initiation of
  expect(validateNarrative({...f.fallback,nutritionAdvice:{...part,text:"Ask whether oral nutrition supplements are suitable."}},f.evidence).issues).toContain("nutritionAdvice:REDUNDANT_SUPPLEMENT_PROMPT");
 });
 
+test("supplement wording distinguishes clinical actions from suitability questions", () => {
+ const f=fixture();
+ f.evidence.push({id:"rule:product:selected",text:"Selected product plan: Example. Dosage and preparation: 1 per day."});
+ for (const field of ["nutritionAdvice", "effectsAdvice"] as const) {
+  for (const text of [
+   "Have 2–3 snacks, and ask your care team to add oral nutrition supplements if your intake is insufficient.",
+   "Ask your care team to add or manage oral nutrition supplements if they are required.",
+   "Ask your care team about your appetite. Use oral nutrition supplements as prescribed.",
+  ]) expect(validateNarrative({...f.fallback,[field]:{text,evidenceIds:["rule:nutrition:nutrition_low"]}},f.evidence).issues).not.toContain(`${field}:REDUNDANT_SUPPLEMENT_PROMPT`);
+  for (const text of [
+   "Ask whether oral nutrition supplements are suitable.",
+   "Ask your care team about oral nutrition supplements.",
+   "Ask your care team if diabetic supplements are suitable.",
+   "Ask your care team about supplement compatibility.",
+  ]) expect(validateNarrative({...f.fallback,[field]:{text,evidenceIds:["rule:nutrition:nutrition_low"]}},f.evidence).issues).toContain(`${field}:REDUNDANT_SUPPLEMENT_PROMPT`);
+ }
+});
+
 test("invalid and empty repair transactions retry within the same limit without re-reviewing unchanged text",async()=>{
  const f=fixture();let revisions=0,reviews=0,repaired=false;
  const result=await manageReportAgents({...f,invoke:async(step,_system,user,schema)=>{

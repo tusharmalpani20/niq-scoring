@@ -516,7 +516,9 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
       if (citedLabels.some(label => !headings.some(heading => headingKey(heading) === headingKey(label))))
         issues.push("conditionAdvice:MISSING_CONDITION_HEADING");
     }
-    if (/\bask\b.{0,70}\b(?:oral nutrition(?:al)? supplements?|(?:DM|diabet(?:es|ic)) supplements?|supplement (?:suitability|compatibility))\b/i.test(part.text))
+    // Suitability questions are redundant once a plan is selected. Instructions to
+    // ask the care team to add/manage indicated support are clinical actions.
+    if (/\bask\b[^.!?\n]{0,70}\b(?:whether|if|about)\b[^.!?\n]{0,70}\b(?:oral nutrition(?:al)? supplements?|(?:DM|diabet(?:es|ic)) supplements?|supplement (?:suitability|compatibility))\b/i.test(part.text))
       issues.push(`${field}:REDUNDANT_SUPPLEMENT_PROMPT`);
     if (/\b(?:Es Fortitude )?Nourish\b.{0,70}\b(?:cannot|can't|not|avoid|exclude|remove)\b|\b(?:cannot recommend|do not recommend|avoid|exclude|remove)\b.{0,70}\b(?:Es Fortitude )?Nourish\b/i.test(part.text))
       issues.push(`${field}:INTERNAL_PRODUCT_EXCLUSION`);
