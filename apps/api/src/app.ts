@@ -37,6 +37,7 @@ export interface AppOptions {
   authStore: AdminAuthStore;
   adminBootstrapToken?: string;
   allowedOrigins: string[];
+  secureCookies?: boolean;
   region: string;
   activationTokenEncryptionKey?: string;
   runtimeEnvironment: "development" | "test" | "production";

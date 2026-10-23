@@ -20,3 +20,9 @@ test("report diagnostics are explicitly enabled and independent of runtime mode"
  }
  expect(()=>parseEnvironment({...base,REPORT_DIAGNOSTICS_ENABLED:"yes"})).toThrow();
 });
+
+test("secure cookies can be enabled for HTTPS development without changing runtime mode", () => {
+ expect(parseEnvironment(base).SECURE_COOKIES).toBe(false);
+ expect(parseEnvironment({...base, SECURE_COOKIES:"true"}).SECURE_COOKIES).toBe(true);
+ expect(()=>parseEnvironment({...base,SECURE_COOKIES:"yes"})).toThrow();
+});

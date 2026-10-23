@@ -8,6 +8,7 @@ const optionalSetting = (schema: z.ZodString) => z.preprocess(
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   REPORT_DIAGNOSTICS_ENABLED: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
+  SECURE_COOKIES: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(4100),
   DATABASE_URL: z.string().min(1),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),

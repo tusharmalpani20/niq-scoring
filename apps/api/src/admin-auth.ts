@@ -25,6 +25,7 @@ export function installAdminAuth(
     authStore: AdminAuthStore;
     adminBootstrapToken?: string;
     allowedOrigins: string[];
+    secureCookies?: boolean;
     runtimeEnvironment: string;
     reportDiagnosticsEnabled?: boolean;
     now?: () => Date;
@@ -56,7 +57,7 @@ export function installAdminAuth(
     );
     deleteCookie(c, cookieName, {
       path: "/",
-      secure: options.runtimeEnvironment === "production",
+      secure: options.runtimeEnvironment === "production" || options.secureCookies === true,
       sameSite: "Strict",
     });
   };
@@ -165,7 +166,7 @@ export function installAdminAuth(
       return c.json({ error: "INVALID_CREDENTIALS" }, 401);
     setCookie(c, cookieName, token, {
       httpOnly: true,
-      secure: options.runtimeEnvironment === "production",
+      secure: options.runtimeEnvironment === "production" || options.secureCookies === true,
       sameSite: "Strict",
       path: "/",
       maxAge: 8 * 60 * 60,

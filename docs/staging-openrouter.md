@@ -103,3 +103,9 @@ and restricted trace retention continue regardless of this visibility flag.
 
 Do not enable it on the client installation just to keep development OTP working.
 Those authentication settings continue to follow their own existing settings.
+
+## Native server configuration
+
+For a development deployment behind HTTPS, set `SECURE_COOKIES=true` privately on the server. Production always uses secure cookies. Keep `REPORT_DIAGNOSTICS_ENABLED=false` for client access.
+
+Keep host names and process paths in server configuration. Vite supports one additional exact host through the web process environment variable `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS`. Set it to the deployed admin host when starting Vite with PM2, rather than hardcoding it in shared source. Keep PM2 ecosystem files, demo seed scripts and generated PDFs on the server. Back them up before synchronising source, and never add patient artifacts or private environment files to Git.

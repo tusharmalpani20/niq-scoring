@@ -5,7 +5,7 @@ import { MemoryScoringStore } from "./store";
 const setupToken = "independent-setup-secret-longer-than-32-characters";
 const password = "correct-horse-battery-staple";
 const origin = "http://localhost:4173";
-function fixture() {
+function fixture(overrides: { runtimeEnvironment?: "development" | "production"; secureCookies?: boolean } = {}) {
   const authStore = new MemoryAdminAuthStore();
   let date = new Date("2026-09-13T00:00:00Z");
   const app = createApp({
@@ -16,6 +16,7 @@ function fixture() {
     region: "india",
     runtimeEnvironment: "production",
     provisionalScoringRequested: false,
+    ...overrides,
     now: () => date,
   });
   const request = (
@@ -324,4 +325,15 @@ describe("NIQ named administrator authentication", () => {
     ).toBe(429);
     await f.login();
   });
+});
+
+test("HTTPS development uses secure cookies for both login and logout", async () => {
+ const f=fixture({runtimeEnvironment:"development",secureCookies:true});
+ await f.setup();
+ const response=await f.request("/auth/login",{email:"admin@niq.test",password});
+ expect(response.headers.get("set-cookie")).toContain("Secure");
+ const cookie=response.headers.get("set-cookie")!.split(";")[0]!;
+ const logout=await f.request("/auth/logout",undefined,cookie);
+ expect(logout.headers.get("set-cookie")).toContain("Secure");
+ expect(logout.headers.get("set-cookie")).toContain("Max-Age=0");
 });
