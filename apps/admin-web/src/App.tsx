@@ -265,7 +265,7 @@ function Console() {
               <Button variant="outline" disabled={overviewLoading} onClick={() => void refresh().catch(() => {})}>Try again</Button>
             </div>
           )}
-          {ruleId ? <RulePage key={ruleId} id={ruleId}/> : page.path === "overview" ? (
+          {ruleId ? <RulePage key={ruleId} id={ruleId} developmentToolsEnabled={developmentToolsEnabled}/> : page.path === "overview" ? (
             <AdminDashboard />
           ) : page.path === "users" ? (
             <Users currentUser={user} />

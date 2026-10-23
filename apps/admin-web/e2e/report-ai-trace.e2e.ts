@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createFinalAssessmentTemplate } from "../../../packages/contracts/src/final-assessment-template";
 
 test("agent trace is fetched only on demand, displays messages as text, and can refresh or close", async ({ page }) => {
   let traceRequests = 0;
@@ -46,5 +47,28 @@ for (const developmentToolsEnabled of [false, undefined]) {
     await expect(page.getByRole("link",{name:"AI usage",exact:true})).toHaveCount(0);
     await expect(page.getByRole("region",{name:"Report AI usage"})).toHaveCount(0);
     expect(usageRequests).toBe(0);
+  });
+}
+
+for (const capability of [false, undefined, true]) {
+  test(`Report AI settings are available only with diagnostics enabled (${capability})`, async ({ page }) => {
+    const definition = createFinalAssessmentTemplate("Diagnostics test");
+    await page.route("**/api/**", route => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === "/api/auth/status") return route.fulfill({ json: { setupRequired: false, developmentToolsEnabled: capability } });
+      if (path === "/api/auth/session") return route.fulfill({ json: { user: { id: "qa", displayName: "QA", enabled: true } } });
+      if (path.startsWith("/api/admin/rules/")) return route.fulfill({ json: { id: "rule", version: definition.name, definition, lifecycle: "ACTIVE", isDefault: true, clinicalUsePermitted: true, revision: 1, packageChecksum: "test", editable: false } });
+      return route.fulfill({ status: 404, json: { error: "NOT_FOUND" } });
+    });
+    await page.goto("/versions/Diagnostics%20test");
+    await expect(page.getByRole("tab", { name: "Details", exact: true })).toBeVisible();
+    const tab = page.getByRole("tab", { name: "Report AI", exact: true });
+    if (capability === true) {
+      await tab.click();
+      await expect(page.getByRole("region", { name: "Report AI configuration" })).toBeVisible();
+    } else {
+      await expect(tab).toHaveCount(0);
+      await expect(page.getByRole("region", { name: "Report AI configuration" })).toHaveCount(0);
+    }
   });
 }

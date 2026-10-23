@@ -7,7 +7,7 @@ import { Button } from '../components/ui/button';
 import { RuleEditor } from './RuleEditor';
 import type { RuleDetail } from './rule-api';
 
-export function RulePage({ id }: { id: string }) {
+export function RulePage({ id, developmentToolsEnabled = false }: { id: string; developmentToolsEnabled?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [record, setRecord] = useState<RuleDetail | null>(null);
@@ -30,5 +30,5 @@ export function RulePage({ id }: { id: string }) {
   }, [record, navigate]);
   if (error) return <div className="space-y-3"><ErrorNotice error={error}/><Button variant="outline" onClick={() => navigate('/versions')}>Back to versions</Button><Button onClick={() => setAttempt(n => n + 1)}>Retry</Button></div>;
   if (!record) return <p role="status">Loading rule version…</p>;
-  return <RuleEditor key={record.id} initial={record} onClose={() => navigate('/versions')} onSaved={setRecord}/>;
+  return <RuleEditor developmentToolsEnabled={developmentToolsEnabled} key={record.id} initial={record} onClose={() => navigate('/versions')} onSaved={setRecord}/>;
 }

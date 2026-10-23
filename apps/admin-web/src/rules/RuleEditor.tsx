@@ -20,8 +20,8 @@ import type { RuleDetail } from './rule-api';
 import { FinalAssessmentEditor } from './FinalAssessmentEditor';
 import { ruleStatusVariant } from './rule-status';
 
-export function RuleEditor({ initial, onClose, onSaved }: { initial: RuleDetail; onClose: () => void; onSaved: (record: RuleDetail) => void }) {
-  if (finalAssessmentDefinitionSchema.safeParse(initial.definition).success) return <FinalAssessmentEditor initial={initial} onClose={onClose} onSaved={onSaved} />;
+export function RuleEditor({ initial, onClose, onSaved, developmentToolsEnabled = false }: { developmentToolsEnabled?: boolean; initial: RuleDetail; onClose: () => void; onSaved: (record: RuleDetail) => void }) {
+  if (finalAssessmentDefinitionSchema.safeParse(initial.definition).success) return <FinalAssessmentEditor developmentToolsEnabled={developmentToolsEnabled} initial={initial} onClose={onClose} onSaved={onSaved} />;
   return <LegacyRuleEditor initial={initial} onClose={onClose} onSaved={onSaved} />;
 }
 
