@@ -398,3 +398,22 @@ export const reportTraceEvents = pgTable("report_trace_events", {
   index("report_trace_events_run_created_idx").on(table.runId, table.createdAt),
   index("report_trace_events_expiry_idx").on(table.expiresAt),
 ]);
+
+// Historical measurements never enter the provider capture worker or reserve scan usage.
+export const faceScanReuses = pgTable("face_scan_reuses", {
+  id: varchar("id", { length: 26 }).primaryKey(),
+  sourceSessionId: varchar("source_session_id", { length: 26 }).notNull().references(() => faceScanWorkflows.sessionId),
+  sourceAssessmentReference: varchar("source_assessment_reference", { length: 128 }).notNull(),
+  assessmentBindingId: varchar("assessment_binding_id", { length: 26 }).notNull().references(() => assessmentBindings.id),
+  clientId: varchar("client_id", { length: 26 }).notNull().references(() => clients.id),
+  deploymentId: varchar("deployment_id", { length: 26 }).notNull().references(() => deployments.id),
+  organizationReference: varchar("organization_reference", { length: 128 }).notNull(),
+  assessmentReference: varchar("assessment_reference", { length: 128 }).notNull(),
+  contextCiphertext: text("context_ciphertext").notNull(),
+  result: jsonb("result").notNull(), score: jsonb("score").notNull(),
+  capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  uniqueIndex("face_scan_reuse_destination_uq").on(table.deploymentId, table.assessmentReference),
+  check("face_scan_reuse_distinct_assessment_ck", sql`${table.sourceAssessmentReference} <> ${table.assessmentReference}`),
+]);

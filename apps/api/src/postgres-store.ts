@@ -30,7 +30,12 @@ export class PostgresScoringStore implements ScoringStore {
       select w.score from face_scan_workflows w join face_scan_sessions s on s.id=w.session_id
       where w.session_id=${input.sessionId} and s.deployment_id=${input.identity.deploymentId}
         and s.client_id=${input.identity.clientId} and w.assessment_reference=${input.assessmentReference}
-        and w.state='COMPLETED'`;
+        and w.state='COMPLETED'
+      union all
+      select h.score from face_scan_reuses h join assessment_bindings b on b.id=h.assessment_binding_id
+      where h.id=${input.sessionId} and h.deployment_id=${input.identity.deploymentId} and h.client_id=${input.identity.clientId}
+        and h.assessment_reference=${input.assessmentReference} and b.deployment_id=h.deployment_id and b.client_id=h.client_id
+        and b.assessment_reference=h.assessment_reference and b.scoring_rule_version_id=${input.ruleVersionId}`;
     const score = row?.score;
     return score?.status === "SCORED" && score.ruleVersionId === input.ruleVersionId && typeof score.points === "number" && Number.isSafeInteger(score.points) && score.points >= 0 ? score.points : null;
   }

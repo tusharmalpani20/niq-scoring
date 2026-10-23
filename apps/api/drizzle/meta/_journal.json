@@ -232,6 +232,13 @@
       "when": 1792070000000,
       "tag": "0032_report_agent_traces",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792757376591,
+      "tag": "0033_historical_face_scan_reuse",
+      "breakpoints": true
     }
   ]
 }

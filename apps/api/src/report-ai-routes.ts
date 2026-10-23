@@ -105,7 +105,7 @@ export function installReportAiRoutes(app: Hono, options: {
       const guidance = matchedReportPacket(definition, input.facts, classification.id, input.facts.assessmentDate, productCatalog);
       const evidence = reportEvidence(definition, input.facts, { id: classification.id, label: classification.label }, guidance);
       if (evidence.length > 500 || JSON.stringify(evidence).length > 80_000) return c.json({ error: "REPORT_CONTEXT_TOO_LARGE" }, 422);
-      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema4-prompt100-manager4` : "baseline-v100-manager4";
+      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema4-prompt101-manager4` : "baseline-v101-manager4";
       const fingerprint = ruleChecksum({ endpoint: "report-content", assessmentReference: binding.assessmentReference, resultReference: input.resultReference,
         checksum: binding.checksum, promptVersion, facts: input.facts });
       const reservation = await runStore.reserve({ clientId: identity.clientId, deploymentId: identity.deploymentId, assessmentReference: binding.assessmentReference,

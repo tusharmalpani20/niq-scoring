@@ -1205,7 +1205,7 @@ test("agent traces require an admin session and never enter deployment report or
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toBe("no-store");
   const trace = await response.json();
-  expect(trace.run.promptVersion).toContain("prompt100");
+  expect(trace.run.promptVersion).toContain("prompt101");
   expect(trace.calls.find((row: any) => row.step === "writer").user).toContain("Current weight");
   expect(trace.calls.find((row: any) => row.step === "reviewer").response).toEqual({ accepted: true, issues: [] });
   expect(trace.events.map((row: any) => row.stage)).toEqual(["run_started", "agent_review_complete", "run_complete"]);

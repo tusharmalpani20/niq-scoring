@@ -72,6 +72,8 @@ export const reportContentRequestSchema = z.object({
       value: z.string().trim().regex(/^-?\d{1,3}(?:\.\d{1,2})?$/),
       unit: z.string().trim().max(30).optional(),
       measuredAt: calendarDate.optional(),
+      measurementSource: z.literal("historical").optional(),
+      sourceAssessmentReference: reference.optional(),
     }).strict()).max(30).default([]),
   }).strict(),
 }).strict();
@@ -325,7 +327,7 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
     // baseline. Do not let it contradict the chart-aligned comparison.
     if (comparison && row.id === "weight_loss_percent") continue;
     const [label, unit] = observationLabels[row.id];
-    evidence.push({ id: `fact:${row.id}`, text: `${label}: ${row.value}${unit ? ` ${unit}` : ""}${row.measuredAt ? ` on ${row.measuredAt}` : ""}` });
+    evidence.push({ id: `fact:${row.id}`, text: `${label}: ${row.value}${unit ? ` ${unit}` : ""}${row.measuredAt ? ` on ${row.measuredAt}` : ""}${row.measurementSource === "historical" ? ". Historical measurement reused from an earlier assessment, not a new scan or a current measurement." : ""}` });
   }
   for (const row of packet.nutritionInterventions) evidence.push({ id: `rule:nutrition:${row.id}`, text: `${row.label}. ${row.coreStrategy}. ${row.clinicalActions}` });
   for (const row of packet.classGuidance) evidence.push({ id: `rule:class:${row.id}`, text: `${row.label}: ${row.guidance}` });

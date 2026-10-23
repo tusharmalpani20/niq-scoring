@@ -1,7 +1,10 @@
+import { FaceScanError, publicFaceScanScore, scoringInput } from "./face-scan-outcome";
+export { FaceScanError, publicFaceScanScore } from "./face-scan-outcome";
+import { createFaceScanReuse, getFaceScanReuse } from "./face-scan-reuse";
 import { reportFaceScanStatus } from "./face-scan-status-report";
 import type postgres from "postgres";
 import { createHash } from "node:crypto";
-import type { FaceScanCreate, FaceScanContext, FaceScanSignal, FaceScanResult, FaceScanState } from "@niq-scoring/contracts/face-scan-session";
+import type { FaceScanCreate, FaceScanContext, FaceScanSignal, FaceScanResult, FaceScanState, FaceScanReuse } from "@niq-scoring/contracts/face-scan-session";
 import { faceScanScoringConfigSchema, type FaceScanScoringConfig } from "@niq-scoring/contracts/face-scan-scoring";
 import { stressScoringConfigSchema, type StressScoringConfig } from "@niq-scoring/contracts/stress-scoring";
 import { calculateFaceScanScore } from "@niq-scoring/scoring-engine/face-scan-scoring";
@@ -23,7 +26,6 @@ type Row = {
  result: FaceScanResult | null; score: ReturnType<typeof calculateFaceScanScore> | null; dispatch_phase: string | null;
  failure_code: string | null; created_at: Date; updated_at: Date; completed_at: Date | null; capture_expires_at: Date; fence: string | null;
 };
-export class FaceScanError extends Error { constructor(public code: string, public status: 400 | 403 | 404 | 408 | 409 | 413 | 503 = 409) { super(code); } }
 export const faceScanHash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const semanticHash = (result: FaceScanResult) => { const { providerCompletedAt: _timestamp, ...fields } = result; return ruleChecksum(fields); };
 function confirmedSubmissionRejection(diagnostic: ReturnType<typeof faceScanDiagnostic> | undefined): string | null {
@@ -31,20 +33,6 @@ function confirmedSubmissionRejection(diagnostic: ReturnType<typeof faceScanDiag
  if (diagnostic.message === "Device is invalid.") return "DEVICE_NOT_SUPPORTED";
  if (diagnostic.message?.startsWith("Age of the user cannot be less than 1 year!")) return "PATIENT_AGE_UNSUPPORTED";
  return null;
-}
-// Keep the pinned scoring bands in the durable record, but expose only the outcome to consumers.
-export function publicFaceScanScore(score: Row["score"]) {
- if (!score) return null;
- return { status: score.status, points: score.points, ruleVersionId: score.ruleVersionId,
-   wellnessScore: score.wellnessScore, wellnessPoints: score.wellnessPoints ?? null,
-   stressIndex: score.stressIndex ?? null, stressBand: score.stressBand ?? null,
-   stressPoints: score.stressPoints ?? null, scoringVersion: score.scoringVersion };
-}
-function scoringInput(result: FaceScanResult) {
-  const value = result.additionalMetrics?.stressIndex;
-  const numeric = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : null;
-  return { wellnessScore: result.wellnessScore,
-    stressIndex: numeric !== null && Number.isFinite(numeric) && numeric >= 0 ? numeric : null };
 }
 export class FaceScanWorkflow {
  constructor(private sql: Database, private options: { enabled: () => boolean; encryptionKey: string; providerAccount: string; retentionHours: number; minDispatchIntervalMs?: number; provider: CarePlixProvider }) {}
@@ -62,6 +50,8 @@ export class FaceScanWorkflow {
    if (!row) throw new FaceScanError("NOT_FOUND", 404); return row;
  }
  async get(identity: DeploymentIdentity, id: string, organization: string) {
+   const historical = await getFaceScanReuse(this.sql, this.options.encryptionKey, identity, id, organization);
+   if (historical) return historical;
    let row = await this.scoped(identity, id, organization);
    if (row.state === "RECONCILIATION_REQUIRED" && row.failure_code === "PROVIDER_REJECTED") {
      // Earlier explicit validation rejections can be settled from encrypted local evidence.
@@ -80,6 +70,9 @@ export class FaceScanWorkflow {
      }
    }
    return this.envelope(row);
+ }
+ async reuse(identity: DeploymentIdentity, sourceId: string, input: FaceScanReuse) {
+   return createFaceScanReuse(this.sql, this.options.encryptionKey, identity, sourceId, input);
  }
  /** A current admission snapshot. create() repeats these checks under its quota lock. */
  async availability(identity: DeploymentIdentity): Promise<{ available: boolean; reason: string | null }> {

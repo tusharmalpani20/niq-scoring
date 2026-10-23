@@ -122,3 +122,17 @@ test("recorded weight history requires a real prior date, while reported previou
   expect(reportContentRequestSchema.safeParse({ ...input, facts: { ...input.facts,
     weightComparison: { ...input.facts.weightComparison, source: "reported_previous_weight", previousLabel: "Weight 1 Month Ago" } } }).success).toBe(true);
 });
+
+test("reused Vital IQ measurements retain their capture date and are explicitly historical in model evidence", () => {
+  const definition = createFinalAssessmentTemplate("Historical measurement test");
+  const facts = reportContentRequestSchema.parse({ assessmentReference: "copy", resultReference: "result", idempotencyKey: "historical", facts: {
+    reviewedScore: 23, treatmentTypeIds: [], drugClassIds: [], confirmedToxicityIds: [], assessmentDate: "2026-10-23",
+    observations: [{ id: "heart_rate", value: "75", measuredAt: "2026-10-01", measurementSource: "historical", sourceAssessmentReference: "ASM-003545" }],
+  } }).facts;
+  const evidence = reportEvidence(definition, facts, { id: "moderate", label: "Moderate Risk" }, matchedReportPacket(definition, facts, "moderate", facts.assessmentDate));
+  const observation = evidence.find(row => row.id === "fact:heart_rate")!;
+  expect(observation.text).toContain("2026-10-01");
+  expect(observation.text).toContain("Historical measurement reused");
+  expect(observation.text).toContain("not a new scan or a current measurement");
+  expect(observation.text).not.toContain("ASM-003545");
+});

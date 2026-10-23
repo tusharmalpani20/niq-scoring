@@ -38,3 +38,8 @@ export type FaceScanResult = {
   additionalMetrics?: Record<string, number | string | null>;
   physiologicalScore: number | null; mentalWellbeingScore: number | null;
 };
+
+export const faceScanReuseSchema = z.object({
+  organizationReference: reference, sourceAssessmentReference: reference, assessmentReference: reference,
+}).strict();
+export type FaceScanReuse = z.infer<typeof faceScanReuseSchema>;

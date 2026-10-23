@@ -1,6 +1,6 @@
 import type { Hono, Context } from "hono";
 import { timingSafeEqual } from "node:crypto";
-import { FACE_SCAN_MAX_BODY_BYTES, faceScanCreateSchema, faceScanSignalSchema } from "@niq-scoring/contracts/face-scan-session";
+import { FACE_SCAN_MAX_BODY_BYTES, faceScanCreateSchema, faceScanSignalSchema, faceScanReuseSchema } from "@niq-scoring/contracts/face-scan-session";
 import { FaceScanError, type FaceScanWorkflow } from "./face-scan-workflow";
 import type { DeploymentIdentity } from "./store";
 
@@ -62,6 +62,11 @@ export function installFaceScanRoutes(app: Hono, options: { workflow?: FaceScanW
       : { available: false, reason: "FACE_SCAN_DISABLED" });
   });
   app.get("/v1/face-scans/:id", run((c, identity, workflow) => workflow.get(identity, c.req.param("id")!, organization(c))));
+  app.post("/v1/face-scans/:id/reuse", run(async (c, identity, workflow) => {
+    const parsed = faceScanReuseSchema.safeParse(await boundedFaceScanJson(c.req.raw, 16_384));
+    if (!parsed.success) throw new FaceScanError("INVALID_REQUEST", 400);
+    return workflow.reuse(identity, c.req.param("id")!, parsed.data);
+  }));
   app.post("/v1/face-scans/:id/signal", run(async (c, identity, workflow) => {
     const parsed = faceScanSignalSchema.safeParse(await boundedFaceScanJson(c.req.raw));
     if (!parsed.success) throw new FaceScanError("INVALID_SIGNAL", 400);
