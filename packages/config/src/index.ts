@@ -41,6 +41,9 @@ export type Environment = z.infer<typeof environmentSchema>;
 
 export function parseEnvironment(values: Record<string, string | undefined>): Environment {
   const result = environmentSchema.parse(values);
+  if (result.REPORT_AI_PROVIDER_ENABLED && result.REPORT_AI_PROVIDER === "openrouter" && !result.OPENROUTER_API_KEY) {
+    throw new Error("OpenRouter requires an API key when report generation is enabled");
+  }
   if (result.REPORT_AI_PROVIDER === "codex_proxy") {
     const url = new URL(result.CODEX_PROXY_BASE_URL);
     if (result.NODE_ENV !== "development" || url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)

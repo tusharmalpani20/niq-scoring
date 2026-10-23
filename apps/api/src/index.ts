@@ -84,7 +84,7 @@ Bun.serve({
   fetch: app.fetch,
 });
 
-console.info(JSON.stringify({ event: "service_started", service: "niq-scoring-api", port: environment.PORT, region: environment.DEPLOYMENT_REGION }));
+console.info(JSON.stringify({ event: "service_started", service: "niq-scoring-api", port: environment.PORT, region: environment.DEPLOYMENT_REGION, reportAiProvider: environment.REPORT_AI_PROVIDER_ENABLED ? environment.REPORT_AI_PROVIDER : "disabled" }));
 
 // One in-flight job per process; database row locks fence multiple service replicas.
 let workerRunning = false;
