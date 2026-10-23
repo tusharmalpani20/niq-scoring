@@ -337,6 +337,7 @@ export function createApp(options: AppOptions) {
   if (!reportTraceStore) throw new Error("REPORT_TRACE_STORE_REQUIRED");
   const reportJobTick = installReportAiRoutes(app, { scoringStore: options.store, runStore: reportRunStore, traceStore: reportTraceStore,
     jobStore: options.reportContentJobStore ?? new MemoryReportContentJobStore(),
+    developmentToolsEnabled: options.runtimeEnvironment === "development",
     authenticate: authenticateDeployment, ...(options.reportTextProvider ? { provider: options.reportTextProvider } : {}), platformEnabled: options.platformEnabled ?? true });
   options.onReportJobTick?.(reportJobTick);
 

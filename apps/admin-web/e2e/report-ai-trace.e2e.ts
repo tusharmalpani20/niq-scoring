@@ -6,7 +6,7 @@ test("agent trace is fetched only on demand, displays messages as text, and can 
   const hostile = '<img src=x onerror="window.traceExecuted=true">';
   await page.route("**/api/**", route => {
     const path = new URL(route.request().url()).pathname;
-    if (path === "/api/auth/status") return route.fulfill({ json: { setupRequired: false } });
+    if (path === "/api/auth/status") return route.fulfill({ json: { setupRequired: false, developmentToolsEnabled: true } });
     if (path === "/api/auth/session") return route.fulfill({ json: { user: { id: "qa", displayName: "Browser QA", enabled: true } } });
     if (path === "/api/admin/report-ai/runs") return route.fulfill({ json: { items: [run], total: 1, page: 1, pageSize: 20 } });
     if (path === "/api/admin/report-ai/runs/trace-run/trace") {
@@ -30,3 +30,21 @@ test("agent trace is fetched only on demand, displays messages as text, and can 
   await expect(page.locator("pre")).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
 });
+
+for (const developmentToolsEnabled of [false, undefined]) {
+  test(`AI usage navigation and direct page access are disabled when capability is ${developmentToolsEnabled}`, async ({page}) => {
+    let usageRequests=0;
+    await page.route("**/api/**",route=>{
+      const path=new URL(route.request().url()).pathname;
+      if(path==="/api/auth/status")return route.fulfill({json:{setupRequired:false,developmentToolsEnabled}});
+      if(path==="/api/auth/session")return route.fulfill({json:{user:{id:"qa",displayName:"QA",enabled:true}}});
+      if(path.startsWith("/api/admin/report-ai/runs"))usageRequests++;
+      return route.fulfill({json:{}});
+    });
+    await page.goto("/report-ai-usage");
+    await expect(page).toHaveURL(/\/overview$/);
+    await expect(page.getByRole("link",{name:"AI usage",exact:true})).toHaveCount(0);
+    await expect(page.getByRole("region",{name:"Report AI usage"})).toHaveCount(0);
+    expect(usageRequests).toBe(0);
+  });
+}

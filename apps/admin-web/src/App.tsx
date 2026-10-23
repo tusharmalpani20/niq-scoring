@@ -83,6 +83,7 @@ function Console() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [setup, setSetup] = useState(false);
+  const [developmentToolsEnabled, setDevelopmentToolsEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [overviewError, setOverviewError] = useState("");
@@ -103,8 +104,9 @@ function Console() {
     setLoading(true);
     setConnectionError("");
     try {
-      const status = await request<{ setupRequired: boolean }>("/auth/status");
+      const status = await request<{ setupRequired: boolean; developmentToolsEnabled?: boolean }>("/auth/status");
       setSetup(status.setupRequired);
+      setDevelopmentToolsEnabled(status.developmentToolsEnabled === true);
       if (!status.setupRequired) {
         const response = await fetch("/api/auth/session", {
           credentials: "same-origin",
@@ -203,7 +205,8 @@ function Console() {
   const deployment = data && deploymentSegment ? resolveDeployment(data, deploymentSegment) : undefined;
   const clientId = client?.id ?? clientSegment;
   const deploymentId = deployment?.id ?? deploymentSegment;
-  const page = pages.find((p) => `/${p.path}` === location.pathname || (p.path === "versions" && ruleId) || (p.path === "clients" && clientSegment) || (p.path === "deployments" && deploymentSegment));
+  const availablePages = pages.filter(page => page.path !== "report-ai-usage" || developmentToolsEnabled);
+  const page = availablePages.find((p) => `/${p.path}` === location.pathname || (p.path === "versions" && ruleId) || (p.path === "clients" && clientSegment) || (p.path === "deployments" && deploymentSegment));
   if (!page) return <Navigate to="/overview" replace />;
   if (client && location.pathname !== clientUrl(client)) return <Navigate to={clientUrl(client)} replace />;
   if (data && deployment) {
@@ -288,7 +291,7 @@ function Console() {
         </main>
       </div>
       <nav className="scoring-dock" aria-label="Main navigation">
-        {pages.map(item => <NavLink key={item.path} to={`/${item.path}`} className="scoring-dock-item" aria-current={page.path === item.path ? "page" : undefined}>
+        {availablePages.map(item => <NavLink key={item.path} to={`/${item.path}`} className="scoring-dock-item" aria-current={page.path === item.path ? "page" : undefined}>
           <item.icon size={20} aria-hidden="true" />
           <span>{item.label}</span>
         </NavLink>)}

@@ -96,7 +96,7 @@ export function installAdminAuth(
     await next();
   });
   app.get("/auth/status", async (c) =>
-    c.json({ setupRequired: !(await store.hasUsers()) }),
+    c.json({ setupRequired: !(await store.hasUsers()), developmentToolsEnabled: options.runtimeEnvironment === "development" }),
   );
   app.post("/auth/setup", async (c) => {
     const body = profile

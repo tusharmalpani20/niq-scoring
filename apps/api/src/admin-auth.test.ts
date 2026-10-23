@@ -73,6 +73,7 @@ describe("NIQ named administrator authentication", () => {
     const f = fixture();
     expect(await (await f.app.request("/auth/status")).json()).toEqual({
       setupRequired: true,
+      developmentToolsEnabled: false,
     });
     const responses = await Promise.all([f.setup(), f.setup()]);
     expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);

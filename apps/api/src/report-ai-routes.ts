@@ -24,11 +24,13 @@ export function installReportAiRoutes(app: Hono, options: {
   authenticate: (c: Context) => Promise<DeploymentIdentity | null>;
   provider?: ReportTextProvider;
   platformEnabled: boolean;
+  developmentToolsEnabled: boolean;
 }) {
   const { scoringStore, runStore, traceStore, jobStore, authenticate, provider, platformEnabled } = options;
 
   app.get("/admin/report-ai/models", c => c.json({ models: [{ id: REPORT_AI_MODEL, label: "GPT-6 Luna", provider: "OpenRouter" }] }));
   app.get("/admin/report-ai/runs", async c => {
+    if (!options.developmentToolsEnabled) return c.json({ error: "NOT_FOUND" }, 404);
     const page = Number(c.req.query("page") ?? "1");
     const pageSize = Number(c.req.query("pageSize") ?? "20");
     const clientId = c.req.query("clientId");
@@ -45,6 +47,7 @@ export function installReportAiRoutes(app: Hono, options: {
   // and deployment endpoints must never include prompts or assessment-derived text.
   app.get("/admin/report-ai/runs/:runId/trace", async c => {
     c.header("Cache-Control", "no-store");
+    if (!options.developmentToolsEnabled) return c.json({ error: "NOT_FOUND" }, 404);
     const runId = c.req.param("runId");
     if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(runId)) return c.json({ error: "INVALID_REQUEST" }, 400);
     const trace = await traceStore.read(runId);
