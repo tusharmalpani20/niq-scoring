@@ -40,6 +40,7 @@ export interface AppOptions {
   region: string;
   activationTokenEncryptionKey?: string;
   runtimeEnvironment: "development" | "test" | "production";
+  reportDiagnosticsEnabled?: boolean;
   provisionalScoringRequested: boolean;
   platformEnabled?: boolean;
   faceScanAdapter?: FaceScanAdapter;
@@ -337,7 +338,7 @@ export function createApp(options: AppOptions) {
   if (!reportTraceStore) throw new Error("REPORT_TRACE_STORE_REQUIRED");
   const reportJobTick = installReportAiRoutes(app, { scoringStore: options.store, runStore: reportRunStore, traceStore: reportTraceStore,
     jobStore: options.reportContentJobStore ?? new MemoryReportContentJobStore(),
-    developmentToolsEnabled: options.runtimeEnvironment === "development",
+    developmentToolsEnabled: options.reportDiagnosticsEnabled === true,
     authenticate: authenticateDeployment, ...(options.reportTextProvider ? { provider: options.reportTextProvider } : {}), platformEnabled: options.platformEnabled ?? true });
   options.onReportJobTick?.(reportJobTick);
 

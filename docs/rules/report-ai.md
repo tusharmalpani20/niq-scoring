@@ -89,3 +89,7 @@ There is no separate manual report approval in this workflow.
 supports `page`, `pageSize`, and optional `clientId`. It returns run status and
 per-call provider, token, cost, latency, and error metadata. It omits patient
 references, prompts, evidence, generated text, and raw provider responses.
+
+AI usage and run-trace administrative endpoints require explicit
+`REPORT_DIAGNOSTICS_ENABLED=true`, independently of `NODE_ENV`. The default is
+false. This does not disable report generation or restricted trace persistence.

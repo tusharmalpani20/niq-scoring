@@ -11,3 +11,12 @@ test("staging can prepare OpenRouter disabled and enable it with a privately con
  expect(parseEnvironment({...base, REPORT_AI_PROVIDER:"openrouter"}).REPORT_AI_PROVIDER_ENABLED).toBe(false);
  expect(parseEnvironment({...base, REPORT_AI_PROVIDER:"openrouter",REPORT_AI_PROVIDER_ENABLED:"true",OPENROUTER_API_KEY:"test-server-only-key"}).REPORT_AI_PROVIDER).toBe("openrouter");
 });
+
+test("report diagnostics are explicitly enabled and independent of runtime mode", () => {
+ for (const NODE_ENV of ["development", "test", "production"]) {
+  expect(parseEnvironment({...base,NODE_ENV}).REPORT_DIAGNOSTICS_ENABLED).toBe(false);
+  expect(parseEnvironment({...base,NODE_ENV,REPORT_DIAGNOSTICS_ENABLED:"false"}).REPORT_DIAGNOSTICS_ENABLED).toBe(false);
+  expect(parseEnvironment({...base,NODE_ENV,REPORT_DIAGNOSTICS_ENABLED:"true"}).REPORT_DIAGNOSTICS_ENABLED).toBe(true);
+ }
+ expect(()=>parseEnvironment({...base,REPORT_DIAGNOSTICS_ENABLED:"yes"})).toThrow();
+});

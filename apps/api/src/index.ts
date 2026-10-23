@@ -45,6 +45,7 @@ const app = createApp({
   region: environment.DEPLOYMENT_REGION,
   ...(environment.ACTIVATION_TOKEN_ENCRYPTION_KEY ? { activationTokenEncryptionKey: environment.ACTIVATION_TOKEN_ENCRYPTION_KEY } : {}),
   runtimeEnvironment: environment.NODE_ENV,
+  reportDiagnosticsEnabled: environment.REPORT_DIAGNOSTICS_ENABLED,
   provisionalScoringRequested: environment.ENABLE_PROVISIONAL_SCORING,
   platformEnabled: environment.SCORING_PLATFORM_ENABLED,
   faceScanAdapter: createFaceScanAdapter(environment.FACE_SCAN_PROVIDER),
@@ -84,7 +85,7 @@ Bun.serve({
   fetch: app.fetch,
 });
 
-console.info(JSON.stringify({ event: "service_started", service: "niq-scoring-api", port: environment.PORT, region: environment.DEPLOYMENT_REGION, reportAiProvider: environment.REPORT_AI_PROVIDER_ENABLED ? environment.REPORT_AI_PROVIDER : "disabled" }));
+console.info(JSON.stringify({ event: "service_started", service: "niq-scoring-api", port: environment.PORT, region: environment.DEPLOYMENT_REGION, reportAiProvider: environment.REPORT_AI_PROVIDER_ENABLED ? environment.REPORT_AI_PROVIDER : "disabled", reportDiagnosticsEnabled: environment.REPORT_DIAGNOSTICS_ENABLED }));
 
 // One in-flight job per process; database row locks fence multiple service replicas.
 let workerRunning = false;

@@ -1,8 +1,9 @@
 # Development-mode server deployment with OpenRouter
 
 This is a restricted staging installation, not the production rollout. Both APIs
-stay in `NODE_ENV=development`. AI usage, agent traces and the clinical report
-workspace remain available. Production OTP/invitation delivery is deferred.
+stay in `NODE_ENV=development`. Diagnostic pages are independently controlled by
+`REPORT_DIAGNOSTICS_ENABLED`, which defaults to `false` in both server templates.
+Production OTP/invitation delivery is deferred.
 Keep access restricted to the agreed testers. Use synthetic assessment data.
 
 ## Scoring server setup
@@ -65,11 +66,11 @@ Then test one agreed synthetic assessment only:
   no provider fallback, no data collection and zero data retention. Do not loosen
   these restrictions or silently substitute models to make an unavailable route
   pass. Confirm supported IDs/settings on the server before changing them.
-- Inspect all calls/review decisions and check that the report reaches `READY`
+- Inspect retained server-side calls/review decisions and check that the report reaches `READY`
   without unintended fallback. Review retry counts, latency and actual usage/cost.
 - Use a normally completed assessment for the automatic PDF check. A legacy
   `html-review` test request intentionally holds PDF export until explicitly requested
-  from the development report workspace; it is not the normal automatic workflow.
+  from the diagnostics-enabled report workspace; it is not the normal automatic workflow.
 - Confirm the PDF is saved against the intended assessment, is visible after a
   refresh/restart and downloads from both the list and assessment detail.
 - Check product images, page breaks, section headers/footers and the downloaded PDF.
@@ -88,3 +89,17 @@ or copy credentials into screenshots. Face scans and provisional scoring remain
 disabled in this staging recipe. Codex support remains in source for local use;
 it is not part of this server deployment. Switching to actual production later
 requires the separate production authentication, delivery and operations work.
+
+## Report diagnostics visibility
+
+`REPORT_DIAGNOSTICS_ENABLED=true` enables AI usage and agent-trace UI/API access in
+Scoring. Set the same flag independently in the application to enable its clinical
+report preview, regeneration and layout workspace. Local private `.env` files use
+`true`; client server templates use `false`. An omitted flag also means `false`,
+including with `NODE_ENV=development`. It is independent of runtime mode. Restart
+the APIs and reload the browser session after changing it. Existing administrator
+and clinical permissions still apply. Automatic generation, PDF download routes
+and restricted trace retention continue regardless of this visibility flag.
+
+Do not enable it on the client installation just to keep development OTP working.
+Those authentication settings continue to follow their own existing settings.

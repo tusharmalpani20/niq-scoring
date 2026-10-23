@@ -180,7 +180,7 @@ async function setup(handler: (step: Step, call: number, user: string, system: s
   const traces = new MemoryReportTraceStore(runs);
   const authStore = new MemoryAdminAuthStore();
   const app = createApp({ store, authStore, reportContentJobStore: jobs, onReportJobTick: tick => { jobTick = tick; }, reportGenerationStore: runs, reportTraceStore: traces, reportTextProvider: provider,
-    region: "test", allowedOrigins: [], runtimeEnvironment: "development", provisionalScoringRequested: false, now: () => new Date("2026-01-02T00:00:00Z") });
+    region: "test", allowedOrigins: [], runtimeEnvironment: "development", reportDiagnosticsEnabled: true, provisionalScoringRequested: false, now: () => new Date("2026-01-02T00:00:00Z") });
   const call = (action: string, data: unknown) => app.request(`/v1/assessments/${action}`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(data) });
   await call("start", { assessmentReference: "report-assessment" });
   const reviewed = await (await call("classify-reviewed", { assessmentReference: "report-assessment", idempotencyKey: "reviewed-result-1", score: 12 })).json();

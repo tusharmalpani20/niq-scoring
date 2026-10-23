@@ -10,7 +10,7 @@ Traces do not change clinical approval, repair, fallback, or PDF behaviour. Fail
 
 ## Access and retention
 
-Administrators can open **AI usage → View agent trace**. This separately fetches `GET /admin/report-ai/runs/:runId/trace`, protected by the existing enabled-admin cookie session. Deployment credentials cannot access this endpoint. Responses use `Cache-Control: no-store`; displayed content is escaped plain text. Closing the viewer removes its content from component state. Regular usage lists, deployment report responses, console logs and PDFs do not contain the trace.
+With `REPORT_DIAGNOSTICS_ENABLED=true`, administrators can open **AI usage → View agent trace**. When the flag is false or absent, the page and run/trace APIs are unavailable regardless of `NODE_ENV`. This flag controls diagnostic access, not capture or retention. This separately fetches `GET /admin/report-ai/runs/:runId/trace`, protected by the existing enabled-admin cookie session. Deployment credentials cannot access this endpoint. Responses use `Cache-Control: no-store`; displayed content is escaped plain text. Closing the viewer removes its content from component state. Regular usage lists, deployment report responses, console logs and PDFs do not contain the trace.
 
 Messages contain assessment-derived clinical data. Store them in the protected Scoring database under its existing encryption, backup and access controls. Do not copy them into operational logs. Authorization is at the platform administrator level, matching the current administration system; this feature does not add a new clinical-review role.
 

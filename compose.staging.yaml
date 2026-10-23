@@ -6,6 +6,7 @@ services:
   api:
     environment:
       NODE_ENV: development
+      REPORT_DIAGNOSTICS_ENABLED: ${REPORT_DIAGNOSTICS_ENABLED:-false}
       PORT: 4100
       REPORT_AI_PROVIDER: openrouter
       REPORT_AI_PROVIDER_ENABLED: "true"

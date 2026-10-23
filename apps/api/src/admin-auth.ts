@@ -26,6 +26,7 @@ export function installAdminAuth(
     adminBootstrapToken?: string;
     allowedOrigins: string[];
     runtimeEnvironment: string;
+    reportDiagnosticsEnabled?: boolean;
     now?: () => Date;
   },
 ) {
@@ -96,7 +97,7 @@ export function installAdminAuth(
     await next();
   });
   app.get("/auth/status", async (c) =>
-    c.json({ setupRequired: !(await store.hasUsers()), developmentToolsEnabled: options.runtimeEnvironment === "development" }),
+    c.json({ setupRequired: !(await store.hasUsers()), developmentToolsEnabled: options.reportDiagnosticsEnabled === true }),
   );
   app.post("/auth/setup", async (c) => {
     const body = profile
