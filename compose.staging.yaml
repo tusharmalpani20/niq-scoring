@@ -1,0 +1,26 @@
+# Explicit development-mode server deployment. Use with docker-compose.yml.
+# The private env file is supplied via --env-file and NIQ_SCORING_ENV_FILE.
+services:
+  postgres:
+    restart: unless-stopped
+  api:
+    environment:
+      NODE_ENV: development
+      PORT: 4100
+      REPORT_AI_PROVIDER: openrouter
+      REPORT_AI_PROVIDER_ENABLED: "true"
+      ENABLE_PROVISIONAL_SCORING: "false"
+    networks:
+      default:
+      staging:
+        aliases: [niq-scoring-api]
+  migrate:
+    environment:
+      NODE_ENV: development
+  admin-web:
+    restart: unless-stopped
+
+networks:
+  staging:
+    external: true
+    name: niq-staging

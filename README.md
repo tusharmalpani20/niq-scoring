@@ -66,3 +66,9 @@ bun run build
 ```
 
 See [architecture](docs/architecture.md) and [compliance boundaries](docs/compliance.md) before extending the platform.
+
+## OpenRouter development server
+
+For a restricted server trial that retains `NODE_ENV=development`, use
+[the OpenRouter staging guide](docs/staging-openrouter.md) and the explicit
+`compose.staging.yaml` override. Keep the API key in the private server env file.
