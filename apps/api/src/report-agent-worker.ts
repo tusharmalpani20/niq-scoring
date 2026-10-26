@@ -58,23 +58,52 @@ export function createReportAgentWorkers(options: {
       if (!saved) throw new ReportAttemptLost();
     };
     const started = performance.now();
+    let observedAttempts = 0;
+    const providerAttempts: unknown[] = [];
     let completion;
     try {
-      completion = await provider.complete({ step, system: input.system, user, schema });
+      completion = await provider.complete({ step, system: input.system, user, schema, beforeAttempt: async () => {
+        assertActive();
+        // Recheck durable ownership before each paid retry, not only on the
+        // heartbeat or after a response has already consumed inference.
+        try {
+          if (jobLease && !await jobLease.store.renew(jobLease.id, jobLease.attemptId)) leaseLost = true;
+          if (!leaseLost && !await runStore.renew(runId, attemptId)) leaseLost = true;
+        } catch { throw traceFailure(); }
+        assertActive();
+      }, onAttempt: async outcome => {
+        assertActive();
+        // Record actual upstream requests, including failed/retried billed output.
+        // No raw response, refusal text, credentials or prompts enter usage events.
+        let saved: boolean;
+        try { saved = await traceStore.appendEvent(runId, attemptId, {
+          stage: "provider_attempt", payload: { sequence: input.sequence, step, ...outcome },
+        }); } catch { throw traceFailure(); }
+        if (!saved) { leaseLost = true; throw new ReportAttemptLost(); }
+        try { saved = await runStore.appendCall(runId, attemptId, { step, status: outcome.errorCode ? "FAILED" : "SUCCEEDED",
+          errorCode: outcome.errorCode, ...outcome.usage }); }
+        catch { throw traceFailure(); }
+        if (!saved) { leaseLost = true; throw new ReportAttemptLost(); }
+        observedAttempts++;
+        providerAttempts.push(outcome);
+      } });
       completion = { ...completion, content: await completion.content };
     } catch (error) {
       assertActive();
       const code = error instanceof ReportModelError ? error.code : "MODEL_UNAVAILABLE";
       // Arbitrary upstream exception messages may contain credentials or response bodies.
-      await persist({ errorCode: code, ...(error instanceof ReportModelError && error.usage ? { usage: error.usage } : {}) });
-      if (!await runStore.appendCall(runId, attemptId, { step, status: "FAILED", model: provider.modelForStep?.(step) ?? provider.model ?? REPORT_AI_ACTIVE_MODEL, provider: provider.provider ?? null, generationId: null,
+      if (error instanceof ReportAttemptLost || error instanceof ReportTraceError) throw error;
+      await persist({ errorCode: code, ...(error instanceof ReportModelError && error.usage ? {
+        usage: { ...error.usage, ...(observedAttempts ? { providerAttempts } : {}) },
+      } : {}) });
+      if (!observedAttempts && !await runStore.appendCall(runId, attemptId, { step, status: "FAILED", model: provider.modelForStep?.(step) ?? provider.model ?? REPORT_AI_ACTIVE_MODEL, provider: provider.provider ?? null, generationId: null,
         promptTokens: null, completionTokens: null, reasoningTokens: null, costUsd: null, latencyMs: Math.round(performance.now() - started),
         ...(error instanceof ReportModelError && error.usage ? error.usage : {}), errorCode: code })) throw new ReportAttemptLost();
       throw error;
     }
     assertActive();
-    await persist({ response: completion.content, usage: completion.usage });
-    if (!await runStore.appendCall(runId, attemptId, { step, status: "SUCCEEDED", errorCode: null, ...completion.usage })) throw new ReportAttemptLost();
+    await persist({ response: completion.content, usage: { ...completion.usage, ...(observedAttempts ? { providerAttempts } : {}) } });
+    if (!observedAttempts && !await runStore.appendCall(runId, attemptId, { step, status: "SUCCEEDED", errorCode: null, ...completion.usage })) throw new ReportAttemptLost();
     return completion.content;
   };
   return { invoke, assertActive, stop: () => clearInterval(heartbeat) };
