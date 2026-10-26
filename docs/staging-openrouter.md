@@ -58,9 +58,9 @@ No paid model requests are made by the deployment commands alone. Before request
 a report, verify startup/readiness and that the deployment's active rules are set.
 Then test one agreed synthetic assessment only:
 
-- Confirm the job uses OpenRouter and the existing role assignments. Manager,
-  reviewer and coverage use `openai/gpt-6.1-sol`; drafting, repairs, summaries and
-  highlighting use `openai/gpt-6-luna`.
+- Confirm the job uses `openai/gpt-6-luna-pro` for manager stages and
+  `openai/gpt-6-luna` for all other stages. Local Codex runs use Luna throughout.
+  The stage sequence and review responsibilities remain unchanged.
 - These model IDs must be available on the funded account through the configured
   Azure-only route. The adapter also requires strict JSON schema parameters,
   no provider fallback, no data collection and zero data retention. Do not loosen
@@ -109,3 +109,16 @@ Those authentication settings continue to follow their own existing settings.
 For a development deployment behind HTTPS, set `SECURE_COOKIES=true` privately on the server. Production always uses secure cookies. Keep `REPORT_DIAGNOSTICS_ENABLED=false` for client access.
 
 Keep host names and process paths in server configuration. Vite supports one additional exact host through the web process environment variable `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS`. Set it to the deployed admin host when starting Vite with PM2, rather than hardcoding it in shared source. Keep PM2 ecosystem files, demo seed scripts and generated PDFs on the server. Back them up before synchronising source, and never add patient artifacts or private environment files to Git.
+
+## Bounded review fallback
+
+If model planning fails or bounded agent repairs still end in `REVIEW_REQUIRED`,
+the same run publishes a deterministic presentation of its pinned, matched rules.
+The private trace retains the rejected candidate, agent concerns and fallback
+reason. This does not request more model calls or silently approve rejected AI
+wording. Missing or conflicting source rules still fail their existing checks.
+
+When updating an existing environment, set both `CODEX_PROXY_MANAGER_MODEL` and
+`CODEX_PROXY_WORKER_MODEL` to `gpt-6-luna`, or remove them to use their defaults.
+These local-only settings must pass startup validation even when OpenRouter is
+selected. They do not override OpenRouter’s manager/worker model IDs.
