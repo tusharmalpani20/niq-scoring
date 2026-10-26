@@ -390,9 +390,11 @@ export function buildDeterministicReportFallback(input: {
   // can conflict with individually tailored kidney guidance. A mechanical
   // copy cannot resolve that conflict safely, so it cannot issue as fallback.
   const renal = conditionRows.some(row => /\b(?:kidney|renal)\b/i.test(row.text) && /individuali[sz]/i.test(row.text));
-  if (renal && [narrative.nutritionAdvice.text, narrative.treatmentAdvice.text,
-    ...possibleToxicities.map(row => row.summary)].some(text =>
-    /\b\d+(?:\.\d+)?\s*(?:kcal\/kg|g\/kg|L\/day)\b|\b(?:banana|coconut water|potato|spinach|avocado)\b/i.test(text)))
+  // Inspect original units before patientLanguage expands them into words.
+  // Otherwise a fixed g/kg/day target could escape this conflict check.
+  if (renal && [...nutritionRows, ...treatmentRows,
+    ...guidance.possibleToxicities.map(row => ({ text: row.nutritionalInterventions }))].some(row =>
+    /\b\d+(?:\.\d+)?\s*(?:kcal\/kg|g\/kg|L\/day)\b|\b(?:banana|coconut water|potato|spinach|avocado)\b/i.test(row.text)))
     throw new ReportFallbackError("FALLBACK_SOURCE_CONFLICT");
   if ([...Object.values(narrative).map(row => row.text), ...possibleToxicities.map(row => row.summary)]
     .some(text => /\b(?:hba1c|a1c|glycated\s+ha?emoglobin)\b/i.test(text)))
