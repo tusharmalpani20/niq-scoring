@@ -26,3 +26,8 @@ test("secure cookies can be enabled for HTTPS development without changing runti
  expect(parseEnvironment({...base, SECURE_COOKIES:"true"}).SECURE_COOKIES).toBe(true);
  expect(()=>parseEnvironment({...base,SECURE_COOKIES:"yes"})).toThrow();
 });
+
+test("local report agents use Luna and reject unsupported model overrides", () => {
+ expect(parseEnvironment(base).CODEX_PROXY_MANAGER_MODEL).toBe("gpt-6-luna");
+ expect(()=>parseEnvironment({...base,CODEX_PROXY_MANAGER_MODEL:"unknown"})).toThrow();
+});

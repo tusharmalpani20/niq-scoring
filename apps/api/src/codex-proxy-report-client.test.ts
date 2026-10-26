@@ -55,8 +55,8 @@ test("aborting an admission wait prevents another model request", async () => {
 });
 
 
-test("model metadata follows clinical-review routing", () => {
+test("model metadata reserves the manager role for manager stages", () => {
   const client = new CodexProxyReportClient("http://127.0.0.1:8999", "test", "clinical", "drafting");
-  for (const step of ["manager", "reviewer", "coverage"] as const) expect(client.modelForStep(step)).toBe("clinical");
-  for (const step of ["writer", "revision", "summarizer", "highlighter"] as const) expect(client.modelForStep(step)).toBe("drafting");
+  for (const step of ["manager"] as const) expect(client.modelForStep(step)).toBe("clinical");
+  for (const step of ["reviewer", "coverage", "writer", "revision", "summarizer", "highlighter"] as const) expect(client.modelForStep(step)).toBe("drafting");
 });

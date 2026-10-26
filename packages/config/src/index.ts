@@ -35,7 +35,7 @@ const environmentSchema = z.object({
   REPORT_AI_PROVIDER: z.enum(["openrouter", "codex_proxy"]).default("openrouter"),
   CODEX_PROXY_BASE_URL: z.string().url().default("http://127.0.0.1:4190"),
   CODEX_PROXY_TOKEN: optionalSetting(z.string().min(32)),
-  CODEX_PROXY_MANAGER_MODEL: z.literal("gpt-6.1-sol").default("gpt-6.1-sol"),
+  CODEX_PROXY_MANAGER_MODEL: z.literal("gpt-6-luna").default("gpt-6-luna"),
   CODEX_PROXY_WORKER_MODEL: z.literal("gpt-6-luna").default("gpt-6-luna"),
 });
 

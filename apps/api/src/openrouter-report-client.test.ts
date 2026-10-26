@@ -12,7 +12,7 @@ test("OpenRouter manager and worker routes use the approved Azure models with me
   const response = await client.complete({ step: "manager", system: "fixed safety", user: "review data", schema: { type: "object" } });
   expect(response.content).toEqual({ accepted: true, issues: [] });
   expect(response.usage).toMatchObject({ generationId: "gen-1", provider: "Azure", promptTokens: 10, completionTokens: 4, costUsd: 0 });
-  expect(seen).toMatchObject({ model: "openai/gpt-6.1-sol", reasoning: { effort: "medium" },
+  expect(seen).toMatchObject({ model: "openai/gpt-6-luna-pro", reasoning: { effort: "medium" },
     provider: { only: ["azure"], allow_fallbacks: false, require_parameters: true, data_collection: "deny", zdr: true },
     messages: [{ role: "system", content: "fixed safety" }, { role: "user", content: "review data" }] });
   const workerRequest = (async (_url: URL | RequestInfo, init?: RequestInit) => {
@@ -125,7 +125,7 @@ test("a failure to persist attempt metadata stops retries before another model c
 });
 
 
-test("both provider adapters assign every report stage to the same model role", async () => {
+test("OpenRouter uses Pro only for managers while local proxy remains Luna", async () => {
   const bodies: Record<string, unknown>[] = [];
   const request = (async (_url: URL | RequestInfo, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));
@@ -134,17 +134,17 @@ test("both provider adapters assign every report stage to the same model role", 
       choices: [{message: {content: "{}"}}]});
   }) as typeof fetch;
   const openRouter = new OpenRouterReportClient("test-secret", "https://openrouter.ai/api/v1", request);
-  const proxy = new CodexProxyReportClient("http://127.0.0.1:8999", "test", "gpt-6.1-sol", "gpt-6-luna");
+  const proxy = new CodexProxyReportClient("http://127.0.0.1:8999", "test", "gpt-6-luna", "gpt-6-luna");
   const schema = {type: "object", additionalProperties: false, properties: {}};
   const stages = [
-    ["manager", "gpt-6.1-sol"], ["reviewer", "gpt-6.1-sol"], ["coverage", "gpt-6.1-sol"],
+    ["manager", "gpt-6-luna-pro"], ["reviewer", "gpt-6-luna"], ["coverage", "gpt-6-luna"],
     ["writer", "gpt-6-luna"], ["revision", "gpt-6-luna"],
     ["summarizer", "gpt-6-luna"], ["highlighter", "gpt-6-luna"],
   ] as const;
   for (const [step, model] of stages) {
     const expected = `openai/${model}`;
     const result = await openRouter.complete({step, system: "fixed policy", user: "clinical context", schema});
-    expect(proxy.modelForStep(step)).toBe(model);
+    expect(proxy.modelForStep(step)).toBe("gpt-6-luna");
     expect(openRouter.modelForStep(step)).toBe(expected);
     expect(result.usage.model).toBe(expected);
     expect(bodies.at(-1)).toMatchObject({model: expected,
