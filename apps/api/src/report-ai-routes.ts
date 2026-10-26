@@ -105,7 +105,7 @@ export function installReportAiRoutes(app: Hono, options: {
       const guidance = matchedReportPacket(definition, input.facts, classification.id, input.facts.assessmentDate, productCatalog);
       const evidence = reportEvidence(definition, input.facts, { id: classification.id, label: classification.label }, guidance);
       if (evidence.length > 500 || JSON.stringify(evidence).length > 80_000) return c.json({ error: "REPORT_CONTEXT_TOO_LARGE" }, 422);
-      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema4-prompt101-manager4` : "baseline-v101-manager4";
+      const promptVersion = definition.reportAi ? `rule-${rule.id}-r${rule.revision}-schema4-prompt102-manager5` : "baseline-v102-manager5";
       const fingerprint = ruleChecksum({ endpoint: "report-content", assessmentReference: binding.assessmentReference, resultReference: input.resultReference,
         checksum: binding.checksum, promptVersion, facts: input.facts });
       const reservation = await runStore.reserve({ clientId: identity.clientId, deploymentId: identity.deploymentId, assessmentReference: binding.assessmentReference,
@@ -173,14 +173,20 @@ export function installReportAiRoutes(app: Hono, options: {
         if (targetResolutions.length) await recordTrace("source_conflicts_resolved", { targetResolutions });
         if (Object.values(sectionOrigins).includes("rule_fallback")) await recordTrace("section_recovery", { sectionOrigins, status, issues });
         await recordTrace("agent_review_complete", { status, issues, omittedNarrativeFields, sectionOrigins, targetResolutions });
+        // The bounded model reviews may disagree even after scoped repairs.
+        // Keep their exact concerns privately, then issue a fresh presentation
+        // of the pinned sources rather than publishing the rejected AI draft.
+        // The deterministic builder still rejects incomplete/conflicting rules.
+        if (status === "REVIEW_REQUIRED" && allowFallback)
+          return await fallbackResponse({ code: "BOUNDED_REVIEW_EXHAUSTED", issues });
         await recordTrace("run_complete", { status, generationMode: response.generationMode });
         if (!await runStore.finish(runId, attemptId, status, response)) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
         return c.json(response);
       } catch (error) {
         if (error instanceof ReportAttemptLost) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
-        const planningFailed = error instanceof ReportModelError &&
-          (error.code === "MODEL_INVALID_SOURCE_CHECKLIST" || error.code.startsWith("MODEL_SOURCE_CHECKLIST"));
-        if (allowFallback && !planningFailed && !(error instanceof ReportFallbackError) && !(error instanceof ReportTraceError)) {
+        // The rule fallback does not depend on a model-generated checklist.
+        // Model planning failures use the same source checks as later failures.
+        if (allowFallback && !(error instanceof ReportFallbackError) && !(error instanceof ReportTraceError)) {
           const code = error instanceof ReportModelError ? error.code : "REPORT_GENERATION_FAILED";
           try { return await fallbackResponse({ code }); }
           catch (fallbackError) { error = fallbackError; }

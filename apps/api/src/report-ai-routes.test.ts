@@ -145,7 +145,7 @@ async function setup(handler: (step: Step, call: number, user: string, system: s
   configure?: (definition: FinalAssessmentDefinition) => void, runs = new MemoryReportGenerationStore(),
   highlighter?: (user: string) => unknown, coverageAuditor?: (user: string) => unknown,
   summarizer?: (user: string) => unknown | Promise<unknown>, planner?: () => unknown,
-  jobs = new MemoryReportContentJobStore()) {
+  jobs = new MemoryReportContentJobStore(), finalManager?: () => unknown) {
   const store = new MemoryScoringStore();
   const definition = createFinalAssessmentTemplate("Report test");
   configure?.(definition);
@@ -168,7 +168,7 @@ async function setup(handler: (step: Step, call: number, user: string, system: s
     content: step === "coverage" ? await (coverageAuditor?.(user) ?? fixtureCoverage(user))
       : step === "highlighter"
       ? highlighter?.(user) ?? fixtureHighlights(user)
-      : step === "manager" ? planner && (schema.properties as any).assignments && (schema.properties as any).assignments.items?.properties?.unitId ? planner() : fixtureManager(system, user, schema)
+      : step === "manager" ? finalManager && (schema.properties as any).decision ? finalManager() : planner && (schema.properties as any).assignments && (schema.properties as any).assignments.items?.properties?.unitId ? planner() : fixtureManager(system, user, schema)
       : step === "summarizer" ? await (summarizer?.(user) ?? fixtureSummaries(user))
       : await (async () => {
         const result = await handler(step, ++calls, user, system);
@@ -1102,15 +1102,15 @@ test("a rejected reviewer claim is never published", async () => {
   expect(body.narrative.overview.text).not.toContain("diagnosis");
 });
 
-test("a repeatedly rejected passage remains held after scoped recovery is independently rejected", async () => {
+test("a repeatedly rejected passage publishes pinned guidance after bounded scoped recovery", async () => {
   const { call, request, getCalls, verifiedFixture } = await setup(step => step === "reviewer"
     ? { accepted: true, issues: [{ field: "overview", code: "UNSUPPORTED_CLAIM", evidenceIds: ["fact:niq_risk"] }] }
     : safeNarrative);
   const body = await (await call("report-content", request())).json();
-  expect(body.status).toBe("REVIEW_REQUIRED");
-  expect(body.generationMode).toBe("SECTION_FALLBACK");
-  expect(body.issues).toContain("overview:UNSUPPORTED_CLAIM");
-  expect(body.sectionOrigins.nutritionAdvice).toBe("agent");
+  expect(body.status).toBe("READY");
+  expect(body.generationMode).toBe("RULE_FALLBACK");
+  expect(body.issues).toEqual([]);
+  expect(body.model).toBe("rule-fallback");
   expect(plainPart(body.narrative.nutritionAdvice)).toEqual(plainPart(verifiedFixture.nutritionAdvice));
   expect(getCalls()).toBe(3);
 });
@@ -1205,7 +1205,7 @@ test("agent traces require an admin session and never enter deployment report or
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toBe("no-store");
   const trace = await response.json();
-  expect(trace.run.promptVersion).toContain("prompt101");
+  expect(trace.run.promptVersion).toContain("prompt102");
   expect(trace.calls.find((row: any) => row.step === "writer").user).toContain("Current weight");
   expect(trace.calls.find((row: any) => row.step === "reviewer").response).toEqual({ accepted: true, issues: [] });
   expect(trace.events.map((row: any) => row.stage)).toEqual(["run_started", "agent_review_complete", "run_complete"]);
@@ -1220,32 +1220,35 @@ test("fallback preserves agent rejection messages and final reasons in the priva
     ? { accepted: false, issues: [{ field: "nutritionAdvice", code: "UNCLEAR_WORDING", evidenceIds: ["rule:nutrition:nutrition_low"], reason }] }
     : safeNarrative);
   const body = await (await call("report-content", request())).json();
-  expect(body.generationMode).toBe("SECTION_FALLBACK");
-  expect(body.status).toBe("REVIEW_REQUIRED");
-  expect(body.sectionOrigins.nutritionAdvice).toBe("rule_fallback");
+  expect(body.generationMode).toBe("RULE_FALLBACK");
+  expect(body.status).toBe("READY");
+  expect(body.issues).toEqual([]);
   const trace = await traces.read(body.runId);
   expect(trace?.calls.some(row => row.step === "reviewer" && JSON.stringify(row.response).includes(reason))).toBe(true);
   const decision = trace?.events.find(row => row.stage === "agent_review_complete");
   expect(decision?.payload).toMatchObject({ status: "REVIEW_REQUIRED", issues: expect.arrayContaining(["nutritionAdvice:UNCLEAR_WORDING"]) });
-  expect(trace?.events.at(-1)?.payload).toEqual({ status: "REVIEW_REQUIRED", generationMode: "SECTION_FALLBACK" });
+  expect(trace?.events.find(row => row.stage === "fallback_selected")?.payload).toMatchObject({
+    code: "BOUNDED_REVIEW_EXHAUSTED", issues: expect.arrayContaining(["nutritionAdvice:UNCLEAR_WORDING"]),
+  });
+  expect(trace?.events.at(-1)?.payload).toEqual({ status: "READY", generationMode: "RULE_FALLBACK" });
   expect(JSON.stringify(body)).not.toContain(reason);
 });
 
 
-test("a timed-out source planner fails explicitly without publishing a rule fallback", async () => {
+test("a timed-out source planner publishes pinned guidance without invoking more agents", async () => {
   const { call, request, runs } = await setup(undefined, undefined, undefined, undefined, undefined, undefined,
     () => { throw new ReportModelError("MODEL_TIMEOUT"); });
   const response = await call("report-content", request());
-  expect(response.status).toBe(503);
+  expect(response.status).toBe(200);
   const body = await response.json();
-  expect(body.error).toBe("MODEL_SOURCE_CHECKLIST_FAILED");
+  expect(body).toMatchObject({status: "READY", generationMode: "RULE_FALLBACK"});
   const run = (await runs.list({ page: 1, pageSize: 10 })).items[0]!;
-  expect(run.status).toBe("FAILED");
+  expect(run.status).toBe("READY");
   expect(run.calls.some(call => call.step === "writer")).toBe(false);
 });
 
 
-test("an exhausted reviewer retains its technical cause without replaying the whole report", async () => {
+test("an exhausted reviewer completes the same durable job from pinned guidance without replaying agents", async () => {
   const steps: string[] = [];
   const f = await setup(step => {
     steps.push(step);
@@ -1257,37 +1260,33 @@ test("an exhausted reviewer retains its technical cause without replaying the wh
   const poll = await (await f.app.request(`/v1/assessments/report-content/jobs/${submitted.runId}`, {
     headers: {authorization: `Bearer ${f.token}`},
   })).json();
-  expect(poll).toMatchObject({status: "FAILED", attempts: 1, errorCode: "MODEL_OUTPUT_LIMIT", retryScheduled: false});
+  expect(poll).toMatchObject({status: "READY", attempts: 1, retryScheduled: false,
+    response: {status: "READY", generationMode: "RULE_FALLBACK"}});
   expect(steps).toEqual(["writer", "reviewer"]);
-  expect(f.runs.runs[0]?.response).toMatchObject({status: "REVIEW_REQUIRED", issues: ["MODEL_OUTPUT_LIMIT"]});
+  const trace = await f.traces.read(f.runs.runs[0]!.id);
+  expect(trace?.events.find(row => row.stage === "fallback_selected")?.payload).toMatchObject({issues: ["MODEL_OUTPUT_LIMIT"]});
+  expect(f.runs.runs).toHaveLength(1);
 });
 
-test("a failed planning attempt exposes worker-owned retry progress and resubmission keeps one job", async () => {
-  let now = Date.now();
-  const jobs = new MemoryReportContentJobStore(() => new Date(now));
-  const f = await setup(undefined, undefined, undefined, undefined, undefined, undefined, () => ({assignments: []}), jobs);
+test("an invalid source plan completes one durable job and resubmission reuses its fallback", async () => {
+  let plans = 0;
+  const f = await setup(undefined, undefined, undefined, undefined, undefined, undefined,
+    () => { plans++; return {assignments: []}; });
   const submitted = await (await f.call("report-content/jobs", f.request())).json();
   await f.jobTick();
   const poll = await (await f.app.request(`/v1/assessments/report-content/jobs/${submitted.runId}`, {
     headers: {authorization: `Bearer ${f.token}`},
   })).json();
-  expect(poll.status).toBe("QUEUED");
-  expect(poll.errorCode).toBe("MODEL_INVALID_SOURCE_CHECKLIST");
-  expect(poll.attempts).toBe(1);
-  expect(poll.retryScheduled).toBe(true);
-  expect(Date.parse(poll.nextAttemptAt)).toBeGreaterThan(Date.now());
+  expect(poll).toMatchObject({status: "READY", attempts: 1, retryScheduled: false, nextAttemptAt: null,
+    response: {status: "READY", generationMode: "RULE_FALLBACK"}});
   const again = await (await f.call("report-content/jobs", f.request())).json();
   expect(again.runId).toBe(submitted.runId);
+  await f.jobTick();
   expect(f.jobs.jobs).toHaveLength(1);
-  const claim = f.jobs.jobs[0]!;
-  expect(claim.status).toBe("QUEUED");
-  expect(claim.attempts).toBe(1);
-  for (let retry = 0; retry < 2; retry++) { now += 90_000; await f.jobTick(); }
-  const terminal = await (await f.app.request(`/v1/assessments/report-content/jobs/${submitted.runId}`, {
-    headers: {authorization: `Bearer ${f.token}`},
-  })).json();
-  expect(terminal).toMatchObject({status: "FAILED", attempts: 3, retryScheduled: false, nextAttemptAt: null});
-  expect(f.jobs.jobs).toHaveLength(1);
+  expect(f.runs.runs).toHaveLength(1);
+  expect(plans).toBe(1);
+  const trace = await f.traces.read(f.runs.runs[0]!.id);
+  expect(trace!.calls.every(call => call.step === "manager")).toBe(true);
 });
 
 test("narrative sentence capitalization is normalized before review without changing units", () => {
@@ -1295,4 +1294,24 @@ test("narrative sentence capitalization is normalized before review without chan
   const normalized = normalizeNarrativePunctuation(input) as typeof input;
   expect(normalized.monitoringSummary.text).toBe("Monitor intake. Your care team should adjust support if needed. Keep pH, 1.2 g/kg/day and e.g. your usual foods unchanged.");
   expect(input.monitoringSummary.text).toContain(". your care team");
+});
+
+
+test("a manager still rejecting the repaired narrative falls back in the same run with no extra calls", async () => {
+  let decisions = 0;
+  const f = await setup(undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+    () => { decisions++; return {decision: "fallback", issues: [{field: "nutritionAdvice",
+      evidenceIds: ["rule:nutrition:nutrition_low"], reason: "Retain the complete supplied nutrition guidance."}]}; });
+  const body = await (await f.call("report-content", f.request())).json();
+  expect(body).toMatchObject({status: "READY", generationMode: "RULE_FALLBACK", model: "rule-fallback", issues: []});
+  expect(plainNarrative(body.narrative)).toEqual(plainNarrative(f.verifiedFixture));
+  expect(decisions).toBe(2);
+  expect(f.runs.runs).toHaveLength(1);
+  const trace = await f.traces.read(body.runId);
+  expect(trace?.events.find(row => row.stage === "agent_review_complete")?.payload).toMatchObject({
+    status: "REVIEW_REQUIRED", issues: ["nutritionAdvice:MANAGER_REVIEW"],
+  });
+  const callCount = trace!.calls.length;
+  expect(await (await f.call("report-content", f.request())).json()).toEqual(body);
+  expect((await f.traces.read(body.runId))!.calls).toHaveLength(callCount);
 });
