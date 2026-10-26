@@ -1,5 +1,10 @@
 # Report agent tracing
 
+See [Report model output limits](report-output-limits.md) for OpenRouter stage
+budgets, bounded truncation retries and per-request usage accounting. One agent
+stage can now have multiple usage rows, with individual attempt metadata in its
+trace events.
+
 ## What is retained
 
 New report runs retain exact system and user/task prompts, response schemas, returned structured model content, usage/model metadata, dispatch order and timestamps in `report_trace_calls`. Calls are associated with both the run and its attempt. Requests are saved before inference, so an interrupted call remains pending rather than disappearing. Reclaimed attempts cannot update their predecessors' records.

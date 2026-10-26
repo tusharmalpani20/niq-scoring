@@ -255,8 +255,12 @@ export function installReportAiRoutes(app: Hono, options: {
         await jobStore.retry(job.id, job.attemptId, String(payload.error ?? "REPORT_GENERATION_FAILED"));
         return;
       }
+      // Technical failures held by the clinical coordinator are not clinical
+      // rejections. Preserve the safe cause without replaying manager/writer.
+      const modelIssue = payload.status === "REVIEW_REQUIRED" && Array.isArray(payload.issues)
+        ? payload.issues.find((issue: unknown) => typeof issue === "string" && /^MODEL_[A-Z0-9_]{1,64}$/.test(issue)) : undefined;
       await jobStore.finish(job.id, job.attemptId, status, status === "FAILED" ? null : payload,
-        status === "FAILED" ? String(payload.error ?? (payload.status === "REVIEW_REQUIRED" ? "AUTOMATIC_REVIEW_RECOVERY_FAILED" : "REPORT_GENERATION_FAILED")) : undefined);
+        status === "FAILED" ? String(payload.error ?? modelIssue ?? (payload.status === "REVIEW_REQUIRED" ? "AUTOMATIC_REVIEW_RECOVERY_FAILED" : "REPORT_GENERATION_FAILED")) : undefined);
     } catch {
       await jobStore.retry(job.id, job.attemptId, "REPORT_GENERATION_FAILED");
     }

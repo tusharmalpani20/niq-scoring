@@ -1245,6 +1245,23 @@ test("a timed-out source planner fails explicitly without publishing a rule fall
 });
 
 
+test("an exhausted reviewer retains its technical cause without replaying the whole report", async () => {
+  const steps: string[] = [];
+  const f = await setup(step => {
+    steps.push(step);
+    if (step === "reviewer") throw new ReportModelError("MODEL_OUTPUT_LIMIT", usage);
+    return safeNarrative;
+  });
+  const submitted = await (await f.call("report-content/jobs", f.request())).json();
+  await f.jobTick();
+  const poll = await (await f.app.request(`/v1/assessments/report-content/jobs/${submitted.runId}`, {
+    headers: {authorization: `Bearer ${f.token}`},
+  })).json();
+  expect(poll).toMatchObject({status: "FAILED", attempts: 1, errorCode: "MODEL_OUTPUT_LIMIT", retryScheduled: false});
+  expect(steps).toEqual(["writer", "reviewer"]);
+  expect(f.runs.runs[0]?.response).toMatchObject({status: "REVIEW_REQUIRED", issues: ["MODEL_OUTPUT_LIMIT"]});
+});
+
 test("a failed planning attempt exposes worker-owned retry progress and resubmission keeps one job", async () => {
   let now = Date.now();
   const jobs = new MemoryReportContentJobStore(() => new Date(now));
