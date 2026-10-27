@@ -1,0 +1,17 @@
+[Unit]
+Description=NIQ server resource threshold check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ghostpepper
+Group=ghostpepper
+UMask=0077
+ExecStart=/usr/bin/python3 /home/ghostpepper/niq/niq-scoring/ops/resource_monitor.py --config /home/ghostpepper/.config/niq/resource-monitor.json
+TimeoutStartSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/ghostpepper/.local/state/niq-resource-monitor
+

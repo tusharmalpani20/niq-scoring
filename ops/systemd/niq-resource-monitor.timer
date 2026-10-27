@@ -1,0 +1,12 @@
+[Unit]
+Description=Check NIQ server resources every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=15s
+Persistent=true
+Unit=niq-resource-monitor.service
+
+[Install]
+WantedBy=timers.target
