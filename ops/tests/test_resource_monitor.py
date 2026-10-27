@@ -163,5 +163,65 @@ class ResourceMonitorTests(unittest.TestCase):
             monitor.execute(self.config, runner=lambda config: [], checkin_sender=unavailable)
 
 
+    def test_complete_collector_delivery_retry_and_recovery_preserve_private_state(self):
+        # Run the public execute -> collect -> envelope path with fixture Linux
+        # counters and a fake HTTPS endpoint, including one rejected warning.
+        self.config.update({"heartbeat_enabled": True, "environment": "development"})
+        proc = self.root / "PRIVATE_PROC"
+        proc.mkdir()
+        (proc / "meminfo").write_text("MemTotal: 1000 kB\nMemAvailable: 700 kB\n")
+        usage = {"disk": 95}
+        attempts, accepted = [], []
+        reject_warning = [True]
+
+        class Response:
+            status = 200
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+
+        class Opener:
+            def open(_self, request, **kwargs):
+                self.assertEqual(request.full_url, "https://sentry.example/api/123/envelope/")
+                self.assertEqual(kwargs["timeout"], 15)
+                lines = request.data.decode().splitlines()
+                item, payload = json.loads(lines[1])["type"], json.loads(lines[2])
+                attempts.append((item, payload))
+                if item == "event" and reject_warning[0]:
+                    reject_warning[0] = False
+                    raise OSError("PRIVATE_NETWORK_ERROR")
+                accepted.append((item, payload))
+                return Response()
+
+        def runner(config):
+            return monitor.run(config, collector=lambda **args: monitor.collect(proc=proc, **args), now=1000)
+
+        with patch.object(monitor.urllib.request, "build_opener", return_value=Opener()), patch.object(
+                monitor.shutil, "disk_usage", side_effect=lambda path: type("Usage", (), {"used": usage["disk"], "total": 100})()):
+            for index, disk in enumerate([95, 96, 97, 98, 70, 70, 70], 1):
+                usage["disk"] = disk
+                (proc / "stat").write_text(f"cpu {index * 10} 0 0 {index * 90} 0 0 0 0\n")
+                if index == 2:
+                    with self.assertRaisesRegex(OSError, "PRIVATE_NETWORK_ERROR"):
+                        monitor.execute(self.config, runner=runner)
+                    # Rejected delivery did not consume the threshold transition.
+                    self.assertFalse(monitor.read_private_json(self.state)["metrics"]["disk_1"]["active"])
+                else:
+                    monitor.execute(self.config, runner=runner)
+
+        events = [payload for item, payload in accepted if item == "event"]
+        self.assertEqual([event["level"] for event in events], ["warning", "info"])
+        self.assertEqual([event["extra"]["transitions"][0]["status"] for event in events], ["high", "recovered"])
+        self.assertEqual(len([item for item, _ in attempts if item == "event"]), 3)
+        self.assertEqual([payload["status"] for item, payload in accepted if item == "check_in"], ["ok", "error", "ok", "ok", "ok", "ok", "ok"])
+        self.assertFalse(monitor.read_private_json(self.state)["metrics"]["disk_1"]["active"])
+        body = json.dumps(accepted)
+        for private in ["PRIVATE_", str(self.root), "filesystem_paths", "state_path", "dsn", "process"]:
+            self.assertNotIn(private, body)
+        # Recovery is an informational issue, not an implicit resolution request.
+        self.assertNotEqual(events[0]["fingerprint"], events[1]["fingerprint"])
+
+
 if __name__ == "__main__":
     unittest.main()

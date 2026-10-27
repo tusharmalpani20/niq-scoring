@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test, spyOn } from "bun:test";
 import * as Sentry from "@sentry/bun";
 import { initializeMonitoring, captureOperationalFailure } from "./monitoring";
 
@@ -52,4 +52,27 @@ test("different safe causes and technical locations are captured within the same
     expect(sent).not.toContain("PRIVATE_PATIENT");
     expect(sent).not.toContain("private-user");
   } finally { await Sentry.close(1000); }
+});
+
+
+test("a recurring issue is suppressed briefly and reported again after the throttle expires", async () => {
+  const envelopes: unknown[] = [];
+  const transport = () => ({ send: async (envelope: unknown) => { envelopes.push(envelope); return { statusCode: 200 }; }, flush: async () => true });
+  initializeMonitoring({ NODE_ENV: "development", SENTRY_DSN: "https://public@example.com/1" }, transport);
+  let now = Date.now() + 120_000;
+  const clock = spyOn(Date, "now").mockImplementation(() => now);
+  const error = () => Object.assign(new Error("PRIVATE_RECOVERY_DETAIL"), {
+    stack: "Error: PRIVATE_RECOVERY_DETAIL\n at recover (/private/worker.ts:78:4)",
+  });
+  try {
+    captureOperationalFailure("face_scan_recovery", error());
+    captureOperationalFailure("face_scan_recovery", error());
+    await Sentry.flush(1000);
+    expect(envelopes).toHaveLength(1);
+    now += 60_001;
+    captureOperationalFailure("face_scan_recovery", error());
+    await Sentry.flush(1000);
+    expect(envelopes).toHaveLength(2);
+    expect(JSON.stringify(envelopes)).not.toContain("PRIVATE_RECOVERY_DETAIL");
+  } finally { clock.mockRestore(); await Sentry.close(1000); }
 });

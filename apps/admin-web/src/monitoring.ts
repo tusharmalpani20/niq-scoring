@@ -1,12 +1,14 @@
 import * as Sentry from "@sentry/react";
 import { sanitizeMonitoringEvent } from "@niq/monitoring";
 
-export function initializeMonitoring() {
-  if (!import.meta.env.VITE_SENTRY_DSN || import.meta.env.MODE === "test") return;
+export function initializeMonitoring(env: Record<string, string | undefined> = import.meta.env,
+  transport?: NonNullable<Parameters<typeof Sentry.init>[0]>["transport"]) {
+  if (!env.VITE_SENTRY_DSN || env.MODE === "test") return;
   try { Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN,
-    environment: import.meta.env.VITE_SENTRY_ENVIRONMENT || import.meta.env.MODE,
-    release: import.meta.env.VITE_SENTRY_RELEASE,
+    ...(transport ? { transport } : {}),
+    dsn: env.VITE_SENTRY_DSN,
+    environment: env.VITE_SENTRY_ENVIRONMENT || env.MODE,
+    release: env.VITE_SENTRY_RELEASE,
     defaultIntegrations: false,
     dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [],
       urlQueryParams: false, genAI: { inputs: false, outputs: false }, mcp: { inputs: false, outputs: false },
