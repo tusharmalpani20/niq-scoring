@@ -1,3 +1,4 @@
+import { captureOperationalFailure } from "./monitoring";
 import type { Context, Hono } from "hono";
 import { z } from "zod";
 import { isFinalAssessmentDefinition, versionedRuleDefinitionSchema } from "@niq-scoring/contracts/versioned-definition";
@@ -142,6 +143,7 @@ export function installReportAiRoutes(app: Hono, options: {
       try { await recordTrace("run_started", { promptVersion, schemaVersion: REPORT_AI_SCHEMA_VERSION, checksum: binding.checksum }); }
       catch (error) {
         if (error instanceof ReportAttemptLost) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
+        captureOperationalFailure("trace_storage", error);
         await runStore.finish(runId, attemptId, "FAILED", null, "REPORT_TRACE_UNAVAILABLE");
         return c.json({ error: "REPORT_TRACE_UNAVAILABLE", runId }, 503);
       }
@@ -150,6 +152,7 @@ export function installReportAiRoutes(app: Hono, options: {
         catch (error) {
           if (error instanceof ReportAttemptLost) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
           const code = error instanceof ReportFallbackError || error instanceof ReportTraceError ? error.code : "REPORT_GENERATION_FAILED";
+          captureOperationalFailure("report_generation", error);
           await runStore.finish(runId, attemptId, "FAILED", null, code);
           return c.json({ error: code, runId }, 422);
         }
@@ -198,6 +201,7 @@ export function installReportAiRoutes(app: Hono, options: {
             if (traceError instanceof ReportAttemptLost) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
           }
         }
+        captureOperationalFailure("report_generation", error);
         if (!await runStore.finish(runId, attemptId, "FAILED", null, code)) return c.json({ error: "REQUEST_IN_PROGRESS" }, 409);
         return c.json({ error: code, runId },
           error instanceof ReportFallbackError ? 422 : error instanceof ReportModelError && error.code === "MODEL_PAYMENT_REQUIRED" ? 402 : 503);
@@ -265,9 +269,11 @@ export function installReportAiRoutes(app: Hono, options: {
       // rejections. Preserve the safe cause without replaying manager/writer.
       const modelIssue = payload.status === "REVIEW_REQUIRED" && Array.isArray(payload.issues)
         ? payload.issues.find((issue: unknown) => typeof issue === "string" && /^MODEL_[A-Z0-9_]{1,64}$/.test(issue)) : undefined;
+      if (status === "FAILED") captureOperationalFailure("report_generation");
       await jobStore.finish(job.id, job.attemptId, status, status === "FAILED" ? null : payload,
         status === "FAILED" ? String(payload.error ?? modelIssue ?? (payload.status === "REVIEW_REQUIRED" ? "AUTOMATIC_REVIEW_RECOVERY_FAILED" : "REPORT_GENERATION_FAILED")) : undefined);
-    } catch {
+    } catch (error) {
+      captureOperationalFailure("report_worker", error);
       await jobStore.retry(job.id, job.attemptId, "REPORT_GENERATION_FAILED");
     }
   };

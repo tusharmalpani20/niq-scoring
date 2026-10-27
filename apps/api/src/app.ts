@@ -1,3 +1,4 @@
+import { captureOperationalFailure } from "./monitoring";
 import { installFaceScanRoutes } from "./face-scan-routes";
 import type { FaceScanWorkflow } from "./face-scan-workflow";
 import { installOrganizationInfoRoute } from "./organization-info";
@@ -362,7 +363,11 @@ export function createApp(options: AppOptions) {
   });
 
   app.notFound((context) => context.json({ error: "NOT_FOUND" }, 404));
-  app.onError((error, context) => error instanceof RuleStoreError ? context.json({ error: error.code }, 409) : context.json({ error: "INTERNAL_ERROR" }, 500));
+  app.onError((error, context) => {
+    if (error instanceof RuleStoreError) return context.json({ error: error.code }, 409);
+    captureOperationalFailure("api_request", error);
+    return context.json({ error: "INTERNAL_ERROR" }, 500);
+  });
   return app;
 }
 

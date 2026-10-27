@@ -17,10 +17,12 @@
     "@niq-scoring/contracts": "workspace:*",
     "@niq-scoring/entitlements": "workspace:*",
     "@niq-scoring/scoring-engine": "workspace:*",
+    "@sentry/bun": "11.9.0",
     "drizzle-orm": "^0.44.5",
     "hono": "^4.9.6",
     "postgres": "^3.4.7",
-    "zod": "^4.1.5"
+    "zod": "^4.1.5",
+    "@niq/monitoring": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "^1.2.21",

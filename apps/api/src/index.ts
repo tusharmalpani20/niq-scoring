@@ -1,3 +1,4 @@
+import { initializeMonitoring, captureOperationalFailure } from "./monitoring";
 import { FaceScanWorkflow } from "./face-scan-workflow";
 import { HttpCarePlixProvider } from "./careplix-provider";
 import { parseEnvironment } from "@niq-scoring/config";
@@ -12,6 +13,7 @@ import { PostgresReportContentJobStore } from "./report-content-job-store";
 import { OpenRouterReportClient } from "./openrouter-report-client";
 import { CodexProxyReportClient } from "./codex-proxy-report-client";
 
+initializeMonitoring();
 const environment = parseEnvironment(Bun.env);
 const database = postgres(environment.DATABASE_URL, { max: 2, idle_timeout: 10 });
 const workflow = environment.FACE_SCAN_ENCRYPTION_KEY && environment.CAREPLIX_ACCOUNT_REFERENCE
@@ -95,7 +97,7 @@ if (workflow) setInterval(async () => {
   if (workerRunning) return;
   workerRunning = true;
   try { await workflow.tick(); if (++workerTicks % 12 === 0) console.info(JSON.stringify({ event: "face_scan_worker_metrics", ...await workflow.metrics() })); }
-  catch { console.error(JSON.stringify({ event: "face_scan_worker_error" })); }
+  catch (error) { captureOperationalFailure("face_scan_recovery", error); console.error(JSON.stringify({ event: "face_scan_worker_error" })); }
   finally { workerRunning = false; }
 }, 5_000);
 
@@ -105,6 +107,7 @@ setInterval(async () => {
   reportWorkerRunning = true;
   try { await reportJobTick(); }
   catch (error) {
+    captureOperationalFailure("report_worker", error);
     const failure = error as { name?: string; code?: string; message?: string };
     console.error(JSON.stringify({ event: "report_worker_error", name: failure?.name ?? "UnknownError",
       code: failure?.code ?? null, message: failure?.message?.slice(0, 200) ?? "Report worker failed" }));
@@ -116,7 +119,7 @@ setInterval(async () => {
 // bounded batches. Usage metadata and report records have separate lifetimes.
 const pruneReportTraces = async () => {
   try { await reportTraceStore.pruneExpired(); }
-  catch { console.error(JSON.stringify({ event: "report_trace_cleanup_failed" })); }
+  catch (error) { captureOperationalFailure("trace_storage", error); console.error(JSON.stringify({ event: "report_trace_cleanup_failed" })); }
 };
 void pruneReportTraces();
 setInterval(pruneReportTraces, 60 * 60 * 1000);
