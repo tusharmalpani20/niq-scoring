@@ -239,6 +239,13 @@
       "when": 1792757376591,
       "tag": "0033_historical_face_scan_reuse",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793059200000,
+      "tag": "0034_byoc_request_recovery",
+      "breakpoints": true
     }
   ]
 }

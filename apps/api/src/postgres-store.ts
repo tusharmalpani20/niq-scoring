@@ -2,7 +2,7 @@ import { assertAssignmentEligible } from "./version-eligibility";
 import { postgresBindAssessment } from "./postgres-assessment-binding";
 import { postgresOrganizationInfo } from "./postgres-organization-info";
 import type { BindingInput } from "./assessment-binding";
-import type { ReserveInput } from "./store";
+import { ScoringLeaseLostError, SCORING_LEASE_MS, type ReserveInput, type ActivationExchangeInput } from "./store";
 import { PostgresRuleStore } from "./postgres-rule-store";
 import { DuplicateClientNameError } from "./lib/client-name";
 import { postgresDeletion, type RecordKind } from "./record-deletion";
@@ -355,14 +355,19 @@ export class PostgresScoringStore implements ScoringStore {
       return "REVOKED";
     });
   }
-  async exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
+  async exchangeActivation(input: ActivationExchangeInput) {
     return this.database.begin(async (tx) => {
-      const [token] = await tx<Array<{ id: string; deploymentId: string }>>`select id, deployment_id as "deploymentId" from activation_tokens where token_hash=${input.tokenHash} and used_at is null and revoked_at is null and (expires_at is null or expires_at>${input.now}) for update`;
+      const [token] = await tx<Array<{ id: string; deploymentId: string; usedAt: Date | null; requestHash: string | null; clientReference: string | null; credentialId: string | null }>>`select id, deployment_id as "deploymentId", used_at as "usedAt", exchange_request_hash as "requestHash", exchange_client_reference as "clientReference", credential_id as "credentialId" from activation_tokens where token_hash=${input.tokenHash} and revoked_at is null and (expires_at is null or expires_at>${input.now}) for update`;
       if (!token) return null;
+      if (token.usedAt) {
+        if (!input.requestHash || token.requestHash !== input.requestHash || token.clientReference !== (input.clientReference ?? null) || token.usedAt.getTime() + 15 * 60_000 <= input.now.getTime()) return null;
+        const [active] = await tx<Array<{ clientId: string }>>`select d.client_id as "clientId" from deployment_credentials c join deployments d on d.id=c.deployment_id where c.id=${token.credentialId} and c.deployment_id=${token.deploymentId} and c.secret_hash=${input.secretHash} and c.revoked_at is null and (c.expires_at is null or c.expires_at>${input.now}) for share of c`;
+        return active ? { deploymentId: token.deploymentId, clientId: active.clientId } : null;
+      }
       const [client] = await tx<Array<{ clientId: string }>>`select client.id as "clientId" from deployments link join clients client on client.id=link.client_id where link.id=${token.deploymentId}`;
       if (!client) return null;
       await tx`insert into deployment_credentials (id, deployment_id, key_prefix, secret_hash, hash_algorithm) values (${input.credentialId}, ${token.deploymentId}, ${input.keyPrefix}, ${input.secretHash}, 'sha256')`;
-      await tx`update activation_tokens set used_at=${input.now}, token_ciphertext=null, credential_id=${input.credentialId} where id=${token.id} and deployment_id=${token.deploymentId}`;
+      await tx`update activation_tokens set used_at=${input.now}, token_ciphertext=null, credential_id=${input.credentialId}, exchange_request_hash=${input.requestHash ?? null}, exchange_client_reference=${input.clientReference ?? null} where id=${token.id} and deployment_id=${token.deploymentId}`;
       return { deploymentId: token.deploymentId, clientId: client.clientId };
     });
   }
@@ -378,34 +383,42 @@ export class PostgresScoringStore implements ScoringStore {
       if (!scope) return { status: "REJECTED", reason: "CLIENT_NOT_ALLOWED" };
       const [entitlement] = await tx<Array<{ enabled: boolean; monthlyLimit: number | null }>>`select enabled, monthly_limit as "monthlyLimit" from entitlements where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and effective_until is null for update`;
       if (!entitlement?.enabled) return { status: "REJECTED", reason: "CAPABILITY_DISABLED" };
-      const [duplicate] = await tx<Array<{ id: string; outcome: string; response: unknown; fingerprint: string | null }>>`select id, outcome, response_payload as response, request_fingerprint as fingerprint from usage_events where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and idempotency_key=${input.idempotencyKey}`;
+      const [duplicate] = await tx<Array<{ id: string; outcome: string; response: unknown; fingerprint: string | null; leaseExpiresAt: Date | null; occurredAt: Date }>>`select id, outcome, response_payload as response, request_fingerprint as fingerprint, lease_expires_at as "leaseExpiresAt", occurred_at as "occurredAt" from usage_events where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and idempotency_key=${input.idempotencyKey}`;
       if (!input.platformEnabled || !scope.clientEnabled || !scope.deploymentEnabled) return { status: "REJECTED", reason: !input.platformEnabled ? "PLATFORM_DISABLED" : !scope.clientEnabled ? "CLIENT_DISABLED" : "DEPLOYMENT_DISABLED" };
       if (duplicate && duplicate.fingerprint !== (input.fingerprint ?? null)) return { status: "REJECTED", reason: "IDEMPOTENCY_CONFLICT" };
       if (duplicate?.response != null) return { status: "DUPLICATE", usageId: duplicate.id, response: duplicate.response };
-      if (duplicate?.outcome === "PENDING") return { status: "REJECTED", reason: "REQUEST_IN_PROGRESS" };
+      // Only synchronous scoring may restart after a crash. A pending scan may
+      // already have been dispatched to a paid provider, so its workflow owns recovery.
+      if (duplicate?.outcome === "PENDING" && (input.capability !== "SCORING" || (duplicate.leaseExpiresAt?.getTime() ?? duplicate.occurredAt.getTime() + SCORING_LEASE_MS) > Date.now())) return { status: "REJECTED", reason: "REQUEST_IN_PROGRESS" };
       const [assignment] = await tx<Array<{ mode: "LATEST_APPROVED" | "PINNED"; scoringRuleVersionId: string | null }>>`select mode, scoring_rule_version_id as "scoringRuleVersionId" from deployment_version_assignments where deployment_id=${input.identity.deploymentId} and effective_until is null`;
       const [resolvedVersion] = assignment?.mode === "PINNED"
         ? await tx<Array<{ id: string; version: string }>>`select id, version from scoring_rule_versions where id=${assignment.scoringRuleVersionId}`
         : await tx<Array<{ id: string; version: string }>>`select id, version from scoring_rule_versions where lifecycle in ('APPROVED','ACTIVE') order by approved_at desc nulls last, created_at desc limit 1`;
       const [bound] = input.binding ? await tx`select id from assessment_bindings where id=${input.binding.id} and deployment_id=${input.identity.deploymentId} and assessment_reference=${input.assessmentReference} and scoring_rule_version_id=${input.binding.ruleVersionId} and package_checksum=${input.binding.checksum}` : [];
-      const [count] = await tx<Array<{ value: number }>>`select count(*)::int as value from usage_events where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and (billable=true or outcome='PENDING') and occurred_at >= (date_trunc('month', now() at time zone 'UTC') at time zone 'UTC')`;
+      const [count] = await tx<Array<{ value: number }>>`select count(*)::int as value from usage_events where deployment_id=${input.identity.deploymentId} and capability=${input.capability} and (billable=true or outcome='PENDING') and (${duplicate?.id ?? null}::varchar is null or id<>${duplicate?.id ?? null}) and occurred_at >= (date_trunc('month', now() at time zone 'UTC') at time zone 'UTC')`;
       const decision = decideEntitlement({ platformEnabled: input.platformEnabled, clientEnabled: scope.clientEnabled, deploymentEnabled: scope.deploymentEnabled, versionActive: input.capability === "FACE_SCAN" || Boolean(bound) || resolvedVersion?.version === PROVISIONAL_SCORING_VERSION, monthlyLimit: entitlement.monthlyLimit, monthlyUsage: count?.value ?? 0 });
       if (!decision.allowed) return { status: "REJECTED", reason: decision.reason };
       const usageId = duplicate?.id ?? createEntityId();
-      if (duplicate) await tx`update usage_events set outcome='PENDING', response_payload=null, completed_at=null, occurred_at=now(), request_fingerprint=${input.fingerprint ?? null}, scoring_rule_version_id=${input.binding?.ruleVersionId ?? null} where id=${usageId}`;
-      else await tx`insert into usage_events (id, client_id, deployment_id, credential_id, capability, request_id, idempotency_key, assessment_reference, request_fingerprint, scoring_rule_version_id, outcome) values (${usageId}, ${input.clientId}, ${input.identity.deploymentId}, ${input.identity.credentialId}, ${input.capability}, ${input.idempotencyKey}, ${input.idempotencyKey}, ${input.assessmentReference}, ${input.fingerprint ?? null}, ${input.binding?.ruleVersionId ?? null}, 'PENDING')`;
-      return { status: "NEW", usageId, version: resolvedVersion?.version ?? PROVISIONAL_SCORING_VERSION };
+      // Each takeover gets a new fence; an old process cannot complete or fail it.
+      const leaseToken = input.capability === "SCORING" ? createEntityId() : null;
+      const leaseExpiresAt = leaseToken ? new Date(Date.now() + SCORING_LEASE_MS) : null;
+      if (duplicate) await tx`update usage_events set lease_token=${leaseToken}, lease_expires_at=${leaseExpiresAt}, outcome='PENDING', response_payload=null, completed_at=null, occurred_at=now(), request_fingerprint=${input.fingerprint ?? null}, scoring_rule_version_id=${input.binding?.ruleVersionId ?? null} where id=${usageId}`;
+      else await tx`insert into usage_events (id, client_id, deployment_id, credential_id, capability, request_id, idempotency_key, assessment_reference, request_fingerprint, scoring_rule_version_id, lease_token, lease_expires_at, outcome) values (${usageId}, ${input.clientId}, ${input.identity.deploymentId}, ${input.identity.credentialId}, ${input.capability}, ${input.idempotencyKey}, ${input.idempotencyKey}, ${input.assessmentReference}, ${input.fingerprint ?? null}, ${input.binding?.ruleVersionId ?? null}, ${leaseToken}, ${leaseExpiresAt}, 'PENDING')`;
+      return { status: "NEW", usageId, version: resolvedVersion?.version ?? PROVISIONAL_SCORING_VERSION, ...(leaseToken ? { leaseToken } : {}) };
     });
   }
-  async completeUsage(usageId: string, response: unknown) { await this.database`update usage_events set outcome='SUCCEEDED', billable=true, response_payload=${this.database.json(response as never)}, completed_at=now() where id=${usageId} and outcome='PENDING'`; }
+  async completeUsage(usageId: string, response: unknown, leaseToken?: string) {
+    const rows = await this.database`update usage_events set outcome='SUCCEEDED', billable=true, response_payload=${this.database.json(response as never)}, completed_at=now() where id=${usageId} and outcome='PENDING' and (lease_token is null or (lease_token=${leaseToken ?? null} and lease_expires_at>now())) returning id`;
+    if (!rows.length) throw new ScoringLeaseLostError();
+  }
   async completedScoringResult(input: { identity: DeploymentIdentity; assessmentReference: string; resultReference: string }): Promise<unknown | null> {
     const [row] = await this.database<Array<{ response: unknown }>>`select response_payload as response from usage_events
       where id=${input.resultReference} and client_id=${input.identity.clientId} and deployment_id=${input.identity.deploymentId}
         and assessment_reference=${input.assessmentReference} and capability='SCORING' and outcome='SUCCEEDED'`;
     return row?.response ?? null;
   }
-  async storePendingUsageResponse(usageId: string, response: unknown) { await this.database`update usage_events set response_payload=${this.database.json(response as never)} where id=${usageId} and outcome='PENDING'`; }
-  async failUsage(usageId: string) { await this.database`update usage_events set outcome='FAILED', completed_at=now() where id=${usageId} and outcome='PENDING'`; }
+  async storePendingUsageResponse(usageId: string, response: unknown) { await this.database`update usage_events set response_payload=${this.database.json(response as never)} where id=${usageId} and outcome='PENDING' and lease_token is null`; }
+  async failUsage(usageId: string, leaseToken?: string) { await this.database`update usage_events set outcome='FAILED', completed_at=now() where id=${usageId} and outcome='PENDING' and (lease_token is null or (lease_token=${leaseToken ?? null} and lease_expires_at>now()))`; }
   async createFaceScanSession(input: { identity: DeploymentIdentity; clientId: string; usageId: string; assessmentReference: string; idempotencyKey: string; provider: string; providerSessionReference?: string }) {
     const id = createEntityId();
     const [row] = await this.database<Array<{ id: string; state: "REQUESTED" }>>`insert into face_scan_sessions (id, client_id, deployment_id, assessment_reference, provider, provider_session_reference, idempotency_key) values (${id}, ${input.clientId}, ${input.identity.deploymentId}, ${input.assessmentReference}, ${input.provider}, ${input.providerSessionReference ?? null}, ${input.idempotencyKey}) returning id, state`;

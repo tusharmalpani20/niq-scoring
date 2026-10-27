@@ -83,6 +83,8 @@ export const activationTokens = pgTable("activation_tokens", {
   tokenHash: varchar("token_hash", { length: 64 }).notNull(),
   tokenCiphertext: text("token_ciphertext"),
   credentialId: varchar("credential_id", { length: 26 }),
+  exchangeRequestHash: varchar("exchange_request_hash", { length: 64 }),
+  exchangeClientReference: varchar("exchange_client_reference", { length: 26 }),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
   usedAt: timestamp("used_at", { withTimezone: true }),
@@ -183,6 +185,8 @@ export const usageEvents = pgTable("usage_events", {
   billable: boolean("billable").notNull().default(false),
   requestFingerprint: varchar("request_fingerprint", { length: 64 }),
   responsePayload: jsonb("response_payload"),
+  leaseToken: varchar("lease_token", { length: 26 }),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

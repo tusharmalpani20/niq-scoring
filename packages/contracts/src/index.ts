@@ -144,6 +144,8 @@ export type DeploymentConfiguration = z.infer<typeof deploymentConfigurationSche
 
 export const activationExchangeSchema = z.object({
   activationToken: z.string().min(48).max(256),
+  activationRequestId: z.uuid().optional(),
+  clientReference: z.string().regex(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/).optional(),
 });
 
 export type CreateClient = z.infer<typeof createClientSchema>;

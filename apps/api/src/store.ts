@@ -25,6 +25,10 @@ import { clampPage, pageResult, type ListPage } from "./list-page";
 import { deploymentDisplayLabel } from "./deployment-display-label";
 import { MemoryProductCatalog, type ProductCatalog } from "./product-catalog";
 
+export type ActivationExchangeInput = { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; requestHash?: string; clientReference?: string; now: Date };
+export const SCORING_LEASE_MS = 120_000;
+export class ScoringLeaseLostError extends Error { constructor() { super("SCORING_LEASE_LOST"); } }
+
 export type StoredActivationToken = { id: string; tokenHash: string; tokenCiphertext: string; expiresAt: Date | null };
 export type TokenRecord = { id: string; expiresAt: Date | null; createdAt: Date; usedAt: Date | null; revokedAt: Date | null; canCopy: boolean; credentialStatus: "Active" | "Revoked" | "Expired" | null };
 export type CredentialRevocation = "REVOKED" | "ALREADY_REVOKED" | "UNAVAILABLE";
@@ -40,7 +44,7 @@ export type DeploymentIdentity = { credentialId: string; deploymentId: string; c
 export type RuleUsage = { ruleVersionId: string | null; name: string; count: number };
 
 export type UsageReservation =
-  | { status: "NEW"; usageId: string; version: string }
+  | { status: "NEW"; usageId: string; version: string; leaseToken?: string }
   | { status: "DUPLICATE"; usageId: string; response: unknown }
   | { status: "REJECTED"; reason: string };
 
@@ -77,19 +81,19 @@ export interface ScoringStore {
   listActivationTokens(deploymentId: string): Promise<TokenRecord[]>;
   revokeActivationToken(deploymentId: string, tokenId: string, now: Date, audit?: AdminMutationAudit): Promise<boolean>;
   revokeTokenCredential(deploymentId: string, tokenId: string, now: Date, audit?: AdminMutationAudit): Promise<CredentialRevocation>;
-  exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }): Promise<{ deploymentId: string; clientId: string } | null>;
+  exchangeActivation(input: ActivationExchangeInput): Promise<{ deploymentId: string; clientId: string } | null>;
   authenticateDeployment(keyPrefix: string, secretHash: string): Promise<DeploymentIdentity | null>;
   completedScoringResult(input: { identity: DeploymentIdentity; assessmentReference: string; resultReference: string }): Promise<unknown | null>;
   reserveUsage(input: ReserveInput): Promise<UsageReservation>;
-  completeUsage(usageId: string, response: unknown): Promise<void>;
+  completeUsage(usageId: string, response: unknown, leaseToken?: string): Promise<void>;
   storePendingUsageResponse(usageId: string, response: unknown): Promise<void>;
-  failUsage(usageId: string): Promise<void>;
+  failUsage(usageId: string, leaseToken?: string): Promise<void>;
   createFaceScanSession(input: { identity: DeploymentIdentity; clientId: string; usageId: string; assessmentReference: string; idempotencyKey: string; provider: string; providerSessionReference?: string }): Promise<{ id: string; state: "REQUESTED" }>;
 }
 
 type Credential = DeploymentIdentity & { keyPrefix: string; secretHash: string; revokedAt?: Date | null; expiresAt?: Date | null };
-type Activation = Omit<StoredActivationToken, "tokenCiphertext"> & { tokenCiphertext: string | null; deploymentId: string; credentialId: string | null; usedAt: Date | null; revokedAt: Date | null; createdAt: Date };
-type Usage = { occurredAt: Date; fingerprint?: string; ruleVersionId?: string; id: string; clientId: string; deploymentId: string; assessmentReference?: string; capability: Capability; idempotencyKey: string; response?: unknown; outcome: "PENDING" | "SUCCEEDED" | "FAILED" };
+type Activation = Omit<StoredActivationToken, "tokenCiphertext"> & { tokenCiphertext: string | null; deploymentId: string; credentialId: string | null; requestHash?: string; clientReference?: string; usedAt: Date | null; revokedAt: Date | null; createdAt: Date };
+type Usage = { occurredAt: Date; leaseToken?: string; leaseExpiresAt?: Date; fingerprint?: string; ruleVersionId?: string; id: string; clientId: string; deploymentId: string; assessmentReference?: string; capability: Capability; idempotencyKey: string; response?: unknown; outcome: "PENDING" | "SUCCEEDED" | "FAILED" };
 
 /** Deterministic in-process implementation used by unit tests; production uses PostgreSQL. */
 export class MemoryScoringStore implements ScoringStore {
@@ -277,13 +281,20 @@ export class MemoryScoringStore implements ScoringStore {
     this.logAdmin(audit, "DEPLOYMENT_CREDENTIAL_REVOKED", "DEPLOYMENT_CREDENTIAL", credential.credentialId, { deploymentId, tokenId });
     return "REVOKED";
   }
-  async exchangeActivation(input: { tokenHash: string; credentialId: string; keyPrefix: string; secretHash: string; now: Date }) {
-    const token = this.activations.find((item) => item.tokenHash === input.tokenHash && !item.usedAt && !item.revokedAt && (!item.expiresAt || item.expiresAt > input.now));
+  async exchangeActivation(input: ActivationExchangeInput) {
+    const token = this.activations.find((item) => item.tokenHash === input.tokenHash && !item.revokedAt && (!item.expiresAt || item.expiresAt > input.now));
     if (!token) return null;
+    if (token.usedAt) {
+      const credential = this.credentials.find(c => c.credentialId === token.credentialId && c.deploymentId === token.deploymentId && !c.revokedAt && (!c.expiresAt || c.expiresAt > input.now) && c.secretHash === input.secretHash);
+      return input.requestHash && token.requestHash === input.requestHash && token.clientReference === input.clientReference && token.usedAt.getTime() + 15 * 60_000 > input.now.getTime() && credential
+        ? { deploymentId: token.deploymentId, clientId: credential.clientId } : null;
+    }
     const deployment = this.deployments.find((item) => item.id === token.deploymentId)!;
     const client = this.clients.find((item) => deployment.clientId === item.id);
     if (!client) return null;
     token.usedAt = input.now;
+    if (input.requestHash) token.requestHash = input.requestHash;
+    if (input.clientReference) token.clientReference = input.clientReference;
     token.credentialId = input.credentialId;
     token.tokenCiphertext = null;
     this.credentials.push({ credentialId: input.credentialId, deploymentId: token.deploymentId, clientId: deployment.clientId, keyPrefix: input.keyPrefix, secretHash: input.secretHash });
@@ -345,30 +356,31 @@ export class MemoryScoringStore implements ScoringStore {
     if (!input.platformEnabled || !client.enabled || !deployment.enabled) return { status: "REJECTED", reason: !input.platformEnabled ? "PLATFORM_DISABLED" : !client.enabled ? "CLIENT_DISABLED" : "DEPLOYMENT_DISABLED" };
     if (duplicate && duplicate.fingerprint !== input.fingerprint) return { status: "REJECTED", reason: "IDEMPOTENCY_CONFLICT" };
     if (duplicate?.response !== undefined) return { status: "DUPLICATE", usageId: duplicate.id, response: duplicate.response };
-    if (duplicate?.outcome === "PENDING") return { status: "REJECTED", reason: "REQUEST_IN_PROGRESS" };
+    if (duplicate?.outcome === "PENDING" && (input.capability !== "SCORING" || (duplicate.leaseExpiresAt?.getTime() ?? duplicate.occurredAt.getTime() + SCORING_LEASE_MS) > Date.now())) return { status: "REJECTED", reason: "REQUEST_IN_PROGRESS" };
     const assignment = this.assignments.find((item) => item.deploymentId === input.identity.deploymentId);
     const resolvedVersion = assignment?.mode === "PINNED"
       ? this.versions.find((item) => item.id === assignment.scoringRuleVersionId)
       : this.versions.find((item) => item.lifecycle === "APPROVED" || item.lifecycle === "ACTIVE");
-    const usage = this.usages.filter((item) => item.deploymentId === input.identity.deploymentId && item.capability === input.capability && item.outcome !== "FAILED").length;
+    const usage = this.usages.filter((item) => item.deploymentId === input.identity.deploymentId && item.capability === input.capability && item.outcome !== "FAILED" && item.id !== duplicate?.id).length;
     const decision = decideEntitlement({ platformEnabled: input.platformEnabled, clientEnabled: Boolean(client?.enabled), deploymentEnabled: Boolean(deployment.enabled), versionActive: input.capability === "FACE_SCAN" || Boolean(input.binding && this.bindings.some(b => b.id === input.binding!.id && b.deploymentId === deployment.id && b.assessmentReference === input.assessmentReference && b.checksum === input.binding!.checksum)) || resolvedVersion?.version === PROVISIONAL_SCORING_VERSION, monthlyLimit: entitlement?.monthlyLimit ?? null, monthlyUsage: usage });
     if (!entitlement?.enabled) return { status: "REJECTED", reason: "CAPABILITY_DISABLED" };
     if (!decision.allowed) return { status: "REJECTED", reason: decision.reason };
     const event: Usage = duplicate ?? { occurredAt: new Date(), id: createEntityId(), clientId: input.clientId, deploymentId: input.identity.deploymentId, assessmentReference: input.assessmentReference, capability: input.capability, idempotencyKey: input.idempotencyKey, outcome: "PENDING" as const };
     event.outcome = "PENDING";
     event.occurredAt = new Date();
+    if (input.capability === "SCORING") { event.leaseToken = createEntityId(); event.leaseExpiresAt = new Date(Date.now() + SCORING_LEASE_MS); }
     if (input.fingerprint) event.fingerprint = input.fingerprint;
     if (input.binding) event.ruleVersionId = input.binding.ruleVersionId;
     if (!duplicate) this.usages.push(event);
-    return { status: "NEW", usageId: event.id, version: resolvedVersion?.version ?? PROVISIONAL_SCORING_VERSION };
+    return { status: "NEW", usageId: event.id, version: resolvedVersion?.version ?? PROVISIONAL_SCORING_VERSION, ...(event.leaseToken ? { leaseToken: event.leaseToken } : {}) };
   }
-  async completeUsage(usageId: string, response: unknown) { const row = this.usages.find((item) => item.id === usageId)!; row.outcome = "SUCCEEDED"; row.response = response; }
+  async completeUsage(usageId: string, response: unknown, leaseToken?: string) { const row = this.usages.find((item) => item.id === usageId)!; if (row.leaseToken && (row.leaseToken !== leaseToken || row.outcome !== "PENDING" || row.leaseExpiresAt! <= new Date())) throw new ScoringLeaseLostError(); row.outcome = "SUCCEEDED"; row.response = response; }
   async completedScoringResult(input: { identity: DeploymentIdentity; assessmentReference: string; resultReference: string }): Promise<unknown | null> {
     return this.usages.find(item => item.id === input.resultReference && item.clientId === input.identity.clientId
       && item.deploymentId === input.identity.deploymentId && item.assessmentReference === input.assessmentReference
       && item.capability === "SCORING" && item.outcome === "SUCCEEDED")?.response ?? null;
   }
-  async storePendingUsageResponse(usageId: string, response: unknown) { const row = this.usages.find((item) => item.id === usageId)!; row.response = response; }
-  async failUsage(usageId: string) { const row = this.usages.find((item) => item.id === usageId)!; row.outcome = "FAILED"; }
+  async storePendingUsageResponse(usageId: string, response: unknown) { const row = this.usages.find((item) => item.id === usageId)!; if (!row.leaseToken) row.response = response; }
+  async failUsage(usageId: string, leaseToken?: string) { const row = this.usages.find((item) => item.id === usageId)!; if (row.leaseToken && (row.leaseToken !== leaseToken || row.outcome !== "PENDING" || row.leaseExpiresAt! <= new Date())) return; row.outcome = "FAILED"; }
   async createFaceScanSession(input: { clientId: string; identity: DeploymentIdentity }) { const value = { clientId: input.clientId, deploymentId: input.identity.deploymentId, id: createEntityId(), state: "REQUESTED" as const }; this.faceScans.push(value); return value; }
 }

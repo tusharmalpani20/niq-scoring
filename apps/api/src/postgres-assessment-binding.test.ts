@@ -35,7 +35,7 @@ test.skipIf(process.env.RULE_DATABASE_TEST !== "1")("PostgreSQL assessment bindi
       const reservation = await store.reserveUsage(usage);
       expect(reservation.status).toBe("NEW");
       if (reservation.status !== "NEW") throw new Error("Missing reservation");
-      await store.completeUsage(reservation.usageId, { synthetic: true });
+      await store.completeUsage(reservation.usageId, { synthetic: true }, reservation.leaseToken);
       expect((await store.reserveUsage(usage)).status).toBe("DUPLICATE");
       expect(await store.reserveUsage({ ...usage, fingerprint: "b".repeat(64) })).toMatchObject({ status: "REJECTED", reason: "IDEMPOTENCY_CONFLICT" });
       expect(await store.reserveUsage({ ...usage, idempotencyKey: "another-request" })).toMatchObject({ status: "REJECTED", reason: "MONTHLY_LIMIT_REACHED" });

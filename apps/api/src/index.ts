@@ -71,6 +71,10 @@ const app = createApp({
           and to_regclass('public.report_content_jobs') is not null
           and exists(select 1 from information_schema.columns where table_schema='public' and table_name='report_generation_runs' and column_name='attempt_id')
           and exists(select 1 from information_schema.columns where table_schema='public' and table_name='report_generation_runs' and column_name='lease_expires_at')
+          and exists(select 1 from information_schema.columns where table_schema='public' and table_name='activation_tokens' and column_name='exchange_request_hash')
+          and exists(select 1 from information_schema.columns where table_schema='public' and table_name='activation_tokens' and column_name='exchange_client_reference')
+          and exists(select 1 from information_schema.columns where table_schema='public' and table_name='usage_events' and column_name='lease_token')
+          and exists(select 1 from information_schema.columns where table_schema='public' and table_name='usage_events' and column_name='lease_expires_at')
           and to_regclass('public.products') is not null
           and (${!workflow} or (to_regclass('public.face_scan_workflows') is not null
             and exists(select 1 from information_schema.columns where table_schema='public' and table_name='face_scan_receipts' and column_name='receipt_ciphertext')

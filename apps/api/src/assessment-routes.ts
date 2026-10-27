@@ -158,9 +158,9 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
       if (reservation.status === "DUPLICATE") return c.json(reservation.response as never);
       try {
         const response = { result: { ...result, resultReference: reservation.usageId }, idempotencyKey: input.idempotencyKey };
-        await store.completeUsage(reservation.usageId, response);
+        await store.completeUsage(reservation.usageId, response, reservation.leaseToken);
         return c.json(response);
-      } catch (cause) { await store.failUsage(reservation.usageId); throw cause; }
+      } catch (cause) { await store.failUsage(reservation.usageId, reservation.leaseToken); throw cause; }
     } catch (cause) {
       if (cause instanceof BindingError) return c.json({ error: cause.code }, cause.code === "ASSESSMENT_NOT_FOUND" ? 404 : 409);
       throw cause;
@@ -182,9 +182,9 @@ export function installAssessmentRoutes(app: Hono, store: ScoringStore, authenti
       if (reservation.status === "DUPLICATE") return c.json(reservation.response as never);
       try {
         const response = { result: { assessmentReference: binding.assessmentReference, bindingId: binding.id, ruleVersionId: rule.id, checksum: binding.checksum, version: rule.version, resultReference: reservation.usageId, score: input.score, classification, calculatedAt: now().toISOString() }, idempotencyKey: input.idempotencyKey };
-        await store.completeUsage(reservation.usageId, response);
+        await store.completeUsage(reservation.usageId, response, reservation.leaseToken);
         return c.json(response);
-      } catch (cause) { await store.failUsage(reservation.usageId); throw cause; }
+      } catch (cause) { await store.failUsage(reservation.usageId, reservation.leaseToken); throw cause; }
     } catch (cause) {
       if (cause instanceof BindingError) return c.json({ error: cause.code }, cause.code === "ASSESSMENT_NOT_FOUND" ? 404 : 409);
       throw cause;

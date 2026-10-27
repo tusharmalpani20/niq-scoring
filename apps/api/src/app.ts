@@ -14,7 +14,7 @@ import { installRuleRoutes } from "./rule-routes";
 import { installProductRoutes } from "./product-routes";
 import { DuplicateClientNameError } from "./lib/client-name";
 import { installRecordDeletion } from "./record-deletion";
-import { encryptActivationToken, decryptActivationToken } from "./lib/activation-secret";
+import { encryptActivationToken, decryptActivationToken, activationExchangeCredential } from "./lib/activation-secret";
 import {
   activationExchangeSchema, activationTokenInputSchema, calculateRequestSchema,
    deploymentConfigurationRequestSchema, createDeploymentSchema,
@@ -321,8 +321,10 @@ export function createApp(options: AppOptions) {
 
   app.post("/v1/activate", async (context) => {
     const parsed = activationExchangeSchema.safeParse(await parseJson(context)); if (!parsed.success) return context.json({ error: "INVALID_REQUEST" }, 400);
-    const prefix = randomSecret(9).slice(0, 12); const credential = `niq_dep_${prefix}.${randomSecret(32)}`;
-    const exchanged = await options.store.exchangeActivation({ tokenHash: await sha256(parsed.data.activationToken), credentialId: createEntityId(), keyPrefix: prefix, secretHash: await sha256(credential), now: now() });
+    if (parsed.data.activationRequestId && !options.activationTokenEncryptionKey) return context.json({ error: "TOKEN_STORAGE_UNAVAILABLE" }, 503);
+    const credential = parsed.data.activationRequestId ? activationExchangeCredential(parsed.data.activationToken, parsed.data.activationRequestId, options.activationTokenEncryptionKey!) : `niq_dep_${randomSecret(9).slice(0, 12)}.${randomSecret(32)}`;
+    const prefix = credential.slice("niq_dep_".length).split(".")[0]!;
+    const exchanged = await options.store.exchangeActivation({ tokenHash: await sha256(parsed.data.activationToken), credentialId: createEntityId(), keyPrefix: prefix, secretHash: await sha256(credential), ...(parsed.data.activationRequestId ? { requestHash: await sha256(parsed.data.activationRequestId) } : {}), ...(parsed.data.clientReference ? { clientReference: parsed.data.clientReference } : {}), now: now() });
     context.header("cache-control", "no-store");
     return exchanged ? context.json({ deploymentId: exchanged.deploymentId, clientId: exchanged.clientId, credential }, 201) : context.json({ error: "ACTIVATION_INVALID_OR_EXPIRED" }, 401);
   });
@@ -352,8 +354,8 @@ export function createApp(options: AppOptions) {
     const reservation = await options.store.reserveUsage({ identity, clientId: parsed.data.input.clientId, capability: "SCORING", idempotencyKey: parsed.data.idempotencyKey, assessmentReference: parsed.data.input.assessmentReference, fingerprint: ruleChecksum({ endpoint: "provisional", input: parsed.data.input }), platformEnabled: options.platformEnabled ?? true });
     if (reservation.status === "DUPLICATE") return context.json(reservation.response as never);
     if (reservation.status === "REJECTED") return context.json({ error: "SCORING_UNAVAILABLE", reason: reservation.reason }, 409);
-    try { const result = calculateProvisionalScore(parsed.data.input, now().toISOString()); const response = { result, idempotencyKey: parsed.data.idempotencyKey }; await options.store.completeUsage(reservation.usageId, response); return context.json(response); }
-    catch (error) { await options.store.failUsage(reservation.usageId); throw error; }
+    try { const result = calculateProvisionalScore(parsed.data.input, now().toISOString()); const response = { result, idempotencyKey: parsed.data.idempotencyKey }; await options.store.completeUsage(reservation.usageId, response, reservation.leaseToken); return context.json(response); }
+    catch (error) { await options.store.failUsage(reservation.usageId, reservation.leaseToken); throw error; }
   });
 
   installFaceScanRoutes(app, { authenticate: authenticateDeployment,
