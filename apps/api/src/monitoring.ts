@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/bun";
-import { sanitizeMonitoringEvent, monitoringFailureCode } from "@niq/monitoring";
+import { sanitizeMonitoringEvent, monitoringFailureCode, monitoringFailureIdentity } from "@niq/monitoring";
 
 /** Errors only. No automatic request, database, AI, console, profiling or session collection. */
 export function initializeMonitoring(env: Record<string, string | undefined> = process.env,
@@ -24,10 +24,13 @@ const lastFailure = new Map<string, number>();
 export function captureOperationalFailure(operation: string, error?: unknown) {
   // Explicit failures may be caught and stored by workers rather than reaching the global handler.
   if (!Sentry.isInitialized()) return;
-  // A broken worker can tick every five seconds. Bound repeated telemetry per operation.
+  // Keep unrelated causes visible while bounding repeated telemetry and process memory.
   const now = Date.now();
-  if (now - (lastFailure.get(operation) ?? 0) < 60_000) return;
-  lastFailure.set(operation, now);
+  const identity = monitoringFailureIdentity(operation, error);
+  if (now - (lastFailure.get(identity) ?? 0) < 60_000) return;
+  for (const [key, timestamp] of lastFailure) if (now - timestamp >= 60_000) lastFailure.delete(key);
+  if (lastFailure.size >= 256) lastFailure.delete(lastFailure.keys().next().value!);
+  lastFailure.set(identity, now);
   try {
     Sentry.withScope(scope => {
       scope.setTag("operation", operation);

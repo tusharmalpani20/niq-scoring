@@ -18,7 +18,13 @@ const failureCodes = new Set([
   "REPORT_TRACE_UNAVAILABLE",
   "REPORT_TRACE_DUPLICATE_SEQUENCE",
   "PDF_RENDER_FAILED",
-  "AUTOMATIC_RETRIES_EXHAUSTED"
+  "AUTOMATIC_RETRIES_EXHAUSTED",
+  "AUTOMATIC_REVIEW_RECOVERY_EXHAUSTED",
+  "AUTOMATIC_REVIEW_RECOVERY_FAILED",
+  "APPROVAL_SOURCE_INVALID",
+  "GENERATION_INTERRUPTED",
+  "GENERATION_FAILED",
+  "REPORT_GENERATION_FAILED"
 ]);
 export function monitoringFailureCode(error: unknown): string | undefined {
   const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
@@ -30,6 +36,17 @@ const operations = new Set([
   "api_request", "browser_error", "push_delivery", "face_scan_recovery", "report_worker",
   "report_generation", "pdf_render", "report_retry_exhausted", "source_validation", "trace_storage",
 ]);
+
+/** Use only approved labels and a technical location, never messages or full paths. */
+export function monitoringFailureIdentity(operation: string, error: unknown): string {
+  const safeOperation = operations.has(operation) ? operation : "unexpected_error";
+  const code = monitoringFailureCode(error) ?? "unknown";
+  const stack = error instanceof Error ? error.stack : undefined;
+  const location = typeof stack === "string"
+    ? /(?:^|[\\/(\s])([a-zA-Z0-9_.-]+\.(?:[cm]?js|tsx?)):(\d+):(\d+)/m.exec(stack.split("\n").slice(1).join("\n")) : null;
+  return `${safeOperation}:${code}:${location ? `${location[1]}:${location[2]}:${location[3]}` : "unknown"}`;
+}
+
 export function sanitizeMonitoringEvent<T>(input: T): T {
   const event = input as Record<string, any>;
   const operation = operations.has(event.tags?.operation) ? event.tags.operation : "unexpected_error";
@@ -52,6 +69,6 @@ export function sanitizeMonitoringEvent<T>(input: T): T {
     platform: "javascript", level: event.level === "fatal" ? "fatal" : "error",
     ...(typeof event.environment === "string" && /^[a-zA-Z0-9._-]{1,40}$/.test(event.environment) ? { environment: event.environment } : {}),
     ...(typeof event.release === "string" && /^[a-zA-Z0-9._@+-]{1,100}$/.test(event.release) ? { release: event.release } : {}),
-    tags: { operation, ...(failureCodes.has(event.tags?.failure_code) ? { failure_code: event.tags.failure_code } : {}) }, fingerprint: ["{{ default }}", operation], exception: { values },
+    tags: { operation, ...(failureCodes.has(event.tags?.failure_code) ? { failure_code: event.tags.failure_code } : {}) }, fingerprint: ["{{ default }}", operation, failureCodes.has(event.tags?.failure_code) ? event.tags.failure_code : "unknown"], exception: { values },
   } as T;
 }

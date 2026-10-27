@@ -31,3 +31,14 @@ test("only known technical failure codes survive", () => {
   expect(good.tags.failure_code).toBe("MODEL_PAYMENT_REQUIRED");
   expect(JSON.stringify(bad)).not.toContain("PATIENT_JANE");
 });
+
+
+test("safe terminal causes remain distinguishable without exposing arbitrary codes", () => {
+  const codes = ["AUTOMATIC_REVIEW_RECOVERY_EXHAUSTED", "AUTOMATIC_REVIEW_RECOVERY_FAILED", "APPROVAL_SOURCE_INVALID", "GENERATION_INTERRUPTED", "GENERATION_FAILED", "REPORT_GENERATION_FAILED"];
+  const fingerprints = codes.map(failure_code => {
+    const event = sanitizeMonitoringEvent({ tags: { operation: "report_retry_exhausted", failure_code } });
+    expect(event.tags.failure_code).toBe(failure_code);
+    return event.fingerprint.join(":");
+  });
+  expect(new Set(fingerprints).size).toBe(codes.length);
+});

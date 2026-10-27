@@ -8,11 +8,19 @@ Set `SENTRY_ENVIRONMENT` and `VITE_SENTRY_ENVIRONMENT` to the installation label
 
 This is error-only monitoring. No replay, automatic request/database/AI instrumentation, performance tracing or console log forwarding is installed. SDK collection of users, headers, cookies, bodies, query strings, AI input/output, query values and stack variables is explicitly disabled. A final allowlist reconstructs each outgoing error: generic operation name, severity, environment/release and source filename/line/column. Original error text, user records, routes/URLs, request data, breadcrumbs, contexts and extras are removed before sending. Do not loosen this for debugging clinical content. Technical debugging requiring report text remains in the private diagnostics workspace.
 
-Unhandled errors, React root errors, unexpected API errors, caught background-worker failures and terminal report/PDF failures are covered. Repeated caught failures are limited to one event per operation per minute per API process. Routine validation/authentication failures are not application errors. Sentry cannot resolve failed jobs or regenerate reports by itself.
+Unhandled errors, React root errors, unexpected API errors, caught background-worker failures and terminal report/PDF failures are covered. Repeated caught failures are limited to one event per sanitized failure identity per minute per API process (operation, approved failure code and technical stack location). Routine validation/authentication failures are not application errors. Sentry cannot resolve failed jobs or regenerate reports by itself.
 
 ## Alert routing and verification
 
 Route error issues and operations resource warnings to `factbook999@gmail.com` (the organisation member must have email notifications enabled). Start with immediate new issues and a 30-minute repeated-alert limit. Use independent uptime checks for both public APIs: a stopped server cannot send its own error event. Alerts are separate from the reporting workflow and must not block it.
+
+Configure recipients and delivery in **Sentry**, not in the NIQ applications:
+
+1. **Monitors → Alerts → select the shared alert → Edit → THEN Notify** selects the recipient member or team. The current alert targets the FactBook member.
+2. **Account → User Settings → Notifications → Issue Alerts → Manage** controls delivery. Issue Alerts should be On and Delivery Method should include Email.
+3. **Account → User Settings → Notifications → Email Routing → Manage** chooses the address used for notifications. Add or verify an address under **Email Addresses** first. The current account uses `factbook999@gmail.com`.
+
+The organisation alert is [available here](https://factbook.sentry.io/monitors/alerts/6236432/). Personal [notification preferences](https://factbook.sentry.io/settings/account/notifications/) and [email addresses](https://factbook.sentry.io/settings/account/emails/) are separate from application `.env` configuration. No alert email variable is needed in either NIQ application.
 
 Use a deliberate generic smoke error, not patient data, to verify ingestion and email routing after deployment. A successful envelope submission does not prove that an email reached the recipient; confirm delivery in the mailbox. No model call is required.
 
