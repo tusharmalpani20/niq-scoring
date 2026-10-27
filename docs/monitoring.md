@@ -22,6 +22,8 @@ Configure recipients and delivery in **Sentry**, not in the NIQ applications:
 
 The organisation alert is [available here](https://factbook.sentry.io/monitors/alerts/6236432/). Personal [notification preferences](https://factbook.sentry.io/settings/account/notifications/) and [email addresses](https://factbook.sentry.io/settings/account/emails/) are separate from application `.env` configuration. No alert email variable is needed in either NIQ application.
 
+Keep failure and recovery email rules separate. The failure rule may throttle repeated alerts for 30 minutes. The **NIQ recovery notifications** rule uses **An issue is resolved**, notifies the same member on every resolution, and is explicitly connected to both uptime monitors. This prevents the failure throttle from suppressing the recovery email. It is [available here](https://factbook.sentry.io/monitors/alerts/6236781/). Connect future cron monitors when they are enabled. Informational resource-recovery events indicate a recovered threshold, but do not automatically resolve the earlier resource-pressure issue.
+
 Use a deliberate generic smoke error, not patient data, to verify ingestion and email routing after deployment. A successful envelope submission does not prove that an email reached the recipient; confirm delivery in the mailbox. No model call is required.
 
 Backups, key recovery and record retention are covered by their operations runbooks. Assessments, reports and valid uploads remain indefinitely; monitoring introduces no clinical-data deletion.
