@@ -80,8 +80,9 @@ late attempts. Active model work renews both attempt-fenced leases each minute.
 If either renewal fails, that attempt stops before another model step or final
 approval. If the provider is disabled, fails, or its output needs review,
 the coordinator tries a deterministic fallback from pinned matched rules. The
-fallback issues `READY` only when its source and coverage checks pass; conflicting
-or incomplete rules fail rather than producing unsupported patient advice.
+fallback issues `READY` only when its source and coverage checks pass. Missing
+source evidence or invalid output fails rather than producing unsupported
+patient advice.
 Application stores the PDF after final clinical approval of the assessment.
 There is no separate manual report approval in this workflow.
 
@@ -93,3 +94,17 @@ references, prompts, evidence, generated text, and raw provider responses.
 AI usage and run-trace administrative endpoints require explicit
 `REPORT_DIAGNOSTICS_ENABLED=true`, independently of `NODE_ENV`. The default is
 false. This does not disable report generation or restricted trace persistence.
+
+## Rules fallback after agent failure
+
+When model calls fail or bounded agent review cannot approve the draft, the job
+publishes a deterministic presentation of its pinned, matched rules. Diagnosis
+combinations and topic keywords do not veto this path. General recommendations
+remain source-backed; matched kidney individualisation guidance accompanies
+general nutrition and treatment advice without selecting new numeric targets.
+Patient-facing text does not identify fallback, model failures or rule internals.
+The generation mode and reasons remain in private operational traces.
+
+Source membership, nonempty matched guidance, complete coverage, response-schema
+limits, assessment binding and job leases remain mandatory. These checks protect
+against missing or invented content and are separate from agent disagreement.
