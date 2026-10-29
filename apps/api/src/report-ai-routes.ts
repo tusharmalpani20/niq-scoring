@@ -179,7 +179,8 @@ export function installReportAiRoutes(app: Hono, options: {
         // The bounded model reviews may disagree even after scoped repairs.
         // Keep their exact concerns privately, then issue a fresh presentation
         // of the pinned sources rather than publishing the rejected AI draft.
-        // The deterministic builder still rejects incomplete/conflicting rules.
+        // The deterministic builder retains matched rules and their qualifications;
+        // missing source evidence and invalid output remain errors.
         if (status === "REVIEW_REQUIRED" && allowFallback)
           return await fallbackResponse({ code: "BOUNDED_REVIEW_EXHAUSTED", issues });
         await recordTrace("run_complete", { status, generationMode: response.generationMode });

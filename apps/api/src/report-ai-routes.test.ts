@@ -1315,3 +1315,21 @@ test("a manager still rejecting the repaired narrative falls back in the same ru
   expect(await (await f.call("report-content", f.request())).json()).toEqual(body);
   expect((await f.traces.read(body.runId))!.calls).toHaveLength(callCount);
 });
+
+test("renal durable job completes with qualified pinned-rule fallback after provider failure",async()=>{
+ const f=await setup(()=>{throw new ReportModelError("MODEL_UNAVAILABLE");});
+ const request=f.request({facts:{...f.facts,coMorbidityIds:["co_morbidities_kidney_disease"]}});
+ const submitted=await (await f.call("report-content/jobs",request)).json();
+ await f.jobTick();
+ const response=await f.app.request(`/v1/assessments/report-content/jobs/${submitted.runId}`,{headers:{authorization:`Bearer ${f.token}`}});
+ const job=await response.json();
+ expect(job).toMatchObject({status:"READY",attempts:1,retryScheduled:false,response:{status:"READY",generationMode:"RULE_FALLBACK",issues:[]}});
+ expect(job.response.narrative.nutritionAdvice.text).toContain("kilocalories per kilogram of body weight per day");
+ expect(job.response.narrative.nutritionAdvice.text).toContain("Discuss these nutrition recommendations with your treating team:");
+ expect(job.response.narrative.conditionAdvice.text).toContain("renal function");
+ expect(job.response.guidance.carePlan.coMorbidities.some((row:any)=>row.conditionId==="co_morbidities_kidney_disease")).toBe(true);
+ const repeated=await (await f.call("report-content/jobs",request)).json();
+ expect(repeated.runId).toBe(submitted.runId);
+ expect(f.jobs.jobs).toHaveLength(1);
+ expect(f.runs.runs).toHaveLength(1);
+});
