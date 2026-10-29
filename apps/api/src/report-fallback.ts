@@ -1,5 +1,5 @@
 import { closingReportSummary } from "./report-closing-summary";
-import { narrativeSchema, type ReportContentRequest, type ReportEvidence, type ReportNarrative, type CompleteReportNarrative, matchedReportPacket } from "./report-content";
+import { hasMatchedKidneyCondition, narrativeSchema, type ReportContentRequest, type ReportEvidence, type ReportNarrative, type CompleteReportNarrative, matchedReportPacket } from "./report-content";
 import { productExceptionActionText } from "@niq-scoring/contracts/product-guidance";
 import { markFallbackHighlight, selectActionHighlight } from "./report-highlights";
 
@@ -7,7 +7,7 @@ type Packet = ReturnType<typeof matchedReportPacket>;
 type Classification = { id: string; label: string };
 
 export class ReportFallbackError extends Error {
-  constructor(readonly code: "FALLBACK_SOURCE_INCOMPLETE" | "FALLBACK_CONTENT_TOO_LARGE" | "FALLBACK_SOURCE_CONFLICT") {
+  constructor(readonly code: "FALLBACK_SOURCE_INCOMPLETE" | "FALLBACK_CONTENT_TOO_LARGE") {
     super(code);
   }
 }
@@ -386,19 +386,20 @@ export function buildDeterministicReportFallback(input: {
     : section && !Object.values(narrative).some(part => part.evidenceIds.includes(row.id)))
       throw new ReportFallbackError("FALLBACK_SOURCE_INCOMPLETE");
   }
-  // The source workbook contains generic fixed targets and food examples that
-  // can conflict with individually tailored kidney guidance. A mechanical
-  // copy cannot resolve that conflict safely, so it cannot issue as fallback.
-  const renal = conditionRows.some(row => /\b(?:kidney|renal)\b/i.test(row.text) && /individuali[sz]/i.test(row.text));
-  // Inspect original units before patientLanguage expands them into words.
-  // Otherwise a fixed g/kg/day target could escape this conflict check.
-  if (renal && [...nutritionRows, ...treatmentRows,
-    ...guidance.possibleToxicities.map(row => ({ text: row.nutritionalInterventions }))].some(row =>
-    /\b\d+(?:\.\d+)?\s*(?:kcal\/kg|g\/kg|L\/day)\b|\b(?:banana|coconut water|potato|spinach|avocado)\b/i.test(row.text)))
-    throw new ReportFallbackError("FALLBACK_SOURCE_CONFLICT");
-  if ([...Object.values(narrative).map(row => row.text), ...possibleToxicities.map(row => row.summary)]
-    .some(text => /\b(?:hba1c|a1c|glycated\s+ha?emoglobin)\b/i.test(text)))
-    throw new ReportFallbackError("FALLBACK_SOURCE_CONFLICT");
+  // The approved rules are the fallback authority. Preserve their general
+  // guidance alongside the matched kidney qualification rather than vetoing
+  // the whole report or choosing an unsupported replacement target.
+  const kidneyRows = conditionRows.filter(row => hasMatchedKidneyCondition(evidence.filter(source => source.id === row.id)));
+  if (kidneyRows.length) {
+    const qualification = part(kidneyRows);
+    for (const field of ["nutritionAdvice", "treatmentAdvice"] as const) {
+      if (!narrative[field].text.trim()) continue;
+      narrative[field] = {
+        text: `${qualification.text}\n\nDiscuss these nutrition recommendations with your treating team:\n${narrative[field].text}`,
+        evidenceIds: [...new Set([...qualification.evidenceIds, ...narrative[field].evidenceIds])],
+      };
+    }
+  }
   if (Object.values(narrative).some(row => row.text.length > 4000 || row.evidenceIds.length > 100) ||
     possibleToxicities.some(row => row.summary.length > 12000) || !narrativeSchema.safeParse(narrative).success)
     throw new ReportFallbackError("FALLBACK_CONTENT_TOO_LARGE");
