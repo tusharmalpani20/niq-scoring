@@ -54,9 +54,17 @@ const workbookRuleSchema = z.object({
   message: "Only chemotherapy guidance can be shared across classes.",
 });
 
+export const toxicityWorkbookReferenceSchema = z.object({
+  id: referenceId,
+  text: cellText,
+  url: z.string().trim().max(2048)
+    .regex(/^https?:\/\//i, "Enter a URL beginning with http:// or https://.")
+    .pipe(z.url({ error: "Enter a valid source URL." })).optional(),
+}).strict();
+
 export const toxicityWorkbookSchema = z.object({
   document: z.string().min(1).max(300).optional(),
-  references: z.array(z.object({ id: referenceId, text: cellText }).strict()).max(100),
+  references: z.array(toxicityWorkbookReferenceSchema).max(100),
   riskMatrix: riskMatrixSchema,
   rules: z.array(workbookRuleSchema).max(500),
 }).strict().superRefine((workbook, context) => {

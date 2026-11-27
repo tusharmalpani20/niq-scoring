@@ -153,10 +153,18 @@ describe("rule management API", () => {
     rule.variants.well_nourished.frequencyBasis = "Well-nourished source";
     rule.variants.moderately_nourished.frequencyBasis = "Moderate source";
     rule.variants.severely_malnourished.frequencyBasis = "Severe source";
+    workbook.references[0]!.url = "https://example.org/citation";
     const revised = await request(`/${draft.id}`, "PUT", { revision: reopened.revision, definition });
     expect(revised.status).toBe(200);
     const reloaded = await (await request(`/${draft.id}`)).json() as RuleRecord;
     expect((reloaded.definition as FinalAssessmentDefinition).reportGuidance?.toxicityWorkbook).toEqual(workbook);
+
+    workbook.references[0]!.url = "javascript:alert(1)";
+    const unsafeUrl = await request(`/${draft.id}`, "PUT", { revision: reloaded.revision, definition });
+    expect(unsafeUrl.status).toBe(400);
+    expect(await unsafeUrl.json()).toMatchObject({ issues: expect.arrayContaining([
+      expect.objectContaining({ path: ["definition", "reportGuidance", "toxicityWorkbook", "references", 0, "url"] }),
+    ]) });
 
     workbook.references = [];
     const rejected = await request(`/${draft.id}`, "PUT", { revision: reloaded.revision, definition });
