@@ -6,7 +6,7 @@ test("care plan rules use risk labels, allow treatment guidance and save edits",
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Care plan rules", exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Care plan sections" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Drug-class by status 48/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Drug-class by status/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Treatment guidance 3/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Products & doses 12/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Co-morbidity diet 5/ })).toBeVisible();
