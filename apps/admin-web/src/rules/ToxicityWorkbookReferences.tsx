@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
-import type { ToxicityWorkbook } from "@niq-scoring/contracts/toxicity-workbook";
+import { toxicityWorkbookReferenceSchema, type ToxicityWorkbook } from "@niq-scoring/contracts/toxicity-workbook";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -22,6 +22,7 @@ export function ToxicityWorkbookReferences({ workbook, selectedReferenceId, disa
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<(Reference & { isNew: boolean }) | null>(null);
   const [deleting, setDeleting] = useState<Reference | null>(null);
+  const [error, setError] = useState("");
   const selectedRow = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
@@ -35,12 +36,23 @@ export function ToxicityWorkbookReferences({ workbook, selectedReferenceId, disa
   const mayAdd = nextId <= 999 && workbook.references.length < 100;
   const query = search.trim().toLocaleLowerCase();
   const visibleReferences = workbook.references.filter(ref => ref.id === selectedReferenceId ||
-    ref.id.toLocaleLowerCase().includes(query) || ref.text.toLocaleLowerCase().includes(query));
+    [ref.id, ref.text, ref.url ?? ""].some(value => value.toLocaleLowerCase().includes(query)));
+
+  function openEditor(reference: Reference, isNew: boolean) {
+    setError("");
+    setEditing({ ...reference, isNew });
+  }
 
   function saveReference() {
     if (disabled || !editing?.text.trim()) return;
-    const reference = { id: editing.id, text: editing.text };
-    if (editing.isNew && (!mayAdd || workbook.references.some(ref => ref.id === reference.id))) return;
+    if (editing.isNew && (!mayAdd || workbook.references.some(ref => ref.id === editing.id))) return;
+    const url = editing.url?.trim();
+    const parsed = toxicityWorkbookReferenceSchema.safeParse({ id: editing.id, text: editing.text, ...(url ? { url } : {}) });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Check the citation and source URL.");
+      return;
+    }
+    const reference = parsed.data;
     const references = editing.isNew
       ? [...workbook.references, reference]
       : workbook.references.map(ref => ref.id === reference.id ? reference : ref);
@@ -59,7 +71,7 @@ export function ToxicityWorkbookReferences({ workbook, selectedReferenceId, disa
   return <section className="min-w-0 space-y-4 rounded-2xl bg-card p-4 shadow-sm sm:p-6" aria-label="References">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h2 className="text-lg font-medium">References</h2>
-      {!disabled && <Button type="button" disabled={!mayAdd} onClick={() => setEditing({ id: String(nextId), text: "", isNew: true })}>
+      {!disabled && <Button type="button" disabled={!mayAdd} onClick={() => openEditor({ id: String(nextId), text: "" }, true)}>
         <Plus aria-hidden="true" /> Add reference
       </Button>}
     </div>
@@ -74,10 +86,14 @@ export function ToxicityWorkbookReferences({ workbook, selectedReferenceId, disa
         return <li key={reference.id} ref={selected ? selectedRow : undefined} tabIndex={-1} aria-current={selected || undefined}
           className={`flex scroll-m-3 items-start gap-3 p-3 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${selected ? "bg-primary/10" : ""}`}>
           <span className="min-w-10 shrink-0 rounded-md bg-muted px-2 py-1 text-center text-xs font-semibold">[{reference.id}]</span>
-          <p className="min-w-0 flex-1 text-sm break-words whitespace-pre-wrap">{reference.text}</p>
+          <div className="min-w-0 flex-1 space-y-1 text-sm">
+            <p className="break-words whitespace-pre-wrap">{reference.text}</p>
+            {reference.url && <a href={reference.url} target="_blank" rel="noopener noreferrer"
+              aria-label={"Open source for reference " + reference.id} className="text-primary underline underline-offset-4">Open source</a>}
+          </div>
           {!disabled && <div className="flex shrink-0 gap-1">
             <Button type="button" variant="ghost" size="icon" aria-label={`Edit reference ${reference.id}`} title="Edit reference"
-              onClick={() => setEditing({ ...reference, isNew: false })}><Pencil aria-hidden="true" /></Button>
+              onClick={() => openEditor(reference, false)}><Pencil aria-hidden="true" /></Button>
             <Button type="button" variant="ghost" size="icon" aria-label={`Delete reference ${reference.id}`} title="Delete reference"
               disabled={inUse} onClick={() => setDeleting(reference)}><Trash2 aria-hidden="true" /></Button>
             {inUse && <span className="sr-only">This reference is linked to drug-class guidance.</span>}
@@ -99,6 +115,15 @@ export function ToxicityWorkbookReferences({ workbook, selectedReferenceId, disa
           <Textarea autoFocus rows={6} maxLength={12000} value={editing?.text ?? ""}
             onChange={event => setEditing(current => current && { ...current, text: event.target.value })} />
         </label>
+        <label className="grid gap-2 text-sm font-medium">Source URL (optional)
+          <Input type="url" maxLength={2048} placeholder="https://…" value={editing?.url ?? ""}
+            onChange={event => {
+              const url = event.target.value;
+              setEditing(current => current && { ...current, url });
+              setError("");
+            }} />
+        </label>
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
           <Button type="button" disabled={!editing?.text.trim()} onClick={saveReference}>{editing?.isNew ? "Add reference" : "Apply changes"}</Button>
