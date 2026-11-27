@@ -217,9 +217,6 @@ export function Users({ currentUser }: { currentUser: User }) {
               <DialogClose asChild><Button type="button" variant="outline" disabled={busy}>Cancel</Button></DialogClose>
               <Button disabled={busy}>{busy ? "Creating…" : "Create"}</Button>
             </DialogFooter>
-            <p className="muted">
-              Invitations are not sent by email automatically.
-            </p>
           </form>
               )}
             </DialogContent>
