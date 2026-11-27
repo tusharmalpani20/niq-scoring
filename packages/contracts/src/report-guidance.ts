@@ -2,6 +2,7 @@ import type { FinalAssessmentAnswers, FinalAssessmentDefinition } from "./final-
 import workbookDefaults from "./report-guidance-defaults.json" with { type: "json" };
 
 type Guidance = NonNullable<FinalAssessmentDefinition["reportGuidance"]>;
+type ReportNutrition = Guidance["nutrition"][number] & { coreStrategy: string; clinicalActions: string };
 type PossibleToxicity = Pick<Guidance["toxicity"][number], "id" | "classId" | "treatmentTypeId" | "expectedToxicity" | "nutritionalInterventions" | "requiresDrugConfirmation" | "source">;
 const importedRows = new Map((workbookDefaults.toxicity as Guidance["toxicity"]).map(row => [row.id, row]));
 
@@ -51,7 +52,7 @@ export type ReportGuidanceFacts = {
 
 /** Match saved report rules to confirmed facts without interpreting free text. */
 export function resolveReportGuidance(definition: FinalAssessmentDefinition, facts: ReportGuidanceFacts): {
-  nutrition: Guidance["nutrition"];
+  nutrition: ReportNutrition[];
   classGuidance: Array<{ id: string; label: string; guidance: string }>;
   /** Class-level reference rows with conditional guidance, never assertions about the patient. */
   possibleToxicities: PossibleToxicity[];
@@ -63,7 +64,11 @@ export function resolveReportGuidance(definition: FinalAssessmentDefinition, fac
     .map(item => ({ id: item.id, label: item.label, guidance: item.guidance!.trim() }));
   const guidance = definition.reportGuidance;
   if (!guidance) return { nutrition: [], classGuidance, possibleToxicities: [], toxicity: [] };
-  const nutrition = guidance.nutrition.filter(rule => rule.enabled && (rule.riskCategoryId === null || rule.riskCategoryId === facts.riskCategoryId));
+  // The current report consumes legacy guidance text. Structured targets will
+  // be resolved separately when the report supports their conditions.
+  const nutrition = guidance.nutrition.filter((rule): rule is ReportNutrition =>
+    rule.enabled && (rule.riskCategoryId === null || rule.riskCategoryId === facts.riskCategoryId)
+    && rule.coreStrategy !== undefined && rule.clinicalActions !== undefined);
   // Other is exclusive and only receives the generic nutrition tier.
   if (facts.drugClassIds.includes("other")) return { nutrition, classGuidance: [], possibleToxicities: [], toxicity: [] };
   const treatments = new Set(facts.treatmentTypeIds);

@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import {
+  DIALYSIS_STATUS_OPTIONS, editableNutritionTargetExceptionsSchema, finalAssessmentDefinitionSchema,
+  kidneyProteinRules, nutritionTargetExceptionsSchema, nutritionTargetRangesSchema,
+} from "./final-assessment";
 import { createFinalAssessmentTemplate } from "./final-assessment-template";
 import { validateFinalAssessmentDefinition } from "./final-assessment-validation";
 import { initialReportGuidance } from "./report-guidance-template";
@@ -6,6 +10,87 @@ import { publicQuestionnaire } from "./rule-public";
 import { classOnlyToxicity, resolveReportGuidance } from "./report-guidance";
 
 describe("versioned report guidance", () => {
+  test("keys kidney protein rules by assessment dialysis status and preserves older versions", () => {
+    const common = {
+      adjustedWeight: { minimumBmi: 30, idealWeightBmi: 25, weightDifferenceFactor: 0.25 },
+      kidneyFluidNote: "Fluid recommendations will be as per the nephrologist’s advice.",
+      fluidRestrictionNote: "This is not applicable for fluide restriction patients.",
+    };
+    const legacy = {
+      ...common,
+      haemodialysisProtein: { min: 1.2, max: 1.5 },
+      nonDialysisCkdProtein: { minStage: 3, maxStage: 5, protein: { min: 0.8, max: 1 } },
+    };
+    const saved = nutritionTargetExceptionsSchema.parse(legacy);
+    expect(saved).toEqual(legacy);
+    const rules = kidneyProteinRules(saved);
+    expect(rules).toEqual([
+      { dialysisStatusId: "haemodialysis", protein: { min: 1.2, max: 1.5 } },
+      { dialysisStatusId: "not_on_dialysis", ckdStages: { minStage: 3, maxStage: 5 }, protein: { min: 0.8, max: 1 } },
+    ]);
+    expect(DIALYSIS_STATUS_OPTIONS.map(option => option.id)).toEqual([
+      "haemodialysis", "peritoneal_dialysis", "not_on_dialysis",
+    ]);
+    const current = { ...common, kidneyProteinRules: rules };
+    expect(editableNutritionTargetExceptionsSchema.parse(current)).toEqual(current);
+    expect(kidneyProteinRules(nutritionTargetExceptionsSchema.parse(current))).toEqual(rules);
+    expect(editableNutritionTargetExceptionsSchema.safeParse({
+      ...common, kidneyProteinRules: [...rules, rules[0]],
+    }).success).toBe(false);
+    expect(editableNutritionTargetExceptionsSchema.safeParse({
+      ...common, kidneyProteinRules: [{ dialysisStatusId: "not_on_dialysis", protein: { min: 0.8, max: 1 } }],
+    }).success).toBe(false);
+    expect(editableNutritionTargetExceptionsSchema.safeParse({
+      ...common, kidneyProteinRules: [{ dialysisStatusId: "peritoneal_dialysis" }],
+    }).success).toBe(false);
+  });
+
+  test("saves typed nutrition ranges without requiring legacy prose", () => {
+    const definition = createFinalAssessmentTemplate("Nutrition targets");
+    const guidance = definition.reportGuidance!;
+    expect(finalAssessmentDefinitionSchema.parse(definition).reportGuidance?.nutritionTargetExceptions).toBeUndefined();
+    const lowRisk = guidance.nutrition.find(row => row.riskCategoryId === "low")!;
+    delete lowRisk.coreStrategy;
+    delete lowRisk.clinicalActions;
+    lowRisk.targets = {
+      energy: { min: 25, max: 30 },
+      protein: { min: 1, max: 1.2 },
+      fluids: { min: 30, max: 35 },
+    };
+    lowRisk.proteinTargetNote = "(Minimum > 1.0 g/kg/d per ESPEN B2-2)";
+    const exceptions = {
+      adjustedWeight: { minimumBmi: 30, idealWeightBmi: 25, weightDifferenceFactor: 0.25 },
+      haemodialysisProtein: { min: 1.2, max: 1.5 },
+      nonDialysisCkdProtein: { minStage: 3, maxStage: 5, protein: { min: 0.8, max: 1 } },
+      kidneyFluidNote: "Fluid recommendations will be as per the nephrologist’s advice.",
+      fluidRestrictionNote: "This is not applicable for fluide restriction patients.",
+    };
+    guidance.nutritionTargetExceptions = exceptions;
+    const saved = finalAssessmentDefinitionSchema.parse(JSON.parse(JSON.stringify(definition)));
+    expect(saved.reportGuidance?.nutritionTargetExceptions).toEqual(exceptions);
+    const storedLowRisk = saved.reportGuidance?.nutrition.find(row => row.id === lowRisk.id);
+    expect(storedLowRisk?.targets).toEqual(lowRisk.targets);
+    expect(storedLowRisk?.proteinTargetNote).toBe(lowRisk.proteinTargetNote);
+    expect(storedLowRisk).not.toHaveProperty("coreStrategy");
+    expect(storedLowRisk).not.toHaveProperty("clinicalActions");
+    expect(resolveReportGuidance(saved, {
+      riskCategoryId: "low", treatmentTypeIds: [], drugClassIds: [], confirmedToxicityIds: [],
+    }).nutrition).toEqual([]);
+    expect(saved.reportGuidance?.nutrition.find(row => row.riskCategoryId === "high")?.coreStrategy).toBeDefined();
+    expect(JSON.stringify(publicQuestionnaire(saved))).not.toContain("nonDialysisCkdProtein");
+
+    expect(nutritionTargetRangesSchema.safeParse({ ...lowRisk.targets, energy: { min: 30, max: 25 } }).success).toBe(false);
+    expect(nutritionTargetExceptionsSchema.safeParse({
+      ...exceptions, nonDialysisCkdProtein: { ...exceptions.nonDialysisCkdProtein, minStage: 5, maxStage: 3 },
+    }).success).toBe(false);
+    expect(nutritionTargetExceptionsSchema.safeParse({
+      ...exceptions, adjustedWeight: { ...exceptions.adjustedWeight, idealWeightBmi: 31 },
+    }).success).toBe(false);
+
+    delete lowRisk.targets;
+    expect(finalAssessmentDefinitionSchema.safeParse(definition).success).toBe(false);
+  });
+
   test("new rule versions include the reviewed toxicity matches", () => {
     const first = createFinalAssessmentTemplate("First draft");
     const second = createFinalAssessmentTemplate("Second draft");

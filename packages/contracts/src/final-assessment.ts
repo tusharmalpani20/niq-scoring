@@ -147,15 +147,108 @@ export const toxicityMatchSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("clinician_confirmation") }).strict(),
 ]);
 
+const nutritionTargetRangeSchema = z.object({
+  min: z.number().finite().positive(),
+  max: z.number().finite().positive(),
+}).strict().refine(range => range.max >= range.min, {
+  path: ["max"],
+  message: "Maximum must be at least the minimum.",
+});
+
+// The factors are per kg of body weight per day, in kcal, grams and mL respectively.
+export const nutritionTargetRangesSchema = z.object({
+  energy: nutritionTargetRangeSchema,
+  protein: nutritionTargetRangeSchema,
+  fluids: nutritionTargetRangeSchema,
+}).strict();
+
+// IDs and labels match NIQ Application's dialysis_status assessment field.
+export const DIALYSIS_STATUS_OPTIONS = [
+  { id: "haemodialysis", label: "On haemodialysis" },
+  { id: "peritoneal_dialysis", label: "On peritoneal dialysis" },
+  { id: "not_on_dialysis", label: "Not on dialysis" },
+] as const;
+
+const ckdStageRangeSchema = z.object({
+  minStage: z.number().int().min(1).max(5),
+  maxStage: z.number().int().min(1).max(5),
+}).strict().refine(range => range.maxStage >= range.minStage, {
+  path: ["maxStage"],
+  message: "Maximum CKD stage must be at least the minimum stage.",
+});
+
+const kidneyProteinRuleSchema = z.discriminatedUnion("dialysisStatusId", [
+  z.object({
+    dialysisStatusId: z.enum(["haemodialysis", "peritoneal_dialysis"]),
+    protein: nutritionTargetRangeSchema,
+  }).strict(),
+  z.object({
+    dialysisStatusId: z.literal("not_on_dialysis"),
+    ckdStages: ckdStageRangeSchema,
+    protein: nutritionTargetRangeSchema,
+  }).strict(),
+]);
+
+const nutritionExceptionFields = {
+  adjustedWeight: z.object({
+    minimumBmi: z.number().finite().positive(),
+    idealWeightBmi: z.number().finite().positive(),
+    weightDifferenceFactor: z.number().finite().min(0).max(1),
+  }).strict().refine(rule => rule.idealWeightBmi <= rule.minimumBmi, {
+    path: ["idealWeightBmi"],
+    message: "Ideal-weight BMI must be at or below the minimum BMI for the rule.",
+  }),
+  kidneyFluidNote: z.string().trim().min(1).max(1000),
+  fluidRestrictionNote: z.string().trim().min(1).max(1000),
+};
+
+export const editableNutritionTargetExceptionsSchema = z.object({
+  ...nutritionExceptionFields,
+  kidneyProteinRules: z.array(kidneyProteinRuleSchema).max(DIALYSIS_STATUS_OPTIONS.length)
+    .refine(rules => new Set(rules.map(rule => rule.dialysisStatusId)).size === rules.length, {
+      message: "Choose a different dialysis status for each protein rule.",
+    }),
+}).strict();
+
+export const nutritionTargetExceptionsSchema = z.union([
+  editableNutritionTargetExceptionsSchema,
+  // Preserve saved versions until the exceptions are explicitly edited.
+  z.object({
+    ...nutritionExceptionFields,
+    haemodialysisProtein: nutritionTargetRangeSchema,
+    nonDialysisCkdProtein: ckdStageRangeSchema.safeExtend({ protein: nutritionTargetRangeSchema }).optional(),
+  }).strict(),
+]);
+
+export function kidneyProteinRules(exceptions: z.infer<typeof nutritionTargetExceptionsSchema>): z.infer<typeof kidneyProteinRuleSchema>[] {
+  if ("kidneyProteinRules" in exceptions) return exceptions.kidneyProteinRules;
+  const rules: z.infer<typeof kidneyProteinRuleSchema>[] = [
+    { dialysisStatusId: "haemodialysis", protein: exceptions.haemodialysisProtein },
+  ];
+  const ckd = exceptions.nonDialysisCkdProtein;
+  if (ckd) rules.push({
+    dialysisStatusId: "not_on_dialysis",
+    ckdStages: { minStage: ckd.minStage, maxStage: ckd.maxStage },
+    protein: ckd.protein,
+  });
+  return rules;
+}
+
 export const reportGuidanceSchema = z.object({
   // Workbook rows are reviewed here before they are connected to report generation.
   toxicityWorkbook: toxicityWorkbookSchema.optional(),
   nutrition: z.array(z.object({
     id: ruleIdSchema, label, riskCategoryId: ruleIdSchema.nullable(),
-    coreStrategy: z.string().trim().min(1).max(4000),
-    clinicalActions: z.string().trim().min(1).max(8000),
+    coreStrategy: z.string().trim().min(1).max(4000).optional(),
+    clinicalActions: z.string().trim().min(1).max(8000).optional(),
+    targets: nutritionTargetRangesSchema.optional(),
+    proteinTargetNote: z.string().trim().min(1).max(1000).optional(),
     enabled: z.boolean(), source: sourceSchema,
-  }).strict()).max(30),
+  }).strict().refine(row => row.targets !== undefined || (row.coreStrategy !== undefined && row.clinicalActions !== undefined), {
+    path: ["targets"],
+    message: "A nutrition rule requires structured targets or both saved guidance fields.",
+  })).max(30),
+  nutritionTargetExceptions: nutritionTargetExceptionsSchema.optional(),
   toxicity: z.array(z.object({
     id: ruleIdSchema, classId: ruleIdSchema, treatmentTypeId: ruleIdSchema,
     // Historical topic labels remain readable, but selecting guidance no longer
