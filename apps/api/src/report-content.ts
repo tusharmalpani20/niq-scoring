@@ -211,6 +211,11 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
   const productDetails = care.products.status === "selected" ? catalog.filter(product =>
     [product.name, ...product.aliases].some(name => selectedNames.has(productIdentityName(name))))
     .map(({ id, name, description, aliases, benefits }) => ({ id, name, description, aliases, benefits: benefits ?? [] })) : [];
+  // The planned-surgery reminder applies even before there is a product plan.
+  const productNotes = care.products.notes.filter(row => care.products.status === "selected" || (
+    care.products.status === "none" && row.kind === "surgery_planned_liss"
+    && row.action?.type === "delay" && productIdentityName(row.action.productName) === "liss wh"
+  ));
   const publicPlan = (plan: (typeof care.products.plans)[number]) => {
     const { id, stage, nutritionalStatus, products, dose, duration, durationAmount } = plan;
     // Client-approved report instruction correction for the exact historical
@@ -241,10 +246,8 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
       coMorbidities: care.coMorbidities.map(({ id, conditionId, label, guidance }) => ({ id, conditionId, label, guidance })),
       products: { status: care.products.status, catalog: productDetails, plans: care.products.plans.map(publicPlan),
         ...(care.products.choices ? { choices: care.products.choices.map(publicPlan) } : {}),
-        // Exception wording is meaningful only with a selected product plan.
-        notes: care.products.status === "selected"
-          ? care.products.notes.map(({ id, kind, label, match, action, guidance }) => ({ id, kind, label, match, action, guidance }))
-          : [], ...(care.products.reason ? { reason: care.products.reason } : {}) },
+        notes: productNotes.map(({ id, kind, label, match, action, guidance }) => ({ id, kind, label, match, action, guidance })),
+        ...(care.products.reason ? { reason: care.products.reason } : {}) },
     },
   };
 }

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { createFinalAssessmentTemplate } from "@niq-scoring/contracts/final-assessment-template";
 import { matchedReportPacket, reportContentRequestSchema, reportEvidence } from "./report-content";
+import { requiredCoverageSources } from "./report-coverage";
 
 test("interpretation receives the recorded activity and appetite labels alongside risk and weight evidence", () => {
   const definition = createFinalAssessmentTemplate("Interpretation test");
@@ -86,6 +87,40 @@ test("report packet applies only the approved legacy Invigour preparation correc
   plan.productNames = ["Invigour"];
   plan.items[0]!.preparation = "Mix 2 sachets in 200 mL water.";
   expect(matchedReportPacket(definition, facts, "moderate", facts.assessmentDate).carePlan.products.plans[0]?.items?.[0]?.preparation).toBe("Mix 2 sachets in 200 mL water.");
+});
+
+test("a matched planned-surgery reminder reaches the report without a selected product plan", async () => {
+  const { buildDeterministicReportFallback } = await import("./report-fallback");
+  const definition = createFinalAssessmentTemplate("Planned surgery reminder");
+  const classification = { id: "moderate", label: "Moderate Risk" };
+  const facts = reportContentRequestSchema.parse({ assessmentReference: "a", resultReference: "r", idempotencyKey: "planned-surgery", facts: {
+    reviewedScore: 23, treatmentTypeIds: [], drugClassIds: [], confirmedToxicityIds: [], assessmentDate: "2026-10-15",
+    cancerTypeId: "cancer_1", dietPreferenceId: "non_vegetarian",
+    surgicalStatusId: "cancer_surgical_status_planned", plannedSurgeryDate: "2026-10-22",
+  } }).facts;
+  const reminderId = "rule:exception:surgery_planned_liss";
+  const guidance = matchedReportPacket(definition, facts, classification.id, facts.assessmentDate);
+  expect(guidance.carePlan.products).toMatchObject({ status: "none", plans: [], catalog: [],
+    notes: [{ kind: "surgery_planned_liss" }] });
+
+  const evidence = reportEvidence(definition, facts, classification, guidance);
+  expect(requiredCoverageSources(evidence)).toContainEqual(expect.objectContaining({
+    id: reminderId, field: "treatmentAdvice", text: expect.stringContaining("begin Liss WH only after surgery"),
+  }));
+  expect(evidence.some(row => row.id.startsWith("rule:product:"))).toBe(false);
+  const fallback = buildDeterministicReportFallback({ facts, classification, guidance, evidence });
+  expect(fallback.narrative.treatmentAdvice.evidenceIds).toContain(reminderId);
+  const text = fallback.narrative.treatmentAdvice.text.replaceAll("**", "");
+  expect(text).toContain("begin Liss WH only after surgery");
+  expect(text).not.toMatch(/\b(?:sachets?|scoops?|per day)\b/i);
+
+  for (const excludedFacts of [
+    { ...facts, plannedSurgeryDate: "2026-10-23" },
+    { ...facts, dietPreferenceId: "vegetarian" as const },
+  ]) {
+    const excluded = matchedReportPacket(definition, excludedFacts, classification.id, facts.assessmentDate);
+    expect(excluded.carePlan.products.notes).toEqual([]);
+  }
 });
 
 test("interpretation uses chart-aligned recorded history before the reported previous-month answer", async () => {
