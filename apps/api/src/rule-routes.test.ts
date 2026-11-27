@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { type RuleDefinition } from "@niq-scoring/contracts/rules";
 import { PROVISIONAL_SCORING_VERSION } from "@niq-scoring/contracts";
 import type { FinalAssessmentDefinition } from "@niq-scoring/contracts/final-assessment";
+import { emptyToxicityGuidance, toxicityWorkbookRiskDots } from "@niq-scoring/contracts/toxicity-workbook";
 import { MemoryAdminAuthStore } from "./admin-auth-store";
 import { createApp } from "./app";
 import { MemoryScoringStore } from "./store";
@@ -112,6 +113,57 @@ describe("rule management API", () => {
     expect((duplicated.definition as FinalAssessmentDefinition).reportGuidance!.toxicity.find(row => row.id === "toxicity_row_009")?.match).toEqual({ mode: "clinician_confirmation" });
     expect(duplicated.lifecycle).toBe("DRAFT");
     expect(duplicated.clinicalUsePermitted).toBe(false);
+  });
+  test("saves linked drug-class guidance as draft data and rejects unresolved reference links", async () => {
+    const { create, request } = setup();
+    const draft = await create("Linked guidance", { template: "final_assessment" });
+    const definition = draft.definition as FinalAssessmentDefinition;
+    const workbook = emptyToxicityGuidance();
+    const guidance = {
+      intervention: "  First line\nSecond line.  ",
+      escalation: "Example escalation",
+      actionOwner: "Example owner",
+      rationale: "Example reason",
+      referenceIds: ["1"],
+    };
+    workbook.references.push({ id: "1", text: "Example citation" });
+    const risk = { frequencyPoints: 3, intakeImpactPoints: 2 };
+    workbook.rules.push({
+      row: 9, classId: "taxanes", classLabel: "Taxanes", effect: "Example effect",
+      treatmentTypeId: "current_cancer_treatment_chemotherapy", frequencyBasis: "", risk,
+      variants: {
+        well_nourished: guidance,
+        moderately_nourished: { ...guidance, intervention: "Moderate guidance" },
+        severely_malnourished: { ...guidance, intervention: "Severe guidance" },
+      },
+    });
+    definition.reportGuidance = { ...definition.reportGuidance!, toxicity: [], toxicityWorkbook: workbook };
+    const saved = await request(`/${draft.id}`, "PUT", { revision: draft.revision, definition });
+    expect(saved.status).toBe(200);
+    const reopened = await (await request(`/${draft.id}`)).json() as RuleRecord;
+    expect(reopened.lifecycle).toBe("DRAFT");
+    expect((reopened.definition as FinalAssessmentDefinition).reportGuidance?.toxicityWorkbook).toEqual(workbook);
+    expect(toxicityWorkbookRiskDots(workbook.riskMatrix, risk, "well_nourished")).toBe(2);
+    expect(toxicityWorkbookRiskDots(workbook.riskMatrix, risk, "severely_malnourished")).toBe(3);
+    expect(toxicityWorkbookRiskDots(workbook.riskMatrix, null, "well_nourished")).toBeNull();
+
+    // Saving nutrition-specific wording must preserve the other statuses and their citation links.
+    const rule = workbook.rules[0]!;
+    delete rule.frequencyBasis;
+    rule.variants.well_nourished.frequencyBasis = "Well-nourished source";
+    rule.variants.moderately_nourished.frequencyBasis = "Moderate source";
+    rule.variants.severely_malnourished.frequencyBasis = "Severe source";
+    const revised = await request(`/${draft.id}`, "PUT", { revision: reopened.revision, definition });
+    expect(revised.status).toBe(200);
+    const reloaded = await (await request(`/${draft.id}`)).json() as RuleRecord;
+    expect((reloaded.definition as FinalAssessmentDefinition).reportGuidance?.toxicityWorkbook).toEqual(workbook);
+
+    workbook.references = [];
+    const rejected = await request(`/${draft.id}`, "PUT", { revision: reloaded.revision, definition });
+    expect(rejected.status).toBe(400);
+    expect(await rejected.json()).toMatchObject({ issues: expect.arrayContaining([
+      expect.objectContaining({ message: "Reference 1 is missing from the list." }),
+    ]) });
   });
   test("mutation responses include the recorded lifecycle history", async () => {
     const context = setup();

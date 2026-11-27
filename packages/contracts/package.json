@@ -17,6 +17,7 @@
     "./report-guidance-template": "./src/report-guidance-template.ts",
     "./toxicity-match-defaults": "./src/toxicity-match-defaults.ts",
     "./report-guidance": "./src/report-guidance.ts",
+    "./toxicity-workbook": "./src/toxicity-workbook.ts",
     "./report-ai": "./src/report-ai.ts",
     "./care-plan-guidance": "./src/care-plan-guidance.ts",
     "./care-plan-resolver": "./src/care-plan-resolver.ts",

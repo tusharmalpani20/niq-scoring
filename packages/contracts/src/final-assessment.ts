@@ -2,6 +2,7 @@ import { faceScanScoringConfigSchema } from "./face-scan-scoring";
 import { stressScoringConfigSchema } from "./stress-scoring";
 import { carePlanGuidanceSchema } from "./care-plan-guidance";
 import { reportAiConfigSchema } from "./report-ai";
+import { toxicityWorkbookSchema } from "./toxicity-workbook";
 import { z } from "zod";
 import { answerValueSchema, answersSchema, optionSchema, rangeSchema, ruleIdSchema, sourceSchema } from "./rule-definition";
 
@@ -147,6 +148,8 @@ export const toxicityMatchSchema = z.discriminatedUnion("mode", [
 ]);
 
 export const reportGuidanceSchema = z.object({
+  // Workbook rows are reviewed here before they are connected to report generation.
+  toxicityWorkbook: toxicityWorkbookSchema.optional(),
   nutrition: z.array(z.object({
     id: ruleIdSchema, label, riskCategoryId: ruleIdSchema.nullable(),
     coreStrategy: z.string().trim().min(1).max(4000),
