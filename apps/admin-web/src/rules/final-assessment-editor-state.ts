@@ -15,6 +15,8 @@ export function editableDefinition(record: RuleDetail) {
   const definition = parse(record.definition);
   if (!definition || !["DRAFT", "VALIDATED"].includes(record.lifecycle)) return definition;
   const carePlanGuidance = withCurrentCarePlanDefaults(definition.carePlanGuidance ?? initialCarePlanGuidance());
+  // A draft with the reviewed guidance uses one set of drug-class rules.
+  if (definition.reportGuidance?.toxicityWorkbook) definition.reportGuidance.toxicity = [];
   return withDefaultRiskCategoryColors({ ...definition, stressScoring: definition.stressScoring ?? structuredClone(DEFAULT_STRESS_SCORING_CONFIG),
     carePlanGuidance: { ...carePlanGuidance, products: { ...carePlanGuidance.products,
       plans: carePlanGuidance.products.plans.map(normalizeProductPlan) } }, reportAi: definition.reportAi ?? initialReportAiConfig() });
