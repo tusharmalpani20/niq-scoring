@@ -3,7 +3,7 @@ import { reportCardSources } from "./report-card-context";
 
 test("routine nutrition targets do not turn into invented card-specific obligations", () => {
   const evidence = [
-    { id: "rule:status:example", text: "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise care\n• Mouth sores: soft high-protein foods\n• Contact your care team for fever." },
+    { id: "rule:treatment:example", text: "Energy and protein\n• Energy 30–35 kcal/kg/day; protein 1.2–1.5 g/kg/day\nSymptom-wise care\n• Mouth sores: soft high-protein foods\n• Contact your care team for fever." },
     { id: "possible:toxicity:infection", text: "Infection risk. Maintain adequate protein and energy. Contact your care team for fever." },
   ];
   const original = structuredClone(evidence);

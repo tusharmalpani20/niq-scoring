@@ -249,8 +249,6 @@ export function buildDeterministicReportFallback(input: {
   const treatmentRows = [
     ...guidance.classGuidance.map(row => ({ id: `rule:class:${row.id}`,
       text: `${row.label}. ${requireSource(`rule:class:${row.id}`, row.guidance)}` })),
-    ...guidance.carePlan.statusModifiers.map(row => ({ id: `rule:status:${row.id}`,
-      text: requireSource(`rule:status:${row.id}`, `${row.riskEmphasis} ${row.actions}`) })),
     ...guidance.carePlan.treatmentGuidance.map(row => ({ id: `rule:treatment:${row.id}`,
       text: requireSource(`rule:treatment:${row.id}`, row.guidance) })),
     ...guidance.carePlan.products.notes.filter(row => row.action?.type !== "remove").map(row => ({ id: `rule:exception:${row.id}`,
@@ -371,7 +369,7 @@ export function buildDeterministicReportFallback(input: {
     narrative[field].text = markFallbackHighlight(field, narrative[field].text);
   const sectionFor = (id: string): keyof ReportNarrative | "possible" | null => {
     if (id.startsWith("rule:nutrition:")) return "nutritionAdvice";
-    if (["rule:class:", "rule:status:", "rule:treatment:", "rule:exception:"].some(prefix => id.startsWith(prefix))) return "treatmentAdvice";
+    if (["rule:class:", "rule:treatment:", "rule:exception:"].some(prefix => id.startsWith(prefix))) return "treatmentAdvice";
     if (id.startsWith("rule:comorbidity:")) return "conditionAdvice";
     if (id.startsWith("rule:toxicity:")) return "effectsAdvice";
     // The selected product plan has its own structured UI card.

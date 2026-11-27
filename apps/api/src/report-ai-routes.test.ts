@@ -457,21 +457,6 @@ test("matched conditions and treatment effects cannot be silently omitted", () =
   expect(validateNarrative({ ...partial, conditionAdvice: { text: "### Kidney disease\nAsk your care team to set fluid and protein targets for your renal function.\n### Diabetes\nAsk your diabetes team about meal timing.", evidenceIds: ["rule:comorbidity:kidney", "rule:comorbidity:diabetes"] } }, evidence).issues).toEqual([]);
 });
 
-test("reported effects can use matched treatment-status guidance without a drug class", () => {
-  const evidence = [
-    { id: "fact:niq_risk", text: "NIQ risk: High Risk; reviewed score 27" },
-    { id: "fact:assessment_symptoms_mouth_sores", text: "Assessment records symptoms: mouth sores. This does not establish a treatment cause." },
-    { id: "rule:status:radiation", text: "Radiation status guidance: soft moist foods can help with mouth sores. Review swallowing difficulty with the team." },
-  ];
-  const narrative = { ...noGuidanceNarrative,
-    treatmentAdvice: { text: "Review nutrition during radiation with your care team.", evidenceIds: ["rule:status:radiation"] },
-    effectsAdvice: { text: "For your reported mouth sores, try soft, moist foods.", evidenceIds: ["rule:status:radiation", "fact:assessment_symptoms_mouth_sores"] },
-  };
-  expect(validateNarrative(narrative, evidence).issues).toEqual([]);
-  expect(validateNarrative({ ...narrative, effectsAdvice: { ...narrative.effectsAdvice, evidenceIds: ["rule:status:radiation"] } }, evidence).issues)
-    .toContain("effectsAdvice:STATUS_GUIDANCE_NEEDS_REPORTED_EFFECT");
-});
-
 test("reported radiation symptoms can use matched treatment guidance without treating it as a symptom fact", () => {
   const evidence = [
     { id: "fact:niq_risk", text: "NIQ risk: High Risk; reviewed score 27" },
@@ -497,7 +482,6 @@ test("matched nutrition and treatment advice cannot vanish from a ready report",
   const evidence = [
     { id: "fact:niq_risk", text: "NIQ risk: High Risk; reviewed score 31" },
     { id: "rule:nutrition:high", text: "Begin medically supervised nutrition support early." },
-    { id: "rule:status:poor", text: "Preserve lean body mass during treatment." },
     { id: "rule:treatment:therapy", text: "Use small frequent meals to support intake." },
     { id: "rule:class:platinum", text: "Monitor hydration during treatment." },
     { id: "rule:product:selected", text: "Selected product plan: Invigour + Protect. Dose: 3 Invigour + 2 Protect." },
@@ -507,7 +491,7 @@ test("matched nutrition and treatment advice cannot vanish from a ready report",
   expect(missing).toContain("treatmentAdvice:MISSING_MATCHED_COVERAGE");
   const covered = { ...emptyNarrative,
     nutritionAdvice: { text: "Begin supervised support early to preserve muscle.", evidenceIds: ["rule:nutrition:high"] },
-    treatmentAdvice: { text: "Preserve muscle with small frequent meals and monitor hydration.", evidenceIds: ["rule:status:poor", "rule:treatment:therapy", "rule:class:platinum"] },
+    treatmentAdvice: { text: "Eat small frequent meals and monitor hydration.", evidenceIds: ["rule:treatment:therapy", "rule:class:platinum"] },
     actionSummary: { text: "Take 3 Invigour and 2 Protect daily.", evidenceIds: ["rule:product:selected"] },
   };
   expect(validateNarrative(covered, evidence).issues).toContain("actionSummary:REPEATS_PRODUCT_PLAN");
@@ -1002,15 +986,15 @@ test("renal guidance blocks fixed nutrition and fluid instructions", () => {
   expect(validateNarrative(generalRange, evidence).issues).toContain("nutritionAdvice:RENAL_FIXED_TARGET_NEEDS_TEAM");
   const qualified = { ...base, nutritionAdvice: { text: "Ask your care team to individualise your energy, protein, and fluid targets.", evidenceIds: ["rule:nutrition:a", "rule:comorbidity:kidney"] } };
   expect(validateNarrative(qualified, evidence).issues).not.toContain("nutritionAdvice:RENAL_TARGET_NEEDS_QUALIFICATION");
-  const withStatus = [...evidence, { id: "rule:status:a", text: "Potassium-rich foods may be relevant, depending on the patient's kidney plan." }];
+  const withTreatment = [...evidence, { id: "rule:treatment:a", text: "Potassium-rich foods may be relevant, depending on the patient's kidney plan." }];
   const directFoods = { ...qualified, treatmentAdvice: {
-    text: "Include potassium-rich foods such as banana, as appropriate to your plan.", evidenceIds: ["rule:status:a"],
+    text: "Include potassium-rich foods such as banana, as appropriate to your plan.", evidenceIds: ["rule:treatment:a"],
   } };
-  expect(validateNarrative(directFoods, withStatus).issues).toContain("treatmentAdvice:RENAL_ELECTROLYTE_FOODS_NEED_APPROVAL");
+  expect(validateNarrative(directFoods, withTreatment).issues).toContain("treatmentAdvice:RENAL_ELECTROLYTE_FOODS_NEED_APPROVAL");
   const checkedFoods = { ...qualified, treatmentAdvice: {
-    text: "Ask your care team whether potassium-rich foods fit your individual plan.", evidenceIds: ["rule:status:a"],
+    text: "Ask your care team whether potassium-rich foods fit your individual plan.", evidenceIds: ["rule:treatment:a"],
   } };
-  expect(validateNarrative(checkedFoods, withStatus).issues).not.toContain("treatmentAdvice:RENAL_ELECTROLYTE_FOODS_NEED_APPROVAL");
+  expect(validateNarrative(checkedFoods, withTreatment).issues).not.toContain("treatmentAdvice:RENAL_ELECTROLYTE_FOODS_NEED_APPROVAL");
   const directBanana = { ...qualified, effectsAdvice: {
     text: "For nausea, try small bland meals such as toast or banana.", evidenceIds: ["rule:toxicity:nausea"],
   } };

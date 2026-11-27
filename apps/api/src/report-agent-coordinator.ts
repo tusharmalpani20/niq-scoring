@@ -197,7 +197,7 @@ Use exact supported labels, quantities, numbers, and units. Keep possible effect
       reviewDetails.some(issue => issue.field === "overallSummary");
     if (!needsSummary) break;
     const source = evidence.filter(item => item.id.startsWith("fact:") ||
-      ["rule:nutrition:", "rule:status:", "rule:treatment:", "rule:comorbidity:", "rule:product:"]
+      ["rule:nutrition:", "rule:treatment:", "rule:comorbidity:", "rule:product:"]
         .some(prefix => item.id.startsWith(prefix)));
     const passage = await invoke("revision", FIXED_SAFETY, `${aiConfig.writerPrompt}\nRepair only overallSummary. Write ONE short coherent patient-facing paragraph connecting the reviewed risk, main supported concerns, nutrition/support strategy if present, and relevant follow-up. Avoid reciting score, nutritional-status label and product as separate stock sentences. Avoid repeating diagnosis, treatment context, and measurements already stated elsewhere. Do not point to advice above, below, listed, or elsewhere. Do not copy detailed instructions, infer treatment causation, or claim a deficiency without evidence. Cite only IDs from the evidence supplied here. Current passage: ${JSON.stringify(parsedCandidate.data.overallSummary)}\nIssues: ${JSON.stringify([...checked.issues.filter(issue => issue.startsWith("overallSummary:")).map(code => ({ code })), ...reviewDetails.filter(issue => issue.field === "overallSummary")])}\nEvidence: ${JSON.stringify(source)}`, fieldJsonSchema);
     const part = z.object({ text: z.string(), evidenceIds: z.array(z.string()) }).strict().safeParse(passage);

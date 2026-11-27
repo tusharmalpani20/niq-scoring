@@ -4,7 +4,7 @@ import { resolveReportSourceConflicts, validateReportTargetResolutions } from ".
 const evidence = [
   { id: "fact:niq_risk", text: "High risk, reviewed score 29." },
   { id: "rule:nutrition:nutrition_high", text: "Aim for 30–35 kcal/kg/day and 1.5–2.0 g protein/kg/day." },
-  { id: "rule:status:status_antimetabolites_severely_malnourished", text: "Target 30–35 kcal/kg/day and 1.2–1.5 g/kg/day protein. Preserve food safety." },
+  { id: "rule:treatment:radiotherapy_severely_malnourished", text: "Target 30–35 kcal/kg/day and 1.2–1.5 g/kg/day protein. Preserve food safety." },
 ];
 
 test("no model call is spent when matched targets agree", async () => {
@@ -20,7 +20,7 @@ test("manager can choose an existing range with a recorded reason without changi
     calls++;
     expect(step).toBe("manager");
     expect(system).toContain("Do not select an overlap");
-    expect(user).toContain("status_antimetabolites_severely_malnourished");
+    expect(user).toContain("radiotherapy_severely_malnourished");
     return { resolutions: [{ nutrient: "protein", decision: "select_source", selectedSourceId: evidence[2]!.id,
       rationale: "The matched treatment/status guidance is more specific to the recorded treatment and nutritional status." }] };
   } });
@@ -55,7 +55,7 @@ test("unjustified conflict withholds only the disputed numeric target", async ()
 test("foreign source IDs, missing decisions and invented targets cannot become authoritative evidence", async () => {
   for (const response of [
     { resolutions: [] },
-    { resolutions: [{ nutrient: "protein", decision: "select_source", selectedSourceId: "rule:status:foreign", rationale: "More specific." }] },
+    { resolutions: [{ nutrient: "protein", decision: "select_source", selectedSourceId: "rule:treatment:foreign", rationale: "More specific." }] },
     { resolutions: [{ nutrient: "protein", decision: "select_source", selectedSourceId: evidence[1]!.id, rationale: "Choose a target.", target: "1.5 g/kg/day" }] },
   ]) await expect(resolveReportSourceConflicts({ evidence, invoke: async () => response })).rejects.toThrow("MODEL_INVALID_CONFLICT_RESOLUTION");
 });
@@ -76,7 +76,7 @@ test("a manager target choice cannot override a matched renal restriction", asyn
 });
 
 test("all conflicting nutrients need distinct decisions in the same bounded call", async () => {
-  const rows = evidence.map(row => row.id.startsWith("rule:status:") ? { ...row, text: row.text.replace("30–35", "25–30") } : row);
+  const rows = evidence.map(row => row.id.startsWith("rule:treatment:") ? { ...row, text: row.text.replace("30–35", "25–30") } : row);
   let calls = 0;
   const result = await resolveReportSourceConflicts({ evidence: rows, invoke: async () => {
     calls++;
@@ -103,7 +103,7 @@ test("resolved targets reject mismatched prescriptions across narrative fields a
 });
 
 test("withheld targets prohibit numeric prescriptions for that nutrient only", async () => {
-  const rows = evidence.map(row => row.id.startsWith("rule:status:") ? { ...row, text: row.text.replace("30–35", "25–30") } : row);
+  const rows = evidence.map(row => row.id.startsWith("rule:treatment:") ? { ...row, text: row.text.replace("30–35", "25–30") } : row);
   const resolved = await resolveReportSourceConflicts({ evidence: rows, invoke: async () => ({ resolutions: [
     { nutrient: "energy", decision: "withhold_numeric", selectedSourceId: null, rationale: "Energy targets conflict without evidence supporting a priority." },
     { nutrient: "protein", decision: "withhold_numeric", selectedSourceId: null, rationale: "Protein targets conflict without evidence supporting a priority." },

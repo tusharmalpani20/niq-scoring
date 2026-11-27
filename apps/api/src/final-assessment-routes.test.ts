@@ -221,9 +221,9 @@ test("approved final assessment supports credential-bound public scoring and exa
   expect(carePlanResponse.status).toBe(200);
   const carePlan = (await carePlanResponse.json()).guidance.carePlan;
   expect(carePlan).toMatchObject({ nutritionalStatus: "well_nourished",
-    statusModifiers: [{ id: "status_taxanes_well_nourished" }],
     coMorbidities: [{ conditionId: "co_morbidities_diabetes" }],
     products: { status: "selected", plans: [{ id: "product_during_treatment_well_nourished" }] } });
+  expect(carePlan).not.toHaveProperty("statusModifiers");
   expect(carePlan.coMorbidities[0]).not.toHaveProperty("sourceText");
   expect((await call("report-guidance", { ...savedGuidanceFacts, coMorbidityIds: ["unknown"] })).status).toBe(400);
   expect((await call("report-guidance", { ...savedGuidanceFacts, surgeryDate: "2026-02-30", surgicalStatusId: "cancer_surgical_status_done" })).status).toBe(400);

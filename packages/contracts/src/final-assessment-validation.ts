@@ -183,7 +183,6 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
   if (definition.carePlanGuidance) {
     const carePlan = definition.carePlanGuidance;
     const configuredRisks = new Set(definition.riskCategories.map(item => item.id));
-    const configuredClasses = new Set(definition.drugClassConfig?.classes.map(item => item.id) ?? []);
     const configuredTreatments = new Set(definition.sections.flatMap(section => section.fields)
       .filter(field => field.id === "current_cancer_treatment" && "options" in field)
       .flatMap(field => "options" in field ? field.options.map(option => option.id) : []));
@@ -203,17 +202,6 @@ export function validateFinalAssessmentDefinition(definition: FinalAssessmentDef
       if (ids.has(id)) add(`${path}.id`, "DUPLICATE_CARE_PLAN_ID", "Each care plan row needs a unique ID.");
       ids.add(id);
     };
-    const modifiers = new Set<string>();
-    carePlan.oncology.statusModifiers.forEach((row, index) => {
-      const path = `carePlanGuidance.oncology.statusModifiers.${index}`;
-      unique(row.id, path);
-      if (!row.enabled) return;
-      if (row.classId === "other" || !configuredClasses.has(row.classId)) add(`${path}.classId`, "UNKNOWN_DRUG_CLASS", "Status guidance must use a configured named drug class.");
-      if (!configuredTreatments.has(row.treatmentTypeId)) add(`${path}.treatmentTypeId`, "UNKNOWN_TREATMENT", "Status guidance refers to a missing treatment type.");
-      const key = JSON.stringify([row.classId, row.treatmentTypeId, row.nutritionalStatus]);
-      if (modifiers.has(key)) add(path, "DUPLICATE_STATUS_GUIDANCE", "Only one active status rule may match this class, treatment and nutrition status.");
-      modifiers.add(key);
-    });
     const treatmentStatuses = new Set<string>();
     carePlan.oncology.radiotherapy.forEach((row, index) => {
       const path = `carePlanGuidance.oncology.radiotherapy.${index}`;

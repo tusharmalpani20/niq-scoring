@@ -16,7 +16,7 @@ const base: CarePlanFacts = {
 };
 
 describe("care plan guidance from the versioned workbooks", () => {
-  test("maps stable risk IDs and matches class, radiotherapy and co-morbidity guidance", () => {
+  test("maps stable risk IDs and matches radiotherapy and co-morbidity guidance", () => {
     const rule = definition();
     rule.riskCategories.find(row => row.id === "moderate")!.label = "Needs support";
     const result = resolveCarePlanGuidance(rule, {
@@ -25,14 +25,13 @@ describe("care plan guidance from the versioned workbooks", () => {
       coMorbidityIds: ["co_morbidities_diabetes"],
     });
     expect(result.nutritionalStatus).toBe("moderately_nourished");
-    expect(result.statusModifiers.map(row => row.id)).toEqual(["status_taxanes_moderately_nourished"]);
+    expect(result).not.toHaveProperty("statusModifiers");
     expect(result.treatmentGuidance).toMatchObject([{ treatmentTypeId: "current_cancer_treatment_radiation", nutritionalStatus: "moderately_nourished" }]);
     expect(result.coMorbidities.map(row => row.conditionId)).toEqual(["co_morbidities_diabetes"]);
     expect(JSON.stringify(result.coMorbidities)).not.toContain("dexamethasone");
     expect(result.coMorbidities[0]).not.toHaveProperty("sourceText");
     expect(validateFinalAssessmentDefinition(rule)).toEqual([]);
     expect(JSON.stringify(publicQuestionnaire(rule))).not.toContain("Liss WH");
-    expect(JSON.stringify(publicQuestionnaire(rule))).not.toContain("status_taxanes");
   });
 
   test("new risk categories require an explicit nutrition-status mapping", () => {
@@ -405,7 +404,7 @@ describe("care plan guidance from the versioned workbooks", () => {
   test("Other receives only the existing generic nutrition layer", () => {
     const result = resolveCarePlanGuidance(definition(), { ...base, drugClassIds: ["other"],
       coMorbidityIds: ["co_morbidities_diabetes"], treatmentStatusId: "treatment_status_under_treatment" });
-    expect(result).toEqual({ nutritionalStatus: null, statusModifiers: [], treatmentGuidance: [], coMorbidities: [],
+    expect(result).toEqual({ nutritionalStatus: null, treatmentGuidance: [], coMorbidities: [],
       products: { status: "none", plans: [], notes: [] } });
   });
 });

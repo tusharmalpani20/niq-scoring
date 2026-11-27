@@ -241,7 +241,6 @@ export function matchedReportPacket(definition: FinalAssessmentDefinition, facts
     classGuidance: report.classGuidance,
     carePlan: {
       nutritionalStatus: care.nutritionalStatus,
-      statusModifiers: care.statusModifiers.map(({ id, classId, treatmentTypeId, nutritionalStatus, riskEmphasis, actions }) => ({ id, classId, treatmentTypeId, nutritionalStatus, riskEmphasis, actions })),
       treatmentGuidance: care.treatmentGuidance.map(({ id, treatmentTypeId, nutritionalStatus, guidance }) => ({ id, treatmentTypeId, nutritionalStatus, guidance })),
       coMorbidities: care.coMorbidities.map(({ id, conditionId, label, guidance }) => ({ id, conditionId, label, guidance })),
       products: { status: care.products.status, catalog: productDetails, plans: care.products.plans.map(publicPlan),
@@ -346,7 +345,6 @@ export function reportEvidence(definition: FinalAssessmentDefinition, facts: Rep
   }
   for (const row of packet.toxicityInterventions)
     evidence.push({ id: `rule:toxicity:${row.id}`, text: `Nutrition guidance for a matched treatment effect: ${row.nutritionalInterventions}` });
-  for (const row of packet.carePlan.statusModifiers) evidence.push({ id: `rule:status:${row.id}`, text: `${row.riskEmphasis}. ${row.actions}` });
   for (const row of packet.carePlan.treatmentGuidance) evidence.push({ id: `rule:treatment:${row.id}`, text: row.guidance });
   for (const row of packet.carePlan.coMorbidities) evidence.push({ id: `rule:comorbidity:${row.id}`, text: `${row.label}: ${row.guidance}` });
   for (const row of packet.carePlan.products.notes) {
@@ -402,9 +400,9 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   const evidenceById = new Map(evidence.map(item => [item.id, item.text]));
   const requiredGuidance: Partial<Record<keyof ReportNarrative, readonly string[]>> = {
     nutritionAdvice: ["rule:nutrition:"],
-    treatmentAdvice: ["rule:nutrition:", "rule:status:", "rule:treatment:", "rule:class:", "rule:exception:"],
+    treatmentAdvice: ["rule:nutrition:", "rule:treatment:", "rule:class:", "rule:exception:"],
     conditionAdvice: ["rule:comorbidity:"],
-    effectsAdvice: ["rule:toxicity:", "possible:toxicity:", "rule:status:", "rule:treatment:"],
+    effectsAdvice: ["rule:toxicity:", "possible:toxicity:", "rule:treatment:"],
   };
   const issues: string[] = reportEditorialFindings(data).map(finding => `${finding.field}:${finding.code}`);
   if (evidenceById.has("fact:niq_risk") && !data.overallSummary.text)
@@ -415,7 +413,7 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
   // empty field and the reviewer accepted it.
   for (const [field, prefixes] of [
     ["nutritionAdvice", ["rule:nutrition:"]],
-    ["treatmentAdvice", ["rule:status:", "rule:treatment:", "rule:class:", "rule:exception:"]],
+    ["treatmentAdvice", ["rule:treatment:", "rule:class:", "rule:exception:"]],
     ["conditionAdvice", ["rule:comorbidity:"]],
     ["effectsAdvice", ["rule:toxicity:"]],
   ] as const) {
@@ -535,9 +533,6 @@ export function validateNarrative(value: unknown, evidence: ReportEvidence[]): {
     if (field === "effectsAdvice" && part.evidenceIds.some(id => id.startsWith("possible:toxicity:"))
       && !part.evidenceIds.some(id => id.startsWith("fact:assessment_") || id.startsWith("fact:clinician_toxicity_")))
       issues.push(`${field}:CANDIDATE_NEEDS_REPORTED_EFFECT`);
-    if (field === "effectsAdvice" && part.evidenceIds.some(id => id.startsWith("rule:status:"))
-      && !part.evidenceIds.some(id => id.startsWith("fact:assessment_") || id.startsWith("fact:clinician_toxicity_")))
-      issues.push(`${field}:STATUS_GUIDANCE_NEEDS_REPORTED_EFFECT`);
     if (field === "effectsAdvice" && part.evidenceIds.some(id => id.startsWith("rule:treatment:"))
       && !part.evidenceIds.some(id => id.startsWith("fact:assessment_") || id.startsWith("fact:clinician_toxicity_")))
       issues.push(`${field}:TREATMENT_GUIDANCE_NEEDS_REPORTED_EFFECT`);
