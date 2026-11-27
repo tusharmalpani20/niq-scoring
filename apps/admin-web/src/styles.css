@@ -468,7 +468,21 @@ td small {
   box-shadow: 0 14px 38px rgb(17 41 50 / 14%);
   backdrop-filter: blur(18px);
 }
-.scoring-dock-item { display: grid; min-width: 0; min-height: 3rem; flex: 1; align-content: center; justify-items: center; gap: .1rem; border-radius: 999px; color: var(--muted-foreground); font-size: .7rem; font-weight: 600; text-align: center; }
+.scoring-dock-item {
+  display: grid;
+  min-width: 0;
+  min-height: 3rem;
+  flex: 1 1 auto;
+  align-content: center;
+  justify-items: center;
+  gap: .1rem;
+  padding-inline: .25rem;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  font-size: .7rem;
+  font-weight: 600;
+  text-align: center;
+}
 .scoring-dock-item[aria-current="page"] { color: var(--primary-foreground); background: var(--primary); }
 .scoring-dock-item:not([aria-current="page"]):hover { color: var(--foreground); background: var(--accent); }
 .scoring-dock-item span { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
@@ -478,6 +492,10 @@ td small {
   .scoring-account-name { display: none; }
   .scoring-dock-item { font-size: .61rem; }
   .scoring-dock-item svg { width: 18px; height: 18px; }
+}
+@media (max-width: 360px) {
+  .scoring-dock { width: calc(100% - 1rem); gap: .0625rem; }
+  .scoring-dock-item { padding-inline: .125rem; }
 }
 
 /* Keep the list's table semantics while presenting each record as a readable card on phones. */
