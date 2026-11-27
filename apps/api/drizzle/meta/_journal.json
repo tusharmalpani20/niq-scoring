@@ -246,6 +246,13 @@
       "when": 1793059200000,
       "tag": "0034_byoc_request_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795769162753,
+      "tag": "0035_clear_legacy_product_descriptions",
+      "breakpoints": true
     }
   ]
 }
