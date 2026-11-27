@@ -1,6 +1,25 @@
 import { expect, test } from "@playwright/test";
 import { mockFinalConsole, startFinalDraft } from "./final-assessment-fixture";
 
+test("renames and disables a legacy nutrition row without converting it", async ({ page }) => {
+  const state = await mockFinalConsole(page);
+  await startFinalDraft(page);
+  const original = state.getRecord()!.definition.reportGuidance!.nutrition.find(row => row.riskCategoryId === "low")!;
+  expect(original.targets).toBeUndefined();
+
+  await page.getByRole("tab", { name: "Report guidance" }).click();
+  await page.getByRole("button", { name: `Edit ${original.label}`, exact: true }).click();
+  const editor = page.getByRole("dialog");
+  await editor.getByRole("textbox", { name: "Name", exact: true }).fill("Previous Low Risk guidance");
+  await editor.getByRole("checkbox", { name: "Enabled for this rule version" }).uncheck();
+  await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
+
+  const saved = state.getRecord()!.definition.reportGuidance!.nutrition.find(row => row.id === original.id);
+  expect(saved).toEqual({ ...original, label: "Previous Low Risk guidance", enabled: false });
+});
+
 test("drug-class report guidance uses class and treatment without symptom matching", async ({ page }) => {
   const state = await mockFinalConsole(page);
   await startFinalDraft(page);

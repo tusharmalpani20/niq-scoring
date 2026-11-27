@@ -9,11 +9,20 @@ import { NativeSelect } from "../components/ui/native-select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import {
+  Field,
+  NutritionTargetExceptionsEditor,
+  NutritionTargetFields,
+  NutritionTargetSummary,
+  parseTargetInputs,
+  targetInputs,
+  type TargetInputs,
+} from "./NutritionTargetFields";
 import { ToxicityWorkbookPanel } from "./ToxicityWorkbookPanel";
 
 type Guidance = NonNullable<FinalAssessmentDefinition["reportGuidance"]>;
 type Nutrition = Guidance["nutrition"][number];
-type EditorState = { item: Nutrition; isNew: boolean };
+type EditorState = { item: Nutrition; isNew: boolean; targets: TargetInputs };
 type Props = {
   definition: FinalAssessmentDefinition;
   disabled: boolean;
@@ -24,10 +33,6 @@ type Props = {
 const emptyGuidance: Guidance = { nutrition: [], toxicity: [] };
 const newNutritionId = () => `nutrition_${crypto.randomUUID().replaceAll("-", "")}`;
 const searchMatch = (query: string, ...values: string[]) => values.some(value => value.toLocaleLowerCase().includes(query));
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block min-w-0 space-y-1.5 text-sm"><span className="font-medium">{label}</span>{children}</label>;
-}
 
 export function ReportGuidanceEditor({ definition, disabled, onChange, onReferenceSelect }: Props) {
   const guidance = definition.reportGuidance ?? emptyGuidance;
@@ -57,21 +62,23 @@ export function ReportGuidanceEditor({ definition, disabled, onChange, onReferen
       : id,
   }));
   const riskName = (id: string | null) => id === null ? "Any risk category" : riskCategories.find(item => item.id === id)?.label ?? id;
+  const hasLegacyGuidance = guidance.nutrition.some(item => !item.targets && item.coreStrategy && item.clinicalActions);
   const filteredNutrition = useMemo(() => guidance.nutrition.filter(item => {
     const query = nutritionSearch.trim().toLocaleLowerCase();
     return (riskFilter === "all" || (riskFilter === "any" ? item.riskCategoryId === null : item.riskCategoryId === riskFilter))
       && (statusFilter === "all" || item.enabled === (statusFilter === "enabled"))
-      && (!query || searchMatch(query, item.label, riskName(item.riskCategoryId), item.coreStrategy, item.clinicalActions));
+      && (!query || searchMatch(query, item.label, riskName(item.riskCategoryId), item.coreStrategy ?? "", item.clinicalActions ?? "", item.proteinTargetNote ?? ""));
   }), [guidance.nutrition, nutritionSearch, riskFilter, statusFilter, riskCategories]);
   const change = (next: Guidance) => onChange({ ...definition, reportGuidance: next });
   const startEdit = (item?: Nutrition) => {
     setError("");
     const next: EditorState = {
       item: item ?? {
-        id: newNutritionId(), label: "", riskCategoryId: null, coreStrategy: "", clinicalActions: "",
+        id: newNutritionId(), label: "", riskCategoryId: null,
         enabled: true, source: { document: "Manual entry", location: "Rules editor", note: "" },
       },
       isNew: !item,
+      targets: targetInputs(item?.targets),
     };
     setEditing(next);
     setOriginal(structuredClone(next));
@@ -84,21 +91,45 @@ export function ReportGuidanceEditor({ definition, disabled, onChange, onReferen
   const saveEdit = () => {
     if (!editing || disabled) return;
     const item = editing.item;
-    if (!item.label.trim() || !item.coreStrategy.trim() || !item.clinicalActions.trim()) { setError("Enter a name, core strategy, and clinical actions."); return; }
-    if (item.riskCategoryId !== null && !riskCategories.some(category => category.id === item.riskCategoryId)) { setError("Select a configured risk category."); return; }
-    if (item.enabled && guidance.nutrition.some(row => row.id !== item.id && row.enabled && item.riskCategoryId !== null && row.riskCategoryId === item.riskCategoryId)) { setError("An active intervention already covers this risk category."); return; }
-    const clean = {
-      ...item,
+    if (!item.label.trim()) {
+      setError("Enter a name.");
+      return;
+    }
+    if (item.riskCategoryId !== null && !riskCategories.some(category => category.id === item.riskCategoryId)) {
+      setError("Select a configured risk category.");
+      return;
+    }
+    if (item.enabled && guidance.nutrition.some(row => row.id !== item.id && row.enabled
+      && item.riskCategoryId !== null && row.riskCategoryId === item.riskCategoryId)) {
+      setError("An active intervention already covers this risk category.");
+      return;
+    }
+    const targets = parseTargetInputs(editing.targets);
+    const noTargetInputs = Object.values(editing.targets).every(range => !range.min.trim() && !range.max.trim());
+    // Renaming or disabling a historical row should preserve its saved text.
+    const legacyText = !item.targets && noTargetInputs && item.coreStrategy && item.clinicalActions
+      ? { coreStrategy: item.coreStrategy, clinicalActions: item.clinicalActions }
+      : undefined;
+    if (!targets.success && !legacyText) {
+      setError("For each daily target, enter a positive minimum and a maximum at least as large as the minimum.");
+      return;
+    }
+    const clean: Nutrition = {
+      id: item.id,
       label: item.label.trim(),
-      coreStrategy: item.coreStrategy.trim(),
-      clinicalActions: item.clinicalActions.trim(),
+      riskCategoryId: item.riskCategoryId,
+      enabled: item.enabled,
+      ...(targets.success ? { targets: targets.data } : legacyText),
+      proteinTargetNote: item.proteinTargetNote?.trim() || undefined,
       source: {
         document: item.source.document.trim() || "Manual entry",
         location: item.source.location.trim() || "Rules editor",
         note: item.source.note.trim(),
       },
     };
-    change({ ...guidance, nutrition: editing.isNew ? [...guidance.nutrition, clean] : guidance.nutrition.map(row => row.id === clean.id ? clean : row) });
+    change({ ...guidance, nutrition: editing.isNew
+      ? [...guidance.nutrition, clean]
+      : guidance.nutrition.map(row => row.id === clean.id ? clean : row) });
     closeEdit();
   };
   const remove = () => {
@@ -115,7 +146,50 @@ export function ReportGuidanceEditor({ definition, disabled, onChange, onReferen
     {section === "nutrition" ? <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-medium">Nutrition by risk</h3><p className="text-sm text-muted-foreground">Guidance by NIQ risk category. “Any” applies across categories.</p></div><Button type="button" disabled={disabled || guidance.nutrition.length >= 30} onClick={() => startEdit()}><Plus className="size-4" aria-hidden="true" /> Add intervention</Button></div>
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem_10rem]"><label className="relative min-w-0"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" aria-hidden="true" /><Input className="pl-9" aria-label="Search nutrition interventions" placeholder="Search nutrition guidance…" value={nutritionSearch} onChange={event => setNutritionSearch(event.target.value)} /></label><NativeSelect aria-label="Filter nutrition risk category" value={riskFilter} onChange={event => setRiskFilter(event.target.value)}><option value="all">All risk categories</option><option value="any">Any risk category</option>{riskCategories.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</NativeSelect><NativeSelect aria-label="Filter nutrition status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="all">All statuses</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></NativeSelect></div>
-      <div className="overflow-x-auto rounded-lg border"><Table className="min-w-[38rem] table-fixed"><TableHeader><TableRow className="bg-primary/5"><TableHead className="w-[23%]">Intervention</TableHead><TableHead className="w-[19%]">Risk category</TableHead><TableHead className="w-[46%]">Guidance</TableHead><TableHead className="w-[12%] text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredNutrition.map(item => <TableRow key={item.id} className="even:bg-muted/20"><TableCell className="whitespace-normal align-top"><span className="font-medium">{item.label}</span>{!item.enabled && <span className="mt-1 block text-xs text-muted-foreground">Disabled</span>}</TableCell><TableCell className="whitespace-normal align-top">{riskName(item.riskCategoryId)}</TableCell><TableCell className="whitespace-normal align-top"><span className="line-clamp-2">{item.coreStrategy}</span><span className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.clinicalActions}</span></TableCell><TableCell className="align-top"><div className="flex justify-end gap-1"><Button type="button" size="icon" variant="ghost" aria-label={`Edit ${item.label}`} disabled={disabled} onClick={() => startEdit(item)}><Pencil className="size-4" aria-hidden="true" /></Button><Button type="button" size="icon" variant="ghost" className="text-destructive" aria-label={`Delete ${item.label}`} disabled={disabled} onClick={() => setDeletingId(item.id)}><Trash2 className="size-4" aria-hidden="true" /></Button></div></TableCell></TableRow>)}</TableBody></Table>{!filteredNutrition.length && <p className="p-5 text-sm text-muted-foreground">{guidance.nutrition.length ? "No interventions match these filters." : "No nutrition interventions in this version. Add an intervention to get started."}</p>}</div>
+      <div className="overflow-x-auto rounded-lg border">
+        <Table className={hasLegacyGuidance ? "min-w-[46rem] table-fixed" : "min-w-[36rem] table-fixed"}>
+          <TableHeader><TableRow className="bg-primary/5">
+            <TableHead className={hasLegacyGuidance ? "w-[21%]" : "w-[31%]"}>Intervention</TableHead>
+            <TableHead className={hasLegacyGuidance ? "w-[14%]" : "w-[19%]"}>Risk category</TableHead>
+            <TableHead className={hasLegacyGuidance ? "w-[22%]" : "w-[38%]"}>Daily targets</TableHead>
+            {hasLegacyGuidance && <TableHead className="w-[31%]">Guidance</TableHead>}
+            <TableHead className="w-[12%] text-right">Actions</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>{filteredNutrition.map(item => (
+            <TableRow key={item.id} className="even:bg-muted/20">
+              <TableCell className="whitespace-normal align-top">
+                <span className="font-medium">{item.label}</span>
+                {!item.enabled && <span className="ml-1 block text-xs text-muted-foreground">Disabled</span>}
+              </TableCell>
+              <TableCell className="whitespace-normal align-top">{riskName(item.riskCategoryId)}</TableCell>
+              <TableCell className="whitespace-normal align-top">
+                {item.targets ? <NutritionTargetSummary targets={item.targets} /> : <span className="text-muted-foreground">—</span>}
+                {item.proteinTargetNote && <p className="mt-1 text-xs text-muted-foreground">{item.proteinTargetNote}</p>}
+              </TableCell>
+              {hasLegacyGuidance && <TableCell className="whitespace-normal align-top">
+                <span className="line-clamp-2">{item.coreStrategy}</span>
+                <span className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.clinicalActions}</span>
+              </TableCell>}
+              <TableCell className="align-top">
+                <div className="flex justify-end gap-1">
+                  <Button type="button" size="icon" variant="ghost" aria-label={`Edit ${item.label}`} disabled={disabled}
+                    onClick={() => startEdit(item)}><Pencil className="size-4" aria-hidden="true" /></Button>
+                  <Button type="button" size="icon" variant="ghost" className="text-destructive" aria-label={`Delete ${item.label}`}
+                    disabled={disabled} onClick={() => setDeletingId(item.id)}><Trash2 className="size-4" aria-hidden="true" /></Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}</TableBody>
+        </Table>
+        {!filteredNutrition.length && <p className="p-5 text-sm text-muted-foreground">
+          {guidance.nutrition.length ? "No interventions match these filters." : "No nutrition interventions in this version. Add an intervention to get started."}
+        </p>}
+      </div>
+      <NutritionTargetExceptionsEditor
+        value={guidance.nutritionTargetExceptions}
+        disabled={disabled}
+        onChange={nutritionTargetExceptions => change({ ...guidance, nutritionTargetExceptions })}
+      />
     </div> : <ToxicityWorkbookPanel
       workbook={toxicityGuidance}
       disabled={disabled}
@@ -129,8 +203,8 @@ export function ReportGuidanceEditor({ definition, disabled, onChange, onReferen
     <Dialog open={editing !== null} onOpenChange={open => { if (!open) requestClose(); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>{editing?.isNew ? "Add" : "Edit"} nutrition intervention</DialogTitle><DialogDescription>Define the guidance for this rule version.</DialogDescription></DialogHeader>{editing && <div className="space-y-4">
         <Field label="Name"><Input autoFocus maxLength={200} value={editing.item.label} onChange={event => setEditing({ ...editing, item: { ...editing.item, label: event.target.value } })} /></Field>
         <Field label="NIQ risk category"><NativeSelect value={editing.item.riskCategoryId ?? "any"} onChange={event => setEditing({ ...editing, item: { ...editing.item, riskCategoryId: event.target.value === "any" ? null : event.target.value } })}><option value="any">Any risk category</option>{riskCategories.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</NativeSelect></Field>
-        <Field label="Core strategy"><Textarea rows={3} maxLength={4000} value={editing.item.coreStrategy} onChange={event => setEditing({ ...editing, item: { ...editing.item, coreStrategy: event.target.value } })} /></Field>
-        <Field label="Clinical actions"><Textarea rows={3} maxLength={8000} value={editing.item.clinicalActions} onChange={event => setEditing({ ...editing, item: { ...editing.item, clinicalActions: event.target.value } })} /></Field>
+        <NutritionTargetFields fields={editing.targets} onChange={targets => setEditing({ ...editing, targets })} />
+        <Field label="Protein target note"><Textarea rows={2} maxLength={1000} value={editing.item.proteinTargetNote ?? ""} onChange={event => setEditing({ ...editing, item: { ...editing.item, proteinTargetNote: event.target.value } })} /></Field>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={editing.item.enabled} onChange={event => setEditing({ ...editing, item: { ...editing.item, enabled: event.target.checked } })} /><span>Enabled for this rule version</span></label>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     </div>}<DialogFooter><Button type="button" variant="outline" onClick={requestClose}>Cancel</Button><Button type="button" onClick={saveEdit}>{editing?.isNew ? "Add intervention" : "Save changes"}</Button></DialogFooter></DialogContent></Dialog>
