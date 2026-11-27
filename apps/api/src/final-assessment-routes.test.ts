@@ -217,7 +217,7 @@ test("approved final assessment supports credential-bound public scoring and exa
   expect(guidance.guidance.possibleToxicities.map((item: { id: string }) => item.id)).toContain("toxicity_row_002");
   expect(JSON.stringify(guidance.guidance.possibleToxicities)).not.toContain("nutritionalInterventions");
   const carePlanResponse = await call("report-guidance", { ...savedGuidanceFacts,
-    treatmentStatusId: "treatment_status_under_treatment", coMorbidityIds: ["co_morbidities_diabetes"] });
+    treatmentStatusId: "treatment_status_under_treatment", cancerTypeId: "cancer_1", coMorbidityIds: ["co_morbidities_diabetes"] });
   expect(carePlanResponse.status).toBe(200);
   const carePlan = (await carePlanResponse.json()).guidance.carePlan;
   expect(carePlan).toMatchObject({ nutritionalStatus: "well_nourished",

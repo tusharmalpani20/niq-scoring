@@ -143,13 +143,14 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
   const surgicalPlan = planFor("surgical");
   const preTreatmentDays = preTreatmentPlan ? productDurationDays(preTreatmentPlan) : null;
   const surgicalDays = surgicalPlan ? productDurationDays(surgicalPlan) : null;
+  const surgeryWindow = surgicalDays === null ? null : Math.min(surgicalDays, config.products.surgicalEligibilityDays ?? surgicalDays);
   const relativePreConditioning = config.preConditioningStartPolicy === "relative_guidance";
   const untilTreatment = facts.asOfDate && facts.plannedTreatmentStartDate ? daysBetween(facts.asOfDate, facts.plannedTreatmentStartDate) : null;
   const applicableTreatmentStage = treatmentStage === "pre_conditioning" && !relativePreConditioning && (untilTreatment === null || preTreatmentDays === null || untilTreatment < 0 || untilTreatment > preTreatmentDays)
     ? null : treatmentStage === "during_treatment" && !facts.treatmentTypeIds.length ? null : treatmentStage;
   const sinceSurgery = facts.asOfDate && facts.surgeryDate ? daysBetween(facts.surgeryDate, facts.asOfDate) : null;
   const untilSurgery = facts.asOfDate && facts.plannedSurgeryDate ? daysBetween(facts.asOfDate, facts.plannedSurgeryDate) : null;
-  const recentSurgery = facts.surgicalStatusId === "cancer_surgical_status_done" && sinceSurgery !== null && surgicalDays !== null && sinceSurgery >= 0 && sinceSurgery <= surgicalDays;
+  const recentSurgery = facts.surgicalStatusId === "cancer_surgical_status_done" && sinceSurgery !== null && surgeryWindow !== null && sinceSurgery >= 0 && sinceSurgery <= surgeryWindow;
   const matchesNote = (row: ProductNote) => {
     const match = row.match ?? (row.kind === "custom" ? null : defaultProductNoteMatch(row.kind));
     if (!match) return false;
@@ -261,7 +262,10 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
         return unresolved(`${row.label} needs a known daily quantity for ${action.productName} before it can be limited.`);
       }
       if (index >= 0 && items[index]!.quantityPerDay! > action.maxQuantityPerDay) {
-        items[index] = { ...items[index]!, quantityPerDay: action.maxQuantityPerDay };
+        // The original meal schedule may allocate more servings than the lower quantity.
+        const { mealTiming: _originalTiming, timesPerDay, ...item } = items[index]!;
+        items[index] = { ...item, quantityPerDay: action.maxQuantityPerDay,
+          ...(timesPerDay ? { timesPerDay: Math.min(timesPerDay, action.maxQuantityPerDay) } : {}) };
         adjusted = true;
       }
     } else if (action.type === "replace") {
@@ -270,6 +274,7 @@ export function resolveCarePlanGuidance(definition: FinalAssessmentDefinition, f
       items = items.filter(item => productIdentityName(item.productName) !== source);
       const destination = items.findIndex(item => productIdentityName(item.productName) === productIdentityName(action.replacementProductName));
       const replacement = { productName: action.replacementProductName, quantityPerDay: replacementQuantity,
+        ...(action.unit ? { unit: action.unit } : {}),
         ...(action.timesPerDay ? { timesPerDay: action.timesPerDay } : {}),
         ...(action.mealTiming ? { mealTiming: action.mealTiming } : {}),
         ...(action.preparation ? { preparation: action.preparation } : {}),

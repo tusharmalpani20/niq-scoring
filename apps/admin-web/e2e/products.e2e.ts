@@ -14,33 +14,35 @@ test("shared product names can be added and selected without changing saved rule
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Care plan rules", exact: true }).click();
   await page.getByRole("button", { name: /Products & doses 12/ }).click();
-  await expect(page.getByText("1 Invigour + 1 Nourish", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 Es-Invigour (sachet) + 1 Es Fortitude Nourish (sachet)", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Edit Before treatment · Well nourished" }).click();
   const editor = page.getByRole("dialog");
   await expect(editor.getByRole("heading", { name: "Products in this rule" })).toBeVisible();
-  await expect(editor.getByLabel("Invigour quantity")).toHaveValue("1");
-  await expect(editor.getByLabel("Nourish quantity")).toHaveValue("1");
+  await expect(editor.getByLabel("Es-Invigour quantity", { exact: true })).toHaveValue("1");
+  await expect(editor.getByLabel("Es Fortitude Nourish quantity", { exact: true })).toHaveValue("1");
+  await expect(editor.getByRole("button", { name: "Add Invigour", exact: true })).toBeDisabled();
   await expect(editor.getByLabel("Duration (days)")).toHaveValue("15");
   await editor.getByRole("button", { name: "Add Fortitude Plus" }).click();
   await editor.getByLabel("Fortitude Plus quantity").fill("2");
   await editor.getByLabel("Fortitude Plus meal timing").fill("After meals");
-  await editor.getByRole("button", { name: "Remove Nourish" }).click();
+  await editor.getByRole("button", { name: "Remove Es Fortitude Nourish" }).click();
   await editor.getByRole("button", { name: "Save rule" }).click();
-  await expect(page.getByText("1 Invigour + 2 Fortitude Plus")).toBeVisible();
+  await expect(page.getByText("1 Es-Invigour (sachet) + 2 Fortitude Plus")).toBeVisible();
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
   const plan = state.getRecord()?.definition.carePlanGuidance?.products.plans.find(row => row.id === "product_pre_conditioning_well_nourished");
-  expect(plan?.productNames).toEqual(["Invigour", "Fortitude Plus"]);
-  expect(plan?.products).toBe("Invigour + Fortitude Plus");
-  expect(plan?.items).toEqual([{ productName: "Invigour", quantityPerDay: 1 }, { productName: "Fortitude Plus", quantityPerDay: 2, mealTiming: "After meals" }]);
-  expect(plan?.dose).toBe("1 Invigour + 2 Fortitude Plus");
+  expect(plan?.productNames).toEqual(["Es-Invigour", "Fortitude Plus"]);
+  expect(plan?.products).toBe("Es-Invigour + Fortitude Plus");
+  expect(plan?.items).toMatchObject([{ productName: "Es-Invigour", quantityPerDay: 1, unit: "sachet", mealTiming: "After breakfast." },
+    { productName: "Fortitude Plus", quantityPerDay: 2, mealTiming: "After meals" }]);
+  expect(plan?.dose).toBe("1 Es-Invigour (sachet) + 2 Fortitude Plus");
 
   await page.goto("/products");
   await page.getByRole("button", { name: "Edit Fortitude Plus" }).click();
   await page.getByRole("dialog").getByRole("textbox", { name: "Name" }).fill("Fortitude X");
   await page.getByRole("dialog").getByRole("button", { name: "Save product" }).click();
   await expect(page.getByText("Fortitude X", { exact: true })).toBeVisible();
-  expect(plan?.products).toBe("Invigour + Fortitude Plus");
+  expect(plan?.products).toBe("Es-Invigour + Fortitude Plus");
 });
 
 test("Surgical plans fill every quantity from the sheet's scoop counts", async ({ page }) => {
@@ -48,17 +50,24 @@ test("Surgical plans fill every quantity from the sheet's scoop counts", async (
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Care plan rules", exact: true }).click();
   await page.getByRole("button", { name: /Products & doses 12/ }).click();
+  await expect(page.getByLabel("Surgery eligibility (days)", { exact: true })).toHaveCount(0);
   await expect(page.getByText("1 Liss WH (level scoop)", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Edit After surgery · Well nourished" }).click();
   const editor = page.getByRole("dialog");
   await expect(editor.getByLabel("Liss WH quantity")).toHaveValue("1");
   await expect(editor.getByLabel("Liss WH preparation")).toHaveValue("Mix in 150 mL water.");
+  await expect(editor.getByLabel("Duration (days)")).toHaveValue("30");
   await editor.getByLabel("Duration (days)").fill("31");
   await editor.getByRole("button", { name: "Save rule" }).click();
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  const plan = () => state.getRecord()?.definition.carePlanGuidance?.products.plans.find(row => row.id === "product_surgical_well_nourished");
+  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
+  const productRules = () => state.getRecord()?.definition.carePlanGuidance?.products;
+  const plan = () => productRules()?.plans.find(row => row.id === "product_surgical_well_nourished");
+  expect(productRules()?.surgicalEligibilityDays).toBe(7);
   expect(plan()?.dose).toBe("1 Liss WH (level scoop)");
-  expect(plan()?.items).toEqual([{ productName: "Liss WH", quantityPerDay: 1, unit: "level scoop", preparation: "Mix in 150 mL water." }]);
+  expect(plan()?.durationAmount).toBe(31);
+  expect(plan()?.items).toEqual([{ productName: "Liss WH", quantityPerDay: 1, unit: "level scoop", timesPerDay: 1,
+    preparation: "Mix in 150 mL water.", mealTiming: "After breakfast." }]);
 
   await page.getByRole("button", { name: "Edit After surgery · Well nourished" }).click();
   await editor.getByLabel("Liss WH quantity").fill("");
@@ -69,30 +78,33 @@ test("Surgical plans fill every quantity from the sheet's scoop counts", async (
   await editor.getByRole("button", { name: "Cancel" }).click();
 });
 
-test("replacement defaults to the replaced product quantity and can use a fixed quantity", async ({ page }) => {
+test("the workbook's fixed vegetarian quantity is editable", async ({ page }) => {
   const state = await mockFinalConsole(page);
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Care plan rules", exact: true }).click();
-  await page.getByRole("button", { name: /Product exceptions 6/ }).click();
+  await page.getByRole("button", { name: /Product exceptions 7/ }).click();
   await page.getByRole("button", { name: "Edit Vegetarian diet" }).click();
   const editor = page.getByRole("dialog");
   const matchQuantity = editor.getByRole("checkbox", { name: "Match the replaced product's daily quantity" });
-  await expect(matchQuantity).toBeChecked();
+  await expect(matchQuantity).not.toBeChecked();
+  await expect(editor.getByLabel("Replacement quantity per day")).toHaveValue("2");
+  await matchQuantity.check();
   await expect(editor.getByLabel("Replacement quantity per day")).toHaveCount(0);
   await matchQuantity.uncheck();
-  await editor.getByLabel("Replacement quantity per day").fill("2");
+  await editor.getByLabel("Replacement quantity per day").fill("3");
   await editor.getByRole("button", { name: "Save rule" }).click();
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
   const action = state.getRecord()?.definition.carePlanGuidance?.products.notes.find(row => row.kind === "vegetarian_liss_substitution")?.action;
-  expect(action).toMatchObject({ type: "replace", productName: "Liss WH", replacementProductName: "Invigour", matchSourceQuantity: false, replacementQuantityPerDay: 2 });
+  expect(action).toMatchObject({ type: "replace", productName: "Liss WH", replacementProductName: "Es-Invigour",
+    matchSourceQuantity: false, replacementQuantityPerDay: 3, unit: "sachet" });
 });
 
 test("a new exception saves an assessment match and exact product change", async ({ page }) => {
   const state = await mockFinalConsole(page);
   await startFinalDraft(page);
   await page.getByRole("tab", { name: "Care plan rules", exact: true }).click();
-  await page.getByRole("button", { name: /Product exceptions 6/ }).click();
+  await page.getByRole("button", { name: /Product exceptions 7/ }).click();
   await page.getByRole("button", { name: "Add rule" }).click();
   const editor = page.getByRole("dialog");
   await editor.getByLabel("Rule name").fill("Protect for selected cancer");

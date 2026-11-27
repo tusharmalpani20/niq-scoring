@@ -1,138 +1,337 @@
 {
+  "surgicalEligibilityDays": 7,
   "plans": [
     {
       "id": "product_pre_conditioning_well_nourished",
       "stage": "pre_conditioning",
       "nutritionalStatus": "well_nourished",
-      "products": "Invigour + Nourish",
-      "dose": "1 Invigour + 1 Nourish",
+      "products": "Es-Invigour + Es Fortitude Nourish",
+      "productNames": [
+        "Es-Invigour",
+        "Es Fortitude Nourish"
+      ],
+      "items": [
+        {
+          "productName": "Es-Invigour",
+          "quantityPerDay": 1,
+          "unit": "sachet",
+          "timesPerDay": 1,
+          "preparation": "Mix 1 sachet in 150 mL of water, shake well and consume immediately.",
+          "mealTiming": "After breakfast."
+        },
+        {
+          "productName": "Es Fortitude Nourish",
+          "quantityPerDay": 1,
+          "unit": "sachet",
+          "timesPerDay": 1,
+          "preparation": "Mix 1 sachet in 120 mL of water, shake well and consume immediately.",
+          "mealTiming": "At evening snack time."
+        }
+      ],
+      "dose": "1 Es-Invigour (sachet) + 1 Es Fortitude Nourish (sachet)",
       "duration": "15 days before treatment",
       "durationAmount": 15,
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A2:E2",
-        "note": ""
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!A2:G2",
+        "note": "Product preparation is in Sheet1!F2:F3."
       }
     },
     {
       "id": "product_pre_conditioning_moderately_nourished",
       "stage": "pre_conditioning",
       "nutritionalStatus": "moderately_nourished",
-      "products": "Invigour + Nourish",
-      "dose": "1 Invigour + 2 Nourish",
+      "products": "Es-Invigour + Es Fortitude Nourish",
+      "productNames": [
+        "Es-Invigour",
+        "Es Fortitude Nourish"
+      ],
+      "items": [
+        {
+          "productName": "Es-Invigour",
+          "quantityPerDay": 1,
+          "unit": "sachet",
+          "timesPerDay": 1,
+          "preparation": "Mix 1 sachet in 150 mL of water, shake well and consume immediately.",
+          "mealTiming": "After breakfast."
+        },
+        {
+          "productName": "Es Fortitude Nourish",
+          "quantityPerDay": 2,
+          "unit": "sachet",
+          "timesPerDay": 2,
+          "preparation": "Mix 1 sachet in 120 mL of water, shake well and consume immediately.",
+          "mealTiming": "1 after lunch and 1 at evening snack time."
+        }
+      ],
+      "dose": "1 Es-Invigour (sachet) + 2 Es Fortitude Nourish (sachet)",
       "duration": "15 days before treatment",
       "durationAmount": 15,
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A3:E3",
-        "note": ""
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!A3:G3",
+        "note": "Product preparation is in Sheet1!F2:F3."
       }
     },
     {
       "id": "product_pre_conditioning_severely_malnourished",
       "stage": "pre_conditioning",
       "nutritionalStatus": "severely_malnourished",
-      "products": "Invigour + Nourish",
-      "dose": "2 Invigour + 2 Nourish",
+      "products": "Es-Invigour + Es Fortitude Nourish",
+      "productNames": [
+        "Es-Invigour",
+        "Es Fortitude Nourish"
+      ],
+      "items": [
+        {
+          "productName": "Es-Invigour",
+          "quantityPerDay": 2,
+          "unit": "sachet",
+          "timesPerDay": 2,
+          "preparation": "Mix 1 sachet in 150 mL of water, shake well and consume immediately.",
+          "mealTiming": "1 after breakfast and 1 after lunch."
+        },
+        {
+          "productName": "Es Fortitude Nourish",
+          "quantityPerDay": 2,
+          "unit": "sachet",
+          "timesPerDay": 2,
+          "preparation": "Mix 1 sachet in 120 mL of water, shake well and consume immediately.",
+          "mealTiming": "1 at evening snack time and 1 after dinner."
+        }
+      ],
+      "dose": "2 Es-Invigour (sachet) + 2 Es Fortitude Nourish (sachet)",
       "duration": "15 days before treatment",
       "durationAmount": 15,
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A4:E4",
-        "note": "Source spelling \"Severly malnourished\" normalized to \"severely_malnourished\"."
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!A4:G4",
+        "note": "Product preparation is in Sheet1!F2:F3."
       }
     },
     {
       "id": "product_during_treatment_well_nourished",
       "stage": "during_treatment",
       "nutritionalStatus": "well_nourished",
-      "products": "Invigour + Protect",
-      "dose": "1 Invigour + 1 Protect",
+      "products": "Es-Invigour + Es Fortitude Protect",
+      "productNames": [
+        "Es-Invigour",
+        "Es Fortitude Protect"
+      ],
+      "items": [
+        {
+          "productName": "Es-Invigour",
+          "quantityPerDay": 1,
+          "unit": "sachet",
+          "timesPerDay": 1,
+          "preparation": "Mix 1 sachet in 150 mL of water, shake well and consume immediately.",
+          "mealTiming": "After breakfast."
+        },
+        {
+          "productName": "Es Fortitude Protect",
+          "quantityPerDay": 1,
+          "unit": "sachet",
+          "timesPerDay": 1,
+          "preparation": "Mix 1 sachet in 120 mL of water and consume immediately.",
+          "mealTiming": "At evening snack time."
+        }
+      ],
+      "dose": "1 Es-Invigour (sachet) + 1 Es Fortitude Protect (sachet)",
       "duration": "Minimum 90 days during treatment",
       "durationAmount": 90,
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A6:E6",
-        "note": ""
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!A7:G7",
+        "note": "Product preparation is in Sheet1!F2 and F4. The agreed minimum is 90 days."
       }
     },
     {
       "id": "product_during_treatment_moderately_nourished",
       "stage": "during_treatment",
       "nutritionalStatus": "moderately_nourished",
-      "products": "Invigour + Protect",
-      "dose": "1 Invigour + 2 Protect",
+      "products": "Es-Invigour + Es Fortitude Protect",
+      "productNames": [
+        "Es-Invigour",
+        "Es Fortitude Protect"
+      ],
+      "items": [
+        {
+          "productName": "Es-Invigour",
+          "quantityPerDay": 1,
+          "unit": "sachet",
+          "timesPerDay": 1,
+          "preparation": "Mix 1 sachet in 150 mL of water, shake well and consume immediately.",
+          "mealTiming": "After breakfast."
+        },
+        {
+          "productName": "Es Fortitude Protect",
+          "quantityPerDay": 2,
+          "unit": "sachet",
+          "timesPerDay": 2,
+          "preparation": "Mix 1 sachet in 120 mL of water and consume immediately.",
+          "mealTiming": "1 after lunch and 1 at evening snack time."
+        }
+      ],
+      "dose": "1 Es-Invigour (sachet) + 2 Es Fortitude Protect (sachet)",
       "duration": "Minimum 90 days during treatment",
       "durationAmount": 90,
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A7:E7",
-        "note": ""
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!A8:G8",
+        "note": "Product preparation is in Sheet1!F2 and F4. The agreed minimum is 90 days."
       }
     },
     {
       "id": "product_during_treatment_severely_malnourished",
       "stage": "during_treatment",
       "nutritionalStatus": "severely_malnourished",
-      "products": "Invigour + Protect",
-      "dose": "3 Invigour + 2 Protect",
+      "products": "Es-Invigour + Es Fortitude Protect",
+      "productNames": [
+        "Es-Invigour",
+        "Es Fortitude Protect"
+      ],
+      "items": [
+        {
+          "productName": "Es-Invigour",
+          "quantityPerDay": 2,
+          "unit": "sachet",
+          "timesPerDay": 2,
+          "preparation": "Mix 1 sachet in 150 mL of water, shake well and consume immediately.",
+          "mealTiming": "1 after breakfast and 1 after lunch."
+        },
+        {
+          "productName": "Es Fortitude Protect",
+          "quantityPerDay": 2,
+          "unit": "sachet",
+          "timesPerDay": 2,
+          "preparation": "Mix 1 sachet in 120 mL of water and consume immediately.",
+          "mealTiming": "1 at evening snack time and 1 after dinner."
+        }
+      ],
+      "dose": "2 Es-Invigour (sachet) + 2 Es Fortitude Protect (sachet)",
       "duration": "Minimum 90 days during treatment",
       "durationAmount": 90,
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A8:E8",
-        "note": "Source spelling \"Severly malnourished\" normalized to \"severely_malnourished\"."
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!A9:G9",
+        "note": "Product preparation is in Sheet1!F2 and F4. The agreed minimum is 90 days."
       }
     },
     {
       "id": "product_post_treatment_well_nourished",
       "stage": "post_treatment",
       "nutritionalStatus": "well_nourished",
-      "products": "Invigour + Recover",
-      "dose": "1 Invigour + 1 Recover",
+      "products": "Es-Invigour + Es Fortitude Recover",
+      "productNames": [
+        "Es-Invigour",
+        "Es Fortitude Recover"
+      ],
+      "items": [
+        {
+          "productName": "Es-Invigour",
+          "quantityPerDay": 1,
+          "unit": "sachet",
+          "timesPerDay": 1,
+          "preparation": "Mix 1 sachet in 150 mL of water, shake well and consume immediately.",
+          "mealTiming": "After breakfast."
+        },
+        {
+          "productName": "Es Fortitude Recover",
+          "quantityPerDay": 1,
+          "unit": "sachet",
+          "timesPerDay": 1,
+          "preparation": "Mix 1 sachet in 120 mL of water and consume immediately.",
+          "mealTiming": "At evening snack time."
+        }
+      ],
+      "dose": "1 Es-Invigour (sachet) + 1 Es Fortitude Recover (sachet)",
       "duration": "365 days or more after treatment",
       "durationAmount": 365,
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A10:E10",
-        "note": ""
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!A11:G11",
+        "note": "Product preparation is in Sheet1!F2 and F5. The agreed minimum is 365 days."
       }
     },
     {
       "id": "product_post_treatment_moderately_nourished",
       "stage": "post_treatment",
       "nutritionalStatus": "moderately_nourished",
-      "products": "Invigour + Recover",
-      "dose": "1 Invigour + 2 Recover",
+      "products": "Es-Invigour + Es Fortitude Recover",
+      "productNames": [
+        "Es-Invigour",
+        "Es Fortitude Recover"
+      ],
+      "items": [
+        {
+          "productName": "Es-Invigour",
+          "quantityPerDay": 1,
+          "unit": "sachet",
+          "timesPerDay": 1,
+          "preparation": "Mix 1 sachet in 150 mL of water, shake well and consume immediately.",
+          "mealTiming": "After breakfast."
+        },
+        {
+          "productName": "Es Fortitude Recover",
+          "quantityPerDay": 2,
+          "unit": "sachet",
+          "timesPerDay": 2,
+          "preparation": "Mix 1 sachet in 120 mL of water and consume immediately.",
+          "mealTiming": "1 after lunch and 1 at evening snack time."
+        }
+      ],
+      "dose": "1 Es-Invigour (sachet) + 2 Es Fortitude Recover (sachet)",
       "duration": "365 days or more after treatment",
       "durationAmount": 365,
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A11:E11",
-        "note": ""
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!A12:G12",
+        "note": "Product preparation is in Sheet1!F2 and F5. The agreed minimum is 365 days."
       }
     },
     {
       "id": "product_post_treatment_severely_malnourished",
       "stage": "post_treatment",
       "nutritionalStatus": "severely_malnourished",
-      "products": "Invigour + Recover",
-      "dose": "2 Invigour + 2 Recover",
+      "products": "Es-Invigour + Es Fortitude Recover",
+      "productNames": [
+        "Es-Invigour",
+        "Es Fortitude Recover"
+      ],
+      "items": [
+        {
+          "productName": "Es-Invigour",
+          "quantityPerDay": 2,
+          "unit": "sachet",
+          "timesPerDay": 2,
+          "preparation": "Mix 1 sachet in 150 mL of water, shake well and consume immediately.",
+          "mealTiming": "1 after breakfast and 1 after lunch."
+        },
+        {
+          "productName": "Es Fortitude Recover",
+          "quantityPerDay": 2,
+          "unit": "sachet",
+          "timesPerDay": 2,
+          "preparation": "Mix 1 sachet in 120 mL of water and consume immediately.",
+          "mealTiming": "1 at evening snack time and 1 after dinner."
+        }
+      ],
+      "dose": "2 Es-Invigour (sachet) + 2 Es Fortitude Recover (sachet)",
       "duration": "365 days or more after treatment",
       "durationAmount": 365,
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A12:E12",
-        "note": "Source spelling \"Severly malnourished\" normalized to \"severely_malnourished\"."
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!A13:G13",
+        "note": "Product preparation is in Sheet1!F2 and F5. The agreed minimum is 365 days."
       }
     },
     {
@@ -140,16 +339,27 @@
       "stage": "surgical",
       "nutritionalStatus": "well_nourished",
       "products": "Liss WH",
-      "productNames": ["Liss WH"],
-      "items": [{ "productName": "Liss WH", "quantityPerDay": 1, "unit": "level scoop", "preparation": "Mix in 150 mL water." }],
+      "productNames": [
+        "Liss WH"
+      ],
+      "items": [
+        {
+          "productName": "Liss WH",
+          "quantityPerDay": 1,
+          "unit": "level scoop",
+          "timesPerDay": 1,
+          "preparation": "Mix in 150 mL water.",
+          "mealTiming": "After breakfast."
+        }
+      ],
       "dose": "1 Liss WH (level scoop)",
-      "duration": "30days post surgery",
+      "duration": "30 days after surgery",
       "durationAmount": 30,
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A14:E14",
-        "note": ""
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!A15:G15",
+        "note": "Sheet1!D26 sets the seven-day selection window. The 30-day course starts at surgery."
       }
     },
     {
@@ -157,36 +367,64 @@
       "stage": "surgical",
       "nutritionalStatus": "moderately_nourished",
       "products": "Liss WH",
-      "productNames": ["Liss WH"],
-      "items": [{ "productName": "Liss WH", "quantityPerDay": 2, "unit": "level scoop", "preparation": "Mix in 150 mL water." }],
+      "productNames": [
+        "Liss WH"
+      ],
+      "items": [
+        {
+          "productName": "Liss WH",
+          "quantityPerDay": 2,
+          "unit": "level scoop",
+          "timesPerDay": 1,
+          "preparation": "Mix in 150 mL water.",
+          "mealTiming": "After breakfast."
+        }
+      ],
       "dose": "2 Liss WH (level scoop)",
-      "duration": "30days post surgery",
+      "duration": "30 days after surgery",
       "durationAmount": 30,
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A15:E15",
-        "note": ""
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!A16:G16",
+        "note": "Sheet1!D26 sets the seven-day selection window. The 30-day course starts at surgery."
       }
     },
     {
       "id": "product_surgical_severely_malnourished",
       "stage": "surgical",
       "nutritionalStatus": "severely_malnourished",
-      "products": "Invigour + Liss WH",
-      "productNames": ["Invigour", "Liss WH"],
-      "items": [
-        { "productName": "Invigour", "quantityPerDay": 1 },
-        { "productName": "Liss WH", "quantityPerDay": 2, "unit": "level scoop", "preparation": "Mix in 150 mL water." }
+      "products": "Es-Invigour + Liss WH",
+      "productNames": [
+        "Es-Invigour",
+        "Liss WH"
       ],
-      "dose": "1 Invigour + 2 Liss WH (level scoop)",
-      "duration": "30days post surgery",
+      "items": [
+        {
+          "productName": "Es-Invigour",
+          "quantityPerDay": 1,
+          "unit": "sachet",
+          "timesPerDay": 1,
+          "preparation": "Mix 1 sachet in 150 mL of water, shake well and consume immediately.",
+          "mealTiming": "After breakfast."
+        },
+        {
+          "productName": "Liss WH",
+          "quantityPerDay": 2,
+          "unit": "level scoop",
+          "timesPerDay": 1,
+          "preparation": "Mix in 150 mL water.",
+          "mealTiming": "After lunch."
+        }
+      ],
+      "dose": "1 Es-Invigour (sachet) + 2 Liss WH (level scoop)",
+      "duration": "30 days after surgery",
       "durationAmount": 30,
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A16:E16",
-        "note": "Source spelling \"Severly malnourished\" normalized to \"severely_malnourished\"."
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!A17:G17",
+        "note": "Sheet1!D26 sets the seven-day selection window. The 30-day course starts at surgery."
       }
     }
   ],
@@ -262,90 +500,154 @@
       "id": "pancreatic_nourish_exclusion",
       "kind": "pancreatic_nourish_exclusion",
       "match": { "fieldId": "cancer_type", "optionId": "cancer_6" },
-      "action": { "type": "remove", "productName": "Nourish" },
+      "action": {
+        "type": "remove",
+        "productName": "Es Fortitude Nourish"
+      },
       "label": "Pancreatic cancer",
       "guidance": "Do not recommend Es Fortitude Nourish for a patient with pancreatic cancer.",
       "sourceText": "No Es Fortitude Nourish to be mapped for Pancreatic cancer patient",
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A18:C18",
-        "note": "Report-ready wording; retain the source for review."
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!C23",
+        "note": ""
       }
     },
     {
       "id": "liver_nourish_once_daily",
       "kind": "liver_nourish_once_daily",
       "match": { "fieldId": "cancer_type", "optionId": "cancer_5" },
-      "action": { "type": "limit", "productName": "Nourish", "maxQuantityPerDay": 1 },
+      "action": {
+        "type": "limit",
+        "productName": "Es Fortitude Nourish",
+        "maxQuantityPerDay": 1
+      },
       "label": "Liver cancer",
       "guidance": "For a patient with liver cancer, Nourish is limited to once daily.",
-      "sourceText": "Es Fortitide Nourish: Liver cancer - Nourish only once a day",
+      "sourceText": "Liver cancer - Nourish only once a day",
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A19:C19",
-        "note": "Report-ready wording; retain the source for review."
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!C24",
+        "note": ""
       }
     },
     {
       "id": "surgery_done_liss",
       "kind": "surgery_done_liss",
-      "match": { "fieldId": "cancer_surgical_status", "optionId": "cancer_surgical_status_done", "withinDays": 7 },
-      "action": { "type": "use_plan", "stage": "surgical" },
+      "match": {
+        "fieldId": "cancer_surgical_status",
+        "optionId": "cancer_surgical_status_done",
+        "withinDays": 7
+      },
+      "action": {
+        "type": "use_plan",
+        "stage": "surgical"
+      },
       "label": "Recent surgery",
-      "guidance": "After surgery, use the Surgical product plan for the selected nutritional status. The severely malnourished plan also includes Invigour.",
-      "sourceText": "Logic for Surgical - Surgery just done then add Liss WH - If patient score is Mild - Only LIss WH, Moderate- Only Liss WH & if the score is High - Add Invigour once a day & Liss WH [Time: 1 week time]",
+      "guidance": "Use the matched product plan for 30 days after surgery. The severely malnourished plan also includes Invigour.",
+      "sourceText": "Logic for Surgical - Surgery just done then add Liss WH - \nIf patient score is \n- Well nourised  - add only LIss WH,\n- If score is  Moderate- add only Liss WH &\n- if the score is Malnourised  - Add Invigour once a day along with  Liss WH\n1 week time",
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A21:D21",
-        "note": "Report-ready wording; retain the source for review."
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!C26:D26",
+        "note": ""
       }
     },
     {
       "id": "surgery_planned_liss",
       "kind": "surgery_planned_liss",
       "match": { "fieldId": "cancer_surgical_status", "optionId": "cancer_surgical_status_planned", "withinDays": 7 },
-      "action": { "type": "delay", "productName": "Liss WH", "until": "planned_surgery" },
+      "action": {
+        "type": "delay",
+        "productName": "Liss WH",
+        "until": "planned_surgery"
+      },
       "label": "Planned surgery",
       "guidance": "If surgery is planned within a week, begin Liss WH only after surgery. Do not consume Liss WH before surgery.",
       "sourceText": "If surgery is planned in a weeks time or next 2-3 days then in report we can give to start with Liss WH and mention to start post surgery, DO NOT CONSUME BEFORE SURGERY",
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A22:C22",
-        "note": "Report-ready wording; retain the source for review."
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!C27",
+        "note": ""
       }
     },
     {
       "id": "vegetarian_liss_substitution",
       "kind": "vegetarian_liss_substitution",
-      "match": { "fieldId": "diet_preference", "optionId": "vegetarian" },
-      "action": { "type": "replace", "productName": "Liss WH", "replacementProductName": "Invigour", "matchSourceQuantity": true },
+      "match": {
+        "fieldId": "diet_preference",
+        "optionId": "vegetarian"
+      },
+      "action": {
+        "type": "replace",
+        "productName": "Liss WH",
+        "replacementProductName": "Es-Invigour",
+        "matchSourceQuantity": false,
+        "replacementQuantityPerDay": 2,
+        "unit": "sachet",
+        "preparation": "Mix 1 sachet in 150 mL of water, shake well and consume immediately."
+      },
       "label": "Vegetarian diet",
-      "guidance": "For a vegetarian patient, avoid Liss WH and use Invigour instead.",
-      "sourceText": "If patient is vegetarian the avoid mapping Liss WH that time only Invigour",
+      "guidance": "For vegetarian patients, use only Es-Invigour at 2 sachets per day in place of Liss WH.",
+      "sourceText": "If patient is vegetarian the avoid mapping Liss WH that time only \nEs Invigour - 2 sachet per day",
       "enabled": true,
       "source": {
-        "document": "NIQ - Product & interventions sheet.ods",
-        "location": "Product_mapping_!A23:C23",
-        "note": "Report-ready wording; retain the source for review."
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!C28",
+        "note": ""
       }
     },
     {
       "id": "jain_liss_substitution",
       "kind": "jain_liss_substitution",
-      "match": { "fieldId": "diet_preference", "optionId": "jain" },
-      "action": { "type": "replace", "productName": "Liss WH", "replacementProductName": "Invigour", "matchSourceQuantity": true },
+      "match": {
+        "fieldId": "diet_preference",
+        "optionId": "jain"
+      },
+      "action": {
+        "type": "replace",
+        "productName": "Liss WH",
+        "replacementProductName": "Es-Invigour",
+        "matchSourceQuantity": true
+      },
       "label": "Jain diet",
       "guidance": "For a Jain patient, avoid Liss WH and use Invigour instead.",
       "sourceText": "The rule owner confirmed that Jain diet uses the same product guidance as Vegetarian diet.",
-      "enabled": true,
+      "enabled": false,
       "source": {
         "document": "Rule owner direction",
         "location": "Product exceptions / Jain diet",
         "note": "Product guidance confirmed by the rule owner. A replacement dose is not specified."
+      }
+    },
+    {
+      "id": "blood_cancer_protect_replacement",
+      "kind": "custom",
+      "match": {
+        "fieldId": "cancer_type",
+        "optionId": "cancer_19"
+      },
+      "action": {
+        "type": "replace",
+        "productName": "Es Fortitude Protect",
+        "replacementProductName": "Es-Invigour",
+        "matchSourceQuantity": false,
+        "replacementQuantityPerDay": 2,
+        "unit": "sachet",
+        "timesPerDay": 2,
+        "preparation": "Mix 1 sachet in 150 mL of water, shake well and consume immediately."
+      },
+      "label": "Protect replacement for Blood cancer / Leukaemia",
+      "guidance": "",
+      "sourceText": "Do not map for Leukemia / blood cancer patient \nIn such case map only Es Invigour - twice a day",
+      "enabled": true,
+      "source": {
+        "document": "PRODUCT MAPPING SHEET.xlsx",
+        "location": "Sheet1!E24",
+        "note": ""
       }
     }
   ]

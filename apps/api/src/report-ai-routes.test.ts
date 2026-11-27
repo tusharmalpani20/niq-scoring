@@ -638,7 +638,8 @@ test("relative pre-conditioning advice avoids calendar windows in report evidenc
   });
   expect(writerInputs.at(-1)).toContain("fact:planned_treatment_start");
   expect(writerInputs.at(-1)).toContain("not confirmed as already underway");
-  expect(writerInputs.at(-1)).toContain("Selected product plan: Invigour + Nourish. Dosage and preparation: Invigour: 1 per day. Nourish: 1 per day.");
+  expect(writerInputs.at(-1)).toContain("Selected product plan: Es-Invigour + Es Fortitude Nourish. Dosage and preparation: Es-Invigour: 1 sachet per day");
+  expect(writerInputs.at(-1)).toContain("Es Fortitude Nourish: 1 sachet per day");
 });
 
 test("writer receives the matched cart quantities and regimen instructions", async () => {
@@ -652,6 +653,7 @@ test("writer receives the matched cart quantities and regimen instructions", asy
       preparation: "Mix in water", mealTiming: "After breakfast" },
     { productName: "Nourish", quantityPerDay: 2, mealTiming: "After meals" }];
     plan.productNames = ["Invigour", "Nourish"];
+    plan.products = "Invigour + Nourish";
     plan.dose = "1 Invigour (sachet) + 2 Nourish";
   });
   const response = await call("report-content", request({ facts: {
@@ -683,7 +685,7 @@ test("a selected product carries its image to the response while agent prompts r
   expect(response.status).toBe(200);
   const body = await response.json();
   expect(body.guidance.carePlan.products.catalog).toContainEqual({ id: old.id, name: "Es Invigour", description: "Nutrition support described in the supplied report", aliases: ["Invigour"], benefits: ["Supports energy and protein intake.", "Helps maintain muscle mass."], imageDataUrl: "data:image/png;base64,cHJpdmF0ZS1pbWFnZS1ieXRlcw==" });
-  expect(body.guidance.carePlan.products.plans[0].items[0].productName).toBe("Invigour");
+  expect(body.guidance.carePlan.products.plans[0].items[0].productName).toBe("Es-Invigour");
   expect(prompts.at(-1)).toContain(`catalog:product:${old.id}`);
   expect(prompts.at(-1)).toContain("Product benefits only; dose and timing come from the selected plan.");
   expect(prompts.at(-1)).toContain("Supports energy and protein intake.");
@@ -703,7 +705,7 @@ test("writer and reviewer receive the patient's diet preference", async () => {
   expect(prompts.reviewer?.system).toContain("diet suggestions compatible with the recorded preference");
 });
 
-test("writer receives the sheet's Surgical scoop quantity without a made-up daily frequency", async () => {
+test("writer receives the sheet's Surgical scoop quantity and meal timing", async () => {
   const writerInputs: string[] = [];
   const { call, request, facts } = await setup((step, _call, user) => {
     if (step === "writer") writerInputs.push(user);
@@ -715,8 +717,9 @@ test("writer receives the sheet's Surgical scoop quantity without a made-up dail
   } }));
   expect(response.status).toBe(200);
   const plan = (await response.json()).guidance.carePlan.products.plans[0];
-  expect(plan.items).toEqual([{ productName: "Liss WH", quantityPerDay: 1, unit: "level scoop", preparation: "Mix in 150 mL water." }]);
-  expect(writerInputs.at(-1)).toContain("Liss WH: 1 level scoop per day; prepare: Mix in 150 mL water.");
+  expect(plan.items).toEqual([{ productName: "Liss WH", quantityPerDay: 1, unit: "level scoop", timesPerDay: 1,
+    preparation: "Mix in 150 mL water.", mealTiming: "After breakfast." }]);
+  expect(writerInputs.at(-1)).toContain("Liss WH: 1 level scoop per day; taken once per day; prepare: Mix in 150 mL water.; meal timing: After breakfast.");
   expect(writerInputs.at(-1)).not.toContain("Liss WH: undefined per day");
 });
 
@@ -729,20 +732,21 @@ test("writer receives only the product plan after matched structured exceptions"
     const plan = definition.carePlanGuidance!.products.plans.find(row => row.id === "product_pre_conditioning_well_nourished")!;
     plan.items = [{ productName: "Invigour", quantityPerDay: 1 }, { productName: "Nourish", quantityPerDay: 3 }];
     plan.productNames = ["Invigour", "Nourish"];
+    plan.products = "Invigour + Nourish";
     plan.dose = "1 Invigour + 3 Nourish";
   });
   const matchedFacts = { ...facts, assessmentDate: "2026-10-12", treatmentStatusId: "treatment_status_newly_diagnosed",
     plannedTreatmentStartDate: "2026-10-20" };
   const limited = await (await call("report-content", request({ facts: { ...matchedFacts, cancerTypeId: "cancer_5" } }))).json();
   expect(limited.guidance.carePlan.products).toMatchObject({ status: "selected", plans: [{ dose: "1 Invigour + 1 Nourish" }],
-    notes: [{ action: { type: "limit", productName: "Nourish", maxQuantityPerDay: 1 } }] });
-  expect(writerInputs.at(-1)).toContain("Limit Nourish to at most 1 per day.");
+    notes: [{ action: { type: "limit", productName: "Es Fortitude Nourish", maxQuantityPerDay: 1 } }] });
+  expect(writerInputs.at(-1)).toContain("Limit Es Fortitude Nourish to at most 1 per day.");
   expect(writerInputs.at(-1)).toContain("Nourish: 1 per day");
   const excluded = await (await call("report-content", request({ idempotencyKey: "report-run-2",
     facts: { ...matchedFacts, cancerTypeId: "cancer_6" } }))).json();
   expect(excluded.guidance.carePlan.products).toMatchObject({ status: "selected", plans: [{ products: "Invigour" }],
-    notes: [{ action: { type: "remove", productName: "Nourish" } }] });
-  expect(writerInputs.at(-1)).not.toContain("Remove Nourish from the product plan.");
+    notes: [{ action: { type: "remove", productName: "Es Fortitude Nourish" } }] });
+  expect(writerInputs.at(-1)).not.toContain("Remove Es Fortitude Nourish from the product plan.");
   expect(writerInputs.at(-1)).toContain("Selected product plan: Invigour.");
 });
 
@@ -755,7 +759,7 @@ test("an unresolved product plan withholds matched exception wording from the wr
     definition.carePlanGuidance!.surgicalOverlapPolicy = "clinician_choice";
   });
   const matchedFacts = {
-    ...facts, treatmentStatusId: "treatment_status_under_treatment",
+    ...facts, treatmentStatusId: "treatment_status_under_treatment", cancerTypeId: "cancer_1",
     treatmentTypeIds: ["current_cancer_treatment_chemotherapy"],
     surgicalStatusId: "cancer_surgical_status_done", surgeryDate: "2026-01-01",
     dietPreferenceId: "vegetarian" as const,

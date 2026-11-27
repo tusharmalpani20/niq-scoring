@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Search, Trash2 } from "lucide-react";
-import { productPlanItems, type ProductPlan, type ProductPlanItem } from "@niq-scoring/contracts/product-guidance";
+import { productIdentityName, productPlanItems, type ProductPlan, type ProductPlanItem } from "@niq-scoring/contracts/product-guidance";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 
@@ -14,6 +14,8 @@ type Props = {
 };
 
 const namesFromPlan = (plan: ProductPlan) => plan.productNames ?? plan.products.split(/\s+\+\s+/).map(name => name.trim()).filter(Boolean);
+const matchesProduct = (product: CatalogProduct, name: string) =>
+  [product.name, ...product.aliases].some(candidate => productIdentityName(candidate) === productIdentityName(name));
 
 export function ProductPlanCart({ plan, catalog, catalogError, onRetry, onChange }: Props) {
   const [search, setSearch] = useState("");
@@ -24,7 +26,7 @@ export function ProductPlanCart({ plan, catalog, catalogError, onRetry, onChange
   const items: ProductPlanItem[] = parsed.length ? parsed : legacyDose
     ? namesFromPlan(plan).map(productName => ({ productName, quantityPerDay: undefined })) : [];
   const results = catalog.filter(product => [product.name, ...product.aliases].some(name => name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())));
-  const selected = (product: CatalogProduct) => items.some(item => [product.name, ...product.aliases].some(name => item.productName.toLocaleLowerCase() === name.toLocaleLowerCase()));
+  const selected = (product: CatalogProduct) => items.some(item => matchesProduct(product, item.productName));
   const change = (name: string, update: Partial<ProductPlanItem>) => onChange(items.map(item => item.productName === name ? { ...item, ...update } : item));
 
   return <div className="min-w-0 space-y-4">
@@ -65,7 +67,7 @@ export function ProductPlanCart({ plan, catalog, catalogError, onRetry, onChange
             const current = catalog.find(product => product.aliases.some(alias => alias.toLocaleLowerCase() === item.productName.toLocaleLowerCase()));
             if (current) onChange(items.map(row => row.productName === item.productName ? { ...row, productName: current.name } : row));
           }}>Use current catalogue name</Button></div>}
-          {!catalog.some(product => [product.name, ...product.aliases].some(name => name.toLocaleLowerCase() === item.productName.toLocaleLowerCase())) && <p className="text-xs text-muted-foreground sm:col-span-4">This name is no longer in Products.</p>}
+          {!catalog.some(product => matchesProduct(product, item.productName)) && <p className="text-xs text-muted-foreground sm:col-span-4">This name is no longer in Products.</p>}
         </div>)}
         {!items.length && <p className="p-3 text-sm text-muted-foreground">No products added yet.</p>}
       </div>

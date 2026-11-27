@@ -3,6 +3,7 @@ import { createFinalAssessmentTemplate } from "./final-assessment-template";
 import { validateFinalAssessmentDefinition } from "./final-assessment-validation";
 import { resolveCarePlanGuidance, type CarePlanFacts } from "./care-plan-resolver";
 import { publicQuestionnaire } from "./rule-public";
+import { productPlanSnapshot } from "./product-guidance";
 
 const definition = () => createFinalAssessmentTemplate("Care plan");
 const base: CarePlanFacts = {
@@ -10,6 +11,7 @@ const base: CarePlanFacts = {
   drugClassIds: ["taxanes"],
   treatmentTypeIds: ["current_cancer_treatment_chemotherapy"],
   coMorbidityIds: [],
+  cancerTypeId: "cancer_1",
   asOfDate: "2026-10-11",
 };
 
@@ -69,7 +71,7 @@ describe("care plan guidance from the versioned workbooks", () => {
 
   test("selects one matching product plan and requires dates for time-bound stages", () => {
     const rule = definition();
-    expect(resolveCarePlanGuidance(rule, { ...base, treatmentStatusId: "treatment_status_newly_diagnosed" }).products).toMatchObject({
+    expect(resolveCarePlanGuidance(rule, { ...base, cancerTypeId: undefined, treatmentStatusId: "treatment_status_newly_diagnosed" }).products).toMatchObject({
       status: "facts_required",
       plans: [],
     });
@@ -84,9 +86,9 @@ describe("care plan guidance from the versioned workbooks", () => {
   test("uses selected catalogue names for exceptions without confusing similar products", () => {
     const rule = definition();
     const plan = rule.carePlanGuidance!.products.plans.find(row => row.stage === "pre_conditioning" && row.nutritionalStatus === "moderately_nourished")!;
-    plan.productNames = ["Invigour", "Nourish Plus"];
-    plan.products = "Invigour + Nourish Plus";
-    plan.dose = "1 Invigour + 1 Nourish Plus";
+    Object.assign(plan, productPlanSnapshot([
+      { productName: "Invigour", quantityPerDay: 1 }, { productName: "Nourish Plus", quantityPerDay: 1 },
+    ]));
     expect(validateFinalAssessmentDefinition(rule)).toEqual([]);
     const result = resolveCarePlanGuidance(rule, { ...base, treatmentStatusId: "treatment_status_newly_diagnosed", plannedTreatmentStartDate: "2026-10-20" });
     expect(result.products).toMatchObject({ status: "selected", plans: [{ products: "Invigour + Nourish Plus" }] });
@@ -111,15 +113,16 @@ describe("care plan guidance from the versioned workbooks", () => {
   test("validates the cart against saved product and dose snapshots", () => {
     const rule = definition();
     const plan = rule.carePlanGuidance!.products.plans[0]!;
-    plan.items = [{ productName: "Invigour", quantityPerDay: 1 }, { productName: "Nourish", quantityPerDay: 1 }];
-    plan.productNames = ["Invigour", "Nourish"];
+    Object.assign(plan, productPlanSnapshot([
+      { productName: "Invigour", quantityPerDay: 1 }, { productName: "Nourish", quantityPerDay: 1 },
+    ]));
     expect(validateFinalAssessmentDefinition(rule)).toEqual([]);
-    delete plan.items[1]!.quantityPerDay;
+    delete plan.items![1]!.quantityPerDay;
     expect(validateFinalAssessmentDefinition(rule).map(issue => issue.code)).toContain("MISSING_PRODUCT_QUANTITY");
-    plan.items[1]!.quantityPerDay = 2;
+    plan.items![1]!.quantityPerDay = 2;
     expect(validateFinalAssessmentDefinition(rule).map(issue => issue.code)).toContain("INVALID_PRODUCT_SNAPSHOT");
     plan.dose = "1 Invigour + 2 Nourish";
-    plan.items.push({ productName: "nourish", quantityPerDay: 1 });
+    plan.items!.push({ productName: "nourish", quantityPerDay: 1 });
     expect(validateFinalAssessmentDefinition(rule).map(issue => issue.code)).toContain("DUPLICATE_PRODUCT_ITEM");
   });
 
@@ -134,14 +137,35 @@ describe("care plan guidance from the versioned workbooks", () => {
   test("uses exact structured quantities for the once-daily Nourish limit", () => {
     const rule = definition();
     const plan = rule.carePlanGuidance!.products.plans.find(row => row.stage === "pre_conditioning" && row.nutritionalStatus === "moderately_nourished")!;
-    plan.items = [{ productName: "Invigour", quantityPerDay: 1 }, { productName: "Nourish", quantityPerDay: 4 }];
+    plan.items = [{ productName: "Invigour", quantityPerDay: 1 }, { productName: "Nourish", quantityPerDay: 2, timesPerDay: 2, mealTiming: "After lunch and dinner." }];
     plan.productNames = ["Invigour", "Nourish"];
-    plan.dose = "1 Invigour + 4 Nourish";
+    plan.dose = "1 Invigour + 2 Nourish";
     const facts: CarePlanFacts = { ...base, treatmentStatusId: "treatment_status_newly_diagnosed",
       plannedTreatmentStartDate: "2026-10-20", cancerTypeId: "cancer_5" };
     expect(resolveCarePlanGuidance(rule, facts).products).toMatchObject({
-      status: "selected", plans: [{ items: [{ productName: "Invigour", quantityPerDay: 1 }, { productName: "Nourish", quantityPerDay: 1 }] }],
+      status: "selected", plans: [{ items: [{ productName: "Invigour", quantityPerDay: 1 }, { productName: "Nourish", quantityPerDay: 1, timesPerDay: 1 }] }],
     });
+    expect(resolveCarePlanGuidance(rule, facts).products.plans[0]?.items?.[1]?.mealTiming).toBeUndefined();
+  });
+
+  test("a seven-day surgery window selects a separate 30-day course", () => {
+    const rule = definition();
+    const facts: CarePlanFacts = { ...base, treatmentStatusId: "treatment_status_under_treatment",
+      surgicalStatusId: "cancer_surgical_status_done", surgeryDate: "2026-10-04", dietPreferenceId: "non_vegetarian" };
+    expect(resolveCarePlanGuidance(rule, facts).products.plans[0]).toMatchObject({
+      stage: "surgical", durationAmount: 30, duration: "30 days after surgery (through 2026-11-03)",
+    });
+    expect(resolveCarePlanGuidance(rule, { ...facts, asOfDate: "2026-10-12" }).products.plans[0]?.stage).toBe("during_treatment");
+    expect(resolveCarePlanGuidance(rule, { ...facts, asOfDate: "2026-10-03" }).products.plans[0]?.stage).toBe("during_treatment");
+  });
+
+  test("a scoped Protect replacement returns a single Invigour dose with its unit", () => {
+    const rule = definition();
+    const facts: CarePlanFacts = { ...base, riskCategoryId: "high", treatmentStatusId: "treatment_status_under_treatment", cancerTypeId: "cancer_19" };
+    expect(resolveCarePlanGuidance(rule, facts).products.plans[0]?.items).toMatchObject([
+      { productName: "Es-Invigour", quantityPerDay: 2, unit: "sachet", timesPerDay: 2 },
+    ]);
+    expect(resolveCarePlanGuidance(rule, { ...facts, cancerTypeId: "cancer_20" }).products.plans[0]?.products).toContain("Protect");
   });
 
   test("relative pre-conditioning guidance needs no treatment date or eligibility window", () => {
@@ -215,22 +239,24 @@ describe("care plan guidance from the versioned workbooks", () => {
       .toMatchObject({ status: "selected", plans: [{ stage: "surgical" }] });
   });
 
-  test("applies exact exclusions and replacements with the source quantity", () => {
+  test("applies exact exclusions and the fixed workbook replacement quantity", () => {
     const rule = definition();
-    const pre: CarePlanFacts = { ...base, treatmentStatusId: "treatment_status_newly_diagnosed",
+    const pre: CarePlanFacts = { ...base, cancerTypeId: undefined, treatmentStatusId: "treatment_status_newly_diagnosed",
       plannedTreatmentStartDate: "2026-10-20" };
     expect(resolveCarePlanGuidance(rule, pre).products.status).toBe("facts_required");
     expect(resolveCarePlanGuidance(rule, { ...pre, cancerTypeId: "cancer_6" }).products).toMatchObject({
-      status: "selected", plans: [{ products: "Invigour", dose: "1 Invigour" }],
+      status: "selected", plans: [{ items: [{ productName: "Es-Invigour", quantityPerDay: 1 }] }],
     });
     expect(resolveCarePlanGuidance(rule, { ...pre, cancerTypeId: "cancer_5" }).products).toMatchObject({
-      status: "selected", plans: [{ products: "Invigour + Nourish", dose: "1 Invigour + 1 Nourish" }],
+      status: "selected", plans: [{ items: [{ productName: "Es-Invigour", quantityPerDay: 1 }, { productName: "Es Fortitude Nourish", quantityPerDay: 1 }] }],
     });
     const surgery: CarePlanFacts = { ...base, surgicalStatusId: "cancer_surgical_status_done", surgeryDate: "2026-10-08" };
     expect(resolveCarePlanGuidance(rule, surgery).products.status).toBe("facts_required");
-    expect(resolveCarePlanGuidance(rule, { ...surgery, dietPreferenceId: "vegetarian" }).products).toMatchObject({
-      status: "selected", plans: [{ products: "Invigour", dose: "2 Invigour" }],
-    });
+    for (const riskCategoryId of ["low", "moderate", "high"]) {
+      expect(resolveCarePlanGuidance(rule, { ...surgery, riskCategoryId, dietPreferenceId: "vegetarian" }).products).toMatchObject({
+        status: "selected", plans: [{ items: [{ productName: "Es-Invigour", quantityPerDay: 2, unit: "sachet" }] }],
+      });
+    }
     expect(resolveCarePlanGuidance(rule, { ...surgery, dietPreferenceId: "non_vegetarian" }).products.plans[0]?.stage).toBe("surgical");
   });
 
@@ -244,11 +270,10 @@ describe("care plan guidance from the versioned workbooks", () => {
     const vegetarian = resolveCarePlanGuidance(rule, { ...surgery, dietPreferenceId: "vegetarian" }).products;
     expect(vegetarian.status).toBe("selected");
     expect(vegetarian.notes.map(row => row.kind)).toEqual(["vegetarian_liss_substitution"]);
-    const jain = resolveCarePlanGuidance(rule, { ...surgery, dietPreferenceId: "jain" }).products;
-    expect(jain.status).toBe("selected");
-    expect(jain.notes.map(row => row.kind)).not.toContain("surgery_done_liss");
-    expect(jain.notes.map(row => row.kind)).toEqual(["jain_liss_substitution"]);
-    expect(jain.plans[0]).toMatchObject({ products: "Invigour", dose: "2 Invigour" });
+    for (const dietPreferenceId of ["jain", "eggetarian"]) {
+      expect(resolveCarePlanGuidance(rule, { ...surgery, dietPreferenceId }).products)
+        .toMatchObject({ status: "clinician_choice_required", plans: [], notes: [] });
+    }
 
     const confirmed = resolveCarePlanGuidance(rule, { ...surgery, dietPreferenceId: "non_vegetarian" }).products;
     expect(confirmed.notes.map(row => row.kind)).toContain("surgery_done_liss");
@@ -275,7 +300,7 @@ describe("care plan guidance from the versioned workbooks", () => {
     exclusion.match = { fieldId: "cancer_type", optionId: "cancer_7" };
     const pre: CarePlanFacts = { ...base, treatmentStatusId: "treatment_status_newly_diagnosed", plannedTreatmentStartDate: "2026-10-20", cancerTypeId: "cancer_6" };
     expect(resolveCarePlanGuidance(rule, pre).products.status).toBe("selected");
-    expect(resolveCarePlanGuidance(rule, { ...pre, cancerTypeId: "cancer_7" }).products).toMatchObject({ status: "selected", plans: [{ products: "Invigour" }] });
+    expect(resolveCarePlanGuidance(rule, { ...pre, cancerTypeId: "cancer_7" }).products).toMatchObject({ status: "selected", plans: [{ products: "Es-Invigour" }] });
 
     const vegetarian = notes.find(row => row.kind === "vegetarian_liss_substitution")!;
     vegetarian.match = { fieldId: "diet_preference", optionId: "eggetarian" };
@@ -286,7 +311,9 @@ describe("care plan guidance from the versioned workbooks", () => {
     expect(resolveCarePlanGuidance(rule, { ...surgery, dietPreferenceId: "non_vegetarian" }).products.notes.map(row => row.kind))
       .not.toContain("surgery_done_liss");
     expect(validateFinalAssessmentDefinition(rule)).toEqual([]);
-    notes.find(row => row.kind === "jain_liss_substitution")!.match = { fieldId: "diet_preference", optionId: "eggetarian" };
+    const jain = notes.find(row => row.kind === "jain_liss_substitution")!;
+    jain.match = { fieldId: "diet_preference", optionId: "eggetarian" };
+    jain.enabled = true;
     expect(validateFinalAssessmentDefinition(rule).map(issue => issue.code)).toContain("DUPLICATE_PRODUCT_NOTE_MATCH");
   });
 
@@ -300,7 +327,7 @@ describe("care plan guidance from the versioned workbooks", () => {
     const pre: CarePlanFacts = { ...base, treatmentStatusId: "treatment_status_newly_diagnosed",
       plannedTreatmentStartDate: "2026-10-20", cancerTypeId: "cancer_7" };
     expect(resolveCarePlanGuidance(rule, pre).products).toMatchObject({
-      status: "selected", plans: [{ products: "Invigour" }], notes: [{ id: "another_nourish_exclusion" }],
+      status: "selected", plans: [{ products: "Es-Invigour" }], notes: [{ id: "another_nourish_exclusion" }],
     });
     expect(resolveCarePlanGuidance(rule, { ...pre, cancerTypeId: "cancer_6" }).products.notes.map(row => row.id))
       .toEqual([exclusion.id]);
@@ -321,11 +348,14 @@ describe("care plan guidance from the versioned workbooks", () => {
       plannedTreatmentStartDate: "2026-10-20", cancerTypeId: "cancer_7" };
     expect(validateFinalAssessmentDefinition(rule)).toEqual([]);
     expect(resolveCarePlanGuidance(rule, facts).products.plans[0]).toMatchObject({
-      dose: "1 Invigour + 3 Nourish", duration: "You can start these supplements 15 days before your treatment.",
+      items: [{ productName: "Es-Invigour", quantityPerDay: 1 }, { productName: "Es Fortitude Nourish", quantityPerDay: 3 }],
+      duration: "You can start these supplements 15 days before your treatment.",
     });
     notes.pop();
     notes.push({ ...custom, action: { type: "replace", productName: "Nourish", replacementProductName: "Protect", replacementQuantityPerDay: 2 } });
-    expect(resolveCarePlanGuidance(rule, facts).products.plans[0]).toMatchObject({ dose: "1 Invigour + 2 Protect" });
+    expect(resolveCarePlanGuidance(rule, facts).products.plans[0]).toMatchObject({
+      items: [{ productName: "Es-Invigour", quantityPerDay: 1 }, { productName: "Protect", quantityPerDay: 2 }],
+    });
     notes.pop();
     notes.push({ ...custom, action: { type: "replace", productName: "Nourish", replacementProductName: "Protect" } });
     expect(resolveCarePlanGuidance(rule, facts).products).toMatchObject({ status: "clinician_choice_required", plans: [] });
@@ -334,13 +364,16 @@ describe("care plan guidance from the versioned workbooks", () => {
   test("replacement copies the replaced product's daily quantity when selected", () => {
     const rule = definition();
     const plan = rule.carePlanGuidance!.products.plans.find(row => row.stage === "pre_conditioning" && row.nutritionalStatus === "moderately_nourished")!;
-    plan.products = "Invigour + Liss WH";
-    plan.dose = "1 Invigour + 2 Liss WH";
-    plan.productNames = ["Invigour", "Liss WH"];
+    Object.assign(plan, productPlanSnapshot([
+      { productName: "Invigour", quantityPerDay: 1 }, { productName: "Liss WH", quantityPerDay: 3 },
+    ]));
+    rule.carePlanGuidance!.products.notes.find(row => row.kind === "vegetarian_liss_substitution")!.action = {
+      type: "replace", productName: "Liss WH", replacementProductName: "Invigour", matchSourceQuantity: true,
+    };
     const facts: CarePlanFacts = { ...base, treatmentStatusId: "treatment_status_newly_diagnosed",
       plannedTreatmentStartDate: "2026-10-20", dietPreferenceId: "vegetarian" };
     expect(resolveCarePlanGuidance(rule, facts).products).toMatchObject({ status: "selected",
-      plans: [{ products: "Invigour", items: [{ productName: "Invigour", quantityPerDay: 2 }] }] });
+      plans: [{ products: "Invigour", items: [{ productName: "Invigour", quantityPerDay: 3 }] }] });
     rule.carePlanGuidance!.products.notes.push({
       id: "eggetarian_remove_liss", kind: "custom", label: "Remove Liss WH for eggetarian diet",
       match: { fieldId: "diet_preference", optionId: "eggetarian" },
@@ -355,9 +388,9 @@ describe("care plan guidance from the versioned workbooks", () => {
   test("delay removes a named product until planned surgery and rejects conflicting actions", () => {
     const rule = definition();
     const plan = rule.carePlanGuidance!.products.plans.find(row => row.stage === "pre_conditioning" && row.nutritionalStatus === "moderately_nourished")!;
-    plan.products = "Invigour + Liss WH";
-    plan.dose = "1 Invigour + 1 Liss WH";
-    plan.productNames = ["Invigour", "Liss WH"];
+    Object.assign(plan, productPlanSnapshot([
+      { productName: "Invigour", quantityPerDay: 1 }, { productName: "Liss WH", quantityPerDay: 1 },
+    ]));
     const facts: CarePlanFacts = { ...base, treatmentStatusId: "treatment_status_newly_diagnosed",
       plannedTreatmentStartDate: "2026-10-20", surgicalStatusId: "cancer_surgical_status_planned",
       plannedSurgeryDate: "2026-10-14", dietPreferenceId: "non_vegetarian" };

@@ -50,6 +50,7 @@ const editableText = z.string().trim().min(1).max(12000);
 const productNameSchema = z.string().trim().min(1).max(120);
 const dailyQuantitySchema = z.number().int().min(1).max(100);
 const productDescriptionSchema = z.string().trim().min(1).max(500);
+const productUnitSchema = z.string().trim().min(1).max(40);
 
 /** Keep workbook names and their earlier shorthands matched to the same product. */
 export function productIdentityName(name: string): string {
@@ -85,6 +86,7 @@ export const productExceptionActionSchema = z.discriminatedUnion("type", [
     /** Copy the replaced product's known daily quantity into the replacement. */
     matchSourceQuantity: z.boolean().optional(),
     replacementQuantityPerDay: dailyQuantitySchema.optional(),
+    unit: productUnitSchema.optional(),
     timesPerDay: dailyQuantitySchema.optional(),
     mealTiming: productDescriptionSchema.optional(),
     preparation: productDescriptionSchema.optional(),
@@ -110,7 +112,7 @@ export function productExceptionActionText(action: ProductExceptionAction): stri
     case "recommend": return `Recommend ${action.productName} at ${action.quantityPerDay} per day${action.description ? ` (${action.description})` : ""}.`;
     case "remove": return `Remove ${action.productName} from the product plan.`;
     case "limit": return `Limit ${action.productName} to at most ${action.maxQuantityPerDay} per day.`;
-    case "replace": return `Replace ${action.productName} with ${action.replacementProductName}${action.matchSourceQuantity ? ` at the same daily quantity as ${action.productName}` : action.replacementQuantityPerDay === undefined ? "; replacement daily quantity requires clinician review" : ` at ${action.replacementQuantityPerDay} per day`}${action.description ? ` (${action.description})` : ""}.`;
+    case "replace": return `Replace ${action.productName} with ${action.replacementProductName}${action.matchSourceQuantity ? ` at the same daily quantity as ${action.productName}` : action.replacementQuantityPerDay === undefined ? "; replacement daily quantity requires clinician review" : ` at ${action.replacementQuantityPerDay} per day`}${action.unit ? ` (${action.unit})` : ""}${action.description ? ` (${action.description})` : ""}.`;
     case "delay": return `Withhold ${action.productName} until the planned surgery date.`;
     case "use_plan": return `Use the ${action.stage.replaceAll("_", " ")} product plan when it is eligible.`;
   }
@@ -142,7 +144,7 @@ export function structuredProductPlanItem(value: unknown): unknown {
 export const productPlanItemSchema = z.preprocess(structuredProductPlanItem, z.object({
   productName: productNameSchema,
   quantityPerDay: dailyQuantitySchema.optional(),
-  unit: z.string().trim().min(1).max(40).optional(),
+  unit: productUnitSchema.optional(),
   timesPerDay: dailyQuantitySchema.optional(),
   preparation: productDescriptionSchema.optional(),
   mealTiming: productDescriptionSchema.optional(),
@@ -153,6 +155,8 @@ export type ProductPlanItem = z.infer<typeof productPlanItemSchema>;
 
 /** Workbook-derived plans and guidance are versioned and editable with a rule. */
 export const productGuidanceSchema = z.object({
+  /** Maximum days since completed surgery when an after-surgery plan first matches. */
+  surgicalEligibilityDays: z.number().int().nonnegative().max(3650).optional(),
   plans: z.array(z.object({
     id: ruleIdSchema,
     stage: productStageSchema,

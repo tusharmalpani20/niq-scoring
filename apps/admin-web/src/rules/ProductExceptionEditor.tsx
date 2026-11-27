@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { ProductExceptionAction, ProductGuidance, ProductNoteMatch, ProductStage } from "@niq-scoring/contracts/product-guidance";
-import { defaultProductExceptionAction, defaultProductNoteMatch } from "@niq-scoring/contracts/product-guidance";
+import { defaultProductExceptionAction, defaultProductNoteMatch, productIdentityName } from "@niq-scoring/contracts/product-guidance";
 import { cancerTypeOptions } from "./application-cancer-options";
 import { Input } from "../components/ui/input";
 import { NativeSelect } from "../components/ui/native-select";
@@ -8,7 +8,7 @@ import { Textarea } from "../components/ui/textarea";
 
 type Exception = ProductGuidance["notes"][number];
 type Option = { id: string; label: string };
-type CatalogProduct = { id: string; name: string };
+type CatalogProduct = { id: string; name: string; aliases: string[] };
 type ActionType = ProductExceptionAction["type"];
 
 const fieldLabels: Record<ProductNoteMatch["fieldId"], string> = {
@@ -53,8 +53,8 @@ export function exceptionOptions(fieldId: ProductNoteMatch["fieldId"], surgeryOp
 
 function actionProducts(action: ProductExceptionAction): string[] {
   if (action.type === "use_plan") return ["__product_plan__"];
-  if (action.type === "replace") return [action.productName, action.replacementProductName].filter(Boolean).map(name => name.trim().toLocaleLowerCase());
-  return [action.productName.trim().toLocaleLowerCase()];
+  if (action.type === "replace") return [action.productName, action.replacementProductName].filter(Boolean).map(productIdentityName);
+  return [productIdentityName(action.productName)];
 }
 
 export function conflictingException(row: Exception, others: Exception[]): Exception | undefined {
@@ -102,7 +102,8 @@ export function validateException(row: Exception, catalog: CatalogProduct[], sur
   if (!exceptionOptions(match.fieldId, surgeryOptions).some(option => option.id === match.optionId)) return "Choose a valid assessment answer.";
   if (match.fieldId === "cancer_surgical_status" && (match.withinDays === undefined || !Number.isInteger(match.withinDays) || match.withinDays < 0 || match.withinDays > 3650)) return "Enter a whole-number surgery window in days.";
   if (!action) return "Choose a product action.";
-  const known = (name: string) => catalog.some(item => item.name.toLocaleLowerCase() === name.trim().toLocaleLowerCase());
+  const known = (name: string) => catalog.some(item => [item.name, ...item.aliases]
+    .some(candidate => productIdentityName(candidate) === productIdentityName(name)));
   const validQuantity = (quantity: number) => Number.isInteger(quantity) && quantity >= 1 && quantity <= 100;
   if (action.type !== "use_plan" && !action.productName.trim()) return "Choose a product.";
   if (action.type !== "use_plan" && catalog.length && !known(action.productName)) return "Choose a product from the shared Products list.";
@@ -110,7 +111,7 @@ export function validateException(row: Exception, catalog: CatalogProduct[], sur
   if (action.type === "limit" && !validQuantity(action.maxQuantityPerDay)) return "Enter a maximum daily quantity from 1 to 100.";
   if (action.type === "replace") {
     if (!action.replacementProductName.trim() || (catalog.length && !known(action.replacementProductName))) return "Choose a replacement from the shared Products list.";
-    if (action.productName.toLocaleLowerCase() === action.replacementProductName.toLocaleLowerCase()) return "Choose a different replacement product.";
+    if (productIdentityName(action.productName) === productIdentityName(action.replacementProductName)) return "Choose a different replacement product.";
     if (action.matchSourceQuantity && action.replacementQuantityPerDay !== undefined) return "Choose matching or fixed replacement quantity.";
     if (!action.matchSourceQuantity && !validQuantity(action.replacementQuantityPerDay ?? 0)) return "Enter a replacement daily quantity from 1 to 100.";
   }
@@ -174,7 +175,17 @@ export function ProductExceptionEditor({ row, catalog, catalogError, onRetry, su
       {action && action.type !== "use_plan" && <ProductSelect label={action.type === "replace" ? "Product to replace" : "Product"} value={action.productName} catalog={catalog} onChange={productName => updateAction({ ...action, productName })} />}
       {action?.type === "recommend" && <><Field label="Quantity per day"><Input type="number" min={1} max={100} step={1} value={action.quantityPerDay || ""} onChange={event => updateAction({ ...action, quantityPerDay: Number(event.target.value) })} /></Field><Field label="Product description (optional)"><Textarea rows={2} maxLength={500} placeholder="Preparation or serving details" value={action.description ?? ""} onChange={event => updateAction({ ...action, description: event.target.value || undefined })} /></Field></>}
       {action?.type === "limit" && <Field label="Maximum quantity per day"><Input type="number" min={1} max={100} step={1} value={action.maxQuantityPerDay || ""} onChange={event => updateAction({ ...action, maxQuantityPerDay: Number(event.target.value) })} /></Field>}
-      {action?.type === "replace" && <><ProductSelect label="Replacement product" value={action.replacementProductName} catalog={catalog} onChange={replacementProductName => updateAction({ ...action, replacementProductName })} /><label className="flex items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={action.matchSourceQuantity ?? false} onChange={event => updateAction({ ...action, matchSourceQuantity: event.target.checked, replacementQuantityPerDay: undefined })} />Match the replaced product's daily quantity</label>{!action.matchSourceQuantity && <Field label="Replacement quantity per day"><Input type="number" min={1} max={100} step={1} value={action.replacementQuantityPerDay ?? ""} onChange={event => updateAction({ ...action, replacementQuantityPerDay: event.target.value === "" ? undefined : Number(event.target.value) })} /></Field>}<Field label="Replacement times per day"><Input type="number" min={1} max={100} step={1} value={action.timesPerDay ?? ""} onChange={event => updateAction({ ...action, timesPerDay: event.target.value === "" ? undefined : Number(event.target.value) })}/></Field><Field label="Replacement timing with meals"><Input maxLength={500} value={action.mealTiming ?? ""} onChange={event => updateAction({ ...action, mealTiming: event.target.value || undefined })}/></Field><Field label="Replacement preparation"><Input maxLength={500} value={action.preparation ?? ""} onChange={event => updateAction({ ...action, preparation: event.target.value || undefined })}/></Field><Field label="Replacement description (optional)"><Textarea rows={2} maxLength={500} placeholder="Preparation or serving details" value={action.description ?? ""} onChange={event => updateAction({ ...action, description: event.target.value || undefined })} /></Field>{action.matchSourceQuantity && <p className="text-xs text-muted-foreground">The replacement uses the selected plan's quantity for {action.productName || "the replaced product"}. If that quantity is unknown, clinician review is required.</p>}</>}
+      {action?.type === "replace" && <>
+        <ProductSelect label="Replacement product" value={action.replacementProductName} catalog={catalog} onChange={replacementProductName => updateAction({ ...action, replacementProductName })} />
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={action.matchSourceQuantity ?? false} onChange={event => updateAction({ ...action, matchSourceQuantity: event.target.checked, replacementQuantityPerDay: undefined })} />Match the replaced product's daily quantity</label>
+        {!action.matchSourceQuantity && <Field label="Replacement quantity per day"><Input type="number" min={1} max={100} step={1} value={action.replacementQuantityPerDay ?? ""} onChange={event => updateAction({ ...action, replacementQuantityPerDay: event.target.value === "" ? undefined : Number(event.target.value) })} /></Field>}
+        <Field label="Replacement unit"><Input maxLength={40} value={action.unit ?? ""} onChange={event => updateAction({ ...action, unit: event.target.value || undefined })} /></Field>
+        <Field label="Replacement times per day"><Input type="number" min={1} max={100} step={1} value={action.timesPerDay ?? ""} onChange={event => updateAction({ ...action, timesPerDay: event.target.value === "" ? undefined : Number(event.target.value) })} /></Field>
+        <Field label="Replacement timing with meals"><Input maxLength={500} value={action.mealTiming ?? ""} onChange={event => updateAction({ ...action, mealTiming: event.target.value || undefined })} /></Field>
+        <Field label="Replacement preparation"><Input maxLength={500} value={action.preparation ?? ""} onChange={event => updateAction({ ...action, preparation: event.target.value || undefined })} /></Field>
+        <Field label="Replacement description (optional)"><Textarea rows={2} maxLength={500} placeholder="Preparation or serving details" value={action.description ?? ""} onChange={event => updateAction({ ...action, description: event.target.value || undefined })} /></Field>
+        {action.matchSourceQuantity && <p className="text-xs text-muted-foreground">The replacement uses the selected plan's quantity for {action.productName || "the replaced product"}. If that quantity is unknown, clinician review is required.</p>}
+      </>}
       {action?.type === "remove" && <p className="text-xs text-muted-foreground">The product will be removed from the selected plan when this rule matches.</p>}
       {action?.type === "delay" && <p className="text-xs text-muted-foreground">Use Cancer surgical status → Planned and a surgery window above. The product is delayed until that date.</p>}
       {action?.type === "use_plan" && <Field label="Plan to use"><NativeSelect value={action.stage} onChange={event => updateAction({ ...action, stage: event.target.value as ProductStage })}>{stageOptions.map(stage => <option key={stage.id} value={stage.id}>{stage.label}</option>)}</NativeSelect></Field>}

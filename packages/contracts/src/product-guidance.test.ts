@@ -14,32 +14,39 @@ describe("product workbook defaults", () => {
     expect(new Set(guidance.plans.map(plan => plan.nutritionalStatus))).toEqual(new Set([
       "well_nourished", "moderately_nourished", "severely_malnourished",
     ]));
-    expect(guidance.plans.every(plan => plan.source.location.startsWith("Product_mapping_!"))).toBe(true);
+    expect(guidance.plans.map(plan => plan.source.location)).toEqual(
+      [2, 3, 4, 7, 8, 9, 11, 12, 13, 15, 16, 17].map(row => `Sheet1!A${row}:G${row}`),
+    );
     expect(guidance.plans.map(plan => plan.durationAmount)).toEqual([15, 15, 15, 90, 90, 90, 365, 365, 365, 30, 30, 30]);
     expect(guidance.plans.every(plan => productPlanItems(plan).length > 0
       && productPlanItems(plan).every(item => item.quantityPerDay !== undefined))).toBe(true);
   });
 
   test("preserves workbook dose and the approved day equivalents for distinct stages", () => {
-    const { plans, notes } = initialProductGuidance();
+    const { plans, notes, surgicalEligibilityDays } = initialProductGuidance();
+    expect(surgicalEligibilityDays).toBe(7);
     expect(plans.find(plan => plan.stage === "pre_conditioning" && plan.nutritionalStatus === "well_nourished")?.duration)
       .toBe("15 days before treatment");
-    expect(plans.find(plan => plan.stage === "during_treatment" && plan.nutritionalStatus === "severely_malnourished")?.dose)
-      .toBe("3 Invigour + 2 Protect");
+    expect(plans.find(plan => plan.stage === "during_treatment" && plan.nutritionalStatus === "severely_malnourished")?.items)
+      .toMatchObject([
+        { productName: "Es-Invigour", quantityPerDay: 2, unit: "sachet", mealTiming: "1 after breakfast and 1 after lunch." },
+        { productName: "Es Fortitude Protect", quantityPerDay: 2, unit: "sachet", mealTiming: "1 at evening snack time and 1 after dinner." },
+      ]);
     expect(plans.find(plan => plan.stage === "surgical" && plan.nutritionalStatus === "severely_malnourished")?.dose)
-      .toBe("1 Invigour + 2 Liss WH (level scoop)");
+      .toBe("1 Es-Invigour (sachet) + 2 Liss WH (level scoop)");
     expect(plans.find(plan => plan.stage === "during_treatment")?.duration).toBe("Minimum 90 days during treatment");
     expect(plans.find(plan => plan.stage === "post_treatment")?.duration).toBe("365 days or more after treatment");
     expect(new Set(notes.map(note => note.kind))).toEqual(new Set([
       "pancreatic_nourish_exclusion", "liver_nourish_once_daily", "surgery_done_liss",
-      "surgery_planned_liss", "vegetarian_liss_substitution", "jain_liss_substitution",
+      "surgery_planned_liss", "vegetarian_liss_substitution", "jain_liss_substitution", "custom",
     ]));
     expect(notes.find(note => note.kind === "surgery_planned_liss")?.guidance)
       .toContain("only after surgery");
   });
 
   test("reads simple legacy doses and round trips a structured product cart", () => {
-    const plan = initialProductGuidance().plans.find(row => row.stage === "pre_conditioning" && row.nutritionalStatus === "moderately_nourished")!;
+    const plan = { ...initialProductGuidance().plans[1]!, items: undefined, productNames: undefined,
+      products: "Invigour + Nourish", dose: "1 Invigour + 2 Nourish" };
     expect(productPlanItems(plan)).toEqual([
       { productName: "Invigour", quantityPerDay: 1 },
       { productName: "Nourish", quantityPerDay: 2 },
@@ -74,17 +81,20 @@ describe("product workbook defaults", () => {
 
   test("stores each workbook Surgical scoop count in the quantity field", () => {
     const surgical = initialProductGuidance().plans.filter(row => row.stage === "surgical");
-    expect(surgical.map(row => row.items)).toEqual([
-      [{ productName: "Liss WH", quantityPerDay: 1, unit: "level scoop", preparation: "Mix in 150 mL water." }],
-      [{ productName: "Liss WH", quantityPerDay: 2, unit: "level scoop", preparation: "Mix in 150 mL water." }],
-      [{ productName: "Invigour", quantityPerDay: 1 }, { productName: "Liss WH", quantityPerDay: 2, unit: "level scoop", preparation: "Mix in 150 mL water." }],
-    ]);
-    for (const plan of surgical) {
+    const liss = surgical.map(row => row.items?.find(item => item.productName === "Liss WH"));
+    expect(liss.map(item => item?.quantityPerDay)).toEqual([1, 2, 2]);
+    expect(liss.map(item => item?.mealTiming)).toEqual(["After breakfast.", "After breakfast.", "After lunch."]);
+    for (const [index, plan] of surgical.entries()) {
+      expect(liss[index]).toMatchObject({ unit: "level scoop", timesPerDay: 1, preparation: "Mix in 150 mL water." });
       expect(productPlanSnapshot(productPlanItems(plan)).dose).toBe(plan.dose);
       const legacy = { ...plan, items: undefined, productNames: undefined,
+        products: index === 2 ? "Invigour + Liss WH" : "Liss WH",
         dose: plan.nutritionalStatus === "well_nourished" ? "1 leveled scoops in 150ml water"
           : plan.nutritionalStatus === "moderately_nourished" ? "2 leveled scoops in 150ml water" : "1 Invigour + 2 leveled scoops in 150ml water" };
-      expect(normalizeProductPlan(legacy)).toMatchObject({ items: plan.items, productNames: plan.productNames, dose: plan.dose });
+      expect(normalizeProductPlan(legacy)).toMatchObject({
+        productNames: index === 2 ? ["Invigour", "Liss WH"] : ["Liss WH"],
+        dose: `${index === 2 ? "1 Invigour + " : ""}${index === 0 ? 1 : 2} Liss WH (level scoop)`,
+      });
     }
   });
 
@@ -134,30 +144,34 @@ describe("product workbook defaults", () => {
     expect(hypertension.guidance).toContain("Check and record BP at home during treatment");
   });
 
-  test("links workbook exceptions to their source rows and identifies the owner-approved Jain rule", () => {
+  test("links the active workbook exceptions to their source rows", () => {
     const locations = Object.fromEntries(initialProductGuidance().notes.map(note => [note.kind, note.source.location]));
     expect(locations).toEqual({
-      pancreatic_nourish_exclusion: "Product_mapping_!A18:C18",
-      liver_nourish_once_daily: "Product_mapping_!A19:C19",
-      surgery_done_liss: "Product_mapping_!A21:D21",
-      surgery_planned_liss: "Product_mapping_!A22:C22",
-      vegetarian_liss_substitution: "Product_mapping_!A23:C23",
+      pancreatic_nourish_exclusion: "Sheet1!C23",
+      liver_nourish_once_daily: "Sheet1!C24",
+      surgery_done_liss: "Sheet1!C26:D26",
+      surgery_planned_liss: "Sheet1!C27",
+      vegetarian_liss_substitution: "Sheet1!C28",
       jain_liss_substitution: "Product exceptions / Jain diet",
+      custom: "Sheet1!E24",
     });
   });
 
-  test("copies the six existing product effects into structured default actions", () => {
+  test("seeds the reviewed product exceptions while retaining the legacy action lookup", () => {
     const notes = initialProductGuidance().notes;
-    for (const note of notes) {
-      expect(note.action).toEqual(defaultProductExceptionAction(note.kind));
-    }
     expect(notes.find(note => note.kind === "pancreatic_nourish_exclusion")?.action).toEqual({
-      type: "remove", productName: "Nourish",
+      type: "remove", productName: "Es Fortitude Nourish",
     });
     expect(notes.find(note => note.kind === "surgery_done_liss")?.action).toEqual({ type: "use_plan", stage: "surgical" });
-    expect(notes.find(note => note.kind === "vegetarian_liss_substitution")?.action).toEqual({
-      type: "replace", productName: "Liss WH", replacementProductName: "Invigour", matchSourceQuantity: true,
+    expect(notes.find(note => note.kind === "vegetarian_liss_substitution")?.action).toMatchObject({
+      type: "replace", productName: "Liss WH", replacementProductName: "Es-Invigour", replacementQuantityPerDay: 2, unit: "sachet",
     });
+    expect(notes.find(note => note.kind === "jain_liss_substitution")?.enabled).toBe(false);
+    expect(notes.find(note => note.id === "blood_cancer_protect_replacement")).toMatchObject({
+      match: { fieldId: "cancer_type", optionId: "cancer_19" },
+      action: { type: "replace", productName: "Es Fortitude Protect", replacementQuantityPerDay: 2, unit: "sachet", timesPerDay: 2 },
+    });
+    expect(defaultProductExceptionAction("vegetarian_liss_substitution")).toMatchObject({ matchSourceQuantity: true });
     expect(defaultProductExceptionAction("custom")).toBeNull();
   });
 
@@ -166,6 +180,7 @@ describe("product workbook defaults", () => {
     const legacy = { ...original.notes[0]!, action: undefined };
     const custom = {
       ...legacy, id: "custom_exclusion", kind: "custom", guidance: "",
+      match: { fieldId: "cancer_type", optionId: "cancer_6" },
       action: { type: "recommend", productName: "Invigour", quantityPerDay: 2 },
     };
     expect(productGuidanceSchema.safeParse({ ...original, notes: [legacy] }).success).toBe(true);
@@ -199,7 +214,7 @@ describe("product workbook defaults", () => {
     const first = initialProductGuidance();
     first.plans[0]!.dose = "changed";
     first.comorbidities[0]!.guidance = "changed";
-    expect(initialProductGuidance().plans[0]!.dose).toBe("1 Invigour + 1 Nourish");
+    expect(initialProductGuidance().plans[0]!.dose).toBe("1 Es-Invigour (sachet) + 1 Es Fortitude Nourish (sachet)");
     expect(initialProductGuidance().comorbidities[0]!.guidance).not.toBe("changed");
   });
 });
