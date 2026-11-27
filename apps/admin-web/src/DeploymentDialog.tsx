@@ -148,21 +148,21 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
       <p className="text-sm text-muted-foreground">{values.ruleVersion === "LATEST_APPROVED" ? "New assessments use the default version. If the default changes, assessments already started keep their original rules." : "This deployment stays on the selected version until you change it."}</p>
       {values.ruleVersion === "LATEST_APPROVED" && !data.versions.some(version => version.isDefault) && <p className="text-sm text-destructive">No default is set. Choose a rule or set a default in Rules before starting assessments.</p>}
   </div>;
-  return <Dialog open onOpenChange={next => { if (!next) close(); }}><DialogContent aria-describedby={undefined} className="flex max-h-[90svh] flex-col overflow-hidden sm:max-w-2xl">
-    <DialogHeader><DialogTitle>{savedResult ? "Deployment saved" : savedId ? "Edit deployment" : "Create deployment"}</DialogTitle></DialogHeader>
-    {!savedResult && !savedId && <ol aria-label="Creation progress" className="grid grid-cols-3 gap-2 border-b pb-4">
+  return <Dialog open onOpenChange={next => { if (!next) close(); }}><DialogContent aria-describedby={undefined} className="flex max-h-[90dvh] flex-col overflow-hidden p-4 sm:max-w-xl sm:p-6">
+    <DialogHeader className="shrink-0"><DialogTitle>{savedResult ? "Deployment saved" : savedId ? "Edit deployment" : "Create deployment"}</DialogTitle></DialogHeader>
+    {!savedResult && !savedId && <ol aria-label="Creation progress" className="grid shrink-0 grid-cols-3 gap-2 border-b pb-4">
       {deploymentSteps.map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined} className={`flex items-center gap-2 text-xs sm:text-sm ${step === index ? "font-medium text-primary" : "text-muted-foreground"}`}><span className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${index <= step ? "border-primary bg-primary text-primary-foreground" : ""}`}>{index + 1}</span>{label}</li>)}
     </ol>}
     <form className="flex min-h-0 flex-col gap-4" noValidate onSubmit={event => { if (savedResult || pendingCreate) { event.preventDefault(); return; } if (!savedId && step < 2) { event.preventDefault(); continueStep(); } else void form.handleSubmit(submit)(event); }}>
       <div className="min-h-0 overflow-y-auto px-1 -mx-1 space-y-6">
       {savedResult ? <div role="status" className="space-y-3 py-2 text-sm"><p>Your deployment was saved.</p>{refreshError && <p className="text-destructive">The page could not refresh. {refreshError}</p>}{savedResult.activation && <div className="space-y-2"><label htmlFor="saved-activation-token" className="font-medium">Activation token</label><Input id="saved-activation-token" readOnly value={savedResult.activation.activationToken} onFocus={event => event.currentTarget.select()} /><p className="text-xs text-muted-foreground">Copy this token now, or retry the refresh to open the deployment’s Tokens page.</p></div>}</div> : pendingCreate ? <div role="status" className="space-y-3 py-2 text-sm"><p>The deployment request may have been saved. Retry the same request to confirm its result before creating another deployment.</p><ErrorNotice error={error} /></div> : <>
-      {savedId && <div className="space-y-6">
+      {savedId && <div className="space-y-4">
         <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 text-sm sm:grid-cols-4">{reviewRows.slice(0, 4).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium break-words">{value}</dd></div>)}</dl>
         <FormInput control={form.control} name="label" label="Deployment label" maxLength={120} disabled={busy} description="Use a name that distinguishes this deployment for the client." />
         {!deployment?.hostingType && <div className="space-y-2">{select("hostingType", "Hosting", [{ value: "NIQ_HOSTED", label: "NIQ hosted" }, { value: "CLIENT_CLOUD", label: "Client cloud" }])}<p className="text-sm text-muted-foreground">Choose hosting for this existing deployment before saving.</p></div>}
         {limits}{rules}
       </div>}
-      {!savedId && step === 0 && <div className="space-y-6">
+      {!savedId && step === 0 && <div className="space-y-4">
       <fieldset disabled={busy} className="grid min-w-0 gap-4 sm:grid-cols-2">
         {select("clientId", "Client", data.clients.map(client => ({ value: client.id, label: client.name })), Boolean(initialClientId))}
         {select("environment", "Environment", ["development", "test", "staging", "production"].map(value => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) })))}
@@ -171,20 +171,25 @@ export function DeploymentDialog({ data, deployment, initialClientId, refresh, o
       {data.clients.length === 0 && <p className="text-sm text-muted-foreground">Create a client before adding a deployment.</p>}
       {select("hostingType", "Hosting", [{ value: "NIQ_HOSTED", label: "NIQ hosted" }, { value: "CLIENT_CLOUD", label: "Client cloud" }])}
       </div>}
-      {!savedId && step === 1 && <div className="space-y-6">{limits}{rules}</div>}
-      {!savedId && step === 2 && <div className="space-y-5">
+      {!savedId && step === 1 && <div className="space-y-4">{limits}{rules}</div>}
+      {!savedId && step === 2 && <div className="space-y-4">
         <dl className="divide-y rounded-xl border">{reviewRows.map(([label, value]) => <div key={label} className="grid grid-cols-2 gap-3 px-4 py-3 text-sm"><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-medium break-words">{value}</dd></div>)}</dl>
         <p className="text-sm text-muted-foreground">Client, environment, and hosting cannot change after creation.</p>
         <TokenExpirySelect value={form.watch("expiryPreset")} date={form.watch("expiryDate")} onValueChange={value => form.setValue("expiryPreset", value, { shouldDirty: true })} onDateChange={value => form.setValue("expiryDate", value, { shouldDirty: true })} disabled={busy} /></div>}
       <ErrorNotice error={error} />
       </>}
       </div>
-      <DialogFooter className="flex shrink-0 flex-row justify-between gap-2 border-t pt-4">
-        {savedResult ? <><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Close</Button><Button type="button" disabled={busy} onClick={() => void refreshAfterSave(savedResult)}>{busy ? "Refreshing…" : "Retry refresh"}</Button></> : pendingCreate ? <><Button type="button" variant="outline" disabled={busy} onClick={close}>Close</Button><Button type="button" disabled={busy} onClick={() => void submit(pendingCreate.values)}>{busy ? "Checking…" : "Retry request"}</Button></> : <><Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button>
-        <div className="flex gap-2">
+      <DialogFooter className="shrink-0 flex-row flex-wrap justify-end">
+        {savedResult ? <>
+          <Button type="button" variant="outline" disabled={busy} onClick={onClose}>Close</Button>
+          <Button type="button" disabled={busy} onClick={() => void refreshAfterSave(savedResult)}>{busy ? "Refreshing…" : "Retry refresh"}</Button>
+        </> : pendingCreate ? <>
+          <Button type="button" variant="outline" disabled={busy} onClick={close}>Close</Button>
+          <Button type="button" disabled={busy} onClick={() => void submit(pendingCreate.values)}>{busy ? "Checking…" : "Retry request"}</Button>
+        </> : <>
+          <Button type="button" variant="outline" disabled={busy} onClick={close}>Cancel</Button>
           {!savedId && step > 0 && <Button type="button" variant="outline" disabled={busy} onClick={() => { setError(""); setStep(step - 1); }}>Back</Button>}
           <Button type="submit" disabled={busy || (!savedId && data.clients.length === 0)}>{busy ? "Saving…" : savedId ? "Save changes" : step < 2 ? "Continue" : "Create"}</Button>
-        </div>
         </>}
       </DialogFooter>
     </form>
